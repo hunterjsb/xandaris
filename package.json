@@ -1,0 +1,21 @@
+{
+  "name": "xandaris",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13"
+  },
+  "type": "module",
+  "dependencies": {
+    "pocketbase": "^0.21.5",
+    "kaboom": "^3000.1.17"
+  }
+}

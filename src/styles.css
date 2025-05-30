@@ -1,0 +1,214 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for Xan Nation - Deep Space Theme */
+@layer base {
+  body {
+    @apply font-mono bg-space-950 text-space-100;
+    background: radial-gradient(ellipse at center, #001433 0%, #000508 70%, #000000 100%);
+    min-height: 100vh;
+  }
+  
+  html {
+    @apply bg-space-950;
+  }
+}
+
+@layer utilities {
+  .gradient-heading {
+    background: linear-gradient(45deg, #4080ff, #8b5cf6, #f1a9ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .aerogel-panel {
+    background: linear-gradient(135deg, 
+      rgba(64, 128, 255, 0.03) 0%,
+      rgba(139, 92, 246, 0.02) 50%,
+      rgba(241, 169, 255, 0.03) 100%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  .nebula-glow {
+    box-shadow: 
+      0 0 20px rgba(64, 128, 255, 0.3),
+      0 0 40px rgba(139, 92, 246, 0.2),
+      0 0 60px rgba(241, 169, 255, 0.1);
+  }
+  
+  .void-surface {
+    background: linear-gradient(145deg, 
+      rgba(0, 20, 51, 0.8) 0%,
+      rgba(0, 5, 8, 0.9) 100%);
+    border: 1px solid rgba(64, 128, 255, 0.2);
+  }
+}
+
+/* Canvas and UI specific styles */
+#game-canvas {
+  image-rendering: pixelated;
+}
+
+#tooltip {
+  @apply aerogel-panel;
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+}
+
+#context-menu {
+  @apply aerogel-panel;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Modal animations */
+#modal-overlay {
+  background: rgba(0, 5, 8, 0.8);
+  backdrop-filter: blur(10px) saturate(120%);
+  animation: fadeIn 0.3s ease-out;
+}
+
+#modal-content {
+  @apply aerogel-panel;
+  border-radius: 16px;
+  animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Button hover effects */
+.btn-hover {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.btn-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 5, 8, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, 
+    rgba(64, 128, 255, 0.3),
+    rgba(139, 92, 246, 0.3));
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, 
+    rgba(64, 128, 255, 0.5),
+    rgba(139, 92, 246, 0.5));
+}
+
+/* Game UI specific styles */
+.system-info {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.resource-counter {
+  @apply font-mono text-sm;
+}
+
+/* Status indicators */
+.status-online {
+  @apply text-green-400;
+}
+
+.status-offline {
+  @apply text-red-400;
+}
+
+.status-warning {
+  @apply text-yellow-400;
+}
+
+/* Fleet and trade route animations */
+@keyframes pulse-fleet {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.fleet-pulse {
+  animation: pulse-fleet 2s infinite;
+}
+
+/* Loading states */
+.loading {
+  @apply opacity-50 pointer-events-none;
+}
+
+.spinner {
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes flash {
+  0% { background-color: rgba(241, 169, 255, 0.3); }
+  50% { background-color: rgba(241, 169, 255, 0.6); }
+  100% { background-color: transparent; }
+}
+
+/* Focus states for accessibility */
+button:focus,
+select:focus,
+input:focus {
+  @apply outline-none;
+  box-shadow: 0 0 0 2px rgba(64, 128, 255, 0.5);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .resource-counter {
+    @apply text-xs;
+  }
+  
+  #system-info {
+    @apply text-xs;
+  }
+}
+
+/* Print styles */
+@media print {
+  #game-canvas,
+  nav,
+  .sidebar {
+    display: none !important;
+  }
+}

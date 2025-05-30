@@ -1,0 +1,36 @@
+# Build outputs
+dist/
+web/
+xandaris
+
+# Dependencies
+node_modules/
+vendor/
+
+# PocketBase data
+pb_data/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go build cache
+*.test
+*.out
+go.work
+go.work.sum
+
+# Logs
+*.log
+logs/
