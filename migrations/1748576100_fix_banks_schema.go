@@ -13,10 +13,11 @@ func init() {
 	m.Register(func(db dbx.Builder) error {
 		dao := daos.New(db)
 
-		collection, err := dao.FindCollectionByNameOrId("banks")
-		if err != nil {
-			return err
-		}
+       collection, err := dao.FindCollectionByNameOrId("banks")
+       if err != nil {
+           // No 'banks' collection exists; skip this migration.
+           return nil
+       }
 
 		// Update owner_id field to be text instead of relation
 		for i, field := range collection.Schema.Fields() {
@@ -62,10 +63,11 @@ func init() {
 	}, func(db dbx.Builder) error {
 		dao := daos.New(db)
 
-		collection, err := dao.FindCollectionByNameOrId("banks")
-		if err != nil {
-			return err
-		}
+       collection, err := dao.FindCollectionByNameOrId("banks")
+       if err != nil {
+           // No 'banks' collection exists; skip revert.
+           return nil
+       }
 
 		// Revert owner_id field to be relation
 		for i, field := range collection.Schema.Fields() {

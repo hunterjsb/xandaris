@@ -19,7 +19,10 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: ['15c8-2600-1700-3270-3af0-3360-821e-f3a5-4421.ngrok-free.app']
+    allowedHosts: [
+      '15c8-2600-1700-3270-3af0-3360-821e-f3a5-4421.ngrok-free.app',
+      'xandaris.vibechuck.com'
+    ]
   },
   build: {
     outDir: 'web',
