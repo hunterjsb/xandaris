@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Xan Nation</title>
+    <script type="module" crossorigin src="/assets/main-CUv3kw2f.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/main-75wpzAOh.css">
+  </head>
+  <body class="text-space-100">
+    <div id="app">
+      <!-- Navigation Bar -->
+      <nav class="aerogel-panel border-b border-space-700/20 p-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <h1 class="text-2xl font-bold gradient-heading">XAN NATION</h1>
+            <button id="fleet-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
+              Fleet
+            </button>
+            <button id="trade-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
+              Trade
+            </button>
+            <button id="diplo-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
+              Diplomacy
+            </button>
+            <button id="banking-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
+              Banking
+            </button>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div id="resources" class="flex space-x-3 text-sm">
+              <span class="text-nebula-300">Credits: <span id="credits">0</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span></span>
+              <span class="text-space-300">Food: <span id="food">0</span></span>
+              <span class="text-void-300">Ore: <span id="ore">0</span></span>
+              <span class="text-plasma-300">Goods: <span id="goods">0</span></span>
+              <span class="text-space-400">Fuel: <span id="fuel">0</span></span>
+            </div>
+            <div id="auth-section">
+              <button id="login-btn" class="px-3 py-1 bg-gradient-to-r from-nebula-600 to-plasma-600 hover:from-nebula-500 hover:to-plasma-500 rounded text-sm transition-all duration-200">
+                Login with Discord
+              </button>
+              <div id="user-info" class="hidden">
+                <span id="username" class="text-nebula-300"></span>
+                <button id="logout-btn" class="ml-2 px-2 py-1 bg-gradient-to-r from-space-700 to-space-800 hover:from-space-600 hover:to-space-700 rounded text-xs transition-all duration-200">
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Main Content -->
+      <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <div class="w-80 aerogel-panel border-r border-space-700/20 p-4 overflow-y-auto">
+          <div id="system-info" class="space-y-4">
+            <div class="void-surface p-3 rounded-lg">
+              <h3 class="font-semibold mb-2 text-nebula-200">Selected System</h3>
+              <div id="selected-system" class="text-sm text-space-300">
+                Click a system to view details
+              </div>
+            </div>
+
+            <div class="void-surface p-3 rounded-lg">
+              <h3 class="font-semibold mb-2 text-nebula-200">Quick Actions</h3>
+              <div class="space-y-2">
+                <button id="build-btn" class="w-full px-3 py-2 bg-gradient-to-r from-nebula-700 to-nebula-600 hover:from-nebula-600 hover:to-nebula-500 rounded text-sm transition-all duration-200">
+                  Build
+                </button>
+                <button id="send-fleet-btn" class="w-full px-3 py-2 bg-gradient-to-r from-plasma-700 to-plasma-600 hover:from-plasma-600 hover:to-plasma-500 rounded text-sm transition-all duration-200">
+                  Send Fleet
+                </button>
+                <button id="trade-route-btn" class="w-full px-3 py-2 bg-gradient-to-r from-void-700 to-void-600 hover:from-void-600 hover:to-void-500 rounded text-sm transition-all duration-200">
+                  Trade Route
+                </button>
+              </div>
+            </div>
+
+            <div class="void-surface p-3 rounded-lg">
+              <h3 class="font-semibold mb-2 text-nebula-200">Game Status</h3>
+              <div class="text-sm text-space-300">
+                <div>Tick Rate: <span id="next-tick" class="text-plasma-300">6/min (10s)</span></div>
+                <div>Current: <span id="current-turn" class="text-nebula-300">Tick 1</span></div>
+                <div>Players: <span id="player-count" class="text-void-300">0</span> <span id="ws-status" class="text-xs" title="WebSocket: connecting">🟡</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Game Canvas -->
+        <div class="flex-1 relative">
+          <canvas id="game-canvas" class="w-full h-full cursor-crosshair" style="background: radial-gradient(ellipse at center, #001433 0%, #000508 70%, #000000 100%);"></canvas>
+
+          <!-- Overlay UI -->
+          <div id="canvas-overlay" class="absolute inset-0 pointer-events-none">
+            <!-- Tooltip -->
+            <div id="tooltip" class="absolute text-sm hidden pointer-events-none z-10">
+            </div>
+
+            <!-- Context Menu -->
+            <div id="context-menu" class="absolute shadow-lg hidden z-20 pointer-events-auto">
+              <div class="py-1">
+                <button class="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-nebula-800 hover:to-space-800 text-sm transition-all duration-200" data-action="view">
+                  View System
+                </button>
+                <button class="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-plasma-800 hover:to-space-800 text-sm transition-all duration-200" data-action="fleet">
+                  Send Fleet
+                </button>
+                <button class="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-void-800 hover:to-space-800 text-sm transition-all duration-200" data-action="trade">
+                  Trade Route
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="fixed inset-0 hidden z-50">
+      <div class="flex items-center justify-center h-full">
+        <div id="modal-content" class="max-w-md w-full mx-4">
+          <!-- Modal content will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

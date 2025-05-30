@@ -25,7 +25,7 @@ export default defineConfig({
     ]
   },
   build: {
-    outDir: 'web',
+    outDir: '../backend/pb_public',
     rollupOptions: {
       input: {
         main: 'index.html'
