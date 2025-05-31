@@ -711,21 +711,6 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 				}
 				user.Set(resourceId, currentResourceValue-amountInt)
 			}
-		case models.JsonMap: // PocketBase's own JsonMap type
-			costMap := costValue
-			for resourceId, amountInterface := range costMap {
-				amount, ok := amountInterface.(float64) // All numbers from JSON map are float64 initially
-				if !ok {
-					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
-				}
-				amountInt := int(amount)
-
-				currentResourceValue := user.GetInt(resourceId)
-				if currentResourceValue < amountInt {
-					return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceId, amountInt, currentResourceValue), nil)
-				}
-				user.Set(resourceId, currentResourceValue-amountInt)
-			}
 		default:
 			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
 		}
