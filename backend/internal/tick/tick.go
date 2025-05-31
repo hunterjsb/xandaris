@@ -110,9 +110,117 @@ func ProcessTick(app *pocketbase.PocketBase) error {
 
 // ApplyBuildingCompletions checks for completed buildings and applies them
 func ApplyBuildingCompletions(app *pocketbase.PocketBase) error {
-	// TODO: Implement building queue system
-	// For now, buildings complete instantly when queued
-	log.Println("Applied building completions")
+	tickMutex.RLock()
+	gameTick := currentTick
+	tickMutex.RUnlock()
+
+	log.Printf("Applying building completions for tick #%d...", gameTick)
+
+	// Query for completed building orders
+	completedOrders, err := app.Dao().FindRecordsByFilter(
+		"building_queue",
+		"completion_tick <= {:current_tick}",
+		"-created", // Process oldest first if multiple complete on same tick
+		0,          // No limit, process all completed
+		0,
+		map[string]interface{}{"current_tick": gameTick},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to query building_queue: %w", err)
+	}
+
+	if len(completedOrders) == 0 {
+		log.Println("No building completions to apply.")
+		return nil
+	}
+
+	processedCount := 0
+	for _, order := range completedOrders {
+		systemID := order.GetString("system_id")
+		buildingType := order.GetString("building_type")
+		targetLevel := order.GetInt("target_level")
+		ownerID := order.GetString("owner_id") // For bank creation
+
+		system, err := app.Dao().FindRecordById("systems", systemID)
+		if err != nil {
+			log.Printf("Error finding system %s for building order %s: %v. Skipping.", systemID, order.Id, err)
+			// Decide if we should delete the order or retry later. For now, skipping.
+			continue
+		}
+
+		log.Printf("Processing completion: System %s, Building %s, Target Level %d, Order %s", systemID, buildingType, targetLevel, order.Id)
+
+		if buildingType == "bank" {
+			// Handle bank creation
+			// Ensure no existing bank (should be guaranteed by BuildOrderHandler, but double check)
+			existingBank, _ := app.Dao().FindFirstRecordByFilter("banks", "system_id = {:systemId}", map[string]interface{}{"systemId": systemID})
+			if existingBank != nil {
+				log.Printf("Bank already exists for system %s, building order %s. Skipping.", systemID, order.Id)
+			} else {
+				bankCollection, err := app.Dao().FindCollectionByNameOrId("banks")
+				if err != nil {
+					log.Printf("Error finding banks collection for order %s: %v. Skipping.", order.Id, err)
+					continue
+				}
+				bank := models.NewRecord(bankCollection)
+				bank.Set("name", fmt.Sprintf("CryptoServer-%s", systemID[:8])) // Consistent naming
+				bank.Set("owner_id", ownerID)
+				bank.Set("system_id", systemID)
+				bank.Set("security_level", 1)
+				bank.Set("processing_power", 10)
+				bank.Set("credits_per_tick", 1) // Base income
+				bank.Set("active", true)
+				bank.Set("last_income_tick", gameTick) // Set last income tick to current tick
+
+				if err := app.Dao().SaveRecord(bank); err != nil {
+					log.Printf("Error creating bank for system %s (order %s): %v. Skipping.", systemID, order.Id, err)
+					continue
+				}
+				log.Printf("Created bank for system %s, linked to user %s.", systemID, ownerID)
+			}
+		} else {
+			// Handle regular building level update
+			fieldName := ""
+			switch buildingType {
+			case "habitat":
+				fieldName = "hab_lvl"
+			case "farm":
+				fieldName = "farm_lvl"
+			case "mine":
+				fieldName = "mine_lvl"
+			case "factory":
+				fieldName = "fac_lvl"
+			case "shipyard":
+				fieldName = "yard_lvl"
+			default:
+				log.Printf("Unknown building type %s in order %s. Skipping.", buildingType, order.Id)
+				continue
+			}
+
+			// Ensure we are not downgrading or setting an invalid level
+			currentLevel := system.GetInt(fieldName)
+			if targetLevel > currentLevel {
+				system.Set(fieldName, targetLevel)
+				if err := app.Dao().SaveRecord(system); err != nil {
+					log.Printf("Error updating system %s for building %s (order %s): %v. Skipping.", systemID, buildingType, order.Id, err)
+					continue
+				}
+				log.Printf("System %s building %s upgraded to level %d.", systemID, buildingType, targetLevel)
+			} else {
+				log.Printf("Target level %d not greater than current level %d for %s on system %s (order %s). Skipping.", targetLevel, currentLevel, buildingType, systemID, order.Id)
+			}
+		}
+
+		// Delete the processed record from the queue
+		if err := app.Dao().DeleteRecord(order); err != nil {
+			log.Printf("Error deleting building order %s: %v.", order.Id, err)
+			// This is not ideal, as it might re-process. Consider marking as processed instead.
+		} else {
+			processedCount++
+		}
+	}
+
+	log.Printf("Applied %d building completions out of %d found.", processedCount, len(completedOrders))
 	return nil
 }
 

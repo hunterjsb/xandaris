@@ -22,6 +22,7 @@ type Client struct {
 	conn   *websocket.Conn
 	send   chan []byte
 	userId string
+	app    *pocketbase.PocketBase // Added app instance
 }
 
 type Hub struct {
@@ -126,8 +127,38 @@ func (c *Client) readPump() {
 		}
 
 		if msg.Type == "auth" {
-			// TODO: Validate token and set userId
-			log.Printf("WebSocket auth message received")
+			// 'c' is the *Client receiver for readPump
+			token, ok := msg.Payload.(string)
+			if !ok {
+				log.Printf("WebSocket auth error: Invalid token format in payload for client.")
+				errorMsg := Message{Type: "auth_failed", Payload: "Invalid token payload format"}
+				errorData, _ := json.Marshal(errorMsg)
+				c.send <- errorData
+				continue
+			}
+
+			// Validate token using c.app
+			// Assuming users are in "_pb_users_auth_" collection.
+			authRecord, err := c.app.Dao().FindAuthRecordByToken(token, "_pb_users_auth_")
+			if err != nil {
+				log.Printf("WebSocket auth failed for token '%s': %v", token, err)
+				errorMsg := Message{Type: "auth_failed", Payload: "Invalid or expired token"}
+				errorData, _ := json.Marshal(errorMsg)
+				c.send <- errorData
+				// Optional: consider closing the connection after a failed auth attempt
+				// GlobalHub.unregister <- c
+				// c.conn.Close()
+				// return // This would exit the readPump goroutine
+				continue
+			}
+
+			c.userId = authRecord.Id
+			log.Printf("WebSocket client authenticated: UserID %s, connection %p", c.userId, c.conn)
+
+			// Send auth success message
+			authSuccessMsg := Message{Type: "auth_success", Payload: map[string]string{"userId": c.userId, "message": "Authentication successful"}}
+			successData, _ := json.Marshal(authSuccessMsg)
+			c.send <- successData
 		}
 	}
 }
@@ -144,6 +175,7 @@ func HandleWebSocket(app *pocketbase.PocketBase) echo.HandlerFunc {
 		client := &Client{
 			conn: conn,
 			send: make(chan []byte, 256),
+			app:  app, // Pass app instance to client
 		}
 
 		GlobalHub.register <- client

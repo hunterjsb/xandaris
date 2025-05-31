@@ -7,6 +7,11 @@ export class MapRenderer {
     this.lanes = [];
     this.fleets = [];
     this.selectedSystem = null;
+
+    // Player and diplomacy info
+    this.currentPlayerId = null;
+    this.allyIds = [];
+    this.enemyIds = [];
     
     // View settings
     this.viewX = 0;
@@ -19,9 +24,10 @@ export class MapRenderer {
     this.colors = {
       background: '#000508',
       star: '#4080ff',        // Nebula blue for unowned
-      starOwned: '#f1a9ff',   // Plasma pink for owned 
+      starOwned: '#f1a9ff',   // Plasma pink for player-owned
+      starAlly: '#50fa7b',    // Friendly green for allies
       starEnemy: '#ff6b6b',   // Bright red for enemies
-      starNeutral: '#8cb3ff', // Lighter blue for neutral
+      starNeutral: '#8cb3ff', // Lighter blue for neutral/other players
       lane: 'rgba(64, 128, 255, 0.2)',  // Faint blue lanes
       laneActive: 'rgba(241, 169, 255, 0.6)', // Active plasma lanes
       fleet: '#8b5cf6',       // Void purple for fleets
@@ -34,6 +40,7 @@ export class MapRenderer {
     // Animation
     this.animationFrame = null;
     this.lastTime = 0;
+    this.currentTick = 0; // Initialize currentTick
     
     this.setupCanvas();
     this.setupEventListeners();
@@ -298,10 +305,19 @@ export class MapRenderer {
       }
 
       // Determine system color based on ownership
-      let color = this.colors.star;
-      if (system.owner_id) {
-        // TODO: Check if owner is current player or ally/enemy
-        color = this.colors.starOwned; // For now, assume owned = friendly
+      let color = this.colors.star; // Default to unowned
+      const ownerId = system.owner_id;
+
+      if (ownerId) {
+        if (ownerId === this.currentPlayerId) {
+          color = this.colors.starOwned;
+        } else if (this.allyIds.includes(ownerId)) {
+          color = this.colors.starAlly;
+        } else if (this.enemyIds.includes(ownerId)) {
+          color = this.colors.starEnemy;
+        } else {
+          color = this.colors.starNeutral; // Owned by another player (not specifically ally or enemy)
+        }
       }
 
       const radius = 6 * this.zoom;
@@ -423,8 +439,27 @@ export class MapRenderer {
       
       if (!fromSystem || !toSystem) return;
 
-      // TODO: Calculate actual progress based on ETA
-      const progress = 0.5; // Placeholder
+      let progress = 0.5; // Default placeholder
+      const { departure_tick, eta_tick } = fleet;
+
+      if (typeof departure_tick === 'undefined' || departure_tick === null) {
+        // console.warn(`Fleet ${fleet.id} missing departure_tick, using placeholder progress.`);
+        // This warning can be noisy, enable if specifically debugging this.
+        progress = 0.5;
+      } else if (eta_tick <= departure_tick) {
+        progress = 0.5; // Or 0 if it's an invalid state (arrived before departure)
+      } else if (this.currentTick >= eta_tick) {
+        progress = 1.0; // Arrived or overdue
+      } else if (this.currentTick < departure_tick) {
+        progress = 0.0; // Not yet departed
+      } else {
+        const totalJourneyTicks = eta_tick - departure_tick;
+        const ticksElapsed = this.currentTick - departure_tick;
+        progress = ticksElapsed / totalJourneyTicks;
+      }
+
+      progress = Math.max(0, Math.min(1, progress)); // Clamp progress between 0 and 1
+
       const worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
       const worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
       
@@ -520,5 +555,22 @@ export class MapRenderer {
     if (this.animationFrame) {
       cancelAnimationFrame(this.animationFrame);
     }
+  }
+
+  // Methods to update player/diplomacy info
+  setCurrentPlayer(playerId) {
+    this.currentPlayerId = playerId;
+  }
+
+  setAllies(allyIdsArray) {
+    this.allyIds = allyIdsArray;
+  }
+
+  setEnemies(enemyIdsArray) {
+    this.enemyIds = enemyIdsArray;
+  }
+
+  setCurrentTick(tick) {
+    this.currentTick = tick;
   }
 }

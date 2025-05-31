@@ -42,9 +42,18 @@ class XanNationApp {
     this.uiController.updateAuthUI(user);
     
     if (user) {
-      console.log('User logged in:', user.username);
+      console.log('User logged in:', user.id, user.username);
+      if (this.mapRenderer) {
+        this.mapRenderer.setCurrentPlayer(user.id);
+      }
     } else {
       console.log('User logged out');
+      if (this.mapRenderer) {
+        this.mapRenderer.setCurrentPlayer(null);
+        // Potentially clear ally/enemy lists too
+        this.mapRenderer.setAllies([]);
+        this.mapRenderer.setEnemies([]);
+      }
     }
   }
 
@@ -59,11 +68,34 @@ class XanNationApp {
       if (state.mapData && state.mapData.lanes) {
         this.mapRenderer.setLanes(state.mapData.lanes);
       }
-      
+
+      // TODO: Update ally/enemy IDs when diplomacy data is available in gameState
+      // For now, this will be empty or based on mock data if we add it.
+      // Example:
+      // if (state.treaties && this.mapRenderer.currentPlayerId) {
+      //   const allies = [];
+      //   const enemies = []; // Logic to determine enemies might be more complex
+      //   state.treaties.forEach(treaty => {
+      //     if (treaty.status === 'active' && (treaty.type === 'alliance' || treaty.type === 'trade_pact')) {
+      //       if (treaty.a_id === this.mapRenderer.currentPlayerId) allies.push(treaty.b_id);
+      //       if (treaty.b_id === this.mapRenderer.currentPlayerId) allies.push(treaty.a_id);
+      //     }
+      //     // Add logic for enemies if applicable from treaties or other state
+      //   });
+      //   this.mapRenderer.setAllies([...new Set(allies)]); // Remove duplicates
+      //   this.mapRenderer.setEnemies(enemies);
+      // }
+
+
       // If this is the first load, fit to systems
       if (state.systems.length > 0 && !this.mapRenderer.hasInitialFit) {
         this.mapRenderer.fitToSystems();
         this.mapRenderer.hasInitialFit = true;
+      }
+
+      // Update current tick in map renderer
+      if (typeof state.currentTick !== 'undefined') {
+        this.mapRenderer.setCurrentTick(state.currentTick);
       }
     }
 

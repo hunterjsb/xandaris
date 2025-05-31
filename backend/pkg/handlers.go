@@ -171,64 +171,157 @@ func BuildOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		// Validate building type and upgrade
+		// Validate building type and calculate cost and build time
 		var fieldName string
 		var cost int
+		var buildTimeTicks int64
+		currentLevel := 0
+
+		// Define build times for each building type
+		// (Habitat: 5 ticks, Farm: 8 ticks, Mine: 10, Factory: 12, Shipyard: 15, Bank: 20)
+		buildTimes := map[string]int64{
+			"habitat":  5,
+			"farm":     8,
+			"mine":     10,
+			"factory":  12,
+			"shipyard": 15,
+			"bank":     20,
+		}
 
 		switch req.BuildingType {
 		case "habitat":
 			fieldName = "hab_lvl"
-			cost = 100 * (system.GetInt("hab_lvl") + 1)
+			currentLevel = system.GetInt("hab_lvl")
+			cost = 100 * (currentLevel + 1)
+			buildTimeTicks = buildTimes["habitat"]
 		case "farm":
 			fieldName = "farm_lvl"
-			cost = 150 * (system.GetInt("farm_lvl") + 1)
+			currentLevel = system.GetInt("farm_lvl")
+			cost = 150 * (currentLevel + 1)
+			buildTimeTicks = buildTimes["farm"]
 		case "mine":
 			fieldName = "mine_lvl"
-			cost = 200 * (system.GetInt("mine_lvl") + 1)
+			currentLevel = system.GetInt("mine_lvl")
+			cost = 200 * (currentLevel + 1)
+			buildTimeTicks = buildTimes["mine"]
 		case "factory":
 			fieldName = "fac_lvl"
-			cost = 300 * (system.GetInt("fac_lvl") + 1)
+			currentLevel = system.GetInt("fac_lvl")
+			cost = 300 * (currentLevel + 1)
+			buildTimeTicks = buildTimes["factory"]
 		case "shipyard":
 			fieldName = "yard_lvl"
-			cost = 500 * (system.GetInt("yard_lvl") + 1)
+			currentLevel = system.GetInt("yard_lvl")
+			cost = 500 * (currentLevel + 1)
+			buildTimeTicks = buildTimes["shipyard"]
 		case "bank":
-			// Banks are special - they create a separate bank record
-			return handleBankConstruction(app, c, user, system, req.BuildingType)
+			// Banks are special: cost is global credits, level isn't directly on system
+			cost = 1000 // Fixed cost for bank
+			buildTimeTicks = buildTimes["bank"]
+			// Check if system already has a bank or a bank is being built
+			existingBank, _ := app.Dao().FindFirstRecordByFilter("banks", "system_id = {:systemId}", map[string]interface{}{"systemId": system.Id})
+			if existingBank != nil {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "System already has a crypto server bank"})
+			}
+			// Check building queue for pending bank
+			pendingBankBuild, _ := app.Dao().FindFirstRecordByFilter("building_queue", "system_id = {:systemId} && building_type = 'bank'", map[string]interface{}{"systemId": system.Id})
+			if pendingBankBuild != nil {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "Crypto server bank construction already in progress for this system"})
+			}
+
+			userCredits := user.GetInt("credits")
+			if userCredits < cost {
+				return c.JSON(http.StatusBadRequest, map[string]string{
+					"error": fmt.Sprintf("Insufficient credits. Required: %d, Have: %d", cost, userCredits),
+				})
+			}
+			user.Set("credits", userCredits-cost)
+			if err := app.Dao().SaveRecord(user); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to deduct credits"})
+			}
 		default:
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": "Invalid building type",
 			})
 		}
 
-		// Check if max level reached
-		currentLevel := system.GetInt(fieldName)
-		if currentLevel >= 10 {
+		// Check if max level reached (not applicable for bank in this direct check)
+		if req.BuildingType != "bank" {
+			if currentLevel >= 10 {
+				return c.JSON(http.StatusBadRequest, map[string]string{
+					"error": "Maximum building level reached",
+				})
+			}
+			// Check resources (using goods as currency for now) for non-bank buildings
+			if system.GetInt("goods") < cost {
+				return c.JSON(http.StatusBadRequest, map[string]string{
+					"error": fmt.Sprintf("Insufficient goods. Required: %d", cost),
+				})
+			}
+			// Deduct resources for non-bank buildings
+			system.Set("goods", system.GetInt("goods")-cost)
+			if err := app.Dao().SaveRecord(system); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to deduct goods from system"})
+			}
+		}
+
+		// Check if there's already a building of the same type in the queue for this system
+		existingQueueItem, _ := app.Dao().FindFirstRecordByFilter(
+			"building_queue",
+			"system_id = {:systemId} && building_type = {:buildingType}",
+			map[string]interface{}{"systemId": req.SystemID, "buildingType": req.BuildingType},
+		)
+		if existingQueueItem != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Maximum building level reached",
+				"error": fmt.Sprintf("Building of type %s already in queue for this system", req.BuildingType),
 			})
 		}
 
-		// Check resources (using goods as currency for now)
-		if system.GetInt("goods") < cost {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": fmt.Sprintf("Insufficient goods. Required: %d", cost),
-			})
-		}
 
-		// Apply upgrade immediately (no build queue for now)
-		system.Set(fieldName, currentLevel+1)
-		system.Set("goods", system.GetInt("goods")-cost)
-
-		if err := app.Dao().SaveRecord(system); err != nil {
+		// Create a new record in the building_queue
+		queueCollection, err := app.Dao().FindCollectionByNameOrId("building_queue")
+		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to upgrade building",
+				"error": "Building queue collection not found",
+			})
+		}
+
+		currentTick := tick.GetCurrentTick(app)
+		completionTick := currentTick + buildTimeTicks
+		targetLevel := currentLevel + 1
+		if req.BuildingType == "bank" { // Bank target level is always 1 (or conceptual)
+			targetLevel = 1
+		}
+
+		queueRecord := models.NewRecord(queueCollection)
+		queueRecord.Set("system_id", req.SystemID)
+		queueRecord.Set("owner_id", user.Id)
+		queueRecord.Set("building_type", req.BuildingType)
+		queueRecord.Set("target_level", targetLevel)
+		queueRecord.Set("completion_tick", completionTick)
+		// PocketBase automatically adds "created"
+
+		if err := app.Dao().SaveRecord(queueRecord); err != nil {
+			// Attempt to refund resources if queue save fails
+			if req.BuildingType == "bank" {
+				user.Set("credits", user.GetInt("credits")+cost)
+				app.Dao().SaveRecord(user) // Best effort refund
+			} else {
+				system.Set("goods", system.GetInt("goods")+cost)
+				app.Dao().SaveRecord(system) // Best effort refund
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "Failed to add building to queue",
 			})
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"building_type": req.BuildingType,
-			"new_level":     currentLevel + 1,
-			"cost":          cost,
+			"message":         "Building construction queued",
+			"building_type":   req.BuildingType,
+			"target_level":    targetLevel,
+			"cost":            cost,
+			"completion_tick": completionTick,
+			"queue_id":        queueRecord.Id,
 		})
 	}
 }
@@ -390,65 +483,7 @@ func DiplomacyHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 	}
 }
 
-// handleBankConstruction creates a new crypto server bank
-func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *models.Record, system *models.Record, buildingType string) error {
-	// Bank construction costs 1000 credits from user's global balance
-	cost := 1000
-	userCredits := user.GetInt("credits")
-	
-	if userCredits < cost {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": fmt.Sprintf("Insufficient credits. Required: %d, Have: %d", cost, userCredits),
-		})
-	}
-
-	// Check if system already has a bank (limit 1 per system)
-	existingBank, err := app.Dao().FindFirstRecordByFilter("banks", "system_id = {:systemId}", map[string]interface{}{
-		"systemId": system.Id,
-	})
-	if err == nil && existingBank != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "System already has a crypto server bank",
-		})
-	}
-
-	// Create the bank
-	bankCollection, err := app.Dao().FindCollectionByNameOrId("banks")
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Banks collection not found",
-		})
-	}
-
-	bank := models.NewRecord(bankCollection)
-	bank.Set("name", fmt.Sprintf("CryptoServer-%s", system.Id[:8]))
-	bank.Set("owner_id", user.Id)
-	bank.Set("system_id", system.Id)
-	bank.Set("security_level", 1)      // Starting security level
-	bank.Set("processing_power", 10)   // Starting processing power
-	bank.Set("credits_per_tick", 1)    // 1 credit per tick income
-	bank.Set("active", true)
-	bank.Set("last_income_tick", tick.GetCurrentTick(app))
-
-	if err := app.Dao().SaveRecord(bank); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to create crypto server",
-		})
-	}
-
-	// Deduct credits from user
-	user.Set("credits", userCredits-cost)
-	if err := app.Dao().SaveRecord(user); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "Failed to deduct credits",
-		})
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"bank_id":     bank.Id,
-		"name":        bank.GetString("name"),
-		"income":      1,
-		"cost":        cost,
-		"new_balance": userCredits - cost,
-	})
-}
+// handleBankConstruction is now integrated into ApplyBuildingCompletions or not needed if bank creation is handled by queue logic
+// func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *models.Record, system *models.Record, buildingType string) error {
+// ... (original content commented out or removed as it's being replaced by the queue system)
+// }
