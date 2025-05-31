@@ -167,14 +167,10 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, resourceType string
 
 // ResolveFleetArrivals handles fleet arrivals and combat
 func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
-	// Get all fleets that should arrive this tick (eta_tick <= current_tick)
-	tickMutex.RLock()
-	tick := currentTick
-	tickMutex.RUnlock()
+	// Get all fleets that have an ETA in the past (should have arrived)
+	currentTime := time.Now().Format("2006-01-02 15:04:05.000Z")
 	
-	fleets, err := app.Dao().FindRecordsByFilter("fleets", "eta_tick <= {:tick}", "", 0, 0, map[string]interface{}{
-		"tick": tick,
-	})
+	fleets, err := app.Dao().FindRecordsByFilter("fleets", "eta != '' && eta <= '"+currentTime+"'", "", 0, 0)
 	if err != nil {
 		return fmt.Errorf("failed to fetch arriving fleets: %w", err)
 	}
@@ -197,49 +193,49 @@ func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
 
 // resolveFleetArrival handles a single fleet arrival
 func resolveFleetArrival(app *pocketbase.PocketBase, fleet *models.Record) error {
-	toId := fleet.GetString("to_id")
+	destinationSystemId := fleet.GetString("destination_system")
 	ownerId := fleet.GetString("owner_id")
-	strength := fleet.GetInt("strength")
-
-	// Get target system
-	system, err := app.Dao().FindRecordById("systems", toId)
+	
+	// Get ships in this fleet to calculate total strength
+	ships, err := app.Dao().FindRecordsByFilter("ships", "fleet_id = '"+fleet.Id+"'", "", 0, 0)
 	if err != nil {
-		return fmt.Errorf("target system not found: %w", err)
+		return fmt.Errorf("failed to get ships for fleet: %w", err)
+	}
+	
+	totalStrength := 0
+	for _, ship := range ships {
+		shipTypeId := ship.GetString("ship_type")
+		shipType, err := app.Dao().FindRecordById("ship_types", shipTypeId)
+		if err != nil {
+			continue
+		}
+		strength := shipType.GetInt("strength")
+		count := ship.GetInt("count")
+		totalStrength += strength * count
 	}
 
-	currentOwner := system.GetString("owner_id")
-
-	// If system is unowned or owned by the same player, colonize/reinforce
-	if currentOwner == "" || currentOwner == ownerId {
-		system.Set("owner_id", ownerId)
-		if currentOwner == "" {
-			// New colonization
-			system.Set("pop", strength*10) // Each fleet strength = 10 population
-			system.Set("morale", 100)
-			log.Printf("System %s colonized by %s", toId, ownerId)
-		} else {
-			// Reinforcement
-			system.Set("pop", system.GetInt("pop")+strength*5)
-			log.Printf("System %s reinforced by %s", toId, ownerId)
-		}
-	} else {
-		// Combat with current owner
-		defenseStrength := system.GetInt("pop") / 10 // Population provides defense
-		if strength > defenseStrength {
-			// Attacker wins
-			system.Set("owner_id", ownerId)
-			system.Set("pop", (strength-defenseStrength)*5)
-			system.Set("morale", 50) // Conquered systems have low morale
-			log.Printf("System %s conquered by %s", toId, ownerId)
-		} else {
-			// Defender wins
-			system.Set("pop", system.GetInt("pop")-(strength*5))
-			system.Set("morale", system.GetInt("morale")+10) // Successful defense boosts morale
-			log.Printf("Attack on system %s repelled", toId)
-		}
+	// Update fleet location
+	fleet.Set("current_system", destinationSystemId)
+	fleet.Set("destination_system", "")
+	fleet.Set("eta", "")
+	
+	// Get planets in target system
+	planets, err := app.Dao().FindRecordsByFilter("planets", "system_id = '"+destinationSystemId+"'", "", 0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get planets in system: %w", err)
 	}
 
-	return app.Dao().SaveRecord(system)
+	if len(planets) == 0 {
+		log.Printf("Fleet %s (owner %s) arrived at empty system %s", fleet.Id, ownerId, destinationSystemId)
+		return app.Dao().SaveRecord(fleet)
+	}
+
+	// For now, just move fleet to the system and log arrival
+	// TODO: Implement proper colonization, combat, and planet management
+	log.Printf("Fleet %s (owner %s, strength %d) arrived at system %s with %d planets", 
+		fleet.Id, ownerId, totalStrength, destinationSystemId, len(planets))
+
+	return app.Dao().SaveRecord(fleet)
 }
 
 // EvaluateTreaties checks for expired treaties and updates statuses
