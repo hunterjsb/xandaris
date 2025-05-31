@@ -5,10 +5,15 @@ import { gameState } from "./stores/gameState.js";
 import { MapRenderer } from "./components/mapRenderer.js";
 import { UIController } from "./components/uiController.js";
 
+// Make gameState and uiController globally available
+const uiController = new UIController();
+window.gameState = gameState;
+window.uiController = uiController;
+
 class XanNationApp {
   constructor() {
     this.mapRenderer = null;
-    this.uiController = null;
+    // this.uiController = null; // Will be set from window global
 
     this.init();
   }
@@ -17,7 +22,7 @@ class XanNationApp {
     console.log("Initializing Xan Nation...");
 
     // Initialize UI controller
-    this.uiController = new UIController();
+    this.uiController = window.uiController; // Use global uiController
 
     // Initialize map renderer
     this.mapRenderer = new MapRenderer("game-canvas");

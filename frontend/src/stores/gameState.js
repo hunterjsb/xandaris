@@ -81,7 +81,12 @@ export class GameState {
 
         const player = await gameData.getPlayer(userId);
         await new Promise((resolve) => setTimeout(resolve, 50));
-        this.playerResources.credits = player.credits;
+        if (player) {
+          this.playerResources.credits = player.credits;
+        } else {
+          this.playerResources.credits = 0;
+          console.warn("Player data could not be loaded, defaulting credits to 0.");
+        }
       }
 
       // Load status last
@@ -227,11 +232,25 @@ export class GameState {
   }
 
   async updatePlayerResources() {
-    const user = await gameData.getPlayer(authManager.getUser().id);
-    if (!user) return;
+    const user = await gameData.getPlayer(authManager.getUser()?.id); // Safe navigation for id
+    let userCredits = 0; // Initialize userCredits to 0
 
-    // Start with user's global credits
-    const userCredits = user.credits;
+    if (!user) {
+      console.warn("Cannot update player resources: user data not found. Defaulting user credits to 0.");
+      // Also, reset player resources to 0 and return, as no further calculation is meaningful.
+      this.playerResources = {
+        credits: 0,
+        food: 0,
+        ore: 0,
+        goods: 0,
+        fuel: 0,
+      };
+      this.creditIncome = 0; // Explicitly set income to 0
+      this.notifyCallbacks(); // Notify UI about the reset state for this part
+      return;
+    } else {
+      userCredits = user.credits;
+    }
 
     // Calculate income from buildings
     const userBuildings = this.getPlayerBuildings();
@@ -242,7 +261,8 @@ export class GameState {
       .reduce((sum, building) => sum + (building.credits_per_tick || 1), 0);
 
     // Calculate total resources from owned systems
-    const ownedSystems = this.systems.filter((s) => s.owner_id === user.id);
+    const userId = user ? user.id : null;
+    const ownedSystems = userId ? this.systems.filter((s) => s.owner_id === userId) : [];
     this.playerResources = ownedSystems.reduce(
       (total, system) => ({
         credits: total.credits + (system.credits || 0),
