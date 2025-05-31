@@ -360,57 +360,48 @@ export class UIController {
     );
   }
 
-  showBuildModal(system) {
-    const buildings = [
-      {
-        type: "habitat",
-        name: "Habitat",
-        cost: 100,
-        description: "Increases population capacity",
-      },
-      { type: "farm", name: "Farm", cost: 150, description: "Produces food" },
-      { type: "mine", name: "Mine", cost: 200, description: "Produces ore" },
-      {
-        type: "factory",
-        name: "Factory",
-        cost: 300,
-        description: "Produces goods",
-      },
-      {
-        type: "shipyard",
-        name: "Shipyard",
-        cost: 500,
-        description: "Enables fleet construction",
-      },
-      {
-        type: "bank",
-        name: "Bank",
-        cost: 1000,
-        description: "Generates 1 credit per tick",
-      },
-    ];
+  async showBuildModal(system) {
+    try {
+      const { gameData } = await import("../lib/pocketbase.js");
+      const result = await gameData.getBuildingTypes();
+      const buildings = result?.items || [];
 
-    const buildingOptions = buildings
-      .map(
-        (building) => `
-      <button class="w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left"
-              onclick="window.gameState.queueBuilding('${system.id}', '${building.type}')">
-        <div class="font-semibold">${building.name}</div>
-        <div class="text-sm text-space-300">${building.description}</div>
-        <div class="text-sm text-green-400">Cost: ${building.cost} credits</div>
+      const buildingOptions = buildings
+        .map(
+          (b) => `
+      <button class="w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left" data-bid="${b.id}">
+        <div class="font-semibold">${b.name}</div>
+        <div class="text-sm text-green-400">Cost: ${b.cost} credits</div>
       </button>
     `,
-      )
-      .join("");
+        )
+        .join("");
 
-    this.showModal(
-      `Build in ${system.name || `System ${system.id.slice(-3)}`}`,
-      `
-      <div class="space-y-2">
-        ${buildingOptions}
-      </div>
-    `,
-    );
+      this.showModal(
+        `Build in ${system.name || `System ${system.id.slice(-3)}`}`,
+        `
+        <div class="space-y-2">
+          ${buildingOptions || '<div class="text-space-400">No building types available</div>'}
+        </div>
+      `,
+      );
+
+      // Attach click listeners to building buttons
+      document.querySelectorAll("#modal-content [data-bid]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await this.gameState.queueBuilding(system.id, btn.dataset.bid);
+            this.hideModal();
+          } catch (err) {
+            console.error("Failed to queue building:", err);
+            this.showError("Failed to queue building");
+          }
+        });
+      });
+    } catch (error) {
+      console.error("Failed to load building types:", error);
+      this.showError("Failed to load building types");
+    }
   }
 
   showSendFleetModal(system) {

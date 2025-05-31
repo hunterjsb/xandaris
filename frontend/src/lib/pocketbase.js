@@ -338,6 +338,19 @@ export class GameDataManager {
     }
   }
 
+  async getBuildingTypes() {
+    try {
+      return await pb.send("/api/building_types", { method: "GET" });
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error("Failed to fetch building types:", e);
+      }
+      return { items: [] };
+    }
+  }
+
   async createTradeRoute(fromId, toId, cargo, capacity) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
