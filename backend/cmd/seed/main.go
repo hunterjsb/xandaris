@@ -72,44 +72,70 @@ func seedNewSchema(app *pocketbase.PocketBase) error {
 }
 
 func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
-	// Create a sample user for testing
-	userCollection, err := app.Dao().FindCollectionByNameOrId("users")
+	// Check if sample user already exists
+	existingUsers, err := app.Dao().FindRecordsByFilter("users", "username = 'testplayer'", "", 1, 0)
 	if err != nil {
 		return err
 	}
 
-	sampleUser := models.NewRecord(userCollection)
-	sampleUser.Set("username", "testplayer")
-	sampleUser.Set("email", "test@example.com")
-	sampleUser.Set("password", "testpassword123")
-	sampleUser.Set("credits", 5000)
-	sampleUser.Set("food", 1000)
-	sampleUser.Set("ore", 500)
-	sampleUser.Set("goods", 200)
-	sampleUser.Set("fuel", 300)
+	var sampleUser *models.Record
+	if len(existingUsers) > 0 {
+		// User already exists, use existing user
+		sampleUser = existingUsers[0]
+		fmt.Printf("Using existing user: %s\n", sampleUser.GetString("username"))
+	} else {
+		// Create a new sample user
+		userCollection, err := app.Dao().FindCollectionByNameOrId("users")
+		if err != nil {
+			return err
+		}
 
-	if err := app.Dao().SaveRecord(sampleUser); err != nil {
-		return err
+		sampleUser = models.NewRecord(userCollection)
+		sampleUser.Set("username", "testplayer")
+		sampleUser.Set("email", "test@example.com") 
+		sampleUser.Set("password", "testpassword123")
+		sampleUser.Set("credits", 5000)
+		sampleUser.Set("food", 1000)
+		sampleUser.Set("ore", 500)
+		sampleUser.Set("goods", 200)
+		sampleUser.Set("fuel", 300)
+
+		if err := app.Dao().SaveRecord(sampleUser); err != nil {
+			return err
+		}
+		fmt.Printf("Created new user: %s\n", sampleUser.GetString("username"))
 	}
 
-	// Get some planets to colonize
-	planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
+	// Check how many planets this user already has colonized
+	existingColonies, err := app.Dao().FindRecordsByFilter("planets", "colonized_by = '"+sampleUser.Id+"'", "", 0, 0)
 	if err != nil {
 		return err
 	}
 
-	if len(planets) == 0 {
-		return fmt.Errorf("no planets found to colonize")
+	if len(existingColonies) >= 3 {
+		fmt.Printf("User already has %d colonized planets, skipping colonization\n", len(existingColonies))
+		return nil
 	}
 
-	// Colonize first 3 planets
-	colonizedCount := 3
-	if len(planets) < colonizedCount {
-		colonizedCount = len(planets)
+	// Get uncolonized planets to colonize
+	uncolonizedPlanets, err := app.Dao().FindRecordsByFilter("planets", "colonized_by = ''", "", 10, 0)
+	if err != nil {
+		return err
 	}
 
-	for i := 0; i < colonizedCount; i++ {
-		planet := planets[i]
+	if len(uncolonizedPlanets) == 0 {
+		fmt.Printf("No uncolonized planets found\n")
+		return nil
+	}
+
+	// Colonize up to 3 planets total
+	planetsToColonize := 3 - len(existingColonies)
+	if len(uncolonizedPlanets) < planetsToColonize {
+		planetsToColonize = len(uncolonizedPlanets)
+	}
+
+	for i := 0; i < planetsToColonize; i++ {
+		planet := uncolonizedPlanets[i]
 		planet.Set("colonized_by", sampleUser.Id)
 		planet.Set("colonized_at", time.Now())
 
@@ -128,7 +154,9 @@ func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 		}
 	}
 
-	fmt.Printf("Created sample user '%s' with %d colonized planets\n", sampleUser.GetString("username"), colonizedCount)
+	totalColonies := len(existingColonies) + planetsToColonize
+
+	fmt.Printf("User '%s' now has %d colonized planets\n", sampleUser.GetString("username"), totalColonies)
 	return nil
 }
 

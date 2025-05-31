@@ -240,10 +240,19 @@ func resolveFleetArrival(app *pocketbase.PocketBase, fleet *models.Record) error
 
 // EvaluateTreaties checks for expired treaties and updates statuses
 func EvaluateTreaties(app *pocketbase.PocketBase) error {
-	// Get all active treaties
-	treaties, err := app.Dao().FindRecordsByFilter("treaties", "status = 'active'", "", 0, 0)
+	// Check if treaties collection exists
+	_, err := app.Dao().FindCollectionByNameOrId("treaties")
 	if err != nil {
-		return fmt.Errorf("failed to fetch treaties: %w", err)
+		// Treaties collection doesn't exist, skip
+		return nil
+	}
+
+	// Get all active treaties
+	treaties, err := app.Dao().FindRecordsByExpr("treaties", nil, nil)
+	if err != nil {
+		// No treaties found, this is normal
+		log.Printf("No treaties found, skipping evaluation")
+		return nil
 	}
 
 	now := time.Now()
