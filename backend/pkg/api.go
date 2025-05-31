@@ -585,7 +585,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		// Get building type to check cost
 		buildingType, err := app.Dao().FindRecordById("building_types", data.BuildingType)
 		if err != nil {
-			return apis.NewBadRequestError("Building type not found", err)
+			return apis.NewBadRequestError(fmt.Sprintf("Building %s type not found", data.BuildingType), err)
 		}
 
 		// Check building cost
