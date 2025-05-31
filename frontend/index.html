@@ -53,11 +53,11 @@
       <div class="flex h-screen">
         <!-- Left Sidebar -->
         <div class="w-80 aerogel-panel border-r border-space-700/20 p-4 overflow-y-auto">
-          <div id="system-info" class="space-y-4">
+          <div id="planet-info-container" class="space-y-4"> <!-- Changed id system-info to planet-info-container -->
             <div class="void-surface p-3 rounded-lg">
-              <h3 class="font-semibold mb-2 text-nebula-200">Selected System</h3>
-              <div id="selected-system" class="text-sm text-space-300">
-                Click a system to view details
+              <h3 class="font-semibold mb-2 text-nebula-200">Selected Planet</h3> <!-- Changed System to Planet -->
+              <div id="selected-planet" class="text-sm text-space-300"> <!-- Changed id selected-system to selected-planet -->
+                Click a planet to view details <!-- Changed system to planet -->
               </div>
             </div>
             
@@ -101,7 +101,7 @@
             <div id="context-menu" class="absolute shadow-lg hidden z-20 pointer-events-auto">
               <div class="py-1">
                 <button class="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-nebula-800 hover:to-space-800 text-sm transition-all duration-200" data-action="view">
-                  View System
+                  View Planet <!-- Changed System to Planet -->
                 </button>
                 <button class="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-plasma-800 hover:to-space-800 text-sm transition-all duration-200" data-action="fleet">
                   Send Fleet

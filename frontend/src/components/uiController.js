@@ -26,7 +26,7 @@ export class UIController {
   updateGameUI(state) {
     this.gameState = state;
     this.updateResourcesUI(state.playerResources);
-    this.updateSystemInfoUI(state.selectedSystem);
+    this.updatePlanetInfoUI(state.selectedPlanet);
     this.updateGameStatusUI(state);
   }
 
@@ -47,42 +47,42 @@ export class UIController {
     }
   }
 
-  updateSystemInfoUI(selectedSystem) {
-    const systemInfo = document.getElementById('selected-system');
+  updatePlanetInfoUI(selectedPlanet) {
+    const planetInfo = document.getElementById('selected-planet'); // Changed ID
     
-    if (selectedSystem) {
-      const isOwned = this.currentUser && selectedSystem.owner_id === this.currentUser.id;
+    if (selectedPlanet) {
+      const isOwned = this.currentUser && selectedPlanet.owner_id === this.currentUser.id;
       
-      systemInfo.innerHTML = `
+      planetInfo.innerHTML = `
         <div class="space-y-2">
-          <div class="font-semibold text-orange-300">${selectedSystem.name || `System ${selectedSystem.id.slice(-3)}`}</div>
+          <div class="font-semibold text-orange-300">${selectedPlanet.name || `Planet ${selectedPlanet.id.slice(-3)}`}</div>
           <div class="text-xs space-y-1">
-            <div>Position: ${selectedSystem.x}, ${selectedSystem.y}</div>
-            <div>Population: ${selectedSystem.pop || 0}</div>
-            <div>Morale: ${selectedSystem.morale || 0}%</div>
-            <div>Owner: ${selectedSystem.owner_name || 'Uncolonized'}</div>
+            <div>Position: ${selectedPlanet.x}, ${selectedPlanet.y}</div>
+            <div>Population: ${selectedPlanet.pop || 0}</div>
+            <div>Morale: ${selectedPlanet.morale || 0}%</div>
+            <div>Owner: ${selectedPlanet.owner_name || 'Uncolonized'}</div>
           </div>
           ${isOwned ? `
             <div class="text-xs space-y-1 pt-2 border-t border-space-600">
               <div class="font-medium">Resources:</div>
-              <div>Food: ${selectedSystem.food || 0}</div>
-              <div>Ore: ${selectedSystem.ore || 0}</div>
-              <div>Goods: ${selectedSystem.goods || 0}</div>
-              <div>Fuel: ${selectedSystem.fuel || 0}</div>
+              <div>Food: ${selectedPlanet.food || 0}</div>
+              <div>Ore: ${selectedPlanet.ore || 0}</div>
+              <div>Goods: ${selectedPlanet.goods || 0}</div>
+              <div>Fuel: ${selectedPlanet.fuel || 0}</div>
             </div>
             <div class="text-xs space-y-1 pt-2 border-t border-space-600">
               <div class="font-medium">Buildings:</div>
-              <div>Habitat: Lvl ${selectedSystem.hab_lvl || 0}</div>
-              <div>Farm: Lvl ${selectedSystem.farm_lvl || 0}</div>
-              <div>Mine: Lvl ${selectedSystem.mine_lvl || 0}</div>
-              <div>Factory: Lvl ${selectedSystem.fac_lvl || 0}</div>
-              <div>Shipyard: Lvl ${selectedSystem.yard_lvl || 0}</div>
+              <div>Habitat: Lvl ${selectedPlanet.hab_lvl || 0}</div>
+              <div>Farm: Lvl ${selectedPlanet.farm_lvl || 0}</div>
+              <div>Mine: Lvl ${selectedPlanet.mine_lvl || 0}</div>
+              <div>Factory: Lvl ${selectedPlanet.fac_lvl || 0}</div>
+              <div>Shipyard: Lvl ${selectedPlanet.yard_lvl || 0}</div>
             </div>
           ` : ''}
         </div>
       `;
     } else {
-      systemInfo.innerHTML = 'Click a system to view details';
+      planetInfo.innerHTML = 'Click a planet to view details'; // Changed text
     }
   }
 
@@ -100,7 +100,7 @@ export class UIController {
       tickElement.style.animation = 'flash 0.5s ease-out';
     }
     
-    document.getElementById('player-count').textContent = state.systems.filter(s => s.owner_id).length;
+    document.getElementById('player-count').textContent = state.planets.filter(p => p.owner_id).length; // Changed state.systems to state.planets
     
     // Update tick rate display
     const tickRate = state.ticksPerMinute || 6;
@@ -165,7 +165,7 @@ export class UIController {
     `);
   }
 
-  showBuildModal(system) {
+  showBuildModal(planet) {
     const buildings = [
       { type: 'habitat', name: 'Habitat', cost: 100, description: 'Increases population capacity' },
       { type: 'farm', name: 'Farm', cost: 150, description: 'Produces food' },
@@ -177,45 +177,45 @@ export class UIController {
 
     const buildingOptions = buildings.map(building => `
       <button class="w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left" 
-              onclick="window.gameState.queueBuilding('${system.id}', '${building.type}')">
+              onclick="window.gameState.queueBuilding('${planet.id}', '${building.type}')">
         <div class="font-semibold">${building.name}</div>
         <div class="text-sm text-space-300">${building.description}</div>
         <div class="text-sm text-green-400">Cost: ${building.cost} credits</div>
       </button>
     `).join('');
 
-    this.showModal(`Build in ${system.name || `System ${system.id.slice(-3)}`}`, `
+    this.showModal(`Build in ${planet.name || `Planet ${planet.id.slice(-3)}`}`, `
       <div class="space-y-2">
         ${buildingOptions}
       </div>
     `);
   }
 
-  showSendFleetModal(system) {
-    const ownedSystems = this.gameState?.getOwnedSystems() || [];
+  showSendFleetModal(planet) {
+    const ownedPlanets = this.gameState?.getOwnedPlanets() || []; // Changed to getOwnedPlanets
     
-    if (ownedSystems.length === 0) {
-      this.showError('You need to own at least one system to send fleets');
+    if (ownedPlanets.length === 0) {
+      this.showError('You need to own at least one planet to send fleets'); // Changed system to planet
       return;
     }
 
-    const systemOptions = ownedSystems.map(s => 
-      `<option value="${s.id}">${s.name || `System ${s.id.slice(-3)}`}</option>`
+    const planetOptions = ownedPlanets.map(p =>  // Changed s to p, System to Planet
+      `<option value="${p.id}">${p.name || `Planet ${p.id.slice(-3)}`}</option>`
     ).join('');
 
     this.showModal('Send Fleet', `
       <form id="fleet-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium mb-1">From System:</label>
-          <select id="from-system" class="w-full p-2 bg-space-700 border border-space-600 rounded">
-            ${systemOptions}
+          <label class="block text-sm font-medium mb-1">From Planet:</label> {/* Changed System to Planet */}
+          <select id="from-planet" class="w-full p-2 bg-space-700 border border-space-600 rounded"> {/* Changed from-system to from-planet */}
+            ${planetOptions} {/* Changed systemOptions to planetOptions */}
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium mb-1">To System:</label>
-          <input type="text" id="to-system" value="${system.name || `System ${system.id.slice(-3)}`}" 
+          <label class="block text-sm font-medium mb-1">To Planet:</label> {/* Changed System to Planet */}
+          <input type="text" id="to-planet" value="${planet.name || `Planet ${planet.id.slice(-3)}`}"  // Changed to-system to to-planet, System to Planet
                  class="w-full p-2 bg-space-700 border border-space-600 rounded" readonly>
-          <input type="hidden" id="to-system-id" value="${system.id}">
+          <input type="hidden" id="to-planet-id" value="${planet.id}"> {/* Changed to-system-id to to-planet-id */}
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Fleet Strength:</label>
@@ -237,8 +237,8 @@ export class UIController {
     document.getElementById('fleet-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        const fromId = document.getElementById('from-system').value;
-        const toId = document.getElementById('to-system-id').value;
+        const fromId = document.getElementById('from-planet').value; // Changed from-system to from-planet
+        const toId = document.getElementById('to-planet-id').value; // Changed to-system-id to to-planet-id
         const strength = parseInt(document.getElementById('fleet-strength').value);
         
         await this.gameState.sendFleet(fromId, toId, strength);
@@ -249,16 +249,16 @@ export class UIController {
     });
   }
 
-  showTradeRouteModal(system) {
-    const ownedSystems = this.gameState?.getOwnedSystems() || [];
+  showTradeRouteModal(planet) {
+    const ownedPlanets = this.gameState?.getOwnedPlanets() || []; // Changed to getOwnedPlanets
     
-    if (ownedSystems.length === 0) {
-      this.showError('You need to own at least one system to create trade routes');
+    if (ownedPlanets.length === 0) {
+      this.showError('You need to own at least one planet to create trade routes'); // Changed system to planet
       return;
     }
 
-    const systemOptions = ownedSystems.map(s => 
-      `<option value="${s.id}">${s.name || `System ${s.id.slice(-3)}`}</option>`
+    const planetOptions = ownedPlanets.map(p => // Changed s to p, System to Planet
+      `<option value="${p.id}">${p.name || `Planet ${p.id.slice(-3)}`}</option>`
     ).join('');
 
     const cargoTypes = ['food', 'ore', 'goods', 'fuel'];
@@ -269,16 +269,16 @@ export class UIController {
     this.showModal('Create Trade Route', `
       <form id="trade-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium mb-1">From System:</label>
-          <select id="trade-from-system" class="w-full p-2 bg-space-700 border border-space-600 rounded">
-            ${systemOptions}
+          <label class="block text-sm font-medium mb-1">From Planet:</label> {/* Changed System to Planet */}
+          <select id="trade-from-planet" class="w-full p-2 bg-space-700 border border-space-600 rounded"> {/* Changed trade-from-system to trade-from-planet */}
+            ${planetOptions} {/* Changed systemOptions to planetOptions */}
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium mb-1">To System:</label>
-          <input type="text" value="${system.name || `System ${system.id.slice(-3)}`}" 
+          <label class="block text-sm font-medium mb-1">To Planet:</label> {/* Changed System to Planet */}
+          <input type="text" value="${planet.name || `Planet ${planet.id.slice(-3)}`}"  // Changed System to Planet
                  class="w-full p-2 bg-space-700 border border-space-600 rounded" readonly>
-          <input type="hidden" id="trade-to-system-id" value="${system.id}">
+          <input type="hidden" id="trade-to-planet-id" value="${planet.id}"> {/* Changed trade-to-system-id to trade-to-planet-id */}
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Cargo Type:</label>
@@ -306,8 +306,8 @@ export class UIController {
     document.getElementById('trade-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        const fromId = document.getElementById('trade-from-system').value;
-        const toId = document.getElementById('trade-to-system-id').value;
+        const fromId = document.getElementById('trade-from-planet').value; // Changed trade-from-system to trade-from-planet
+        const toId = document.getElementById('trade-to-planet-id').value; // Changed trade-to-system-id to trade-to-planet-id
         const cargo = document.getElementById('cargo-type').value;
         const capacity = parseInt(document.getElementById('cargo-capacity').value);
         
@@ -372,7 +372,7 @@ export class UIController {
       <div class="bg-space-700 p-3 rounded mb-2">
         <div class="font-semibold text-plasma-300">${bank.name || `CryptoServer-${bank.id.slice(-3)}`}</div>
         <div class="text-sm text-space-300">
-          <div>System: ${bank.system_name || bank.system_id}</div>
+          <div>Planet: ${bank.planet_name || bank.planet_id}</div> {/* Changed System to Planet, system_name to planet_name, system_id to planet_id */}
           <div>Security Level: ${bank.security_level || 1}</div>
           <div>Processing Power: ${bank.processing_power || 10}</div>
           <div class="text-nebula-300">Income: ${bank.credits_per_tick || 1} credits/tick</div>
@@ -392,7 +392,7 @@ export class UIController {
         ${bankList}
       </div>
       <div class="mt-4 text-xs text-space-400 border-t border-space-600 pt-2">
-        💡 Build Crypto Servers at your systems to generate passive income
+        💡 Build Crypto Servers at your planets to generate passive income {/* Changed systems to planets */}
       </div>
     `);
   }

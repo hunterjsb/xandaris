@@ -3,13 +3,13 @@ import { gameData, authManager } from '../lib/pocketbase.js';
 
 export class GameState {
   constructor() {
-    this.systems = [];
+    this.planets = [];
     this.fleets = [];
     this.trades = [];
     this.treaties = [];
     this.banks = [];
     this.mapData = null;
-    this.selectedSystem = null;
+    this.selectedPlanet = null;
     this.currentTick = 1;
     this.ticksPerMinute = 6;
     this.playerResources = {
@@ -36,7 +36,7 @@ export class GameState {
     this.loadMapData();
 
     // Subscribe to game data updates
-    gameData.subscribe('systems', (data) => this.updateSystems(data));
+    gameData.subscribe('planets', (data) => this.updatePlanets(data));
     gameData.subscribe('fleets', (data) => this.updateFleets(data));
     gameData.subscribe('trades', (data) => this.updateTrades(data));
     gameData.subscribe('tick', (data) => this.handleTick(data));
@@ -56,9 +56,9 @@ export class GameState {
         gameData.getStatus()
       ]);
 
-      // Use map data for systems (already loaded)
-      if (mapData && mapData.systems) {
-        this.systems = mapData.systems;
+      // Use map data for planets (already loaded)
+      if (mapData && mapData.planets) {
+        this.planets = mapData.planets;
         this.mapData = mapData;
       }
       this.fleets = fleets;
@@ -80,13 +80,13 @@ export class GameState {
   }
 
   reset() {
-    this.systems = [];
+    this.planets = [];
     this.fleets = [];
     this.trades = [];
     this.treaties = [];
     this.banks = [];
     this.mapData = null;
-    this.selectedSystem = null;
+    this.selectedPlanet = null;
     this.currentTick = 1;
     this.ticksPerMinute = 6;
     this.playerResources = {
@@ -103,12 +103,12 @@ export class GameState {
   async loadMapData() {
     try {
       console.log('GameState: Loading map data...');
-      // Load map data (systems) even without authentication
+      // Load map data (planets) even without authentication
       const mapData = await gameData.getMap();
       console.log('GameState: Received map data', mapData);
-      if (mapData && mapData.systems) {
-        console.log('GameState: Setting systems', mapData.systems.length, 'systems');
-        this.systems = mapData.systems;
+      if (mapData && mapData.planets) {
+        console.log('GameState: Setting planets', mapData.planets.length, 'planets');
+        this.planets = mapData.planets;
         this.mapData = mapData;
         this.notifyCallbacks();
       }
@@ -130,16 +130,16 @@ export class GameState {
     this.callbacks.forEach(callback => callback(this));
   }
 
-  updateSystems(systemsData) {
-    if (Array.isArray(systemsData)) {
-      this.systems = systemsData;
+  updatePlanets(planetsData) {
+    if (Array.isArray(planetsData)) {
+      this.planets = planetsData;
     } else {
-      // Single system update
-      const index = this.systems.findIndex(s => s.id === systemsData.id);
+      // Single planet update
+      const index = this.planets.findIndex(p => p.id === planetsData.id);
       if (index >= 0) {
-        this.systems[index] = systemsData;
+        this.planets[index] = planetsData;
       } else {
-        this.systems.push(systemsData);
+        this.planets.push(planetsData);
       }
     }
     this.updatePlayerResources();
@@ -198,14 +198,14 @@ export class GameState {
     const userBanks = this.getPlayerBanks();
     const creditsPerTick = userBanks.filter(bank => bank.active !== false).length;
 
-    // Calculate total resources from owned systems
-    const ownedSystems = this.systems.filter(s => s.owner_id === user.id);
-    this.playerResources = ownedSystems.reduce((total, system) => ({
-      credits: total.credits + (system.credits || 0),
-      food: total.food + (system.food || 0),
-      ore: total.ore + (system.ore || 0),
-      goods: total.goods + (system.goods || 0),
-      fuel: total.fuel + (system.fuel || 0)
+    // Calculate total resources from owned planets
+    const ownedPlanets = this.planets.filter(p => p.owner_id === user.id);
+    this.playerResources = ownedPlanets.reduce((total, planet) => ({
+      credits: total.credits + (planet.credits || 0),
+      food: total.food + (planet.food || 0),
+      ore: total.ore + (planet.ore || 0),
+      goods: total.goods + (planet.goods || 0),
+      fuel: total.fuel + (planet.fuel || 0)
     }), { 
       credits: userCredits,  // Start with user's global credits
       food: 0, 
@@ -218,19 +218,19 @@ export class GameState {
     this.creditIncome = creditsPerTick;
   }
 
-  selectSystem(systemId) {
-    this.selectedSystem = this.systems.find(s => s.id === systemId) || null;
+  selectPlanet(planetId) {
+    this.selectedPlanet = this.planets.find(p => p.id === planetId) || null;
     this.notifyCallbacks();
   }
 
-  getSelectedSystem() {
-    return this.selectedSystem;
+  getSelectedPlanet() {
+    return this.selectedPlanet;
   }
 
-  getOwnedSystems() {
+  getOwnedPlanets() {
     const user = authManager.getUser();
     if (!user) return [];
-    return this.systems.filter(s => s.owner_id === user.id);
+    return this.planets.filter(p => p.owner_id === user.id);
   }
 
   getPlayerFleets() {
@@ -250,8 +250,8 @@ export class GameState {
     return await gameData.sendFleet(fromId, toId, strength);
   }
 
-  async queueBuilding(systemId, buildingType) {
-    return await gameData.queueBuilding(systemId, buildingType);
+  async queueBuilding(planetId, buildingType) {
+    return await gameData.queueBuilding(planetId, buildingType);
   }
 
   async createTradeRoute(fromId, toId, cargo, capacity) {

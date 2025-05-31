@@ -131,7 +131,7 @@
 }
 
 /* Game UI specific styles */
-.system-info {
+.planet-info { /* Renamed from .system-info */
   font-family: 'Monaco', 'Consolas', monospace;
   font-size: 12px;
 }
@@ -199,7 +199,7 @@ input:focus {
     @apply text-xs;
   }
   
-  #system-info {
+  #planet-info-container { /* Renamed from #system-info */
     @apply text-xs;
   }
 }

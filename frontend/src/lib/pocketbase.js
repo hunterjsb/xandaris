@@ -72,7 +72,7 @@ export class GameDataManager {
   constructor() {
     this.ws = null;
     this.callbacks = {
-      systems: [],
+      planets: [],
       fleets: [],
       trades: [],
       tick: []
@@ -161,8 +161,8 @@ export class GameDataManager {
       case 'tick':
         this.notifyCallbacks('tick', data.payload);
         break;
-      case 'system_update':
-        this.notifyCallbacks('systems', data.payload);
+      case 'planet_update':
+        this.notifyCallbacks('planets', data.payload);
         break;
       case 'fleet_update':
         this.notifyCallbacks('fleets', data.payload);
@@ -176,22 +176,22 @@ export class GameDataManager {
   }
 
   // API methods
-  async getSystems() {
+  async getPlanets() {
     try {
-      return await pb.collection('systems').getFullList({
+      return await pb.collection('planets').getFullList({
         sort: 'x,y'
       });
     } catch (error) {
-      console.error('Failed to fetch systems:', error);
+      console.error('Failed to fetch planets:', error);
       return [];
     }
   }
 
-  async getSystem(id) {
+  async getPlanet(id) {
     try {
-      return await pb.collection('systems').getOne(id);
+      return await pb.collection('planets').getOne(id);
     } catch (error) {
-      console.error('Failed to fetch system:', error);
+      console.error('Failed to fetch planet:', error);
       return null;
     }
   }
@@ -270,14 +270,14 @@ export class GameDataManager {
     }
   }
 
-  async queueBuilding(systemId, buildingType) {
+  async queueBuilding(planetId, buildingType) {
     if (!pb.authStore.isValid) throw new Error('Not authenticated');
     
     try {
       return await pb.send('/api/orders/build', {
         method: 'POST',
         body: JSON.stringify({
-          system_id: systemId,
+          planet_id: planetId,
           building_type: buildingType
         }),
         headers: {

@@ -3,10 +3,10 @@ export class MapRenderer {
   constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext('2d');
-    this.systems = [];
+    this.planets = [];
     this.lanes = [];
     this.fleets = [];
-    this.selectedSystem = null;
+    this.selectedPlanet = null;
     
     // View settings
     this.viewX = 0;
@@ -60,10 +60,10 @@ export class MapRenderer {
     this.canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) { // Left click
         const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
-        const clickedSystem = this.getSystemAt(worldPos.x, worldPos.y);
+        const clickedPlanet = this.getPlanetAt(worldPos.x, worldPos.y);
         
-        if (clickedSystem) {
-          this.selectSystem(clickedSystem);
+        if (clickedPlanet) {
+          this.selectPlanet(clickedPlanet);
         } else {
           isPanning = true;
           lastMouseX = e.offsetX;
@@ -82,10 +82,10 @@ export class MapRenderer {
         lastMouseX = e.offsetX;
         lastMouseY = e.offsetY;
       } else {
-        // Show tooltip for systems
+        // Show tooltip for planets
         const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
-        const hoveredSystem = this.getSystemAt(worldPos.x, worldPos.y);
-        this.showTooltip(hoveredSystem, e.offsetX, e.offsetY);
+        const hoveredPlanet = this.getPlanetAt(worldPos.x, worldPos.y);
+        this.showTooltip(hoveredPlanet, e.offsetX, e.offsetY);
       }
     });
 
@@ -99,10 +99,10 @@ export class MapRenderer {
     this.canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
-      const clickedSystem = this.getSystemAt(worldPos.x, worldPos.y);
+      const clickedPlanet = this.getPlanetAt(worldPos.x, worldPos.y);
       
-      if (clickedSystem) {
-        this.showContextMenu(clickedSystem, e.offsetX, e.offsetY);
+      if (clickedPlanet) {
+        this.showContextMenu(clickedPlanet, e.offsetX, e.offsetY);
       }
     });
 
@@ -142,32 +142,32 @@ export class MapRenderer {
     };
   }
 
-  getSystemAt(worldX, worldY) {
+  getPlanetAt(worldX, worldY) {
     const radius = 20; // Hit detection radius
-    return this.systems.find(system => {
-      const dx = system.x - worldX;
-      const dy = system.y - worldY;
+    return this.planets.find(planet => {
+      const dx = planet.x - worldX;
+      const dy = planet.y - worldY;
       return Math.sqrt(dx * dx + dy * dy) <= radius;
     });
   }
 
-  selectSystem(system) {
-    this.selectedSystem = system;
+  selectPlanet(planet) {
+    this.selectedPlanet = planet;
     // Emit custom event for UI to handle
-    this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
-      detail: { system }
+    this.canvas.dispatchEvent(new CustomEvent('planetSelected', {
+      detail: { planet }
     }));
   }
 
-  showTooltip(system, screenX, screenY) {
+  showTooltip(planet, screenX, screenY) {
     const tooltip = document.getElementById('tooltip');
-    if (system) {
+    if (planet) {
       tooltip.innerHTML = `
-        <div class="font-semibold">${system.name || `System ${system.id}`}</div>
+        <div class="font-semibold">${planet.name || `Planet ${planet.id}`}</div>
         <div class="text-xs">
-          <div>Position: ${system.x}, ${system.y}</div>
-          <div>Population: ${system.pop || 0}</div>
-          <div>Owner: ${system.owner_name || 'Uncolonized'}</div>
+          <div>Position: ${planet.x}, ${planet.y}</div>
+          <div>Population: ${planet.pop || 0}</div>
+          <div>Owner: ${planet.owner_name || 'Uncolonized'}</div>
         </div>
       `;
       tooltip.style.left = `${screenX + 10}px`;
@@ -178,14 +178,14 @@ export class MapRenderer {
     }
   }
 
-  showContextMenu(system, screenX, screenY) {
+  showContextMenu(planet, screenX, screenY) {
     const menu = document.getElementById('context-menu');
     menu.style.left = `${screenX}px`;
     menu.style.top = `${screenY}px`;
     menu.classList.remove('hidden');
     
-    // Store system reference for menu actions
-    menu.dataset.systemId = system.id;
+    // Store planet reference for menu actions
+    menu.dataset.planetId = planet.id;
     
     // Hide menu when clicking elsewhere
     const hideMenu = (e) => {
@@ -205,7 +205,7 @@ export class MapRenderer {
       this.clear();
       this.drawBackground();
       this.drawLanes();
-      this.drawSystems();
+      this.drawPlanets();
       this.drawFleets(deltaTime);
       this.drawUI();
       
@@ -287,9 +287,9 @@ export class MapRenderer {
     this.ctx.globalAlpha = 1;
   }
 
-  drawSystems() {
-    this.systems.forEach(system => {
-      const screenPos = this.worldToScreen(system.x, system.y);
+  drawPlanets() {
+    this.planets.forEach(planet => {
+      const screenPos = this.worldToScreen(planet.x, planet.y);
       
       // Skip if outside visible area
       if (screenPos.x < -50 || screenPos.x > this.canvas.width + 50 ||
@@ -297,9 +297,9 @@ export class MapRenderer {
         return;
       }
 
-      // Determine system color based on ownership
-      let color = this.colors.star;
-      if (system.owner_id) {
+      // Determine planet color based on ownership
+      let color = this.colors.star; // Default to unowned color
+      if (planet.owner_id) {
         // TODO: Check if owner is current player or ally/enemy
         color = this.colors.starOwned; // For now, assume owned = friendly
       }
@@ -335,8 +335,8 @@ export class MapRenderer {
       this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
       this.ctx.fill();
 
-      // Add sparkle effect for owned systems
-      if (system.owner_id && this.zoom > 0.6) {
+      // Add sparkle effect for owned planets
+      if (planet.owner_id && this.zoom > 0.6) {
         this.ctx.strokeStyle = this.colors.starOwned;
         this.ctx.lineWidth = 1;
         this.ctx.globalAlpha = 0.8;
@@ -353,7 +353,7 @@ export class MapRenderer {
       }
 
       // Draw selection ring with pulsing effect
-      if (this.selectedSystem && this.selectedSystem.id === system.id) {
+      if (this.selectedPlanet && this.selectedPlanet.id === planet.id) {
         const time = Date.now() * 0.005;
         const pulseRadius = (12 + Math.sin(time) * 2) * this.zoom;
         
@@ -366,7 +366,7 @@ export class MapRenderer {
         this.ctx.globalAlpha = 1;
       }
 
-      // Draw system name with glow
+      // Draw planet name with glow
       if (this.zoom > 0.8) {
         const fontSize = Math.floor(11 * this.zoom);
         this.ctx.font = `${fontSize}px monospace`;
@@ -375,7 +375,7 @@ export class MapRenderer {
         // Text shadow/glow
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillText(
-          system.name || `S${system.id.slice(-3)}`,
+          planet.name || `P${planet.id.slice(-3)}`, // Changed S to P
           screenPos.x + 1,
           screenPos.y - 15 * this.zoom + 1
         );
@@ -383,14 +383,14 @@ export class MapRenderer {
         // Main text
         this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         this.ctx.fillText(
-          system.name || `S${system.id.slice(-3)}`,
+          planet.name || `P${planet.id.slice(-3)}`, // Changed S to P
           screenPos.x,
           screenPos.y - 15 * this.zoom
         );
       }
 
       // Draw population indicator with plasma styling
-      if (system.pop > 0 && this.zoom > 0.5) {
+      if (planet.pop > 0 && this.zoom > 0.5) {
         const popFontSize = Math.floor(9 * this.zoom);
         this.ctx.font = `${popFontSize}px monospace`;
         this.ctx.textAlign = 'center';
@@ -407,7 +407,7 @@ export class MapRenderer {
         // Population text
         this.ctx.fillStyle = '#f1a9ff';
         this.ctx.fillText(
-          system.pop.toString(),
+          planet.pop.toString(),
           screenPos.x,
           screenPos.y + 21 * this.zoom
         );
@@ -418,15 +418,15 @@ export class MapRenderer {
   drawFleets(deltaTime) {
     this.fleets.forEach(fleet => {
       // Calculate fleet position based on progress
-      const fromSystem = this.systems.find(s => s.id === fleet.from_id);
-      const toSystem = this.systems.find(s => s.id === fleet.to_id);
+      const fromPlanet = this.planets.find(p => p.id === fleet.from_id);
+      const toPlanet = this.planets.find(p => p.id === fleet.to_id);
       
-      if (!fromSystem || !toSystem) return;
+      if (!fromPlanet || !toPlanet) return;
 
       // TODO: Calculate actual progress based on ETA
       const progress = 0.5; // Placeholder
-      const worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
-      const worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
+      const worldX = fromPlanet.x + (toPlanet.x - fromPlanet.x) * progress;
+      const worldY = fromPlanet.y + (toPlanet.y - fromPlanet.y) * progress;
       
       const screenPos = this.worldToScreen(worldX, worldY);
 
@@ -467,9 +467,9 @@ export class MapRenderer {
   }
 
   // Public methods for updating data
-  setSystems(systems) {
-    console.log('MapRenderer: Setting systems', systems.length, 'systems');
-    this.systems = systems;
+  setPlanets(planets) {
+    console.log('MapRenderer: Setting planets', planets.length, 'planets');
+    this.planets = planets;
   }
 
   setLanes(lanes) {
@@ -480,27 +480,27 @@ export class MapRenderer {
     this.fleets = fleets;
   }
 
-  setSelectedSystem(system) {
-    this.selectedSystem = system;
+  setSelectedPlanet(planet) {
+    this.selectedPlanet = planet;
   }
 
-  // Center view on a specific system
-  centerOnSystem(systemId) {
-    const system = this.systems.find(s => s.id === systemId);
-    if (system) {
-      this.viewX = -system.x;
-      this.viewY = -system.y;
+  // Center view on a specific planet
+  centerOnPlanet(planetId) {
+    const planet = this.planets.find(p => p.id === planetId);
+    if (planet) {
+      this.viewX = -planet.x;
+      this.viewY = -planet.y;
     }
   }
 
-  // Fit all systems in view
-  fitToSystems() {
-    if (this.systems.length === 0) return;
+  // Fit all planets in view
+  fitToPlanets() {
+    if (this.planets.length === 0) return;
 
-    const minX = Math.min(...this.systems.map(s => s.x));
-    const maxX = Math.max(...this.systems.map(s => s.x));
-    const minY = Math.min(...this.systems.map(s => s.y));
-    const maxY = Math.max(...this.systems.map(s => s.y));
+    const minX = Math.min(...this.planets.map(p => p.x));
+    const maxX = Math.max(...this.planets.map(p => p.x));
+    const minY = Math.min(...this.planets.map(p => p.y));
+    const maxY = Math.max(...this.planets.map(p => p.y));
 
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;

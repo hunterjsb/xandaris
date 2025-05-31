@@ -158,22 +158,22 @@ func MoveCargo(app *pocketbase.PocketBase) error {
 	return nil
 }
 
-// transferCargo moves resources between systems
+// transferCargo moves resources between planets
 func transferCargo(app *pocketbase.PocketBase, fromId, toId, cargo string, capacity int) error {
-	// Get source system
-	fromSystem, err := app.Dao().FindRecordById("systems", fromId)
+	// Get source planet
+	fromPlanet, err := app.Dao().FindRecordById("planets", fromId)
 	if err != nil {
-		return fmt.Errorf("source system not found: %w", err)
+		return fmt.Errorf("source planet not found: %w", err)
 	}
 
-	// Get destination system
-	toSystem, err := app.Dao().FindRecordById("systems", toId)
+	// Get destination planet
+	toPlanet, err := app.Dao().FindRecordById("planets", toId)
 	if err != nil {
-		return fmt.Errorf("destination system not found: %w", err)
+		return fmt.Errorf("destination planet not found: %w", err)
 	}
 
 	// Check available cargo at source
-	available := fromSystem.GetInt(cargo)
+	available := fromPlanet.GetInt(cargo)
 	if available <= 0 {
 		return nil // No cargo to move
 	}
@@ -184,17 +184,17 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, cargo string, capac
 		amount = available
 	}
 
-	// Update systems
-	fromSystem.Set(cargo, available-amount)
-	toSystem.Set(cargo, toSystem.GetInt(cargo)+amount)
+	// Update planets
+	fromPlanet.Set(cargo, available-amount)
+	toPlanet.Set(cargo, toPlanet.GetInt(cargo)+amount)
 
 	// Save changes
-	if err := app.Dao().SaveRecord(fromSystem); err != nil {
-		return fmt.Errorf("failed to update source system: %w", err)
+	if err := app.Dao().SaveRecord(fromPlanet); err != nil {
+		return fmt.Errorf("failed to update source planet: %w", err)
 	}
 
-	if err := app.Dao().SaveRecord(toSystem); err != nil {
-		return fmt.Errorf("failed to update destination system: %w", err)
+	if err := app.Dao().SaveRecord(toPlanet); err != nil {
+		return fmt.Errorf("failed to update destination planet: %w", err)
 	}
 
 	log.Printf("Transferred %d %s from %s to %s", amount, cargo, fromId, toId)
@@ -237,45 +237,45 @@ func resolveFleetArrival(app *pocketbase.PocketBase, fleet *models.Record) error
 	ownerId := fleet.GetString("owner_id")
 	strength := fleet.GetInt("strength")
 
-	// Get target system
-	system, err := app.Dao().FindRecordById("systems", toId)
+	// Get target planet
+	planet, err := app.Dao().FindRecordById("planets", toId)
 	if err != nil {
-		return fmt.Errorf("target system not found: %w", err)
+		return fmt.Errorf("target planet not found: %w", err)
 	}
 
-	currentOwner := system.GetString("owner_id")
+	currentOwner := planet.GetString("owner_id")
 
-	// If system is unowned or owned by the same player, colonize/reinforce
+	// If planet is unowned or owned by the same player, colonize/reinforce
 	if currentOwner == "" || currentOwner == ownerId {
-		system.Set("owner_id", ownerId)
+		planet.Set("owner_id", ownerId)
 		if currentOwner == "" {
 			// New colonization
-			system.Set("pop", strength*10) // Each fleet strength = 10 population
-			system.Set("morale", 100)
-			log.Printf("System %s colonized by %s", toId, ownerId)
+			planet.Set("pop", strength*10) // Each fleet strength = 10 population
+			planet.Set("morale", 100)
+			log.Printf("Planet %s colonized by %s", toId, ownerId)
 		} else {
 			// Reinforcement
-			system.Set("pop", system.GetInt("pop")+strength*5)
-			log.Printf("System %s reinforced by %s", toId, ownerId)
+			planet.Set("pop", planet.GetInt("pop")+strength*5)
+			log.Printf("Planet %s reinforced by %s", toId, ownerId)
 		}
 	} else {
 		// Combat with current owner
-		defenseStrength := system.GetInt("pop") / 10 // Population provides defense
+		defenseStrength := planet.GetInt("pop") / 10 // Population provides defense
 		if strength > defenseStrength {
 			// Attacker wins
-			system.Set("owner_id", ownerId)
-			system.Set("pop", (strength-defenseStrength)*5)
-			system.Set("morale", 50) // Conquered systems have low morale
-			log.Printf("System %s conquered by %s", toId, ownerId)
+			planet.Set("owner_id", ownerId)
+			planet.Set("pop", (strength-defenseStrength)*5)
+			planet.Set("morale", 50) // Conquered planets have low morale
+			log.Printf("Planet %s conquered by %s", toId, ownerId)
 		} else {
 			// Defender wins
-			system.Set("pop", system.GetInt("pop")-(strength*5))
-			system.Set("morale", system.GetInt("morale")+10) // Successful defense boosts morale
-			log.Printf("Attack on system %s repelled", toId)
+			planet.Set("pop", planet.GetInt("pop")-(strength*5))
+			planet.Set("morale", planet.GetInt("morale")+10) // Successful defense boosts morale
+			log.Printf("Attack on planet %s repelled", toId)
 		}
 	}
 
-	return app.Dao().SaveRecord(system)
+	return app.Dao().SaveRecord(planet)
 }
 
 // EvaluateTreaties checks for expired treaties and updates statuses

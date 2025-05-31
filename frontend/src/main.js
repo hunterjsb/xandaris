@@ -51,18 +51,18 @@ class XanNationApp {
   handleGameStateChange(state) {
     // Update map renderer with new data
     if (this.mapRenderer) {
-      this.mapRenderer.setSystems(state.systems);
+      this.mapRenderer.setPlanets(state.planets); // Changed setSystems to setPlanets, state.systems to state.planets
       this.mapRenderer.setFleets(state.fleets);
-      this.mapRenderer.setSelectedSystem(state.selectedSystem);
+      this.mapRenderer.setSelectedPlanet(state.selectedPlanet); // Changed setSelectedSystem to setSelectedPlanet, state.selectedSystem to state.selectedPlanet
       
       // Set lanes if available
       if (state.mapData && state.mapData.lanes) {
         this.mapRenderer.setLanes(state.mapData.lanes);
       }
       
-      // If this is the first load, fit to systems
-      if (state.systems.length > 0 && !this.mapRenderer.hasInitialFit) {
-        this.mapRenderer.fitToSystems();
+      // If this is the first load, fit to planets
+      if (state.planets.length > 0 && !this.mapRenderer.hasInitialFit) { // Changed state.systems to state.planets
+        this.mapRenderer.fitToPlanets(); // Changed fitToSystems to fitToPlanets
         this.mapRenderer.hasInitialFit = true;
       }
     }
@@ -75,18 +75,18 @@ class XanNationApp {
     // Canvas events
     const canvas = document.getElementById('game-canvas');
     
-    canvas.addEventListener('systemSelected', (e) => {
-      gameState.selectSystem(e.detail.system.id);
+    canvas.addEventListener('planetSelected', (e) => { // Changed systemSelected to planetSelected
+      gameState.selectPlanet(e.detail.planet.id); // Changed selectSystem to selectPlanet, e.detail.system.id to e.detail.planet.id
     });
 
     // Context menu actions
     const contextMenu = document.getElementById('context-menu');
     contextMenu.addEventListener('click', (e) => {
       const action = e.target.dataset.action;
-      const systemId = contextMenu.dataset.systemId;
+      const planetId = contextMenu.dataset.planetId; // Changed systemId to planetId
       
-      if (action && systemId) {
-        this.handleContextMenuAction(action, systemId);
+      if (action && planetId) { // Changed systemId to planetId
+        this.handleContextMenuAction(action, planetId); // Changed systemId to planetId
         contextMenu.classList.add('hidden');
       }
     });
@@ -162,28 +162,28 @@ class XanNationApp {
     authManager.logout();
   }
 
-  handleContextMenuAction(action, systemId) {
-    const system = gameState.systems.find(s => s.id === systemId);
-    if (!system) return;
+  handleContextMenuAction(action, planetId) { // Changed systemId to planetId
+    const planet = gameState.planets.find(p => p.id === planetId); // Changed system to planet, s to p
+    if (!planet) return;
 
     switch (action) {
       case 'view':
-        gameState.selectSystem(systemId);
-        this.mapRenderer.centerOnSystem(systemId);
+        gameState.selectPlanet(planetId); // Changed selectSystem to selectPlanet
+        this.mapRenderer.centerOnPlanet(planetId); // Changed centerOnSystem to centerOnPlanet
         break;
       case 'fleet':
-        this.uiController.showSendFleetModal(system);
+        this.uiController.showSendFleetModal(planet); // Changed system to planet
         break;
       case 'trade':
-        this.uiController.showTradeRouteModal(system);
+        this.uiController.showTradeRouteModal(planet); // Changed system to planet
         break;
     }
   }
 
   handleBuildAction() {
-    const selectedSystem = gameState.getSelectedSystem();
-    if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+    const selectedPlanet = gameState.getSelectedPlanet(); // Changed getSelectedSystem to getSelectedPlanet
+    if (!selectedPlanet) {
+      this.uiController.showError('Please select a planet first'); // Changed system to planet
       return;
     }
 
@@ -192,13 +192,13 @@ class XanNationApp {
       return;
     }
 
-    this.uiController.showBuildModal(selectedSystem);
+    this.uiController.showBuildModal(selectedPlanet); // Changed selectedSystem to selectedPlanet
   }
 
   handleSendFleetAction() {
-    const selectedSystem = gameState.getSelectedSystem();
-    if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+    const selectedPlanet = gameState.getSelectedPlanet(); // Changed getSelectedSystem to getSelectedPlanet
+    if (!selectedPlanet) {
+      this.uiController.showError('Please select a planet first'); // Changed system to planet
       return;
     }
 
@@ -207,13 +207,13 @@ class XanNationApp {
       return;
     }
 
-    this.uiController.showSendFleetModal(selectedSystem);
+    this.uiController.showSendFleetModal(selectedPlanet); // Changed selectedSystem to selectedPlanet
   }
 
   handleTradeRouteAction() {
-    const selectedSystem = gameState.getSelectedSystem();
-    if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+    const selectedPlanet = gameState.getSelectedPlanet(); // Changed getSelectedSystem to getSelectedPlanet
+    if (!selectedPlanet) {
+      this.uiController.showError('Please select a planet first'); // Changed system to planet
       return;
     }
 
@@ -222,7 +222,7 @@ class XanNationApp {
       return;
     }
 
-    this.uiController.showTradeRouteModal(selectedSystem);
+    this.uiController.showTradeRouteModal(selectedPlanet); // Changed selectedSystem to selectedPlanet
   }
 
   handleKeyboardInput(e) {
@@ -246,12 +246,12 @@ class XanNationApp {
         this.handleBuildAction();
         break;
       case 'c':
-        if (gameState.getSelectedSystem()) {
-          this.mapRenderer.centerOnSystem(gameState.getSelectedSystem().id);
+        if (gameState.getSelectedPlanet()) { // Changed getSelectedSystem to getSelectedPlanet
+          this.mapRenderer.centerOnPlanet(gameState.getSelectedPlanet().id); // Changed centerOnSystem to centerOnPlanet
         }
         break;
       case 'h':
-        this.mapRenderer.fitToSystems();
+        this.mapRenderer.fitToPlanets(); // Changed fitToSystems to fitToPlanets
         break;
     }
   }

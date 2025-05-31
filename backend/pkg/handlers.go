@@ -61,30 +61,30 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		user := info.(*models.Record)
 
-		// Verify ownership of source system
-		fromSystem, err := app.Dao().FindRecordById("systems", req.FromID)
+		// Verify ownership of source planet
+		fromPlanet, err := app.Dao().FindRecordById("planets", req.FromID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Source system not found",
+				"error": "Source planet not found",
 			})
 		}
 
-		if fromSystem.GetString("owner_id") != user.Id {
+		if fromPlanet.GetString("owner_id") != user.Id {
 			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "You don't own the source system",
+				"error": "You don't own the source planet",
 			})
 		}
 
-		// Check if target system exists
-		_, err = app.Dao().FindRecordById("systems", req.ToID)
+		// Check if target planet exists
+		_, err = app.Dao().FindRecordById("planets", req.ToID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Target system not found",
+				"error": "Target planet not found",
 			})
 		}
 
 		// Check if source has enough population
-		if fromSystem.GetInt("pop") < req.Strength*10 {
+		if fromPlanet.GetInt("pop") < req.Strength*10 {
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": "Insufficient population for fleet strength",
 			})
@@ -116,11 +116,11 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		// Reduce population from source system
-		fromSystem.Set("pop", fromSystem.GetInt("pop")-req.Strength*10)
-		if err := app.Dao().SaveRecord(fromSystem); err != nil {
+		// Reduce population from source planet
+		fromPlanet.Set("pop", fromPlanet.GetInt("pop")-req.Strength*10)
+		if err := app.Dao().SaveRecord(fromPlanet); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to update source system",
+				"error": "Failed to update source planet",
 			})
 		}
 
@@ -144,7 +144,7 @@ func BuildOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		// Parse request
 		var req struct {
-			SystemID     string `json:"system_id"`
+			PlanetID     string `json:"planet_id"`
 			BuildingType string `json:"building_type"`
 		}
 
@@ -156,18 +156,18 @@ func BuildOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		user := info.(*models.Record)
 
-		// Get system
-		system, err := app.Dao().FindRecordById("systems", req.SystemID)
+		// Get planet
+		planet, err := app.Dao().FindRecordById("planets", req.PlanetID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "System not found",
+				"error": "Planet not found",
 			})
 		}
 
 		// Verify ownership
-		if system.GetString("owner_id") != user.Id {
+		if planet.GetString("owner_id") != user.Id {
 			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "You don't own this system",
+				"error": "You don't own this planet",
 			})
 		}
 
@@ -178,22 +178,22 @@ func BuildOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 		switch req.BuildingType {
 		case "habitat":
 			fieldName = "hab_lvl"
-			cost = 100 * (system.GetInt("hab_lvl") + 1)
+			cost = 100 * (planet.GetInt("hab_lvl") + 1)
 		case "farm":
 			fieldName = "farm_lvl"
-			cost = 150 * (system.GetInt("farm_lvl") + 1)
+			cost = 150 * (planet.GetInt("farm_lvl") + 1)
 		case "mine":
 			fieldName = "mine_lvl"
-			cost = 200 * (system.GetInt("mine_lvl") + 1)
+			cost = 200 * (planet.GetInt("mine_lvl") + 1)
 		case "factory":
 			fieldName = "fac_lvl"
-			cost = 300 * (system.GetInt("fac_lvl") + 1)
+			cost = 300 * (planet.GetInt("fac_lvl") + 1)
 		case "shipyard":
 			fieldName = "yard_lvl"
-			cost = 500 * (system.GetInt("yard_lvl") + 1)
+			cost = 500 * (planet.GetInt("yard_lvl") + 1)
 		case "bank":
 			// Banks are special - they create a separate bank record
-			return handleBankConstruction(app, c, user, system, req.BuildingType)
+			return handleBankConstruction(app, c, user, planet, req.BuildingType)
 		default:
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": "Invalid building type",
@@ -201,7 +201,7 @@ func BuildOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		// Check if max level reached
-		currentLevel := system.GetInt(fieldName)
+		currentLevel := planet.GetInt(fieldName)
 		if currentLevel >= 10 {
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": "Maximum building level reached",
@@ -209,17 +209,17 @@ func BuildOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		// Check resources (using goods as currency for now)
-		if system.GetInt("goods") < cost {
+		if planet.GetInt("goods") < cost {
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": fmt.Sprintf("Insufficient goods. Required: %d", cost),
 			})
 		}
 
 		// Apply upgrade immediately (no build queue for now)
-		system.Set(fieldName, currentLevel+1)
-		system.Set("goods", system.GetInt("goods")-cost)
+		planet.Set(fieldName, currentLevel+1)
+		planet.Set("goods", planet.GetInt("goods")-cost)
 
-		if err := app.Dao().SaveRecord(system); err != nil {
+		if err := app.Dao().SaveRecord(planet); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
 				"error": "Failed to upgrade building",
 			})
@@ -260,17 +260,17 @@ func TradeOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		user := info.(*models.Record)
 
-		// Verify ownership of source system
-		fromSystem, err := app.Dao().FindRecordById("systems", req.FromID)
+		// Verify ownership of source planet
+		fromPlanet, err := app.Dao().FindRecordById("planets", req.FromID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "Source system not found",
+				"error": "Source planet not found",
 			})
 		}
 
-		if fromSystem.GetString("owner_id") != user.Id {
+		if fromPlanet.GetString("owner_id") != user.Id {
 			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "You don't own the source system",
+				"error": "You don't own the source planet",
 			})
 		}
 
@@ -391,7 +391,7 @@ func DiplomacyHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 }
 
 // handleBankConstruction creates a new crypto server bank
-func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *models.Record, system *models.Record, buildingType string) error {
+func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *models.Record, planet *models.Record, buildingType string) error {
 	// Bank construction costs 1000 credits from user's global balance
 	cost := 1000
 	userCredits := user.GetInt("credits")
@@ -402,13 +402,13 @@ func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *mo
 		})
 	}
 
-	// Check if system already has a bank (limit 1 per system)
-	existingBank, err := app.Dao().FindFirstRecordByFilter("banks", "system_id = {:systemId}", map[string]interface{}{
-		"systemId": system.Id,
+	// Check if planet already has a bank (limit 1 per planet)
+	existingBank, err := app.Dao().FindFirstRecordByFilter("banks", "planet_id = {:planetId}", map[string]interface{}{
+		"planetId": planet.Id,
 	})
 	if err == nil && existingBank != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "System already has a crypto server bank",
+			"error": "Planet already has a crypto server bank",
 		})
 	}
 
@@ -421,9 +421,9 @@ func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *mo
 	}
 
 	bank := models.NewRecord(bankCollection)
-	bank.Set("name", fmt.Sprintf("CryptoServer-%s", system.Id[:8]))
+	bank.Set("name", fmt.Sprintf("CryptoServer-%s", planet.Id[:8]))
 	bank.Set("owner_id", user.Id)
-	bank.Set("system_id", system.Id)
+	bank.Set("planet_id", planet.Id)
 	bank.Set("security_level", 1)      // Starting security level
 	bank.Set("processing_power", 10)   // Starting processing power
 	bank.Set("credits_per_tick", 1)    // 1 credit per tick income

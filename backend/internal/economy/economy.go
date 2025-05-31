@@ -8,7 +8,7 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 )
 
-// UpdateMarkets handles the economic simulation for all systems
+// UpdateMarkets handles the economic simulation for all planets
 func UpdateMarkets(app *pocketbase.PocketBase) error {
 	log.Println("Updating markets and economy...")
 
@@ -18,39 +18,39 @@ func UpdateMarkets(app *pocketbase.PocketBase) error {
 		// Don't fail the entire economy update for bank errors
 	}
 
-	// Get all owned systems
-	systems, err := app.Dao().FindRecordsByFilter("systems", "owner_id != ''", "", 0, 0)
+	// Get all owned planets
+	planets, err := app.Dao().FindRecordsByFilter("planets", "owner_id != ''", "", 0, 0)
 	if err != nil {
-		return fmt.Errorf("failed to fetch systems: %w", err)
+		return fmt.Errorf("failed to fetch planets: %w", err)
 	}
 
-	for _, system := range systems {
-		if err := updateSystemEconomy(system); err != nil {
-			log.Printf("Failed to update economy for system %s: %v", system.Id, err)
+	for _, planet := range planets {
+		if err := updatePlanetEconomy(planet); err != nil {
+			log.Printf("Failed to update economy for planet %s: %v", planet.Id, err)
 			continue
 		}
 
-		if err := app.Dao().SaveRecord(system); err != nil {
-			log.Printf("Failed to save system %s: %v", system.Id, err)
+		if err := app.Dao().SaveRecord(planet); err != nil {
+			log.Printf("Failed to save planet %s: %v", planet.Id, err)
 		}
 	}
 
-	log.Printf("Updated economy for %d systems", len(systems))
+	log.Printf("Updated economy for %d planets", len(planets))
 	return nil
 }
 
-// updateSystemEconomy simulates production and consumption for a single system
-func updateSystemEconomy(system *models.Record) error {
-	pop := system.GetInt("pop")
-	morale := system.GetInt("morale")
-	richness := system.GetInt("richness")
+// updatePlanetEconomy simulates production and consumption for a single planet
+func updatePlanetEconomy(planet *models.Record) error {
+	pop := planet.GetInt("pop")
+	morale := planet.GetInt("morale")
+	richness := planet.GetInt("richness")
 
 	// Get building levels
-	habLvl := system.GetInt("hab_lvl")
-	farmLvl := system.GetInt("farm_lvl")
-	mineLvl := system.GetInt("mine_lvl")
-	facLvl := system.GetInt("fac_lvl")
-	yardLvl := system.GetInt("yard_lvl")
+	habLvl := planet.GetInt("hab_lvl")
+	farmLvl := planet.GetInt("farm_lvl")
+	mineLvl := planet.GetInt("mine_lvl")
+	facLvl := planet.GetInt("fac_lvl")
+	yardLvl := planet.GetInt("yard_lvl")
 
 	// Calculate efficiency based on morale (50-150%)
 	efficiency := float64(morale+50) / 100.0
@@ -62,10 +62,10 @@ func updateSystemEconomy(system *models.Record) error {
 	}
 
 	// Current resources
-	food := system.GetInt("food")
-	ore := system.GetInt("ore")
-	goods := system.GetInt("goods")
-	fuel := system.GetInt("fuel")
+	food := planet.GetInt("food")
+	ore := planet.GetInt("ore")
+	goods := planet.GetInt("goods")
+	fuel := planet.GetInt("fuel")
 
 	// === PRODUCTION ===
 
@@ -139,13 +139,13 @@ func updateSystemEconomy(system *models.Record) error {
 		morale = 100
 	}
 
-	// === UPDATE SYSTEM ===
-	system.Set("pop", pop)
-	system.Set("morale", morale)
-	system.Set("food", food)
-	system.Set("ore", ore)
-	system.Set("goods", goods)
-	system.Set("fuel", fuel)
+	// === UPDATE PLANET ===
+	planet.Set("pop", pop)
+	planet.Set("morale", morale)
+	planet.Set("food", food)
+	planet.Set("ore", ore)
+	planet.Set("goods", goods)
+	planet.Set("fuel", fuel)
 
 	return nil
 }
@@ -171,22 +171,22 @@ func CalculatePrice(basePrice float64, demand, supply int, k float64) float64 {
 	return basePrice * multiplier
 }
 
-// GetSystemValue calculates the total value of a system's resources
-func GetSystemValue(system *models.Record) int {
-	food := system.GetInt("food")
-	ore := system.GetInt("ore")
-	goods := system.GetInt("goods")
-	fuel := system.GetInt("fuel")
+// GetPlanetValue calculates the total value of a planet's resources
+func GetPlanetValue(planet *models.Record) int {
+	food := planet.GetInt("food")
+	ore := planet.GetInt("ore")
+	goods := planet.GetInt("goods")
+	fuel := planet.GetInt("fuel")
 
 	// Base prices for resources
 	value := food*1 + ore*2 + goods*5 + fuel*3
 
 	// Add building values
-	habLvl := system.GetInt("hab_lvl")
-	farmLvl := system.GetInt("farm_lvl")
-	mineLvl := system.GetInt("mine_lvl")
-	facLvl := system.GetInt("fac_lvl")
-	yardLvl := system.GetInt("yard_lvl")
+	habLvl := planet.GetInt("hab_lvl")
+	farmLvl := planet.GetInt("farm_lvl")
+	mineLvl := planet.GetInt("mine_lvl")
+	facLvl := planet.GetInt("fac_lvl")
+	yardLvl := planet.GetInt("yard_lvl")
 
 	buildingValue := (habLvl+farmLvl+mineLvl+facLvl+yardLvl) * 100
 

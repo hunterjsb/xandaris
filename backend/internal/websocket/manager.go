@@ -174,16 +174,16 @@ func BroadcastTickUpdate(tick int, _ string) {
 	GlobalHub.broadcast <- data
 }
 
-// BroadcastSystemUpdate sends system update to all connected clients
-func BroadcastSystemUpdate(systemData interface{}) {
+// BroadcastPlanetUpdate sends planet update to all connected clients
+func BroadcastPlanetUpdate(planetData interface{}) {
 	message := Message{
-		Type:    "system_update",
-		Payload: systemData,
+		Type:    "planet_update",
+		Payload: planetData,
 	}
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("Failed to marshal system update: %v", err)
+		log.Printf("Failed to marshal planet update: %v", err)
 		return
 	}
 
