@@ -24,7 +24,15 @@ func UpdateMarkets(app *pocketbase.PocketBase) error {
 		return fmt.Errorf("failed to fetch colonized planets: %w", err)
 	}
 
+	planetsProcessed := 0
 	for _, planet := range planets {
+		// Skip planets without populations (empty colonies)
+		populations, err := app.Dao().FindRecordsByFilter("populations", 
+			fmt.Sprintf("planet_id = '%s'", planet.Id), "", 1, 0)
+		if err != nil || len(populations) == 0 {
+			continue // Skip planets with no population
+		}
+
 		if err := updatePlanetEconomy(app, planet); err != nil {
 			log.Printf("Failed to update economy for planet %s: %v", planet.Id, err)
 			continue
@@ -33,9 +41,10 @@ func UpdateMarkets(app *pocketbase.PocketBase) error {
 		if err := app.Dao().SaveRecord(planet); err != nil {
 			log.Printf("Failed to save planet %s: %v", planet.Id, err)
 		}
+		planetsProcessed++
 	}
 
-	log.Printf("Updated economy for %d colonized planets", len(planets))
+	log.Printf("Updated economy for %d planets with populations (skipped %d empty colonies)", planetsProcessed, len(planets)-planetsProcessed)
 	return nil
 }
 
