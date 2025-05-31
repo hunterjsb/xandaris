@@ -227,7 +227,7 @@ export class GameDataManager {
       const filter = userId ? `owner_id = "${userId}"` : '';
       return await pb.collection('trade_routes').getFullList({
         filter,
-        sort: 'eta'
+        sort: 'created'
       });
     } catch (error) {
       try {
@@ -241,9 +241,9 @@ export class GameDataManager {
 
   async getBuildings(userId = null) {
     try {
-      const filter = userId ? `owner_id = "${userId}"` : '';
+      // Buildings don't have owner_id, they belong to planets
+      // For now, return all buildings for authenticated users
       return await pb.collection('buildings').getFullList({
-        filter,
         sort: 'created'
       });
     } catch (error) {
@@ -258,11 +258,9 @@ export class GameDataManager {
 
   async getTreaties(userId = null) {
     try {
-      const filter = userId ? `owner_id = "${userId}"` : '';
-      return await pb.collection('treaties').getFullList({
-        filter,
-        sort: 'created'
-      });
+      // Treaties collection doesn't exist in new schema yet
+      // Return empty array for now
+      return [];
     } catch (error) {
       try {
         suppressAutoCancelError(error);
