@@ -41,6 +41,10 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		// Status endpoint
 		e.Router.GET("/api/status", getStatus(app))
 
+		// Building and Resource Types
+		e.Router.GET("/api/building_types", getBuildingTypes(app))
+		e.Router.GET("/api/resource_types", getResourceTypes(app))
+
 		return nil
 	})
 }
@@ -94,6 +98,7 @@ type BuildingData struct {
 	Level          int    `json:"level"`
 	Active         bool   `json:"active"`
 	CreditsPerTick int    `json:"credits_per_tick"`
+	SystemName     string `json:"system_name,omitempty"`
 }
 
 type FleetData struct {
@@ -135,6 +140,25 @@ type LaneData struct {
 	ToX      int    `json:"toX"`
 	ToY      int    `json:"toY"`
 	Distance int    `json:"distance"`
+}
+
+// BuildingTypeData represents the data structure for building types
+type BuildingTypeData struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Cost        int    `json:"cost"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	BuildTime   int    `json:"build_time"`
+	Icon        string `json:"icon"`
+	MaxLevel    int    `json:"max_level"`
+}
+
+// ResourceTypeData represents the data structure for resource types
+type ResourceTypeData struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Icon string `json:"icon"`
 }
 
 // getMapData returns the complete map with systems, planets, and lanes
@@ -242,6 +266,69 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, mapData)
+	}
+}
+
+// getBuildingTypes returns all building types
+func getBuildingTypes(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		records, err := app.Dao().FindRecordsByExpr("building_types", nil, nil)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"error":   "Failed to fetch building types",
+				"details": err.Error(),
+			})
+		}
+
+		buildingTypesData := make([]BuildingTypeData, len(records))
+		for i, record := range records {
+			buildingTypesData[i] = BuildingTypeData{
+				ID:          record.Id,
+				Name:        record.GetString("name"),
+				Cost:        record.GetInt("cost"),
+				Description: record.GetString("description"),
+				Category:    record.GetString("category"),
+				BuildTime:   record.GetInt("build_time"),
+				Icon:        record.GetString("icon"),
+				MaxLevel:    record.GetInt("max_level"),
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"page":       1,
+			"perPage":    len(buildingTypesData),
+			"totalItems": len(buildingTypesData),
+			"items":      buildingTypesData,
+		})
+	}
+}
+
+// getResourceTypes returns all resource types
+func getResourceTypes(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		records, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				"error":   "Failed to fetch resource types",
+				"details": err.Error(),
+			})
+		}
+
+		resourceTypesData := make([]ResourceTypeData, len(records))
+		for i, record := range records {
+			resourceTypesData[i] = ResourceTypeData{
+				ID:   record.Id,
+				Name: record.GetString("name"),
+				Icon: record.GetString("icon"),
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"page":       1,
+			"perPage":    len(resourceTypesData),
+			"totalItems": len(resourceTypesData),
+			"items":      resourceTypesData,
+		})
 	}
 }
 
@@ -368,11 +455,12 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 		for i, building := range buildings {
 			// Get planet and system data
 			planet, _ := app.Dao().FindRecordById("planets", building.GetString("planet_id"))
-			var systemID, ownerID string
+			var systemID, ownerID, systemName string
 			if planet != nil {
 				systemID = planet.GetString("system_id")
-				if system, err := app.Dao().FindRecordById("systems", systemID); err == nil {
-					ownerID = system.GetString("owner_id")
+				if systemRecord, err := app.Dao().FindRecordById("systems", systemID); err == nil {
+					ownerID = systemRecord.GetString("owner_id")
+					systemName = systemRecord.GetString("name")
 				}
 			}
 
@@ -386,6 +474,7 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 				PlanetID:       building.GetString("planet_id"),
 				SystemID:       systemID,
 				OwnerID:        ownerID,
+				SystemName:     systemName,
 				Type:           building.GetString("building_type"),
 				Name:           fmt.Sprintf("%s Level %d", building.GetString("building_type"), building.GetInt("level")),
 				Level:          building.GetInt("level"),
@@ -588,13 +677,57 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError(fmt.Sprintf("Building %s type not found", data.BuildingType), err)
 		}
 
-		// Check building cost
-		cost := buildingType.GetInt("cost")
+		// Check building cost and deduct resources
+		costRaw := buildingType.Get("cost")
+		originalCostPayload := buildingType.Get("cost") // For the response
 
-		// Check if user has enough credits
-		userCredits := user.GetInt("credits")
-		if userCredits < cost {
-			return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+		switch costValue := costRaw.(type) {
+		case int64: // Likely from direct model set or simple integer in JSON
+			cost := int(costValue)
+			userCredits := user.GetInt("credits")
+			if userCredits < cost {
+				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+			}
+			user.Set("credits", userCredits-cost)
+		case float64: // Likely from JSON unmarshal if it's a plain number
+			cost := int(costValue)
+			userCredits := user.GetInt("credits")
+			if userCredits < cost {
+				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+			}
+			user.Set("credits", userCredits-cost)
+		case map[string]interface{}: // JSON map for multi-resource cost
+			costMap := costValue
+			for resourceId, amountInterface := range costMap {
+				amount, ok := amountInterface.(float64) // All numbers from JSON map are float64 initially
+				if !ok {
+					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
+				}
+				amountInt := int(amount)
+
+				currentResourceValue := user.GetInt(resourceId)
+				if currentResourceValue < amountInt {
+					return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceId, amountInt, currentResourceValue), nil)
+				}
+				user.Set(resourceId, currentResourceValue-amountInt)
+			}
+		case models.JsonMap: // PocketBase's own JsonMap type
+			costMap := costValue
+			for resourceId, amountInterface := range costMap {
+				amount, ok := amountInterface.(float64) // All numbers from JSON map are float64 initially
+				if !ok {
+					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
+				}
+				amountInt := int(amount)
+
+				currentResourceValue := user.GetInt(resourceId)
+				if currentResourceValue < amountInt {
+					return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceId, amountInt, currentResourceValue), nil)
+				}
+				user.Set(resourceId, currentResourceValue-amountInt)
+			}
+		default:
+			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
 		}
 
 		// Find a planet in the system to build on
@@ -603,10 +736,9 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError("No planets found in system", err)
 		}
 
-		// Deduct credits from user
-		user.Set("credits", userCredits-cost)
+		// Save user record after all deductions
 		if err := app.Dao().SaveRecord(user); err != nil {
-			return apis.NewBadRequestError("Failed to deduct credits", err)
+			return apis.NewBadRequestError("Failed to save user record after deducting costs", err)
 		}
 
 		// Create building record
@@ -628,8 +760,8 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":           true,
 			"building_id":       building.Id,
-			"cost":              cost,
-			"credits_remaining": userCredits - cost,
+			"cost":              originalCostPayload, // Return the original cost structure
+			"credits_remaining": user.GetInt("credits"), // Return current credits
 		})
 	}
 }

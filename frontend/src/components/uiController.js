@@ -352,26 +352,55 @@ export class UIController {
   }
 
   showBuildModal(system) {
-    const buildings = [];
+    const buildingTypes = this.gameState?.buildingTypes;
 
-    const buildingOptions = buildings
-      .map(
-        (building) => `
+    if (!buildingTypes || buildingTypes.length === 0) {
+      console.warn("Building types not available or empty in gameState.");
+      this.showModal(
+        `Build in ${system.name || `System ${system.id.slice(-3)}`}`,
+        `<div class="text-space-400">No buildings available to construct or building types are still loading.</div>`,
+      );
+      return;
+    }
+
+    const buildingOptions = buildingTypes
+      .map((buildingType) => {
+        let costString = "Cost: ";
+        if (typeof buildingType.cost === "number") {
+          costString += `${buildingType.cost} Credits`;
+        } else if (typeof buildingType.cost === "object") {
+          // Assuming cost is an object like { "credits": 100, "ore": 50 }
+          // And resourceTypes is an array of objects like [{ id: "ore", name: "Ore" }, ...]
+          const resourceTypesMap = (this.gameState?.resourceTypes || []).reduce((map, rt) => {
+            map[rt.id] = rt.name;
+            return map;
+          }, {});
+          costString += Object.entries(buildingType.cost)
+            .map(([resourceId, amount]) => {
+              const resourceName = resourceTypesMap[resourceId] || resourceId;
+              return `${amount} ${resourceName}`;
+            })
+            .join(", ");
+        } else {
+          costString += "N/A";
+        }
+
+        return `
       <button class="w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left"
-              onclick="window.gameState.queueBuilding('${system.id}', '${building.type}')">
-        <div class="font-semibold">${building.name}</div>
-        <div class="text-sm text-space-300">${building.description}</div>
-        <div class="text-sm text-green-400">Cost: ${building.cost} credits</div>
+              onclick="window.gameState.queueBuilding('${system.id}', '${buildingType.id}')">
+        <div class="font-semibold">${buildingType.name || "Unknown Building"}</div>
+        <div class="text-sm text-space-300">${buildingType.description || "No description available."}</div>
+        <div class="text-sm text-green-400">${costString}</div>
       </button>
-    `,
-      )
+    `;
+      })
       .join("");
 
     this.showModal(
       `Build in ${system.name || `System ${system.id.slice(-3)}`}`,
       `
       <div class="space-y-2">
-        ${buildingOptions}
+        ${buildingOptions.length > 0 ? buildingOptions : '<div class="text-space-400">No buildings available to construct.</div>'}
       </div>
     `,
     );
@@ -608,18 +637,25 @@ export class UIController {
     }, {});
 
     const buildingTypeNames = {};
+    if (this.gameState && this.gameState.buildingTypes) {
+      for (const bt of this.gameState.buildingTypes) {
+        buildingTypeNames[bt.id] = bt.name || bt.id; // Fallback to ID if name is missing
+      }
+    } else {
+      console.warn("Building types not available in gameState for building panel.");
+    }
 
     const buildingSections = Object.entries(buildingsByType)
       .map(
-        ([type, typeBuildings]) => `
+        ([typeId, typeBuildings]) => `
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-plasma-300 mb-2">${buildingTypeNames[type] || type} (${typeBuildings.length})</h3>
+        <h3 class="text-lg font-semibold text-plasma-300 mb-2">${buildingTypeNames[typeId] || typeId} (${typeBuildings.length})</h3>
         <div class="space-y-2">
           ${typeBuildings
             .map(
               (building) => `
             <div class="bg-space-700 p-3 rounded">
-              <div class="font-semibold text-nebula-300">${building.name || `${buildingTypeNames[type]?.slice(0, -1) || type}-${building.id.slice(-3)}`}</div>
+              <div class="font-semibold text-nebula-300">${building.name || `${buildingTypeNames[building.type] || building.type} ${building.id.slice(-3)}`}</div>
               <div class="text-sm text-space-300">
                 <div>System: ${building.system_name || building.system_id}</div>
                 ${building.type === "bank" ? `<div class="text-nebula-300">Income: ${building.credits_per_tick || 1} credits/tick</div>` : ""}
