@@ -135,6 +135,10 @@ class XanNationApp {
       this.handleTradeRouteAction();
     });
 
+    document.getElementById('colonize-btn').addEventListener('click', () => {
+      this.handleColonizeAction();
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       this.handleKeyboardInput(e);
@@ -176,6 +180,9 @@ class XanNationApp {
         break;
       case 'trade':
         this.uiController.showTradeRouteModal(system);
+        break;
+      case 'colonize':
+        this.uiController.showColonizeModal(system);
         break;
     }
   }
@@ -225,6 +232,21 @@ class XanNationApp {
     this.uiController.showTradeRouteModal(selectedSystem);
   }
 
+  handleColonizeAction() {
+    const selectedSystem = gameState.getSelectedSystem();
+    if (!selectedSystem) {
+      this.uiController.showError('Please select a system first');
+      return;
+    }
+
+    if (!authManager.isLoggedIn()) {
+      this.uiController.showError('Please log in first');
+      return;
+    }
+
+    this.uiController.showColonizeModal(selectedSystem);
+  }
+
   handleKeyboardInput(e) {
     // Only handle keyboard shortcuts when not in input fields
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -249,6 +271,9 @@ class XanNationApp {
         if (gameState.getSelectedSystem()) {
           this.mapRenderer.centerOnSystem(gameState.getSelectedSystem().id);
         }
+        break;
+      case 'o':
+        this.handleColonizeAction();
         break;
       case 'h':
         this.mapRenderer.fitToSystems();

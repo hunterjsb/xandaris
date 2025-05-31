@@ -101,7 +101,7 @@ func init() {
 				{"name": "system_id", "type": "relation", "required": true, "options": {"collectionId": "systems"}},
 				{"name": "planet_type", "type": "relation", "required": true, "options": {"collectionId": "planet_types"}},
 				{"name": "size", "type": "number", "required": true},
-				{"name": "colonized_by", "type": "relation", "options": {"collectionId": "_pb_users_auth_"}},
+				{"name": "colonized_by", "type": "text"},
 				{"name": "colonized_at", "type": "date"}
 			],
 			"indexes": ["CREATE INDEX idx_planets_system ON planets (system_id)"]

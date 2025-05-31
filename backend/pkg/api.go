@@ -2,7 +2,9 @@ package pkg
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
@@ -18,7 +20,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/test", func(c echo.Context) error {
 			return c.JSON(http.StatusOK, map[string]string{"status": "API routes working!"})
 		})
-		
+
 		// Game data endpoints
 		e.Router.GET("/api/map", getMapData(app))
 		e.Router.GET("/api/systems", getSystems(app))
@@ -28,16 +30,17 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/fleets", getFleets(app))
 		e.Router.GET("/api/trade_routes", getTradeRoutes(app))
 		e.Router.GET("/api/treaties", getTreaties(app))
-		
+
 		// Game actions
 		e.Router.POST("/api/orders/fleet", sendFleet(app))
 		e.Router.POST("/api/orders/build", queueBuilding(app))
 		e.Router.POST("/api/orders/trade", createTradeRoute(app))
+		e.Router.POST("/api/orders/colonize", colonizePlanet(app))
 		e.Router.POST("/api/diplomacy", proposeTreaty(app))
-		
+
 		// Status endpoint
 		e.Router.GET("/api/status", getStatus(app))
-		
+
 		return nil
 	})
 }
@@ -56,39 +59,41 @@ type SystemData struct {
 	Y        int    `json:"y"`
 	OwnerID  string `json:"owner_id"`
 	Richness int    `json:"richness"`
-	
+
 	// Aggregated data from planets/buildings
-	Pop        int                    `json:"pop"`
-	Morale     int                    `json:"morale"`
-	Food       int                    `json:"food"`
-	Ore        int                    `json:"ore"`
-	Goods      int                    `json:"goods"`
-	Fuel       int                    `json:"fuel"`
-	Credits    int                    `json:"credits"`
-	Buildings  map[string]int         `json:"buildings"`
-	Resources  map[string]interface{} `json:"resources"`
+	Pop       int                    `json:"pop"`
+	Morale    int                    `json:"morale"`
+	Food      int                    `json:"food"`
+	Ore       int                    `json:"ore"`
+	Goods     int                    `json:"goods"`
+	Fuel      int                    `json:"fuel"`
+	Credits   int                    `json:"credits"`
+	Buildings map[string]int         `json:"buildings"`
+	Resources map[string]interface{} `json:"resources"`
 }
 
 type PlanetData struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	SystemID       string `json:"system_id"`
-	PlanetType     string `json:"type"`
-	Size           int    `json:"size"`
-	Population     int    `json:"population"`
-	MaxPopulation  int    `json:"max_population"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	SystemID      string `json:"system_id"`
+	PlanetType    string `json:"type"`
+	Size          int    `json:"size"`
+	Population    int    `json:"population"`
+	MaxPopulation int    `json:"max_population"`
+	ColonizedBy   string `json:"colonized_by"`
+	ColonizedAt   string `json:"colonized_at"`
 }
 
 type BuildingData struct {
-	ID            string `json:"id"`
-	PlanetID      string `json:"planet_id"`
-	SystemID      string `json:"system_id"`
-	OwnerID       string `json:"owner_id"`
-	Type          string `json:"type"`
-	Name          string `json:"name"`
-	Level         int    `json:"level"`
-	Active        bool   `json:"active"`
-	CreditsPerTick int   `json:"credits_per_tick"`
+	ID             string `json:"id"`
+	PlanetID       string `json:"planet_id"`
+	SystemID       string `json:"system_id"`
+	OwnerID        string `json:"owner_id"`
+	Type           string `json:"type"`
+	Name           string `json:"name"`
+	Level          int    `json:"level"`
+	Active         bool   `json:"active"`
+	CreditsPerTick int    `json:"credits_per_tick"`
 }
 
 type FleetData struct {
@@ -152,7 +157,7 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 		for i, system := range systems {
 			// Get planets for this system
 			systemPlanets, _ := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", system.Id), "", 0, 0)
-			
+
 			// Calculate aggregated data
 			totalPop := 0
 			totalFood := 0
@@ -161,16 +166,16 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 			totalFuel := 0
 			totalCredits := 0
 			buildingCounts := make(map[string]int)
-			
+
 			for _, planet := range systemPlanets {
 				totalPop += planet.GetInt("population")
-				
+
 				// Get buildings for this planet
 				buildings, _ := app.Dao().FindRecordsByFilter("buildings", fmt.Sprintf("planet_id='%s'", planet.Id), "", 0, 0)
 				for _, building := range buildings {
 					buildingType := building.GetString("building_type")
 					buildingCounts[buildingType]++
-					
+
 					// Calculate building production based on type
 					switch buildingType {
 					case "farm":
@@ -188,19 +193,19 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 			}
 
 			systemsData[i] = SystemData{
-				ID:       system.Id,
-				Name:     system.GetString("name"),
-				X:        system.GetInt("x"),
-				Y:        system.GetInt("y"),
-				OwnerID:  system.GetString("owner_id"),
-				Richness: system.GetInt("richness"),
-				Pop:      totalPop,
-				Morale:   75, // Default morale
-				Food:     totalFood,
-				Ore:      totalOre,
-				Goods:    totalGoods,
-				Fuel:     totalFuel,
-				Credits:  totalCredits,
+				ID:        system.Id,
+				Name:      system.GetString("name"),
+				X:         system.GetInt("x"),
+				Y:         system.GetInt("y"),
+				OwnerID:   system.GetString("owner_id"),
+				Richness:  system.GetInt("richness"),
+				Pop:       totalPop,
+				Morale:    75, // Default morale
+				Food:      totalFood,
+				Ore:       totalOre,
+				Goods:     totalGoods,
+				Fuel:      totalFuel,
+				Credits:   totalCredits,
 				Buildings: buildingCounts,
 				Resources: map[string]interface{}{
 					"food":  totalFood,
@@ -222,6 +227,8 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 				Size:          planet.GetInt("size"),
 				Population:    planet.GetInt("population"),
 				MaxPopulation: planet.GetInt("max_population"),
+				ColonizedBy:   planet.GetString("colonized_by"),
+				ColonizedAt:   planet.GetString("colonized_at"),
 			}
 		}
 
@@ -242,10 +249,10 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 func getSystems(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		userID := c.QueryParam("user_id")
-		
+
 		var systems []*models.Record
 		var err error
-		
+
 		if userID != "" {
 			filter := fmt.Sprintf("owner_id='%s'", userID)
 			systems, err = app.Dao().FindRecordsByFilter("systems", filter, "x,y", 0, 0)
@@ -254,7 +261,7 @@ func getSystems(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-				"error": "Failed to fetch systems", 
+				"error":   "Failed to fetch systems",
 				"details": err.Error(),
 			})
 		}
@@ -285,7 +292,7 @@ func getSystems(app *pocketbase.PocketBase) echo.HandlerFunc {
 func getSystem(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		systemID := c.PathParam("id")
-		
+
 		system, err := app.Dao().FindRecordById("systems", systemID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "System not found"})
@@ -293,7 +300,7 @@ func getSystem(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		// Get planets in this system
 		planets, _ := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", systemID), "", 0, 0)
-		
+
 		planetsData := make([]PlanetData, len(planets))
 		for i, planet := range planets {
 			planetsData[i] = PlanetData{
@@ -304,6 +311,8 @@ func getSystem(app *pocketbase.PocketBase) echo.HandlerFunc {
 				Size:          planet.GetInt("size"),
 				Population:    planet.GetInt("population"),
 				MaxPopulation: planet.GetInt("max_population"),
+				ColonizedBy:   planet.GetString("colonized_by"),
+				ColonizedAt:   planet.GetString("colonized_at"),
 			}
 		}
 
@@ -317,7 +326,7 @@ func getSystem(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"system": systemData,
+			"system":  systemData,
 			"planets": planetsData,
 		})
 	}
@@ -327,7 +336,7 @@ func getSystem(app *pocketbase.PocketBase) echo.HandlerFunc {
 func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		userID := c.QueryParam("owner_id")
-		
+
 		// Get all buildings
 		buildings, err := app.Dao().FindRecordsByExpr("buildings", nil, nil)
 		if err != nil {
@@ -398,10 +407,10 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 func getFleets(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		userID := c.QueryParam("owner_id")
-		
+
 		var fleets []*models.Record
 		var err error
-		
+
 		if userID != "" {
 			filter := fmt.Sprintf("owner_id='%s'", userID)
 			fleets, err = app.Dao().FindRecordsByFilter("fleets", filter, "eta", 0, 0)
@@ -439,10 +448,10 @@ func getFleets(app *pocketbase.PocketBase) echo.HandlerFunc {
 func getTradeRoutes(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		userID := c.QueryParam("owner_id")
-		
+
 		var routes []*models.Record
 		var err error
-		
+
 		if userID != "" {
 			filter := fmt.Sprintf("owner_id='%s'", userID)
 			routes, err = app.Dao().FindRecordsByFilter("trade_routes", filter, "eta", 0, 0)
@@ -480,10 +489,10 @@ func getTradeRoutes(app *pocketbase.PocketBase) echo.HandlerFunc {
 func getTreaties(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		userID := c.QueryParam("user_id")
-		
+
 		var treaties []*models.Record
 		var err error
-		
+
 		if userID != "" {
 			filter := fmt.Sprintf("a_id='%s' || b_id='%s'", userID, userID)
 			treaties, err = app.Dao().FindRecordsByFilter("treaties", filter, "-created", 0, 0)
@@ -551,7 +560,7 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success": true,
+			"success":  true,
 			"fleet_id": fleet.Id,
 		})
 	}
@@ -596,7 +605,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success": true,
+			"success":     true,
 			"building_id": building.Id,
 		})
 	}
@@ -639,7 +648,7 @@ func createTradeRoute(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success": true,
+			"success":  true,
 			"route_id": route.Id,
 		})
 	}
@@ -679,10 +688,104 @@ func proposeTreaty(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success": true,
+			"success":   true,
 			"treaty_id": treaty.Id,
 		})
 	}
+}
+
+func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		data := struct {
+			PlanetID string `json:"planet_id"`
+		}{}
+
+		if err := c.Bind(&data); err != nil {
+			return apis.NewBadRequestError("Invalid request data", err)
+		}
+
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Get the planet
+		planet, err := app.Dao().FindRecordById("planets", data.PlanetID)
+		if err != nil {
+			return apis.NewBadRequestError("Planet not found", err)
+		}
+
+		// Check if planet is already colonized
+		if planet.GetString("colonized_by") != "" {
+			return apis.NewBadRequestError("Planet is already colonized", nil)
+		}
+
+		// Set colonization data
+		planet.Set("colonized_by", user.Id)
+		planet.Set("colonized_at", time.Now())
+
+		if err := app.Dao().SaveRecord(planet); err != nil {
+			return apis.NewBadRequestError("Failed to colonize planet", err)
+		}
+
+		// Create initial population
+		if err := createInitialPopulation(app, planet, user.Id); err != nil {
+			return apis.NewBadRequestError("Failed to create initial population", err)
+		}
+
+		// Create initial buildings (optional)
+		if err := createInitialBuildings(app, planet); err != nil {
+			// Don't fail colonization if buildings fail, just log it
+			log.Printf("Warning: Failed to create initial buildings for planet %s: %v", planet.Id, err)
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":   true,
+			"planet_id": planet.Id,
+			"message":   "Planet colonized successfully",
+		})
+	}
+}
+
+func createInitialPopulation(app *pocketbase.PocketBase, planet *models.Record, ownerID string) error {
+	populationCollection, err := app.Dao().FindCollectionByNameOrId("populations")
+	if err != nil {
+		return err
+	}
+
+	population := models.NewRecord(populationCollection)
+	population.Set("owner_id", ownerID)
+	population.Set("planet_id", planet.Id)
+	population.Set("count", 100)    // Start with 100 population
+	population.Set("happiness", 80) // Start with 80% happiness
+
+	return app.Dao().SaveRecord(population)
+}
+
+func createInitialBuildings(app *pocketbase.PocketBase, planet *models.Record) error {
+	// Get building types
+	buildingTypes, err := app.Dao().FindRecordsByFilter("building_types", "name = 'Command Center'", "", 1, 0)
+	if err != nil || len(buildingTypes) == 0 {
+		// If no Command Center, try to get any building type
+		buildingTypes, err = app.Dao().FindRecordsByExpr("building_types", nil, nil)
+		if err != nil || len(buildingTypes) == 0 {
+			return fmt.Errorf("no building types found")
+		}
+	}
+
+	buildingCollection, err := app.Dao().FindCollectionByNameOrId("buildings")
+	if err != nil {
+		return err
+	}
+
+	// Create one initial building (Command Center or first available)
+	building := models.NewRecord(buildingCollection)
+	building.Set("planet_id", planet.Id)
+	building.Set("building_type", buildingTypes[0].Id)
+	building.Set("level", 1)
+	building.Set("active", true)
+
+	return app.Dao().SaveRecord(building)
 }
 
 func getStatus(app *pocketbase.PocketBase) echo.HandlerFunc {
@@ -730,30 +833,56 @@ func generateLanes(systems []SystemData) []LaneData {
 func getPlanets(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		systemID := c.QueryParam("system_id")
-		
+
 		var planets []*models.Record
 		var err error
-		
+
 		if systemID != "" {
-			filter := fmt.Sprintf("system_id='%s'", systemID)
-			planets, err = app.Dao().FindRecordsByFilter("planets", filter, "", 0, 0)
+			// Get all planets and filter in Go since PocketBase relation field filtering is tricky
+			allPlanets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
+			}
+			
+			// Filter planets that belong to this system
+			var filteredPlanets []*models.Record
+			for _, planet := range allPlanets {
+				// Get system_id as string slice (relation field is stored as JSON array)
+				systemIDs := planet.GetStringSlice("system_id")
+				for _, id := range systemIDs {
+					if id == systemID {
+						filteredPlanets = append(filteredPlanets, planet)
+						break
+					}
+				}
+			}
+			planets = filteredPlanets
 		} else {
 			planets, err = app.Dao().FindRecordsByExpr("planets", nil, nil)
-		}
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
+			}
 		}
 
 		planetsData := make([]PlanetData, len(planets))
 		for i, planet := range planets {
+			// Get the first system_id from the relation array
+			systemIDs := planet.GetStringSlice("system_id")
+			systemID := ""
+			if len(systemIDs) > 0 {
+				systemID = systemIDs[0]
+			}
+			
 			planetsData[i] = PlanetData{
 				ID:            planet.Id,
 				Name:          planet.GetString("name"),
-				SystemID:      planet.GetString("system_id"),
+				SystemID:      systemID,
 				PlanetType:    planet.GetString("planet_type"),
 				Size:          planet.GetInt("size"),
 				Population:    planet.GetInt("population"),
 				MaxPopulation: planet.GetInt("max_population"),
+				ColonizedBy:   planet.GetString("colonized_by"),
+				ColonizedAt:   planet.GetString("colonized_at"),
 			}
 		}
 

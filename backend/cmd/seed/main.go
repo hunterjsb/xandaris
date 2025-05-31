@@ -117,10 +117,21 @@ func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 		return nil
 	}
 
-	// Get uncolonized planets to colonize
-	uncolonizedPlanets, err := app.Dao().FindRecordsByFilter("planets", "colonized_by = ''", "", 10, 0)
+	// Get all planets and filter uncolonized ones in Go (PocketBase filter has issues with relation fields)
+	allPlanets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
 	if err != nil {
 		return err
+	}
+
+	// Filter uncolonized planets in Go
+	var uncolonizedPlanets []*models.Record
+	for _, planet := range allPlanets {
+		if planet.GetString("colonized_by") == "" {
+			uncolonizedPlanets = append(uncolonizedPlanets, planet)
+			if len(uncolonizedPlanets) >= 10 { // Limit to 10 for seeding
+				break
+			}
+		}
 	}
 
 	if len(uncolonizedPlanets) == 0 {
@@ -134,8 +145,12 @@ func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 		planetsToColonize = len(uncolonizedPlanets)
 	}
 
+
+	
 	for i := 0; i < planetsToColonize; i++ {
 		planet := uncolonizedPlanets[i]
+		
+		// Colonize planet
 		planet.Set("colonized_by", sampleUser.Id)
 		planet.Set("colonized_at", time.Now())
 

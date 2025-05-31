@@ -46,22 +46,30 @@ func checkColonies(app *pocketbase.PocketBase) {
 	
 	// Get counts
 	allPlanets, _ := app.Dao().FindRecordsByExpr("planets", nil, nil)
-	colonizedPlanets, _ := app.Dao().FindRecordsByFilter("planets", "colonized_by != ''", "", 0, 0)
 	users, _ := app.Dao().FindRecordsByExpr("users", nil, nil)
 	populations, _ := app.Dao().FindRecordsByExpr("populations", nil, nil)
 	buildings, _ := app.Dao().FindRecordsByExpr("buildings", nil, nil)
 
+	// Count colonized planets directly in Go instead of using PocketBase filter
+	colonizedCount := 0
+	for _, planet := range allPlanets {
+		colonizedBy := planet.GetString("colonized_by")
+		if colonizedBy != "" {
+			colonizedCount++
+		}
+	}
+
 	fmt.Printf("Total planets: %d\n", len(allPlanets))
-	fmt.Printf("Colonized planets: %d\n", len(colonizedPlanets))
+	fmt.Printf("Colonized planets: %d\n", colonizedCount)
 	fmt.Printf("Users: %d\n", len(users))
 	fmt.Printf("Population records: %d\n", len(populations))
 	fmt.Printf("Building records: %d\n", len(buildings))
 
-	if len(colonizedPlanets) > 20 {
-		fmt.Printf("\n⚠️  WARNING: %d colonized planets is too many!\n", len(colonizedPlanets))
+	if colonizedCount > 20 {
+		fmt.Printf("\n⚠️  WARNING: %d colonized planets is too many!\n", colonizedCount)
 		fmt.Println("💡 Run 'util reset' to fix this")
 	} else {
-		fmt.Println("\n✅ Colony count looks reasonable")
+		fmt.Println("✅ Colony distribution looks reasonable")
 	}
 }
 
@@ -86,8 +94,8 @@ func resetColonies(app *pocketbase.PocketBase) {
 	fmt.Println("Resetting planets to uncolonized...")
 	if planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil); err == nil {
 		for _, planet := range planets {
-			planet.Set("colonized_by", "")
-			planet.Set("colonized_at", "")
+			planet.Set("colonized_by", nil)
+			planet.Set("colonized_at", nil)
 			app.Dao().SaveRecord(planet)
 		}
 	}
@@ -149,8 +157,8 @@ func cleanGameData(app *pocketbase.PocketBase) {
 	// Reset planets
 	if planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil); err == nil {
 		for _, planet := range planets {
-			planet.Set("colonized_by", "")
-			planet.Set("colonized_at", "")
+			planet.Set("colonized_by", nil)
+			planet.Set("colonized_at", nil)
 			app.Dao().SaveRecord(planet)
 		}
 		fmt.Printf("Reset %d planets to uncolonized\n", len(planets))

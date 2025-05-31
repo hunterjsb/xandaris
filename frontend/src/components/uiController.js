@@ -53,6 +53,7 @@ export class UIController {
     if (selectedSystem) {
       const isOwned = this.currentUser && selectedSystem.owner_id === this.currentUser.id;
       
+      // Initially show basic system info
       systemInfo.innerHTML = `
         <div class="space-y-2">
           <div class="font-semibold text-orange-300">${selectedSystem.name || `System ${selectedSystem.id.slice(-3)}`}</div>
@@ -62,6 +63,12 @@ export class UIController {
             <div>Morale: ${selectedSystem.morale || 0}%</div>
             <div>Owner: ${selectedSystem.owner_name || 'Uncolonized'}</div>
           </div>
+          
+          <div class="text-xs space-y-1 pt-2 border-t border-space-600">
+            <div class="font-medium">Planets:</div>
+            <div id="planets-loading" class="text-space-400">Loading planets...</div>
+          </div>
+          
           ${isOwned ? `
             <div class="text-xs space-y-1 pt-2 border-t border-space-600">
               <div class="font-medium">Resources:</div>
@@ -81,9 +88,155 @@ export class UIController {
           ` : ''}
         </div>
       `;
+      
+      // Load planets asynchronously
+      this.loadSystemPlanets(selectedSystem.id);
     } else {
       systemInfo.innerHTML = 'Click a system to view details';
     }
+  }
+
+  async loadSystemPlanets(systemId) {
+    try {
+      // Use custom API endpoint instead of PocketBase collections
+      const response = await fetch(`http://localhost:8090/api/planets?system_id=${systemId}`);
+      const data = await response.json();
+      const planets = data.items || [];
+      
+      const planetsContainer = document.getElementById('planets-loading');
+      if (!planetsContainer) return; // System changed while loading
+      
+      if (planets.length === 0) {
+        planetsContainer.innerHTML = '<div class="text-space-400">No planets in this system</div>';
+        return;
+      }
+      
+      const planetsHtml = planets.map(planet => {
+        const isColonized = planet.colonized_by != null && planet.colonized_by !== '';
+        const planetTypeName = planet.type || 'Unknown';
+        const colonizedByMe = isColonized && this.currentUser && planet.colonized_by === this.currentUser.id;
+        
+        return `
+          <div class="p-2 bg-space-800 rounded mb-1 cursor-pointer hover:bg-space-700" 
+               onclick="window.uiController.selectPlanet('${planet.id}')">
+            <div class="font-medium text-space-200">${planet.name}</div>
+            <div class="text-xs text-space-400">${planetTypeName} • Size ${planet.size}</div>
+            <div class="text-xs ${isColonized ? (colonizedByMe ? 'text-emerald-400' : 'text-red-400') : 'text-space-300'}">
+              ${isColonized ? (colonizedByMe ? 'Your Colony' : 'Colonized') : 'Uncolonized'}
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      planetsContainer.innerHTML = planetsHtml;
+      
+      // Store reference for planet selection
+      window.uiController = this;
+      
+    } catch (error) {
+      console.error('Error loading planets:', error);
+      const planetsContainer = document.getElementById('planets-loading');
+      if (planetsContainer) {
+        planetsContainer.innerHTML = '<div class="text-red-400">Failed to load planets</div>';
+      }
+    }
+  }
+
+  selectPlanet(planetId) {
+    // For now, just show colonize modal if planet is not colonized
+    fetch(`http://localhost:8090/api/planets`)
+      .then(response => response.json())
+      .then(data => {
+        const planet = data.items.find(p => p.id === planetId);
+        if (!planet) {
+          this.showError('Planet not found');
+          return;
+        }
+        
+        if (!planet.colonized_by || planet.colonized_by === '') {
+          // Planet is available for colonization
+          this.showPlanetColonizeModal(planet);
+        } else {
+          // Planet is already colonized, show info
+          this.showPlanetInfo(planet);
+        }
+      }).catch(err => {
+        console.error('Error fetching planet:', err);
+        this.showError('Failed to load planet information');
+      });
+  }
+
+  showPlanetColonizeModal(planet) {
+    if (!this.currentUser) {
+      this.showError('Please log in to colonize planets');
+      return;
+    }
+
+    const planetTypeName = planet.type || 'Unknown';
+    
+    this.showModal(`Colonize ${planet.name}`, `
+      <div class="space-y-4">
+        <div class="p-3 bg-space-800 rounded">
+          <div class="font-semibold text-emerald-300">${planet.name}</div>
+          <div class="text-sm text-space-300">Type: ${planetTypeName}</div>
+          <div class="text-sm text-space-300">Size: ${planet.size}</div>
+          <div class="text-sm text-emerald-400">Available for colonization</div>
+        </div>
+        
+        <div class="text-sm text-space-300">
+          Establishing a colony will:
+          <ul class="list-disc list-inside mt-2 space-y-1">
+            <li>Create an initial population of 100</li>
+            <li>Build a basic command center</li>
+            <li>Start resource production</li>
+          </ul>
+        </div>
+        
+        <div class="flex space-x-2">
+          <button class="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded" 
+                  onclick="window.uiController.colonizePlanet('${planet.id}')">
+            Colonize Planet
+          </button>
+          <button class="flex-1 px-4 py-2 bg-space-700 hover:bg-space-600 rounded" 
+                  onclick="window.uiController.hideModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `);
+  }
+
+  showPlanetInfo(planet) {
+    const planetTypeName = planet.type || 'Unknown';
+    const isMyColony = this.currentUser && planet.colonized_by === this.currentUser.id;
+    
+    this.showModal(`${planet.name} Information`, `
+      <div class="space-y-4">
+        <div class="p-3 bg-space-800 rounded">
+          <div class="font-semibold text-orange-300">${planet.name}</div>
+          <div class="text-sm text-space-300">Type: ${planetTypeName}</div>
+          <div class="text-sm text-space-300">Size: ${planet.size}</div>
+          <div class="text-sm ${isMyColony ? 'text-emerald-400' : 'text-red-400'}">
+            ${isMyColony ? 'Your Colony' : 'Colonized by another player'}
+          </div>
+        </div>
+        
+        ${isMyColony ? `
+          <div class="text-sm text-space-300">
+            This is one of your colonies. You can manage it through the buildings and resources panels.
+          </div>
+        ` : `
+          <div class="text-sm text-space-300">
+            This planet has already been colonized by another player.
+          </div>
+        `}
+        
+        <button class="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded" 
+                onclick="window.uiController.hideModal()">
+          Close
+        </button>
+      </div>
+    `);
   }
 
   updateGameStatusUI(state) {
@@ -418,6 +571,110 @@ export class UIController {
       <div class="mt-4 text-xs text-space-400 border-t border-space-600 pt-2">
         💡 Build structures at your systems to improve production and defense
       </div>
+    `);
+  }
+
+  showColonizeModal(system) {
+    if (!this.currentUser) {
+      this.showError('Please log in to colonize planets');
+      return;
+    }
+
+    // We need to fetch planets in this system
+    fetch(`http://localhost:8090/api/planets?system_id=${system.id}`)
+      .then(response => response.json())
+      .then(data => {
+        const planets = data.items || [];
+        if (planets.length === 0) {
+          this.showError('No planets found in this system');
+          return;
+        }
+
+        const planetOptions = planets.map(planet => {
+          const isColonized = planet.colonized_by != null && planet.colonized_by !== '';
+          const planetTypeName = planet.type || 'Unknown';
+          
+          return `
+            <div class="p-3 bg-space-700 rounded mb-2 ${isColonized ? 'opacity-50' : 'hover:bg-space-600 cursor-pointer'}" 
+                 ${!isColonized ? `onclick="window.uiController.colonizePlanet('${planet.id}')"` : ''}>
+              <div class="font-semibold">${planet.name}</div>
+              <div class="text-sm text-space-300">Type: ${planetTypeName}</div>
+              <div class="text-sm text-space-300">Size: ${planet.size}</div>
+              ${isColonized ? 
+                `<div class="text-sm text-red-400">Already colonized</div>` : 
+                `<div class="text-sm text-emerald-400">Available for colonization</div>`
+              }
+            </div>
+          `;
+        }).join('');
+
+        this.showModal(`Colonize Planet in ${system.name || `System ${system.id.slice(-3)}`}`, `
+          <div class="space-y-2">
+            <div class="text-sm text-space-300 mb-4">
+              Select a planet to establish a new colony:
+            </div>
+            ${planetOptions}
+          </div>
+        `);
+
+        // Store reference for colonization
+        window.uiController = this;
+        
+      }).catch(err => {
+        console.error('Error fetching planets:', err);
+        this.showError('Failed to load planets in this system');
+      });
+  }
+
+  async colonizePlanet(planetId) {
+    try {
+      const { pb } = await import('../lib/pocketbase.js');
+      
+      // Debug auth status
+      console.log('Auth token:', pb.authStore.token ? 'Present' : 'Missing');
+      console.log('User logged in:', pb.authStore.isValid);
+      console.log('Current user:', pb.authStore.model);
+      
+      if (!pb.authStore.isValid) {
+        this.showError('Please log in first to colonize planets');
+        return;
+      }
+      
+      const response = await fetch(`${pb.baseUrl}/api/orders/colonize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': pb.authStore.token
+        },
+        body: JSON.stringify({
+          planet_id: planetId
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        this.hideModal();
+        this.showSuccessMessage('Planet colonized successfully! Your new colony has been established.');
+        
+        // Refresh game state to show the new colony
+        const { gameState } = await import('../stores/gameState.js');
+        gameState.refreshGameData();
+      } else {
+        throw new Error(result.error || result.message || 'Failed to colonize planet');
+      }
+    } catch (error) {
+      console.error('Colonization error:', error);
+      this.showError(`Failed to colonize planet: ${error.message}`);
+    }
+  }
+
+  showSuccessMessage(message) {
+    this.showModal('Success', `
+      <div class="text-emerald-400 mb-4">${message}</div>
+      <button class="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
+        OK
+      </button>
     `);
   }
 }
