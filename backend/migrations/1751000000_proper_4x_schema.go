@@ -1,9 +1,12 @@
 package migrations
 
 import (
+	"encoding/json"
+
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/daos"
 	m "github.com/pocketbase/pocketbase/migrations"
+	"github.com/pocketbase/pocketbase/models"
 )
 
 func init() {
@@ -220,5 +223,13 @@ func init() {
 		}
 		return nil
 	})
+}
+
+func createCollectionFromJSON(dao *daos.Dao, jsonData string) error {
+	collection := &models.Collection{}
+	if err := json.Unmarshal([]byte(jsonData), collection); err != nil {
+		return err
+	}
+	return dao.SaveCollection(collection)
 }
 
