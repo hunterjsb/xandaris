@@ -23,30 +23,32 @@ func GenerateMap(app *pocketbase.PocketBase, systemCount int) error {
 	systems := generateSystems(systemCount)
 
 	// Save systems to database
-	collection, err := app.Dao().FindCollectionByNameOrId("systems")
+	sysCollection, err := app.Dao().FindCollectionByNameOrId("systems")
 	if err != nil {
 		return fmt.Errorf("systems collection not found: %w", err)
 	}
+	planetCollection, err := app.Dao().FindCollectionByNameOrId("planets")
+	if err != nil {
+		return fmt.Errorf("planets collection not found: %w", err)
+	}
 
-	for _, sys := range systems {
-		record := models.NewRecord(collection)
-		record.Set("x", sys.X)
-		record.Set("y", sys.Y)
-		record.Set("richness", sys.Richness)
-		record.Set("pop", 0)
-		record.Set("morale", 0)
-		record.Set("food", 0)
-		record.Set("ore", 0)
-		record.Set("goods", 0)
-		record.Set("fuel", 0)
-		record.Set("hab_lvl", 0)
-		record.Set("farm_lvl", 0)
-		record.Set("mine_lvl", 0)
-		record.Set("fac_lvl", 0)
-		record.Set("yard_lvl", 0)
+	for i, sys := range systems {
+		systemRecord := models.NewRecord(sysCollection)
+		systemRecord.Set("x", sys.X)
+		systemRecord.Set("y", sys.Y)
+		systemRecord.Set("richness", sys.Richness)
 
-		if err := app.Dao().SaveRecord(record); err != nil {
+		if err := app.Dao().SaveRecord(systemRecord); err != nil {
 			return fmt.Errorf("failed to save system: %w", err)
+		}
+
+		// create a default planet for each system
+		planet := models.NewRecord(planetCollection)
+		planet.Set("name", fmt.Sprintf("Planet-%d", i+1))
+		planet.Set("system_id", systemRecord.Id)
+		planet.Set("type_id", "") // default type will be assigned later
+		if err := app.Dao().SaveRecord(planet); err != nil {
+			return fmt.Errorf("failed to save planet: %w", err)
 		}
 	}
 
@@ -61,7 +63,7 @@ type System struct {
 
 func generateSystems(count int) []System {
 	systems := make([]System, 0, count)
-	
+
 	// Use a simple grid with some randomization
 	gridSize := int(math.Ceil(math.Sqrt(float64(count))))
 	spacing := 200 // Distance between systems
@@ -96,14 +98,17 @@ func generateSystems(count int) []System {
 }
 
 func clearExistingSystems(app *pocketbase.PocketBase) error {
-	// Try to find and delete existing systems
-	// We'll just skip if the collection doesn't exist yet
-	systems, err := app.Dao().FindRecordsByFilter("systems", "", "", 50, 0)
-	if err != nil {
-		// If systems collection doesn't exist, that's fine
-		return nil
+	// delete planets first
+	planets, _ := app.Dao().FindRecordsByFilter("planets", "", "", 100, 0)
+	for _, p := range planets {
+		_ = app.Dao().DeleteRecord(p)
 	}
 
+	// delete systems
+	systems, err := app.Dao().FindRecordsByFilter("systems", "", "", 50, 0)
+	if err != nil {
+		return nil
+	}
 	for _, system := range systems {
 		if err := app.Dao().DeleteRecord(system); err != nil {
 			return fmt.Errorf("failed to delete system %s: %w", system.Id, err)
@@ -118,7 +123,7 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 	// Use a simple query to get all systems
 	query := app.Dao().RecordQuery("systems")
 	systems := []*models.Record{}
-	
+
 	if err := query.All(&systems); err != nil {
 		return nil, fmt.Errorf("failed to fetch systems: %w", err)
 	}
@@ -131,17 +136,18 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 			"y":        system.GetInt("y"),
 			"richness": system.GetInt("richness"),
 			"owner_id": system.GetString("owner_id"),
-			"pop":      system.GetInt("pop"),
-			"morale":   system.GetInt("morale"),
-			"food":     system.GetInt("food"),
-			"ore":      system.GetInt("ore"),
-			"goods":    system.GetInt("goods"),
-			"fuel":     system.GetInt("fuel"),
-			"hab_lvl":  system.GetInt("hab_lvl"),
-			"farm_lvl": system.GetInt("farm_lvl"),
-			"mine_lvl": system.GetInt("mine_lvl"),
-			"fac_lvl":  system.GetInt("fac_lvl"),
-			"yard_lvl": system.GetInt("yard_lvl"),
+		}
+	}
+
+	// fetch planets
+	planetRecords, _ := app.Dao().FindRecordsByFilter("planets", "", "", 0, 0)
+	planetsData := make([]map[string]interface{}, len(planetRecords))
+	for i, p := range planetRecords {
+		planetsData[i] = map[string]interface{}{
+			"id":        p.Id,
+			"name":      p.GetString("name"),
+			"system_id": p.GetString("system_id"),
+			"type_id":   p.GetString("type_id"),
 		}
 	}
 
@@ -150,6 +156,7 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 
 	return map[string]interface{}{
 		"systems": systemsData,
+		"planets": planetsData,
 		"lanes":   lanes,
 	}, nil
 }

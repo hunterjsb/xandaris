@@ -137,8 +137,17 @@ Output will be in the `backend/pb_public/` directory, ready to be served by the 
 
 The frontend expects these PocketBase collections:
 - `users` - Player accounts
-- `systems` - Star systems with resources/buildings
-- `fleets` - Moving military units
+- `systems` - Star systems with coordinates
+- `planet_types` - Templates for planet generation
+- `planets` - Planets belonging to systems
+- `building_types` - Available building templates
+- `buildings` - Constructed buildings on planets
+- `resource_types` - Types of resources
+- `resource_nodes` - Resource deposits on planets
+- `populations` - Player population units
+- `fleets` - Moving groups of ships
+- `ship_types` - Templates for ships
+- `ships` - Ships belonging to fleets
 - `trade_routes` - Automated cargo transport
 - `treaties` - Diplomatic agreements
 
