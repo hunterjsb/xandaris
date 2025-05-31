@@ -109,8 +109,8 @@ class XanNationApp {
       this.uiController.showDiplomacyPanel();
     });
 
-    document.getElementById('banking-btn').addEventListener('click', () => {
-      this.uiController.showBankingPanel();
+    document.getElementById('buildings-btn').addEventListener('click', () => {
+      this.uiController.showBuildingsPanel();
     });
 
     // Auth buttons
@@ -133,6 +133,10 @@ class XanNationApp {
 
     document.getElementById('trade-route-btn').addEventListener('click', () => {
       this.handleTradeRouteAction();
+    });
+
+    document.getElementById('colonize-btn').addEventListener('click', () => {
+      this.handleColonizeAction();
     });
 
     // Keyboard shortcuts
@@ -176,6 +180,9 @@ class XanNationApp {
         break;
       case 'trade':
         this.uiController.showTradeRouteModal(system);
+        break;
+      case 'colonize':
+        this.uiController.showColonizeModal(system);
         break;
     }
   }
@@ -225,6 +232,21 @@ class XanNationApp {
     this.uiController.showTradeRouteModal(selectedSystem);
   }
 
+  handleColonizeAction() {
+    const selectedSystem = gameState.getSelectedSystem();
+    if (!selectedSystem) {
+      this.uiController.showError('Please select a system first');
+      return;
+    }
+
+    if (!authManager.isLoggedIn()) {
+      this.uiController.showError('Please log in first');
+      return;
+    }
+
+    this.uiController.showColonizeModal(selectedSystem);
+  }
+
   handleKeyboardInput(e) {
     // Only handle keyboard shortcuts when not in input fields
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -249,6 +271,9 @@ class XanNationApp {
         if (gameState.getSelectedSystem()) {
           this.mapRenderer.centerOnSystem(gameState.getSelectedSystem().id);
         }
+        break;
+      case 'o':
+        this.handleColonizeAction();
         break;
       case 'h':
         this.mapRenderer.fitToSystems();

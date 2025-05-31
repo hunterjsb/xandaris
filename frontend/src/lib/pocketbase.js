@@ -6,6 +6,15 @@ const BASE_URL = import.meta.env.VITE_POCKETBASE_URL || 'http://localhost:8090';
 // Create a single PocketBase client instance
 export const pb = new PocketBase(BASE_URL);
 
+// Helper function to suppress auto-cancellation errors
+function suppressAutoCancelError(error) {
+  if (error.message?.includes('autocancelled') || error.status === 0) {
+    // These are expected auto-cancellation errors, don't log them
+    return;
+  }
+  throw error; // Re-throw non-autocancellation errors
+}
+
 // Auth state management
 export class AuthManager {
   constructor() {
@@ -204,7 +213,11 @@ export class GameDataManager {
         sort: 'eta'
       });
     } catch (error) {
-      console.error('Failed to fetch fleets:', error);
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error('Failed to fetch fleets:', e);
+      }
       return [];
     }
   }
@@ -214,36 +227,46 @@ export class GameDataManager {
       const filter = userId ? `owner_id = "${userId}"` : '';
       return await pb.collection('trade_routes').getFullList({
         filter,
-        sort: 'eta'
+        sort: 'created'
       });
     } catch (error) {
-      console.error('Failed to fetch trades:', error);
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error('Failed to fetch trades:', e);
+      }
+      return [];
+    }
+  }
+
+  async getBuildings(userId = null) {
+    try {
+      // Buildings don't have owner_id, they belong to planets
+      // For now, return all buildings for authenticated users
+      return await pb.collection('buildings').getFullList({
+        sort: 'created'
+      });
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error('Failed to fetch buildings:', e);
+      }
       return [];
     }
   }
 
   async getTreaties(userId = null) {
     try {
-      const filter = userId ? `a_id = "${userId}" || b_id = "${userId}"` : '';
-      return await pb.collection('treaties').getFullList({
-        filter,
-        sort: '-created_at'
-      });
-    } catch (error) {
-      console.error('Failed to fetch treaties:', error);
+      // Treaties collection doesn't exist in new schema yet
+      // Return empty array for now
       return [];
-    }
-  }
-
-  async getBanks(userId = null) {
-    try {
-      const filter = userId ? `owner_id = "${userId}"` : '';
-      return await pb.collection('banks').getFullList({
-        filter,
-        sort: '-created_at'
-      });
     } catch (error) {
-      console.error('Failed to fetch banks:', error);
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error('Failed to fetch treaties:', e);
+      }
       return [];
     }
   }
@@ -353,7 +376,11 @@ export class GameDataManager {
         method: 'GET'
       });
     } catch (error) {
-      console.error('Failed to fetch status:', error);
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error('Failed to fetch status:', e);
+      }
       return null;
     }
   }

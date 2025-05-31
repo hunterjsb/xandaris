@@ -7,7 +7,7 @@ export class GameState {
     this.fleets = [];
     this.trades = [];
     this.treaties = [];
-    this.banks = [];
+    this.buildings = [];
     this.mapData = null;
     this.selectedSystem = null;
     this.currentTick = 1;
@@ -46,37 +46,62 @@ export class GameState {
     if (this.initialized) return;
     
     try {
-      // Load initial game data
-      const [fleets, trades, treaties, banks, mapData, status] = await Promise.all([
-        gameData.getFleets(authManager.getUser()?.id),
-        gameData.getTrades(authManager.getUser()?.id),
-        gameData.getTreaties(authManager.getUser()?.id),
-        gameData.getBanks(authManager.getUser()?.id),
-        gameData.getMap(),
-        gameData.getStatus()
-      ]);
+      await this.loadGameData();
+      this.initialized = true;
+    } catch (error) {
+      console.error('Failed to initialize game state:', error);
+    }
+  }
 
-      // Use map data for systems (already loaded)
+  async loadGameData() {
+    try {
+      // Load game data with individual requests to avoid auto-cancellation
+      const userId = authManager.getUser()?.id;
+      
+      // Load map data first (most important)
+      const mapData = await gameData.getMap();
       if (mapData && mapData.systems) {
         this.systems = mapData.systems;
         this.mapData = mapData;
       }
-      this.fleets = fleets;
-      this.trades = trades;
-      this.treaties = treaties;
-      this.banks = banks;
+
+      // Load user-specific data with delays to prevent auto-cancellation
+      if (userId) {
+        this.fleets = await gameData.getFleets(userId);
+        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
+        
+        this.trades = await gameData.getTrades(userId);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        this.treaties = await gameData.getTreaties(userId);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        this.buildings = await gameData.getBuildings(userId);
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
       
+      // Load status last
+      const status = await gameData.getStatus();
       if (status) {
         this.currentTick = status.current_tick || 1;
         this.ticksPerMinute = status.ticks_per_minute || 6;
       }
       
       this.updatePlayerResources();
-      this.initialized = true;
       this.notifyCallbacks();
     } catch (error) {
-      console.error('Failed to initialize game state:', error);
+      console.error('Failed to load game data:', error);
     }
+  }
+
+  async refreshGameData() {
+    // Refresh data without reinitializing
+    if (!this.initialized) {
+      await this.initialize();
+      return;
+    }
+    
+    await this.loadGameData();
   }
 
   reset() {
@@ -84,7 +109,7 @@ export class GameState {
     this.fleets = [];
     this.trades = [];
     this.treaties = [];
-    this.banks = [];
+    this.buildings = [];
     this.mapData = null;
     this.selectedSystem = null;
     this.currentTick = 1;
@@ -183,7 +208,7 @@ export class GameState {
     
     // Optional: Refresh data periodically, but not every tick
     if (this.currentTick % 6 === 0) { // Refresh every minute (6 ticks)
-      this.initialize();
+      this.refreshGameData();
     }
   }
 
@@ -194,9 +219,11 @@ export class GameState {
     // Start with user's global credits
     const userCredits = user.credits || 0;
     
-    // Calculate banking income by counting active banks
-    const userBanks = this.getPlayerBanks();
-    const creditsPerTick = userBanks.filter(bank => bank.active !== false).length;
+    // Calculate income from buildings
+    const userBuildings = this.getPlayerBuildings();
+    const creditsPerTick = userBuildings
+      .filter(building => building.type === 'bank' && building.active !== false)
+      .reduce((sum, building) => sum + (building.credits_per_tick || 1), 0);
 
     // Calculate total resources from owned systems
     const ownedSystems = this.systems.filter(s => s.owner_id === user.id);
@@ -214,7 +241,7 @@ export class GameState {
       fuel: 0 
     });
 
-    // Store banking income for UI display
+    // Store building income for UI display
     this.creditIncome = creditsPerTick;
   }
 
@@ -262,10 +289,14 @@ export class GameState {
     return await gameData.proposeTreaty(playerId, type, terms);
   }
 
-  getPlayerBanks() {
+  getPlayerBuildings() {
     const user = authManager.getUser();
     if (!user) return [];
-    return this.banks?.filter(bank => bank.owner_id === user.id) || [];
+    return this.buildings?.filter(building => building.owner_id === user.id) || [];
+  }
+
+  getPlayerBuildingsByType(type) {
+    return this.getPlayerBuildings().filter(building => building.type === type);
   }
 }
 

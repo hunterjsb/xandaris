@@ -8,195 +8,250 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 )
 
-// UpdateMarkets handles the economic simulation for all systems
+// UpdateMarkets handles the economic simulation for all colonized planets
 func UpdateMarkets(app *pocketbase.PocketBase) error {
 	log.Println("Updating markets and economy...")
 
-	// Process bank income first
+	// Process bank income first (if banks still exist)
 	if err := ProcessBankIncome(app); err != nil {
 		log.Printf("Error processing bank income: %v", err)
 		// Don't fail the entire economy update for bank errors
 	}
 
-	// Get all owned systems
-	systems, err := app.Dao().FindRecordsByFilter("systems", "owner_id != ''", "", 0, 0)
+	// Get all colonized planets (this is where the economy happens now)
+	planets, err := app.Dao().FindRecordsByFilter("planets", "colonized_by != ''", "", 0, 0)
 	if err != nil {
-		return fmt.Errorf("failed to fetch systems: %w", err)
+		return fmt.Errorf("failed to fetch colonized planets: %w", err)
 	}
 
-	for _, system := range systems {
-		if err := updateSystemEconomy(system); err != nil {
-			log.Printf("Failed to update economy for system %s: %v", system.Id, err)
+	planetsProcessed := 0
+	for _, planet := range planets {
+		// Skip planets without populations (empty colonies)
+		populations, err := app.Dao().FindRecordsByFilter("populations", 
+			fmt.Sprintf("planet_id = '%s'", planet.Id), "", 1, 0)
+		if err != nil || len(populations) == 0 {
+			continue // Skip planets with no population
+		}
+
+		if err := updatePlanetEconomy(app, planet); err != nil {
+			log.Printf("Failed to update economy for planet %s: %v", planet.Id, err)
 			continue
 		}
 
-		if err := app.Dao().SaveRecord(system); err != nil {
-			log.Printf("Failed to save system %s: %v", system.Id, err)
+		if err := app.Dao().SaveRecord(planet); err != nil {
+			log.Printf("Failed to save planet %s: %v", planet.Id, err)
 		}
+		planetsProcessed++
 	}
 
-	log.Printf("Updated economy for %d systems", len(systems))
+	log.Printf("Updated economy for %d planets with populations (skipped %d empty colonies)", planetsProcessed, len(planets)-planetsProcessed)
 	return nil
 }
 
-// updateSystemEconomy simulates production and consumption for a single system
-func updateSystemEconomy(system *models.Record) error {
-	pop := system.GetInt("pop")
-	morale := system.GetInt("morale")
-	richness := system.GetInt("richness")
-
-	// Get building levels
-	habLvl := system.GetInt("hab_lvl")
-	farmLvl := system.GetInt("farm_lvl")
-	mineLvl := system.GetInt("mine_lvl")
-	facLvl := system.GetInt("fac_lvl")
-	yardLvl := system.GetInt("yard_lvl")
-
-	// Calculate efficiency based on morale (50-150%)
-	efficiency := float64(morale+50) / 100.0
-	if efficiency < 0.5 {
-		efficiency = 0.5
-	}
-	if efficiency > 1.5 {
-		efficiency = 1.5
+// updatePlanetEconomy simulates production and consumption for a single planet
+func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) error {
+	// Get planet owner
+	ownerID := planet.GetString("colonized_by")
+	if ownerID == "" {
+		return nil // Skip uncolonized planets
 	}
 
-	// Current resources
-	food := system.GetInt("food")
-	ore := system.GetInt("ore")
-	goods := system.GetInt("goods")
-	fuel := system.GetInt("fuel")
-
-	// === PRODUCTION ===
-
-	// Food production: farms + basic population farming
-	foodProduction := int(float64(farmLvl*50+pop/10) * efficiency)
-	food += foodProduction
-
-	// Ore production: mines based on richness
-	oreProduction := int(float64(mineLvl*30+richness*10) * efficiency)
-	ore += oreProduction
-
-	// Goods production: factories (requires ore)
-	goodsProduction := int(float64(facLvl*20) * efficiency)
-	if ore >= goodsProduction {
-		ore -= goodsProduction
-		goods += goodsProduction
-	} else {
-		// Partial production if not enough ore
-		goods += ore
-		ore = 0
+	// Get planet size (affects base capacity)
+	planetSize := planet.GetInt("size")
+	if planetSize == 0 {
+		planetSize = 1
 	}
 
-	// Fuel production: limited fuel extraction
-	fuelProduction := int(float64(yardLvl*10+richness*5) * efficiency)
-	fuel += fuelProduction
-
-	// === CONSUMPTION ===
-
-	// Population consumes food
-	foodConsumption := pop / 5
-	food -= foodConsumption
-
-	// Low food affects morale and population
-	if food < 0 {
-		morale -= 10 // Starvation hurts morale
-		if food < -pop {
-			pop = int(float64(pop) * 0.95) // Population decline from starvation
-		}
-		food = 0
+	// Get planet type for habitability modifier
+	planetType, err := app.Dao().FindRecordById("planet_types", planet.GetString("planet_type"))
+	if err != nil {
+		log.Printf("Failed to get planet type for planet %s: %v", planet.Id, err)
+		return nil
 	}
 
-	// === GROWTH ===
+	habitability := planetType.GetFloat("habitability")
+	maxPop := int(float64(planetType.GetInt("base_max_population")) * float64(planetSize) * habitability)
 
-	// Population growth based on habitat level and morale
-	if food > pop && morale > 70 {
-		maxPop := habLvl * 100
-		if pop < maxPop {
-			growth := int(float64(pop) * 0.02 * (float64(morale)/100.0))
-			if growth < 1 {
-				growth = 1
-			}
-			pop += growth
-			if pop > maxPop {
-				pop = maxPop
-			}
+	// Get population on this planet
+	populations, err := app.Dao().FindRecordsByFilter("populations", 
+		fmt.Sprintf("owner_id = '%s' && planet_id = '%s'", ownerID, planet.Id), "", 0, 0)
+	if err != nil {
+		log.Printf("Failed to get population for planet %s: %v", planet.Id, err)
+		return nil
+	}
+
+	totalPop := 0
+	totalHappiness := 75 // Default happiness
+	for _, pop := range populations {
+		totalPop += pop.GetInt("count")
+		if pop.GetInt("happiness") > 0 {
+			totalHappiness = pop.GetInt("happiness")
 		}
 	}
 
-	// Morale naturally trends toward 75 (neutral)
-	if morale < 75 {
-		morale += 2
-	} else if morale > 75 {
-		morale -= 1
+	if totalPop == 0 {
+		return nil // No population to simulate
 	}
 
-	// Ensure morale stays in bounds
-	if morale < 0 {
-		morale = 0
-	}
-	if morale > 100 {
-		morale = 100
+	// Get buildings on this planet
+	buildings, err := app.Dao().FindRecordsByFilter("buildings", 
+		fmt.Sprintf("planet_id = '%s' && active = true", planet.Id), "", 0, 0)
+	if err != nil {
+		log.Printf("Failed to get buildings for planet %s: %v", planet.Id, err)
+		return nil
 	}
 
-	// === UPDATE SYSTEM ===
-	system.Set("pop", pop)
-	system.Set("morale", morale)
-	system.Set("food", food)
-	system.Set("ore", ore)
-	system.Set("goods", goods)
-	system.Set("fuel", fuel)
+	// Get resource nodes on this planet
+	resourceNodes, err := app.Dao().FindRecordsByFilter("resource_nodes", 
+		fmt.Sprintf("planet_id = '%s' && exhausted = false", planet.Id), "", 0, 0)
+	if err != nil {
+		log.Printf("Failed to get resource nodes for planet %s: %v", planet.Id, err)
+		return nil
+	}
+
+	// Calculate production from buildings working resource nodes
+	production := make(map[string]int)
+	
+	for _, building := range buildings {
+		buildingTypeID := building.GetString("building_type")
+		buildingType, err := app.Dao().FindRecordById("building_types", buildingTypeID)
+		if err != nil {
+			continue
+		}
+
+		level := building.GetInt("level")
+		if level == 0 {
+			level = 1
+		}
+
+		workerCapacity := buildingType.GetInt("worker_capacity") * level
+
+		// Get employed population for this building
+		employedPops, err := app.Dao().FindRecordsByFilter("populations",
+			fmt.Sprintf("employed_at = '%s'", building.Id), "", 0, 0)
+		if err != nil {
+			continue
+		}
+
+		workers := 0
+		for _, emp := range employedPops {
+			workers += emp.GetInt("count")
+		}
+
+		if workers > workerCapacity {
+			workers = workerCapacity
+		}
+
+		// Calculate efficiency based on happiness and workers
+		efficiency := float64(totalHappiness) / 100.0 * float64(workers) / float64(workerCapacity)
+		if efficiency > 1.0 {
+			efficiency = 1.0
+		}
+
+		// Different building types produce different resources
+		buildingName := buildingType.GetString("name")
+		baseProduction := int(float64(level*20) * efficiency)
+
+		switch buildingName {
+		case "farm":
+			production["food"] += baseProduction
+		case "mine":
+			// Mines work ore resource nodes
+			for _, node := range resourceNodes {
+				resourceType, err := app.Dao().FindRecordById("resource_types", node.GetString("resource_type"))
+				if err != nil {
+					continue
+				}
+				if resourceType.GetString("name") == "ore" {
+					richness := node.GetInt("richness")
+					production["ore"] += baseProduction * richness / 5
+					break
+				}
+			}
+		case "factory":
+			production["goods"] += baseProduction
+		case "power_plant":
+			production["fuel"] += baseProduction
+		}
+	}
+
+	// Basic consumption for population
+	consumption := map[string]int{
+		"food": totalPop / 5,
+		"fuel": totalPop / 10,
+	}
+
+	// Get owner's current resources (stored globally per user)
+	owner, err := app.Dao().FindRecordById("users", ownerID)
+	if err != nil {
+		log.Printf("Failed to get owner for planet %s: %v", planet.Id, err)
+		return nil
+	}
+
+	// Update owner's resources
+	for resource, amount := range production {
+		currentAmount := owner.GetInt(resource)
+		owner.Set(resource, currentAmount + amount)
+	}
+
+	for resource, amount := range consumption {
+		currentAmount := owner.GetInt(resource)
+		newAmount := currentAmount - amount
+		if newAmount < 0 {
+			// Resource shortage affects happiness
+			for _, pop := range populations {
+				happiness := pop.GetInt("happiness")
+				happiness -= 5
+				if happiness < 0 {
+					happiness = 0
+				}
+				pop.Set("happiness", happiness)
+				app.Dao().SaveRecord(pop)
+			}
+			newAmount = 0
+		}
+		owner.Set(resource, newAmount)
+	}
+
+	// Population growth/decline
+	if totalHappiness > 70 && production["food"] > consumption["food"] && totalPop < maxPop {
+		// Population growth
+		growthRate := 0.02 * (float64(totalHappiness) / 100.0)
+		growth := int(float64(totalPop) * growthRate)
+		if growth < 1 {
+			growth = 1
+		}
+
+		if len(populations) > 0 {
+			mainPop := populations[0]
+			newCount := mainPop.GetInt("count") + growth
+			if totalPop + growth > maxPop {
+				newCount = maxPop - (totalPop - mainPop.GetInt("count"))
+			}
+			mainPop.Set("count", newCount)
+			app.Dao().SaveRecord(mainPop)
+		}
+	}
+
+	// Save owner's updated resources
+	if err := app.Dao().SaveRecord(owner); err != nil {
+		log.Printf("Failed to save owner resources: %v", err)
+	}
 
 	return nil
 }
 
-// CalculatePrice calculates market price using logistic function
-// p' = p * (1 + k*(d-s)/(d+s))
-func CalculatePrice(basePrice float64, demand, supply int, k float64) float64 {
-	if supply == 0 && demand > 0 {
-		return basePrice * 2.0 // Price doubles when no supply
-	}
-	if demand == 0 {
-		return basePrice * 0.5 // Price halves when no demand
-	}
-
-	total := float64(demand + supply)
-	if total == 0 {
-		return basePrice
-	}
-
-	ratio := float64(demand-supply) / total
-	multiplier := 1.0 + k*ratio
-
-	return basePrice * multiplier
-}
-
-// GetSystemValue calculates the total value of a system's resources
-func GetSystemValue(system *models.Record) int {
-	food := system.GetInt("food")
-	ore := system.GetInt("ore")
-	goods := system.GetInt("goods")
-	fuel := system.GetInt("fuel")
-
-	// Base prices for resources
-	value := food*1 + ore*2 + goods*5 + fuel*3
-
-	// Add building values
-	habLvl := system.GetInt("hab_lvl")
-	farmLvl := system.GetInt("farm_lvl")
-	mineLvl := system.GetInt("mine_lvl")
-	facLvl := system.GetInt("fac_lvl")
-	yardLvl := system.GetInt("yard_lvl")
-
-	buildingValue := (habLvl+farmLvl+mineLvl+facLvl+yardLvl) * 100
-
-	return value + buildingValue
-}
-
-// ProcessBankIncome handles crypto server income generation efficiently
+// ProcessBankIncome handles legacy bank income (might not exist in new schema)
 func ProcessBankIncome(app *pocketbase.PocketBase) error {
+	// Check if banks collection exists
+	_, err := app.Dao().FindCollectionByNameOrId("banks")
+	if err != nil {
+		// Banks don't exist in new schema, skip
+		return nil
+	}
+
 	// Get all users 
-	users, err := app.Dao().FindRecordsByFilter("users", "id != ''", "", 0, 0)
+	users, err := app.Dao().FindRecordsByExpr("users", nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch users: %w", err)
 	}
@@ -213,12 +268,12 @@ func ProcessBankIncome(app *pocketbase.PocketBase) error {
 	return nil
 }
 
-// processUserBankingIncome handles banking income for a single user
+// processUserBankingIncome handles banking income for a single user (legacy)
 func processUserBankingIncome(app *pocketbase.PocketBase, user *models.Record) error {
 	// Count active banks owned by this user
 	bankCount, err := app.Dao().FindRecordsByFilter("banks", fmt.Sprintf("owner_id = '%s' && active = true", user.Id), "", 0, 0)
 	if err != nil {
-		return fmt.Errorf("failed to count user banks: %w", err)
+		return nil // Banks collection doesn't exist
 	}
 
 	creditsPerTick := len(bankCount)
@@ -241,24 +296,36 @@ func processUserBankingIncome(app *pocketbase.PocketBase, user *models.Record) e
 	return nil
 }
 
-// AuditUserCredits verifies that a user's expected income matches their bank count
-func AuditUserCredits(app *pocketbase.PocketBase, userID string) error {
-	user, err := app.Dao().FindRecordById("users", userID)
+// GetPlanetValue calculates the total value of a planet's economy
+func GetPlanetValue(app *pocketbase.PocketBase, planet *models.Record) int {
+	value := 0
+
+	// Get buildings on planet
+	buildings, err := app.Dao().FindRecordsByFilter("buildings", 
+		fmt.Sprintf("planet_id = '%s'", planet.Id), "", 0, 0)
 	if err != nil {
-		return fmt.Errorf("failed to find user: %w", err)
+		return 0
 	}
 
-	// Count user's active banks
-	banks, err := app.Dao().FindRecordsByFilter("banks", fmt.Sprintf("owner_id = '%s' && active = true", userID), "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to count user banks: %w", err)
+	for _, building := range buildings {
+		buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+		if err != nil {
+			continue
+		}
+		
+		level := building.GetInt("level")
+		cost := buildingType.GetInt("cost")
+		value += cost * level
 	}
 
-	expectedCreditsPerTick := len(banks)
-	currentCredits := user.GetInt("credits")
-	
-	log.Printf("User %s audit: %d credits, %d banks (expected %d credits/tick)", 
-		userID, currentCredits, len(banks), expectedCreditsPerTick)
+	// Get population value
+	populations, err := app.Dao().FindRecordsByFilter("populations", 
+		fmt.Sprintf("planet_id = '%s'", planet.Id), "", 0, 0)
+	if err == nil {
+		for _, pop := range populations {
+			value += pop.GetInt("count") * 10 // 10 credits per population
+		}
+	}
 
-	return nil
+	return value
 }

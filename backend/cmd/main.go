@@ -8,15 +8,14 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
 	"github.com/hunterjsb/xandaris/internal/tick"
 	"github.com/hunterjsb/xandaris/internal/websocket"
-	"github.com/hunterjsb/xandaris/pkg"
 	_ "github.com/hunterjsb/xandaris/migrations"
+	"github.com/hunterjsb/xandaris/pkg"
 )
 
 func main() {
@@ -44,12 +43,12 @@ func main() {
 		if e.Model.TableName() == "users" {
 			user := e.Model.(*models.Record)
 			log.Printf("New user created: %s, setting starting resources", user.Id)
-			
+
 			// Set starting resources - stored in a separate table or user fields
 			// For now, we'll use user custom fields
-			user.Set("credits", 1000)  // Starting credits
+			user.Set("credits", 1000) // Starting credits
 			user.Set("last_resource_update", time.Now())
-			
+
 			if err := app.Dao().SaveRecord(user); err != nil {
 				log.Printf("Error setting starting resources for user %s: %v", user.Id, err)
 				return err
@@ -59,30 +58,11 @@ func main() {
 		return nil
 	})
 
+	// Register unified API routes
+	pkg.RegisterAPIRoutes(app)
 
-	// Set up custom API routes
+	// Set up additional custom routes
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
-		// Map endpoint
-		e.Router.GET("/api/map", pkg.MapHandler(app))
-
-		// Game status endpoint
-		e.Router.GET("/api/status", func(c echo.Context) error {
-			currentTick := tick.GetCurrentTick(app)
-			ticksPerMinute := tick.GetTickRate()
-			
-			return c.JSON(200, map[string]interface{}{
-				"current_tick": currentTick,
-				"ticks_per_minute": ticksPerMinute,
-				"server_time": time.Now().Format(time.RFC3339),
-			})
-		})
-
-		// Game action endpoints (require authentication)
-		e.Router.POST("/api/orders/fleet", pkg.FleetOrderHandler(app), apis.RequireRecordAuth())
-		e.Router.POST("/api/orders/build", pkg.BuildOrderHandler(app), apis.RequireRecordAuth())
-		e.Router.POST("/api/orders/trade", pkg.TradeOrderHandler(app), apis.RequireRecordAuth())
-		e.Router.POST("/api/diplomacy", pkg.DiplomacyHandler(app), apis.RequireRecordAuth())
-
 		// WebSocket endpoint for real-time updates
 		e.Router.GET("/api/stream", websocket.HandleWebSocket(app))
 
@@ -101,5 +81,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
-

@@ -13,43 +13,56 @@ import (
 // GenerateMap creates a new galaxy with systems
 func GenerateMap(app *pocketbase.PocketBase, systemCount int) error {
 	rand.Seed(time.Now().UnixNano())
+	fmt.Printf("Starting map generation with %d systems...\n", systemCount)
 
 	// Clear existing systems
 	if err := clearExistingSystems(app); err != nil {
 		return fmt.Errorf("failed to clear existing systems: %w", err)
 	}
+	fmt.Println("Cleared existing systems")
 
 	// Generate systems
 	systems := generateSystems(systemCount)
+	fmt.Printf("Generated %d system positions\n", len(systems))
 
 	// Save systems to database
-	collection, err := app.Dao().FindCollectionByNameOrId("systems")
+	sysCollection, err := app.Dao().FindCollectionByNameOrId("systems")
 	if err != nil {
 		return fmt.Errorf("systems collection not found: %w", err)
 	}
+	fmt.Println("Found systems collection")
+	
+	// Check if planets collection exists (optional)
+	planetCollection, err := app.Dao().FindCollectionByNameOrId("planets")
+	planetsEnabled := err == nil
+	fmt.Printf("Planets collection enabled: %v\n", planetsEnabled)
 
-	for _, sys := range systems {
-		record := models.NewRecord(collection)
-		record.Set("x", sys.X)
-		record.Set("y", sys.Y)
-		record.Set("richness", sys.Richness)
-		record.Set("pop", 0)
-		record.Set("morale", 0)
-		record.Set("food", 0)
-		record.Set("ore", 0)
-		record.Set("goods", 0)
-		record.Set("fuel", 0)
-		record.Set("hab_lvl", 0)
-		record.Set("farm_lvl", 0)
-		record.Set("mine_lvl", 0)
-		record.Set("fac_lvl", 0)
-		record.Set("yard_lvl", 0)
+	for i, sys := range systems {
+		systemRecord := models.NewRecord(sysCollection)
+		systemRecord.Set("x", sys.X)
+		systemRecord.Set("y", sys.Y)
+		systemRecord.Set("richness", sys.Richness)
 
-		if err := app.Dao().SaveRecord(record); err != nil {
-			return fmt.Errorf("failed to save system: %w", err)
+		fmt.Printf("Saving system %d: x=%d, y=%d, richness=%d\n", i+1, sys.X, sys.Y, sys.Richness)
+		if err := app.Dao().SaveRecord(systemRecord); err != nil {
+			return fmt.Errorf("failed to save system %d: %w", i+1, err)
+		}
+		fmt.Printf("Saved system %d with ID: %s\n", i+1, systemRecord.Id)
+
+		// create a default planet for each system (if planets collection exists)
+		if planetsEnabled {
+			planet := models.NewRecord(planetCollection)
+			planet.Set("name", fmt.Sprintf("Planet-%d", i+1))
+			planet.Set("system_id", systemRecord.Id)
+			planet.Set("type_id", "") // default type will be assigned later
+			if err := app.Dao().SaveRecord(planet); err != nil {
+				return fmt.Errorf("failed to save planet: %w", err)
+			}
+			fmt.Printf("Saved planet for system %d\n", i+1)
 		}
 	}
 
+	fmt.Printf("Successfully saved all %d systems to database\n", len(systems))
 	return nil
 }
 
@@ -61,7 +74,7 @@ type System struct {
 
 func generateSystems(count int) []System {
 	systems := make([]System, 0, count)
-	
+
 	// Use a simple grid with some randomization
 	gridSize := int(math.Ceil(math.Sqrt(float64(count))))
 	spacing := 200 // Distance between systems
@@ -96,14 +109,18 @@ func generateSystems(count int) []System {
 }
 
 func clearExistingSystems(app *pocketbase.PocketBase) error {
-	// Try to find and delete existing systems
-	// We'll just skip if the collection doesn't exist yet
-	systems, err := app.Dao().FindRecordsByFilter("systems", "", "", 50, 0)
-	if err != nil {
-		// If systems collection doesn't exist, that's fine
-		return nil
+	// delete planets first (if collection exists)
+	if planets, err := app.Dao().FindRecordsByFilter("planets", "", "", 100, 0); err == nil {
+		for _, p := range planets {
+			_ = app.Dao().DeleteRecord(p)
+		}
 	}
 
+	// delete systems
+	systems, err := app.Dao().FindRecordsByFilter("systems", "", "", 50, 0)
+	if err != nil {
+		return nil
+	}
 	for _, system := range systems {
 		if err := app.Dao().DeleteRecord(system); err != nil {
 			return fmt.Errorf("failed to delete system %s: %w", system.Id, err)
@@ -118,7 +135,7 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 	// Use a simple query to get all systems
 	query := app.Dao().RecordQuery("systems")
 	systems := []*models.Record{}
-	
+
 	if err := query.All(&systems); err != nil {
 		return nil, fmt.Errorf("failed to fetch systems: %w", err)
 	}
@@ -131,17 +148,20 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 			"y":        system.GetInt("y"),
 			"richness": system.GetInt("richness"),
 			"owner_id": system.GetString("owner_id"),
-			"pop":      system.GetInt("pop"),
-			"morale":   system.GetInt("morale"),
-			"food":     system.GetInt("food"),
-			"ore":      system.GetInt("ore"),
-			"goods":    system.GetInt("goods"),
-			"fuel":     system.GetInt("fuel"),
-			"hab_lvl":  system.GetInt("hab_lvl"),
-			"farm_lvl": system.GetInt("farm_lvl"),
-			"mine_lvl": system.GetInt("mine_lvl"),
-			"fac_lvl":  system.GetInt("fac_lvl"),
-			"yard_lvl": system.GetInt("yard_lvl"),
+		}
+	}
+
+	// fetch planets (if collection exists)
+	planetsData := make([]map[string]interface{}, 0)
+	if planetRecords, err := app.Dao().FindRecordsByFilter("planets", "", "", 0, 0); err == nil {
+		planetsData = make([]map[string]interface{}, len(planetRecords))
+		for i, p := range planetRecords {
+			planetsData[i] = map[string]interface{}{
+				"id":        p.Id,
+				"name":      p.GetString("name"),
+				"system_id": p.GetString("system_id"),
+				"type_id":   p.GetString("type_id"),
+			}
 		}
 	}
 
@@ -150,6 +170,7 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 
 	return map[string]interface{}{
 		"systems": systemsData,
+		"planets": planetsData,
 		"lanes":   lanes,
 	}, nil
 }
