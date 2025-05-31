@@ -1,5 +1,5 @@
 // Game state management similar to vibe-chuck's events store
-import { gameData, authManager } from '../lib/pocketbase.js';
+import { gameData, authManager } from "../lib/pocketbase.js";
 
 export class GameState {
   constructor() {
@@ -17,12 +17,12 @@ export class GameState {
       food: 0,
       ore: 0,
       goods: 0,
-      fuel: 0
+      fuel: 0,
     };
-    
+
     this.callbacks = [];
     this.initialized = false;
-    
+
     // Subscribe to auth changes
     authManager.subscribe((user) => {
       if (user && !this.initialized) {
@@ -36,20 +36,20 @@ export class GameState {
     this.loadMapData();
 
     // Subscribe to game data updates
-    gameData.subscribe('systems', (data) => this.updateSystems(data));
-    gameData.subscribe('fleets', (data) => this.updateFleets(data));
-    gameData.subscribe('trades', (data) => this.updateTrades(data));
-    gameData.subscribe('tick', (data) => this.handleTick(data));
+    gameData.subscribe("systems", (data) => this.updateSystems(data));
+    gameData.subscribe("fleets", (data) => this.updateFleets(data));
+    gameData.subscribe("trades", (data) => this.updateTrades(data));
+    gameData.subscribe("tick", (data) => this.handleTick(data));
   }
 
   async initialize() {
     if (this.initialized) return;
-    
+
     try {
       await this.loadGameData();
       this.initialized = true;
     } catch (error) {
-      console.error('Failed to initialize game state:', error);
+      console.error("Failed to initialize game state:", error);
     }
   }
 
@@ -57,7 +57,7 @@ export class GameState {
     try {
       // Load game data with individual requests to avoid auto-cancellation
       const userId = authManager.getUser()?.id;
-      
+
       // Load map data first (most important)
       const mapData = await gameData.getMap();
       if (mapData && mapData.systems) {
@@ -68,29 +68,33 @@ export class GameState {
       // Load user-specific data with delays to prevent auto-cancellation
       if (userId) {
         this.fleets = await gameData.getFleets(userId);
-        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
-        
+        await new Promise((resolve) => setTimeout(resolve, 50)); // Small delay
+
         this.trades = await gameData.getTrades(userId);
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
         this.treaties = await gameData.getTreaties(userId);
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
         this.buildings = await gameData.getBuildings(userId);
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        const player = await gameData.getPlayer(userId);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        this.playerResources.credits = player.credits;
       }
-      
+
       // Load status last
       const status = await gameData.getStatus();
       if (status) {
         this.currentTick = status.current_tick || 1;
         this.ticksPerMinute = status.ticks_per_minute || 6;
       }
-      
+
       this.updatePlayerResources();
       this.notifyCallbacks();
     } catch (error) {
-      console.error('Failed to load game data:', error);
+      console.error("Failed to load game data:", error);
     }
   }
 
@@ -100,7 +104,7 @@ export class GameState {
       await this.initialize();
       return;
     }
-    
+
     await this.loadGameData();
   }
 
@@ -119,7 +123,7 @@ export class GameState {
       food: 0,
       ore: 0,
       goods: 0,
-      fuel: 0
+      fuel: 0,
     };
     this.initialized = false;
     this.notifyCallbacks();
@@ -127,18 +131,22 @@ export class GameState {
 
   async loadMapData() {
     try {
-      console.log('GameState: Loading map data...');
+      console.log("GameState: Loading map data...");
       // Load map data (systems) even without authentication
       const mapData = await gameData.getMap();
-      console.log('GameState: Received map data', mapData);
+      console.log("GameState: Received map data", mapData);
       if (mapData && mapData.systems) {
-        console.log('GameState: Setting systems', mapData.systems.length, 'systems');
+        console.log(
+          "GameState: Setting systems",
+          mapData.systems.length,
+          "systems",
+        );
         this.systems = mapData.systems;
         this.mapData = mapData;
         this.notifyCallbacks();
       }
     } catch (error) {
-      console.error('Failed to load map data:', error);
+      console.error("Failed to load map data:", error);
     }
   }
 
@@ -148,11 +156,11 @@ export class GameState {
   }
 
   unsubscribe(callback) {
-    this.callbacks = this.callbacks.filter(cb => cb !== callback);
+    this.callbacks = this.callbacks.filter((cb) => cb !== callback);
   }
 
   notifyCallbacks() {
-    this.callbacks.forEach(callback => callback(this));
+    this.callbacks.forEach((callback) => callback(this));
   }
 
   updateSystems(systemsData) {
@@ -160,7 +168,7 @@ export class GameState {
       this.systems = systemsData;
     } else {
       // Single system update
-      const index = this.systems.findIndex(s => s.id === systemsData.id);
+      const index = this.systems.findIndex((s) => s.id === systemsData.id);
       if (index >= 0) {
         this.systems[index] = systemsData;
       } else {
@@ -175,7 +183,7 @@ export class GameState {
     if (Array.isArray(fleetsData)) {
       this.fleets = fleetsData;
     } else {
-      const index = this.fleets.findIndex(f => f.id === fleetsData.id);
+      const index = this.fleets.findIndex((f) => f.id === fleetsData.id);
       if (index >= 0) {
         this.fleets[index] = fleetsData;
       } else {
@@ -189,7 +197,7 @@ export class GameState {
     if (Array.isArray(tradesData)) {
       this.trades = tradesData;
     } else {
-      const index = this.trades.findIndex(t => t.id === tradesData.id);
+      const index = this.trades.findIndex((t) => t.id === tradesData.id);
       if (index >= 0) {
         this.trades[index] = tradesData;
       } else {
@@ -201,52 +209,63 @@ export class GameState {
 
   handleTick(tickData) {
     this.currentTick = tickData.tick || this.currentTick + 1;
-    console.log('Tick update received:', tickData, 'Current tick:', this.currentTick);
-    
+    console.log(
+      "Tick update received:",
+      tickData,
+      "Current tick:",
+      this.currentTick,
+    );
+
     // Notify UI of tick update immediately
     this.notifyCallbacks();
-    
+
     // Optional: Refresh data periodically, but not every tick
-    if (this.currentTick % 6 === 0) { // Refresh every minute (6 ticks)
+    if (this.currentTick % 6 === 0) {
+      // Refresh every minute (6 ticks)
       this.refreshGameData();
     }
   }
 
-  updatePlayerResources() {
-    const user = authManager.getUser();
+  async updatePlayerResources() {
+    const user = await gameData.getPlayer(authManager.getUser().id);
     if (!user) return;
 
     // Start with user's global credits
-    const userCredits = user.credits || 0;
-    
+    const userCredits = user.credits;
+
     // Calculate income from buildings
     const userBuildings = this.getPlayerBuildings();
     const creditsPerTick = userBuildings
-      .filter(building => building.type === 'bank' && building.active !== false)
+      .filter(
+        (building) => building.type === "bank" && building.active !== false,
+      )
       .reduce((sum, building) => sum + (building.credits_per_tick || 1), 0);
 
     // Calculate total resources from owned systems
-    const ownedSystems = this.systems.filter(s => s.owner_id === user.id);
-    this.playerResources = ownedSystems.reduce((total, system) => ({
-      credits: total.credits + (system.credits || 0),
-      food: total.food + (system.food || 0),
-      ore: total.ore + (system.ore || 0),
-      goods: total.goods + (system.goods || 0),
-      fuel: total.fuel + (system.fuel || 0)
-    }), { 
-      credits: userCredits,  // Start with user's global credits
-      food: 0, 
-      ore: 0, 
-      goods: 0, 
-      fuel: 0 
-    });
+    const ownedSystems = this.systems.filter((s) => s.owner_id === user.id);
+    this.playerResources = ownedSystems.reduce(
+      (total, system) => ({
+        credits: total.credits + (system.credits || 0),
+        food: total.food + (system.food || 0),
+        ore: total.ore + (system.ore || 0),
+        goods: total.goods + (system.goods || 0),
+        fuel: total.fuel + (system.fuel || 0),
+      }),
+      {
+        credits: userCredits, // Start with user's global credits
+        food: 0,
+        ore: 0,
+        goods: 0,
+        fuel: 0,
+      },
+    );
 
     // Store building income for UI display
     this.creditIncome = creditsPerTick;
   }
 
   selectSystem(systemId) {
-    this.selectedSystem = this.systems.find(s => s.id === systemId) || null;
+    this.selectedSystem = this.systems.find((s) => s.id === systemId) || null;
     this.notifyCallbacks();
   }
 
@@ -257,19 +276,19 @@ export class GameState {
   getOwnedSystems() {
     const user = authManager.getUser();
     if (!user) return [];
-    return this.systems.filter(s => s.owner_id === user.id);
+    return this.systems.filter((s) => s.owner_id === user.id);
   }
 
   getPlayerFleets() {
     const user = authManager.getUser();
     if (!user) return [];
-    return this.fleets.filter(f => f.owner_id === user.id);
+    return this.fleets.filter((f) => f.owner_id === user.id);
   }
 
   getPlayerTrades() {
     const user = authManager.getUser();
     if (!user) return [];
-    return this.trades.filter(t => t.owner_id === user.id);
+    return this.trades.filter((t) => t.owner_id === user.id);
   }
 
   // Action methods (delegates to gameData)
@@ -292,11 +311,15 @@ export class GameState {
   getPlayerBuildings() {
     const user = authManager.getUser();
     if (!user) return [];
-    return this.buildings?.filter(building => building.owner_id === user.id) || [];
+    return (
+      this.buildings?.filter((building) => building.owner_id === user.id) || []
+    );
   }
 
   getPlayerBuildingsByType(type) {
-    return this.getPlayerBuildings().filter(building => building.type === type);
+    return this.getPlayerBuildings().filter(
+      (building) => building.type === type,
+    );
   }
 }
 

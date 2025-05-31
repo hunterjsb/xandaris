@@ -582,10 +582,31 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewUnauthorizedError("Authentication required", nil)
 		}
 
+		// Get building type to check cost
+		buildingType, err := app.Dao().FindRecordById("building_types", data.BuildingType)
+		if err != nil {
+			return apis.NewBadRequestError("Building type not found", err)
+		}
+
+		// Check building cost
+		cost := buildingType.GetInt("cost")
+
+		// Check if user has enough credits
+		userCredits := user.GetInt("credits")
+		if userCredits < cost {
+			return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+		}
+
 		// Find a planet in the system to build on
 		planets, err := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", data.SystemID), "", 1, 0)
 		if err != nil || len(planets) == 0 {
 			return apis.NewBadRequestError("No planets found in system", err)
+		}
+
+		// Deduct credits from user
+		user.Set("credits", userCredits-cost)
+		if err := app.Dao().SaveRecord(user); err != nil {
+			return apis.NewBadRequestError("Failed to deduct credits", err)
 		}
 
 		// Create building record
@@ -605,8 +626,10 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success":     true,
-			"building_id": building.Id,
+			"success":           true,
+			"building_id":       building.Id,
+			"cost":              cost,
+			"credits_remaining": userCredits - cost,
 		})
 	}
 }
@@ -718,6 +741,19 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		// Check if planet is already colonized
 		if planet.GetString("colonized_by") != "" {
 			return apis.NewBadRequestError("Planet is already colonized", nil)
+		}
+
+		// Check colonization cost
+		colonizationCost := 500 // Base cost to establish a colony
+		userCredits := user.GetInt("credits")
+		if userCredits < colonizationCost {
+			return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Colonization costs %d, you have %d", colonizationCost, userCredits), nil)
+		}
+
+		// Deduct credits from user
+		user.Set("credits", userCredits-colonizationCost)
+		if err := app.Dao().SaveRecord(user); err != nil {
+			return apis.NewBadRequestError("Failed to deduct credits", err)
 		}
 
 		// Set colonization data
@@ -843,7 +879,7 @@ func getPlanets(app *pocketbase.PocketBase) echo.HandlerFunc {
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
 			}
-			
+
 			// Filter planets that belong to this system
 			var filteredPlanets []*models.Record
 			for _, planet := range allPlanets {
@@ -872,7 +908,7 @@ func getPlanets(app *pocketbase.PocketBase) echo.HandlerFunc {
 			if len(systemIDs) > 0 {
 				systemID = systemIDs[0]
 			}
-			
+
 			planetsData[i] = PlanetData{
 				ID:            planet.Id,
 				Name:          planet.GetString("name"),

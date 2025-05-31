@@ -1,14 +1,14 @@
-import PocketBase from 'pocketbase';
+import PocketBase from "pocketbase";
 
 // Base URL for the PocketBase backend
-const BASE_URL = import.meta.env.VITE_POCKETBASE_URL || 'http://localhost:8090';
+const BASE_URL = import.meta.env.VITE_POCKETBASE_URL || "http://localhost:8090";
 
 // Create a single PocketBase client instance
 export const pb = new PocketBase(BASE_URL);
 
 // Helper function to suppress auto-cancellation errors
 function suppressAutoCancelError(error) {
-  if (error.message?.includes('autocancelled') || error.status === 0) {
+  if (error.message?.includes("autocancelled") || error.status === 0) {
     // These are expected auto-cancellation errors, don't log them
     return;
   }
@@ -20,10 +20,10 @@ export class AuthManager {
   constructor() {
     this.callbacks = [];
     this.user = null;
-    
+
     // Initialize auth state
     this.checkAuthStatus();
-    
+
     // Listen for auth store changes
     pb.authStore.onChange(() => {
       this.checkAuthStatus();
@@ -41,21 +41,21 @@ export class AuthManager {
   }
 
   unsubscribe(callback) {
-    this.callbacks = this.callbacks.filter(cb => cb !== callback);
+    this.callbacks = this.callbacks.filter((cb) => cb !== callback);
   }
 
   notifyCallbacks() {
-    this.callbacks.forEach(callback => callback(this.user));
+    this.callbacks.forEach((callback) => callback(this.user));
   }
 
   async loginWithDiscord() {
     try {
-      const authData = await pb.collection('users').authWithOAuth2({
-        provider: 'discord'
+      const authData = await pb.collection("users").authWithOAuth2({
+        provider: "discord",
       });
       return authData;
     } catch (error) {
-      console.error('Discord login failed:', error);
+      console.error("Discord login failed:", error);
       throw error;
     }
   }
@@ -84,7 +84,7 @@ export class GameDataManager {
       systems: [],
       fleets: [],
       trades: [],
-      tick: []
+      tick: [],
     };
   }
 
@@ -97,34 +97,38 @@ export class GameDataManager {
 
   unsubscribe(type, callback) {
     if (this.callbacks[type]) {
-      this.callbacks[type] = this.callbacks[type].filter(cb => cb !== callback);
+      this.callbacks[type] = this.callbacks[type].filter(
+        (cb) => cb !== callback,
+      );
     }
   }
 
   notifyCallbacks(type, data) {
     if (this.callbacks[type]) {
-      this.callbacks[type].forEach(callback => callback(data));
+      this.callbacks[type].forEach((callback) => callback(data));
     }
   }
 
   // Connect to WebSocket for real-time updates
   connectWebSocket() {
     try {
-      this.ws = new WebSocket(`${BASE_URL.replace('http', 'ws')}/api/stream`);
-      
+      this.ws = new WebSocket(`${BASE_URL.replace("http", "ws")}/api/stream`);
+
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log("WebSocket connected");
         // Update connection status in UI
-        this.updateConnectionStatus('connected');
-        
+        this.updateConnectionStatus("connected");
+
         // Send auth token if available (with small delay to ensure connection is ready)
         if (pb.authStore.isValid) {
           setTimeout(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-              this.ws.send(JSON.stringify({
-                type: 'auth',
-                token: pb.authStore.token
-              }));
+              this.ws.send(
+                JSON.stringify({
+                  type: "auth",
+                  token: pb.authStore.token,
+                }),
+              );
             }
           }, 100);
         }
@@ -135,88 +139,109 @@ export class GameDataManager {
           const data = JSON.parse(event.data);
           this.handleWebSocketMessage(data);
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          console.error("Failed to parse WebSocket message:", error);
         }
       };
 
       this.ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        this.updateConnectionStatus('disconnected');
+        console.log("WebSocket disconnected");
+        this.updateConnectionStatus("disconnected");
         // Attempt to reconnect after 5 seconds
         setTimeout(() => this.connectWebSocket(), 5000);
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        this.updateConnectionStatus('error');
+        console.error("WebSocket error:", error);
+        this.updateConnectionStatus("error");
       };
     } catch (error) {
-      console.error('Failed to connect WebSocket:', error);
-      this.updateConnectionStatus('error');
+      console.error("Failed to connect WebSocket:", error);
+      this.updateConnectionStatus("error");
     }
   }
 
   updateConnectionStatus(status) {
     // Update UI with connection status
-    const statusElement = document.getElementById('ws-status');
+    const statusElement = document.getElementById("ws-status");
     if (statusElement) {
-      statusElement.textContent = status === 'connected' ? '🟢' : status === 'error' ? '🔴' : '🟡';
+      statusElement.textContent =
+        status === "connected" ? "🟢" : status === "error" ? "🔴" : "🟡";
       statusElement.title = `WebSocket: ${status}`;
     }
   }
 
   handleWebSocketMessage(data) {
     switch (data.type) {
-      case 'tick':
-        this.notifyCallbacks('tick', data.payload);
+      case "tick":
+        this.notifyCallbacks("tick", data.payload);
         break;
-      case 'system_update':
-        this.notifyCallbacks('systems', data.payload);
+      case "system_update":
+        this.notifyCallbacks("systems", data.payload);
         break;
-      case 'fleet_update':
-        this.notifyCallbacks('fleets', data.payload);
+      case "fleet_update":
+        this.notifyCallbacks("fleets", data.payload);
         break;
-      case 'trade_update':
-        this.notifyCallbacks('trades', data.payload);
+      case "trade_update":
+        this.notifyCallbacks("trades", data.payload);
         break;
       default:
-        console.log('Unknown WebSocket message type:', data.type);
+        console.log("Unknown WebSocket message type:", data.type);
     }
   }
 
   // API methods
   async getSystems() {
     try {
-      return await pb.collection('systems').getFullList({
-        sort: 'x,y'
+      return await pb.collection("systems").getFullList({
+        sort: "x,y",
       });
     } catch (error) {
-      console.error('Failed to fetch systems:', error);
+      console.error("Failed to fetch systems:", error);
       return [];
+    }
+  }
+
+  async getPlayer(userId) {
+    try {
+      const record = await pb.collection("users").getOne(userId);
+      return record;
+    } catch (error) {
+      console.error("Failed to fetch player details:", error);
+      return null;
+    }
+  }
+
+  async getPlayerCredits(userId) {
+    try {
+      const record = await pb.collection("players").getOne(userId);
+      return record.credits;
+    } catch (error) {
+      console.error("Failed to fetch player credits:", error);
+      return 0;
     }
   }
 
   async getSystem(id) {
     try {
-      return await pb.collection('systems').getOne(id);
+      return await pb.collection("systems").getOne(id);
     } catch (error) {
-      console.error('Failed to fetch system:', error);
+      console.error("Failed to fetch system:", error);
       return null;
     }
   }
 
   async getFleets(userId = null) {
     try {
-      const filter = userId ? `owner_id = "${userId}"` : '';
-      return await pb.collection('fleets').getFullList({
+      const filter = userId ? `owner_id = "${userId}"` : "";
+      return await pb.collection("fleets").getFullList({
         filter,
-        sort: 'eta'
+        sort: "eta",
       });
     } catch (error) {
       try {
         suppressAutoCancelError(error);
       } catch (e) {
-        console.error('Failed to fetch fleets:', e);
+        console.error("Failed to fetch fleets:", e);
       }
       return [];
     }
@@ -224,16 +249,16 @@ export class GameDataManager {
 
   async getTrades(userId = null) {
     try {
-      const filter = userId ? `owner_id = "${userId}"` : '';
-      return await pb.collection('trade_routes').getFullList({
+      const filter = userId ? `owner_id = "${userId}"` : "";
+      return await pb.collection("trade_routes").getFullList({
         filter,
-        sort: 'created'
+        sort: "created",
       });
     } catch (error) {
       try {
         suppressAutoCancelError(error);
       } catch (e) {
-        console.error('Failed to fetch trades:', e);
+        console.error("Failed to fetch trades:", e);
       }
       return [];
     }
@@ -243,14 +268,14 @@ export class GameDataManager {
     try {
       // Buildings don't have owner_id, they belong to planets
       // For now, return all buildings for authenticated users
-      return await pb.collection('buildings').getFullList({
-        sort: 'created'
+      return await pb.collection("buildings").getFullList({
+        sort: "created",
       });
     } catch (error) {
       try {
         suppressAutoCancelError(error);
       } catch (e) {
-        console.error('Failed to fetch buildings:', e);
+        console.error("Failed to fetch buildings:", e);
       }
       return [];
     }
@@ -265,7 +290,7 @@ export class GameDataManager {
       try {
         suppressAutoCancelError(error);
       } catch (e) {
-        console.error('Failed to fetch treaties:', e);
+        console.error("Failed to fetch treaties:", e);
       }
       return [];
     }
@@ -273,98 +298,98 @@ export class GameDataManager {
 
   // Action methods
   async sendFleet(fromId, toId, strength) {
-    if (!pb.authStore.isValid) throw new Error('Not authenticated');
-    
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
     try {
-      return await pb.send('/api/orders/fleet', {
-        method: 'POST',
+      return await pb.send("/api/orders/fleet", {
+        method: "POST",
         body: JSON.stringify({
           from_id: fromId,
           to_id: toId,
-          strength: strength
+          strength: strength,
         }),
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
     } catch (error) {
-      console.error('Failed to send fleet:', error);
+      console.error("Failed to send fleet:", error);
       throw error;
     }
   }
 
   async queueBuilding(systemId, buildingType) {
-    if (!pb.authStore.isValid) throw new Error('Not authenticated');
-    
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
     try {
-      return await pb.send('/api/orders/build', {
-        method: 'POST',
+      return await pb.send("/api/orders/build", {
+        method: "POST",
         body: JSON.stringify({
           system_id: systemId,
-          building_type: buildingType
+          building_type: buildingType,
         }),
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
     } catch (error) {
-      console.error('Failed to queue building:', error);
+      console.error("Failed to queue building:", error);
       throw error;
     }
   }
 
   async createTradeRoute(fromId, toId, cargo, capacity) {
-    if (!pb.authStore.isValid) throw new Error('Not authenticated');
-    
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
     try {
-      return await pb.send('/api/orders/trade', {
-        method: 'POST',
+      return await pb.send("/api/orders/trade", {
+        method: "POST",
         body: JSON.stringify({
           from_id: fromId,
           to_id: toId,
           cargo: cargo,
-          capacity: capacity
+          capacity: capacity,
         }),
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
     } catch (error) {
-      console.error('Failed to create trade route:', error);
+      console.error("Failed to create trade route:", error);
       throw error;
     }
   }
 
   async proposeTreaty(playerId, type, terms) {
-    if (!pb.authStore.isValid) throw new Error('Not authenticated');
-    
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
     try {
-      return await pb.send('/diplomacy', {
-        method: 'POST',
+      return await pb.send("/diplomacy", {
+        method: "POST",
         body: JSON.stringify({
           player_id: playerId,
           type: type,
-          terms: terms
+          terms: terms,
         }),
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
     } catch (error) {
-      console.error('Failed to propose treaty:', error);
+      console.error("Failed to propose treaty:", error);
       throw error;
     }
   }
 
   async getMap() {
     try {
-      return await pb.send('/api/map', {
-        method: 'GET'
+      return await pb.send("/api/map", {
+        method: "GET",
       });
     } catch (error) {
       // Suppress auto-cancellation errors (these are normal)
-      if (!error.message?.includes('autocancelled')) {
-        console.error('Failed to fetch map:', error);
+      if (!error.message?.includes("autocancelled")) {
+        console.error("Failed to fetch map:", error);
       }
       return null;
     }
@@ -372,14 +397,14 @@ export class GameDataManager {
 
   async getStatus() {
     try {
-      return await pb.send('/api/status', {
-        method: 'GET'
+      return await pb.send("/api/status", {
+        method: "GET",
       });
     } catch (error) {
       try {
         suppressAutoCancelError(error);
       } catch (e) {
-        console.error('Failed to fetch status:', e);
+        console.error("Failed to fetch status:", e);
       }
       return null;
     }

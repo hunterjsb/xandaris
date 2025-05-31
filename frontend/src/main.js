@@ -1,26 +1,26 @@
 // Main application entry point
-import './styles.css';
-import { authManager } from './lib/pocketbase.js';
-import { gameState } from './stores/gameState.js';
-import { MapRenderer } from './components/mapRenderer.js';
-import { UIController } from './components/uiController.js';
+import "./styles.css";
+import { authManager } from "./lib/pocketbase.js";
+import { gameState } from "./stores/gameState.js";
+import { MapRenderer } from "./components/mapRenderer.js";
+import { UIController } from "./components/uiController.js";
 
 class XanNationApp {
   constructor() {
     this.mapRenderer = null;
     this.uiController = null;
-    
+
     this.init();
   }
 
   async init() {
-    console.log('Initializing Xan Nation...');
+    console.log("Initializing Xan Nation...");
 
     // Initialize UI controller
     this.uiController = new UIController();
 
     // Initialize map renderer
-    this.mapRenderer = new MapRenderer('game-canvas');
+    this.mapRenderer = new MapRenderer("game-canvas");
 
     // Subscribe to auth changes
     authManager.subscribe((user) => {
@@ -35,16 +35,16 @@ class XanNationApp {
     // Set up event listeners
     this.setupEventListeners();
 
-    console.log('Xan Nation initialized');
+    console.log("Xandaris initialized");
   }
 
   handleAuthChange(user) {
     this.uiController.updateAuthUI(user);
-    
+
     if (user) {
-      console.log('User logged in:', user.username);
+      console.log("User logged in:", user.username);
     } else {
-      console.log('User logged out');
+      console.log("User logged out");
     }
   }
 
@@ -54,12 +54,12 @@ class XanNationApp {
       this.mapRenderer.setSystems(state.systems);
       this.mapRenderer.setFleets(state.fleets);
       this.mapRenderer.setSelectedSystem(state.selectedSystem);
-      
+
       // Set lanes if available
       if (state.mapData && state.mapData.lanes) {
         this.mapRenderer.setLanes(state.mapData.lanes);
       }
-      
+
       // If this is the first load, fit to systems
       if (state.systems.length > 0 && !this.mapRenderer.hasInitialFit) {
         this.mapRenderer.fitToSystems();
@@ -73,80 +73,80 @@ class XanNationApp {
 
   setupEventListeners() {
     // Canvas events
-    const canvas = document.getElementById('game-canvas');
-    
-    canvas.addEventListener('systemSelected', (e) => {
+    const canvas = document.getElementById("game-canvas");
+
+    canvas.addEventListener("systemSelected", (e) => {
       gameState.selectSystem(e.detail.system.id);
     });
 
     // Context menu actions
-    const contextMenu = document.getElementById('context-menu');
-    contextMenu.addEventListener('click', (e) => {
+    const contextMenu = document.getElementById("context-menu");
+    contextMenu.addEventListener("click", (e) => {
       const action = e.target.dataset.action;
       const systemId = contextMenu.dataset.systemId;
-      
+
       if (action && systemId) {
         this.handleContextMenuAction(action, systemId);
-        contextMenu.classList.add('hidden');
+        contextMenu.classList.add("hidden");
       }
     });
 
     // Hide tooltip when canvas loses focus
-    canvas.addEventListener('mouseleave', () => {
-      document.getElementById('tooltip').classList.add('hidden');
+    canvas.addEventListener("mouseleave", () => {
+      document.getElementById("tooltip").classList.add("hidden");
     });
 
     // Navigation buttons
-    document.getElementById('fleet-btn').addEventListener('click', () => {
+    document.getElementById("fleet-btn").addEventListener("click", () => {
       this.uiController.showFleetPanel();
     });
 
-    document.getElementById('trade-btn').addEventListener('click', () => {
+    document.getElementById("trade-btn").addEventListener("click", () => {
       this.uiController.showTradePanel();
     });
 
-    document.getElementById('diplo-btn').addEventListener('click', () => {
+    document.getElementById("diplo-btn").addEventListener("click", () => {
       this.uiController.showDiplomacyPanel();
     });
 
-    document.getElementById('buildings-btn').addEventListener('click', () => {
+    document.getElementById("buildings-btn").addEventListener("click", () => {
       this.uiController.showBuildingsPanel();
     });
 
     // Auth buttons
-    document.getElementById('login-btn').addEventListener('click', () => {
+    document.getElementById("login-btn").addEventListener("click", () => {
       this.handleLogin();
     });
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
+    document.getElementById("logout-btn").addEventListener("click", () => {
       this.handleLogout();
     });
 
     // Action buttons
-    document.getElementById('build-btn').addEventListener('click', () => {
+    document.getElementById("build-btn").addEventListener("click", () => {
       this.handleBuildAction();
     });
 
-    document.getElementById('send-fleet-btn').addEventListener('click', () => {
+    document.getElementById("send-fleet-btn").addEventListener("click", () => {
       this.handleSendFleetAction();
     });
 
-    document.getElementById('trade-route-btn').addEventListener('click', () => {
+    document.getElementById("trade-route-btn").addEventListener("click", () => {
       this.handleTradeRouteAction();
     });
 
-    document.getElementById('colonize-btn').addEventListener('click', () => {
+    document.getElementById("colonize-btn").addEventListener("click", () => {
       this.handleColonizeAction();
     });
 
     // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener("keydown", (e) => {
       this.handleKeyboardInput(e);
     });
 
     // Modal handling
-    const modalOverlay = document.getElementById('modal-overlay');
-    modalOverlay.addEventListener('click', (e) => {
+    const modalOverlay = document.getElementById("modal-overlay");
+    modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) {
         this.uiController.hideModal();
       }
@@ -157,8 +157,8 @@ class XanNationApp {
     try {
       await authManager.loginWithDiscord();
     } catch (error) {
-      console.error('Login failed:', error);
-      this.uiController.showError('Login failed. Please try again.');
+      console.error("Login failed:", error);
+      this.uiController.showError("Login failed. Please try again.");
     }
   }
 
@@ -167,21 +167,21 @@ class XanNationApp {
   }
 
   handleContextMenuAction(action, systemId) {
-    const system = gameState.systems.find(s => s.id === systemId);
+    const system = gameState.systems.find((s) => s.id === systemId);
     if (!system) return;
 
     switch (action) {
-      case 'view':
+      case "view":
         gameState.selectSystem(systemId);
         this.mapRenderer.centerOnSystem(systemId);
         break;
-      case 'fleet':
+      case "fleet":
         this.uiController.showSendFleetModal(system);
         break;
-      case 'trade':
+      case "trade":
         this.uiController.showTradeRouteModal(system);
         break;
-      case 'colonize':
+      case "colonize":
         this.uiController.showColonizeModal(system);
         break;
     }
@@ -190,12 +190,12 @@ class XanNationApp {
   handleBuildAction() {
     const selectedSystem = gameState.getSelectedSystem();
     if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+      this.uiController.showError("Please select a system first");
       return;
     }
 
     if (!authManager.isLoggedIn()) {
-      this.uiController.showError('Please log in first');
+      this.uiController.showError("Please log in first");
       return;
     }
 
@@ -205,12 +205,12 @@ class XanNationApp {
   handleSendFleetAction() {
     const selectedSystem = gameState.getSelectedSystem();
     if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+      this.uiController.showError("Please select a system first");
       return;
     }
 
     if (!authManager.isLoggedIn()) {
-      this.uiController.showError('Please log in first');
+      this.uiController.showError("Please log in first");
       return;
     }
 
@@ -220,12 +220,12 @@ class XanNationApp {
   handleTradeRouteAction() {
     const selectedSystem = gameState.getSelectedSystem();
     if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+      this.uiController.showError("Please select a system first");
       return;
     }
 
     if (!authManager.isLoggedIn()) {
-      this.uiController.showError('Please log in first');
+      this.uiController.showError("Please log in first");
       return;
     }
 
@@ -235,12 +235,12 @@ class XanNationApp {
   handleColonizeAction() {
     const selectedSystem = gameState.getSelectedSystem();
     if (!selectedSystem) {
-      this.uiController.showError('Please select a system first');
+      this.uiController.showError("Please select a system first");
       return;
     }
 
     if (!authManager.isLoggedIn()) {
-      this.uiController.showError('Please log in first');
+      this.uiController.showError("Please log in first");
       return;
     }
 
@@ -249,33 +249,33 @@ class XanNationApp {
 
   handleKeyboardInput(e) {
     // Only handle keyboard shortcuts when not in input fields
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
       return;
     }
 
     switch (e.key.toLowerCase()) {
-      case 'escape':
+      case "escape":
         this.uiController.hideModal();
-        document.getElementById('context-menu').classList.add('hidden');
+        document.getElementById("context-menu").classList.add("hidden");
         break;
-      case 'f':
+      case "f":
         this.handleSendFleetAction();
         break;
-      case 't':
+      case "t":
         this.handleTradeRouteAction();
         break;
-      case 'b':
+      case "b":
         this.handleBuildAction();
         break;
-      case 'c':
+      case "c":
         if (gameState.getSelectedSystem()) {
           this.mapRenderer.centerOnSystem(gameState.getSelectedSystem().id);
         }
         break;
-      case 'o':
+      case "o":
         this.handleColonizeAction();
         break;
-      case 'h':
+      case "h":
         this.mapRenderer.fitToSystems();
         break;
     }
