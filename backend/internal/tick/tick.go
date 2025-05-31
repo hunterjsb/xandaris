@@ -118,14 +118,12 @@ func ApplyBuildingCompletions(app *pocketbase.PocketBase) error {
 
 // MoveCargo handles trade route cargo movement
 func MoveCargo(app *pocketbase.PocketBase) error {
-	// Get all trade routes that should arrive this tick
-	tickMutex.RLock()
-	tick := currentTick
-	tickMutex.RUnlock()
-	
-	routes, err := app.Dao().FindRecordsByFilter("trade_routes", "eta_tick <= {:tick}", "", 0, 0, map[string]interface{}{
-		"tick": tick,
-	})
+        // Get all trade routes that should arrive now
+        now := time.Now()
+
+        routes, err := app.Dao().FindRecordsByFilter("trade_routes", "eta <= {:now}", "", 0, 0, map[string]interface{}{
+                "now": now,
+        })
 	if err != nil {
 		return fmt.Errorf("failed to fetch trade routes: %w", err)
 	}
@@ -143,11 +141,9 @@ func MoveCargo(app *pocketbase.PocketBase) error {
 			continue
 		}
 
-		// Calculate next ETA (trade routes are recurring)
-		// Travel time is 12 ticks (2 minutes at 6 ticks/minute)
-		travelTime := int64(12)
-		nextETATick := tick + travelTime
-		route.Set("eta_tick", nextETATick)
+                // Calculate next ETA (trade routes are recurring)
+                nextEta := now.Add(2 * time.Minute)
+                route.Set("eta", nextEta)
 
 		if err := app.Dao().SaveRecord(route); err != nil {
 			log.Printf("Failed to update trade route %s: %v", route.Id, err)
@@ -203,14 +199,12 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, cargo string, capac
 
 // ResolveFleetArrivals handles fleet arrivals and combat
 func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
-	// Get all fleets that should arrive this tick (eta_tick <= current_tick)
-	tickMutex.RLock()
-	tick := currentTick
-	tickMutex.RUnlock()
-	
-	fleets, err := app.Dao().FindRecordsByFilter("fleets", "eta_tick <= {:tick}", "", 0, 0, map[string]interface{}{
-		"tick": tick,
-	})
+        // Get all fleets that should arrive now
+        now := time.Now()
+
+        fleets, err := app.Dao().FindRecordsByFilter("fleets", "eta <= {:now}", "", 0, 0, map[string]interface{}{
+                "now": now,
+        })
 	if err != nil {
 		return fmt.Errorf("failed to fetch arriving fleets: %w", err)
 	}

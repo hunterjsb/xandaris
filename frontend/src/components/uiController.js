@@ -329,7 +329,7 @@ export class UIController {
           <div>From: ${fleet.from_name || fleet.from_id}</div>
           <div>To: ${fleet.to_name || fleet.to_id}</div>
           <div>Strength: ${fleet.strength}</div>
-          <div>ETA: ${fleet.eta_tick ? `Tick ${fleet.eta_tick}` : 'Unknown'}</div>
+          <div>ETA: ${fleet.eta ? new Date(fleet.eta).toLocaleTimeString() : 'Unknown'}</div>
         </div>
       </div>
     `).join('') : '<div class="text-space-400">No fleets in transit</div>';
@@ -348,7 +348,7 @@ export class UIController {
           <div>To: ${trade.to_name || trade.to_id}</div>
           <div>Cargo: ${trade.cargo}</div>
           <div>Capacity: ${trade.cap}</div>
-          <div>ETA: ${trade.eta_tick ? `Tick ${trade.eta_tick}` : 'Unknown'}</div>
+          <div>ETA: ${trade.eta ? new Date(trade.eta).toLocaleTimeString() : 'Unknown'}</div>
         </div>
       </div>
     `).join('') : '<div class="text-space-400">No active trade routes</div>';

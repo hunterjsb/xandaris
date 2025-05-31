@@ -90,10 +90,8 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		// Calculate ETA (12 ticks travel time = 2 minutes at 6 ticks/minute)
-		currentTick := tick.GetCurrentTick(app)
-		travelTime := int64(12)
-		etaTick := currentTick + travelTime
+                // Calculate ETA (2 minutes travel time)
+                eta := time.Now().Add(2 * time.Minute)
 
 		// Create fleet record
 		fleetCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
@@ -105,10 +103,10 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		fleet := models.NewRecord(fleetCollection)
 		fleet.Set("owner_id", user.Id)
-		fleet.Set("from_id", req.FromID)
-		fleet.Set("to_id", req.ToID)
-		fleet.Set("eta_tick", etaTick)
-		fleet.Set("strength", req.Strength)
+                fleet.Set("from_id", req.FromID)
+                fleet.Set("to_id", req.ToID)
+                fleet.Set("eta", eta)
+                fleet.Set("strength", req.Strength)
 
 		if err := app.Dao().SaveRecord(fleet); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -124,10 +122,10 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"fleet_id": fleet.Id,
-			"eta_tick": etaTick,
-		})
+                return c.JSON(http.StatusOK, map[string]interface{}{
+                        "fleet_id": fleet.Id,
+                        "eta":     eta,
+                })
 	}
 }
 
@@ -288,10 +286,8 @@ func TradeOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		// Calculate first ETA (12 ticks travel time = 2 minutes at 6 ticks/minute)
-		currentTick := tick.GetCurrentTick(app)
-		travelTime := int64(12)
-		etaTick := currentTick + travelTime
+                // Calculate first ETA (2 minutes travel time)
+                eta := time.Now().Add(2 * time.Minute)
 
 		// Create trade route record
 		tradeCollection, err := app.Dao().FindCollectionByNameOrId("trade_routes")
@@ -306,8 +302,8 @@ func TradeOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 		trade.Set("from_id", req.FromID)
 		trade.Set("to_id", req.ToID)
 		trade.Set("cargo", req.Cargo)
-		trade.Set("cap", req.Capacity)
-		trade.Set("eta_tick", etaTick)
+                trade.Set("cap", req.Capacity)
+                trade.Set("eta", eta)
 
 		if err := app.Dao().SaveRecord(trade); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -315,10 +311,10 @@ func TradeOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"trade_id": trade.Id,
-			"eta_tick": etaTick,
-		})
+                return c.JSON(http.StatusOK, map[string]interface{}{
+                        "trade_id": trade.Id,
+                        "eta":      eta,
+                })
 	}
 }
 
