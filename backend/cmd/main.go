@@ -15,8 +15,8 @@ import (
 
 	"github.com/hunterjsb/xandaris/internal/tick"
 	"github.com/hunterjsb/xandaris/internal/websocket"
-	"github.com/hunterjsb/xandaris/pkg"
 	_ "github.com/hunterjsb/xandaris/migrations"
+	"github.com/hunterjsb/xandaris/pkg"
 )
 
 func main() {
@@ -44,12 +44,12 @@ func main() {
 		if e.Model.TableName() == "users" {
 			user := e.Model.(*models.Record)
 			log.Printf("New user created: %s, setting starting resources", user.Id)
-			
+
 			// Set starting resources - stored in a separate table or user fields
 			// For now, we'll use user custom fields
-			user.Set("credits", 1000)  // Starting credits
+			user.Set("credits", 1000) // Starting credits
 			user.Set("last_resource_update", time.Now())
-			
+
 			if err := app.Dao().SaveRecord(user); err != nil {
 				log.Printf("Error setting starting resources for user %s: %v", user.Id, err)
 				return err
@@ -58,7 +58,6 @@ func main() {
 		}
 		return nil
 	})
-
 
 	// Set up custom API routes
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
@@ -69,11 +68,11 @@ func main() {
 		e.Router.GET("/api/status", func(c echo.Context) error {
 			currentTick := tick.GetCurrentTick(app)
 			ticksPerMinute := tick.GetTickRate()
-			
+
 			return c.JSON(200, map[string]interface{}{
-				"current_tick": currentTick,
+				"current_tick":     currentTick,
 				"ticks_per_minute": ticksPerMinute,
-				"server_time": time.Now().Format(time.RFC3339),
+				"server_time":      time.Now().Format(time.RFC3339),
 			})
 		})
 
@@ -101,5 +100,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
-
