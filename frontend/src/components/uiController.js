@@ -79,18 +79,9 @@ export class UIController {
               ? `
             <div class="text-xs space-y-1 pt-2 border-t border-space-600">
               <div class="font-medium">Resources:</div>
-              <div>Food: ${selectedSystem.food || 0}</div>
-              <div>Ore: ${selectedSystem.ore || 0}</div>
-              <div>Goods: ${selectedSystem.goods || 0}</div>
-              <div>Fuel: ${selectedSystem.fuel || 0}</div>
             </div>
             <div class="text-xs space-y-1 pt-2 border-t border-space-600">
               <div class="font-medium">Buildings:</div>
-              <div>Habitat: Lvl ${selectedSystem.hab_lvl || 0}</div>
-              <div>Farm: Lvl ${selectedSystem.farm_lvl || 0}</div>
-              <div>Mine: Lvl ${selectedSystem.mine_lvl || 0}</div>
-              <div>Factory: Lvl ${selectedSystem.fac_lvl || 0}</div>
-              <div>Shipyard: Lvl ${selectedSystem.yard_lvl || 0}</div>
             </div>
           `
               : ""
@@ -361,34 +352,7 @@ export class UIController {
   }
 
   showBuildModal(system) {
-    const buildings = [
-      {
-        type: "habitat",
-        name: "Habitat",
-        cost: 100,
-        description: "Increases population capacity",
-      },
-      { type: "farm", name: "Farm", cost: 150, description: "Produces food" },
-      { type: "mine", name: "Mine", cost: 200, description: "Produces ore" },
-      {
-        type: "factory",
-        name: "Factory",
-        cost: 300,
-        description: "Produces goods",
-      },
-      {
-        type: "shipyard",
-        name: "Shipyard",
-        cost: 500,
-        description: "Enables fleet construction",
-      },
-      {
-        type: "bank",
-        name: "Bank",
-        cost: 1000,
-        description: "Generates 1 credit per tick",
-      },
-    ];
+    const buildings = [];
 
     const buildingOptions = buildings
       .map(
@@ -643,14 +607,7 @@ export class UIController {
       return acc;
     }, {});
 
-    const buildingTypeNames = {
-      habitat: "Habitats",
-      farm: "Farms",
-      mine: "Mines",
-      factory: "Factories",
-      shipyard: "Shipyards",
-      bank: "Banks",
-    };
+    const buildingTypeNames = {};
 
     const buildingSections = Object.entries(buildingsByType)
       .map(

@@ -203,7 +203,9 @@ export class GameDataManager {
 
   async getPlayer(userId) {
     try {
-      const record = await pb.collection("users").getOne(userId);
+      const record = await pb.collection("users").getOne(userId, {
+        requestKey: `getPlayer-${userId}-${Date.now()}`,
+      });
       return record;
     } catch (error) {
       console.error("Failed to fetch player details:", error);
