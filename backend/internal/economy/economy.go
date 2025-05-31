@@ -242,7 +242,7 @@ func ProcessBankIncome(app *pocketbase.PocketBase) error {
 	}
 
 	// Get all users 
-	users, err := app.Dao().FindRecordsByFilter("users", "id != ''", "", 0, 0)
+	users, err := app.Dao().FindRecordsByExpr("users", nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch users: %w", err)
 	}

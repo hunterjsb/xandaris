@@ -63,6 +63,132 @@ func seedNewSchema(app *pocketbase.PocketBase) error {
 		return fmt.Errorf("failed to seed resource nodes: %w", err)
 	}
 
+	// 8. Create sample user and colonize some planets
+	if err := seedSampleUserAndColonies(app); err != nil {
+		return fmt.Errorf("failed to seed sample user and colonies: %w", err)
+	}
+
+	return nil
+}
+
+func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
+	// Create a sample user for testing
+	userCollection, err := app.Dao().FindCollectionByNameOrId("users")
+	if err != nil {
+		return err
+	}
+
+	sampleUser := models.NewRecord(userCollection)
+	sampleUser.Set("username", "testplayer")
+	sampleUser.Set("email", "test@example.com")
+	sampleUser.Set("password", "testpassword123")
+	sampleUser.Set("credits", 5000)
+	sampleUser.Set("food", 1000)
+	sampleUser.Set("ore", 500)
+	sampleUser.Set("goods", 200)
+	sampleUser.Set("fuel", 300)
+
+	if err := app.Dao().SaveRecord(sampleUser); err != nil {
+		return err
+	}
+
+	// Get some planets to colonize
+	planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	if len(planets) == 0 {
+		return fmt.Errorf("no planets found to colonize")
+	}
+
+	// Colonize first 3 planets
+	colonizedCount := 3
+	if len(planets) < colonizedCount {
+		colonizedCount = len(planets)
+	}
+
+	for i := 0; i < colonizedCount; i++ {
+		planet := planets[i]
+		planet.Set("colonized_by", sampleUser.Id)
+		planet.Set("colonized_at", time.Now())
+
+		if err := app.Dao().SaveRecord(planet); err != nil {
+			return err
+		}
+
+		// Add population to this planet
+		if err := seedPopulationForPlanet(app, planet, sampleUser.Id); err != nil {
+			return err
+		}
+
+		// Add some buildings
+		if err := seedBuildingsForPlanet(app, planet); err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("Created sample user '%s' with %d colonized planets\n", sampleUser.GetString("username"), colonizedCount)
+	return nil
+}
+
+func seedPopulationForPlanet(app *pocketbase.PocketBase, planet *models.Record, ownerID string) error {
+	populationCollection, err := app.Dao().FindCollectionByNameOrId("populations")
+	if err != nil {
+		return err
+	}
+
+	population := models.NewRecord(populationCollection)
+	population.Set("owner_id", ownerID)
+	population.Set("planet_id", planet.Id)
+	population.Set("count", rand.Intn(200)+50) // 50-250 population
+	population.Set("happiness", rand.Intn(30)+70) // 70-100 happiness
+
+	return app.Dao().SaveRecord(population)
+}
+
+func seedBuildingsForPlanet(app *pocketbase.PocketBase, planet *models.Record) error {
+	// Get building types
+	buildingTypes, err := app.Dao().FindRecordsByExpr("building_types", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	if len(buildingTypes) == 0 {
+		return nil
+	}
+
+	buildingCollection, err := app.Dao().FindCollectionByNameOrId("buildings")
+	if err != nil {
+		return err
+	}
+
+	// Add 1-3 random buildings per planet
+	buildingCount := rand.Intn(3) + 1
+	usedTypes := make(map[string]bool)
+
+	for i := 0; i < buildingCount && len(usedTypes) < len(buildingTypes); i++ {
+		// Pick a random building type we haven't used
+		var buildingType *models.Record
+		for {
+			buildingType = buildingTypes[rand.Intn(len(buildingTypes))]
+			if !usedTypes[buildingType.Id] {
+				usedTypes[buildingType.Id] = true
+				break
+			}
+		}
+
+		building := models.NewRecord(buildingCollection)
+		building.Set("planet_id", planet.Id)
+		building.Set("building_type", buildingType.Id)
+		building.Set("level", rand.Intn(3)+1) // Level 1-3
+		building.Set("active", true)
+
+		if err := app.Dao().SaveRecord(building); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -213,13 +339,13 @@ func seedSystems(app *pocketbase.PocketBase, count int) error {
 
 func seedPlanets(app *pocketbase.PocketBase) error {
 	// Get all systems
-	systems, err := app.Dao().FindRecordsByFilter("systems", "", "", 0, 0)
+	systems, err := app.Dao().FindRecordsByExpr("systems", nil, nil)
 	if err != nil {
 		return err
 	}
 
 	// Get planet types
-	planetTypes, err := app.Dao().FindRecordsByFilter("planet_types", "", "", 0, 0)
+	planetTypes, err := app.Dao().FindRecordsByExpr("planet_types", nil, nil)
 	if err != nil {
 		return err
 	}
@@ -258,13 +384,13 @@ func seedPlanets(app *pocketbase.PocketBase) error {
 
 func seedResourceNodes(app *pocketbase.PocketBase) error {
 	// Get all planets
-	planets, err := app.Dao().FindRecordsByFilter("planets", "", "", 0, 0)
+	planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
 	if err != nil {
 		return err
 	}
 
 	// Get resource types
-	resourceTypes, err := app.Dao().FindRecordsByFilter("resource_types", "", "", 0, 0)
+	resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
 	if err != nil {
 		return err
 	}
