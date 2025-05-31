@@ -27,6 +27,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/systems/:id", getSystem(app))
 		e.Router.GET("/api/planets", getPlanets(app))
 		e.Router.GET("/api/buildings", getBuildings(app))
+		e.Router.GET("/api/building_types", getBuildingTypes(app))
 		e.Router.GET("/api/fleets", getFleets(app))
 		e.Router.GET("/api/trade_routes", getTradeRoutes(app))
 		e.Router.GET("/api/treaties", getTreaties(app))
@@ -94,6 +95,14 @@ type BuildingData struct {
 	Level          int    `json:"level"`
 	Active         bool   `json:"active"`
 	CreditsPerTick int    `json:"credits_per_tick"`
+}
+
+type BuildingTypeData struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Cost           int    `json:"cost"`
+	WorkerCapacity int    `json:"worker_capacity"`
+	MaxLevel       int    `json:"max_level"`
 }
 
 type FleetData struct {
@@ -399,6 +408,34 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 			"perPage":    len(buildingsData),
 			"totalItems": len(buildingsData),
 			"items":      buildingsData,
+		})
+	}
+}
+
+// getBuildingTypes returns the available building types
+func getBuildingTypes(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		types, err := app.Dao().FindRecordsByExpr("building_types", nil, nil)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch building types"})
+		}
+
+		data := make([]BuildingTypeData, len(types))
+		for i, t := range types {
+			data[i] = BuildingTypeData{
+				ID:             t.Id,
+				Name:           t.GetString("name"),
+				Cost:           t.GetInt("cost"),
+				WorkerCapacity: t.GetInt("worker_capacity"),
+				MaxLevel:       t.GetInt("max_level"),
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"page":       1,
+			"perPage":    len(data),
+			"totalItems": len(data),
+			"items":      data,
 		})
 	}
 }
