@@ -3,7 +3,6 @@ export class UIController {
   constructor() {
     this.currentUser = null;
     this.gameState = null;
-    this.tickTimer = null;
   }
 
   updateAuthUI(user) {
@@ -101,35 +100,6 @@ export class UIController {
     }
     
     document.getElementById('player-count').textContent = state.systems.filter(s => s.owner_id).length;
-    
-    // Update tick rate display
-    const tickRate = state.ticksPerMinute || 6;
-    const secondsPerTick = Math.round(60 / tickRate);
-    document.getElementById('next-tick').textContent = `${tickRate}/min (${secondsPerTick}s)`;
-  }
-
-  startTickTimer(nextTickTime) {
-    if (this.tickTimer) {
-      clearInterval(this.tickTimer);
-    }
-
-    const updateTimer = () => {
-      const now = new Date();
-      const remaining = nextTickTime - now;
-      
-      if (remaining <= 0) {
-        document.getElementById('next-tick').textContent = 'Processing...';
-        clearInterval(this.tickTimer);
-        return;
-      }
-
-      const minutes = Math.floor(remaining / 60000);
-      const seconds = Math.floor((remaining % 60000) / 1000);
-      document.getElementById('next-tick').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    };
-
-    updateTimer();
-    this.tickTimer = setInterval(updateTimer, 1000);
   }
 
   showModal(title, content) {

@@ -32,7 +32,7 @@
             </div>
           `:""}
         </div>
-      `}else e.innerHTML="Click a system to view details"}updateGameStatusUI(t){const e=document.getElementById("current-turn"),i=e.textContent,s=`Tick ${t.currentTick}`;e.textContent=s,i!==s&&(e.style.animation="none",e.offsetHeight,e.style.animation="flash 0.5s ease-out"),document.getElementById("player-count").textContent=t.systems.filter(r=>r.owner_id).length;const n=t.ticksPerMinute||6,o=Math.round(60/n);document.getElementById("next-tick").textContent=`${n}/min (${o}s)`}startTickTimer(t){this.tickTimer&&clearInterval(this.tickTimer);const e=()=>{const s=t-new Date;if(s<=0){document.getElementById("next-tick").textContent="Processing...",clearInterval(this.tickTimer);return}const n=Math.floor(s/6e4),o=Math.floor(s%6e4/1e3);document.getElementById("next-tick").textContent=`${n}:${o.toString().padStart(2,"0")}`};e(),this.tickTimer=setInterval(e,1e3)}showModal(t,e){const i=document.getElementById("modal-overlay"),s=document.getElementById("modal-content");s.innerHTML=`
+      `}else e.innerHTML="Click a system to view details"}updateGameStatusUI(t){const e=document.getElementById("current-turn"),i=e.textContent,s=`Tick ${t.currentTick}`;e.textContent=s,i!==s&&(e.style.animation="none",e.offsetHeight,e.style.animation="flash 0.5s ease-out"),document.getElementById("player-count").textContent=t.systems.filter(r=>r.owner_id).length}showModal(t,e){const i=document.getElementById("modal-overlay"),s=document.getElementById("modal-content");s.innerHTML=`
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold">${t}</h2>
         <button id="modal-close" class="text-space-400 hover:text-space-200">&times;</button>

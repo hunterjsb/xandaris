@@ -7,6 +7,7 @@ export class MapRenderer {
     this.lanes = [];
     this.fleets = [];
     this.selectedSystem = null;
+    this.currentTick = 1;
     
     // View settings
     this.viewX = 0;
@@ -417,14 +418,17 @@ export class MapRenderer {
 
   drawFleets(deltaTime) {
     this.fleets.forEach(fleet => {
-      // Calculate fleet position based on progress
+      // Calculate fleet position based on travel progress
       const fromSystem = this.systems.find(s => s.id === fleet.from_id);
       const toSystem = this.systems.find(s => s.id === fleet.to_id);
-      
+
       if (!fromSystem || !toSystem) return;
 
-      // TODO: Calculate actual progress based on ETA
-      const progress = 0.5; // Placeholder
+      // Progress is based on currentTick vs eta_tick
+      const travelTime = 12; // ticks between systems
+      let progress = 1 - (fleet.eta_tick - this.currentTick) / travelTime;
+      if (progress < 0) progress = 0;
+      if (progress > 1) progress = 1;
       const worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
       const worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
       
@@ -482,6 +486,10 @@ export class MapRenderer {
 
   setSelectedSystem(system) {
     this.selectedSystem = system;
+  }
+
+  setCurrentTick(tick) {
+    this.currentTick = tick;
   }
 
   // Center view on a specific system

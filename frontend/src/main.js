@@ -54,6 +54,7 @@ class XanNationApp {
       this.mapRenderer.setSystems(state.systems);
       this.mapRenderer.setFleets(state.fleets);
       this.mapRenderer.setSelectedSystem(state.selectedSystem);
+      this.mapRenderer.setCurrentTick(state.currentTick);
       
       // Set lanes if available
       if (state.mapData && state.mapData.lanes) {
