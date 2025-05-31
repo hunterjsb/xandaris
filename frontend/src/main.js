@@ -109,8 +109,8 @@ class XanNationApp {
       this.uiController.showDiplomacyPanel();
     });
 
-    document.getElementById('banking-btn').addEventListener('click', () => {
-      this.uiController.showBankingPanel();
+    document.getElementById('buildings-btn').addEventListener('click', () => {
+      this.uiController.showBuildingsPanel();
     });
 
     // Auth buttons

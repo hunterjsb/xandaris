@@ -13,24 +13,29 @@ import (
 // GenerateMap creates a new galaxy with systems
 func GenerateMap(app *pocketbase.PocketBase, systemCount int) error {
 	rand.Seed(time.Now().UnixNano())
+	fmt.Printf("Starting map generation with %d systems...\n", systemCount)
 
 	// Clear existing systems
 	if err := clearExistingSystems(app); err != nil {
 		return fmt.Errorf("failed to clear existing systems: %w", err)
 	}
+	fmt.Println("Cleared existing systems")
 
 	// Generate systems
 	systems := generateSystems(systemCount)
+	fmt.Printf("Generated %d system positions\n", len(systems))
 
 	// Save systems to database
 	sysCollection, err := app.Dao().FindCollectionByNameOrId("systems")
 	if err != nil {
 		return fmt.Errorf("systems collection not found: %w", err)
 	}
+	fmt.Println("Found systems collection")
+	
+	// Check if planets collection exists (optional)
 	planetCollection, err := app.Dao().FindCollectionByNameOrId("planets")
-	if err != nil {
-		return fmt.Errorf("planets collection not found: %w", err)
-	}
+	planetsEnabled := err == nil
+	fmt.Printf("Planets collection enabled: %v\n", planetsEnabled)
 
 	for i, sys := range systems {
 		systemRecord := models.NewRecord(sysCollection)
@@ -38,20 +43,26 @@ func GenerateMap(app *pocketbase.PocketBase, systemCount int) error {
 		systemRecord.Set("y", sys.Y)
 		systemRecord.Set("richness", sys.Richness)
 
+		fmt.Printf("Saving system %d: x=%d, y=%d, richness=%d\n", i+1, sys.X, sys.Y, sys.Richness)
 		if err := app.Dao().SaveRecord(systemRecord); err != nil {
-			return fmt.Errorf("failed to save system: %w", err)
+			return fmt.Errorf("failed to save system %d: %w", i+1, err)
 		}
+		fmt.Printf("Saved system %d with ID: %s\n", i+1, systemRecord.Id)
 
-		// create a default planet for each system
-		planet := models.NewRecord(planetCollection)
-		planet.Set("name", fmt.Sprintf("Planet-%d", i+1))
-		planet.Set("system_id", systemRecord.Id)
-		planet.Set("type_id", "") // default type will be assigned later
-		if err := app.Dao().SaveRecord(planet); err != nil {
-			return fmt.Errorf("failed to save planet: %w", err)
+		// create a default planet for each system (if planets collection exists)
+		if planetsEnabled {
+			planet := models.NewRecord(planetCollection)
+			planet.Set("name", fmt.Sprintf("Planet-%d", i+1))
+			planet.Set("system_id", systemRecord.Id)
+			planet.Set("type_id", "") // default type will be assigned later
+			if err := app.Dao().SaveRecord(planet); err != nil {
+				return fmt.Errorf("failed to save planet: %w", err)
+			}
+			fmt.Printf("Saved planet for system %d\n", i+1)
 		}
 	}
 
+	fmt.Printf("Successfully saved all %d systems to database\n", len(systems))
 	return nil
 }
 
@@ -98,10 +109,11 @@ func generateSystems(count int) []System {
 }
 
 func clearExistingSystems(app *pocketbase.PocketBase) error {
-	// delete planets first
-	planets, _ := app.Dao().FindRecordsByFilter("planets", "", "", 100, 0)
-	for _, p := range planets {
-		_ = app.Dao().DeleteRecord(p)
+	// delete planets first (if collection exists)
+	if planets, err := app.Dao().FindRecordsByFilter("planets", "", "", 100, 0); err == nil {
+		for _, p := range planets {
+			_ = app.Dao().DeleteRecord(p)
+		}
 	}
 
 	// delete systems
@@ -139,15 +151,17 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 		}
 	}
 
-	// fetch planets
-	planetRecords, _ := app.Dao().FindRecordsByFilter("planets", "", "", 0, 0)
-	planetsData := make([]map[string]interface{}, len(planetRecords))
-	for i, p := range planetRecords {
-		planetsData[i] = map[string]interface{}{
-			"id":        p.Id,
-			"name":      p.GetString("name"),
-			"system_id": p.GetString("system_id"),
-			"type_id":   p.GetString("type_id"),
+	// fetch planets (if collection exists)
+	planetsData := make([]map[string]interface{}, 0)
+	if planetRecords, err := app.Dao().FindRecordsByFilter("planets", "", "", 0, 0); err == nil {
+		planetsData = make([]map[string]interface{}, len(planetRecords))
+		for i, p := range planetRecords {
+			planetsData[i] = map[string]interface{}{
+				"id":        p.Id,
+				"name":      p.GetString("name"),
+				"system_id": p.GetString("system_id"),
+				"type_id":   p.GetString("type_id"),
+			}
 		}
 	}
 

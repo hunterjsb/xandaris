@@ -5,8 +5,8 @@
     <link rel="icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Xan Nation</title>
-    <script type="module" crossorigin src="/assets/main-CUv3kw2f.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/main-75wpzAOh.css">
+    <script type="module" crossorigin src="/assets/main-CphkWw-o.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/main-BR27e_KE.css">
   </head>
   <body class="text-space-100">
     <div id="app">
@@ -24,8 +24,8 @@
             <button id="diplo-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
               Diplomacy
             </button>
-            <button id="banking-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
-              Banking
+            <button id="buildings-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
+              Buildings
             </button>
           </div>
           <div class="flex items-center space-x-4">
@@ -62,7 +62,7 @@
                 Click a system to view details
               </div>
             </div>
-
+            
             <div class="void-surface p-3 rounded-lg">
               <h3 class="font-semibold mb-2 text-nebula-200">Quick Actions</h3>
               <div class="space-y-2">
@@ -92,13 +92,13 @@
         <!-- Main Game Canvas -->
         <div class="flex-1 relative">
           <canvas id="game-canvas" class="w-full h-full cursor-crosshair" style="background: radial-gradient(ellipse at center, #001433 0%, #000508 70%, #000000 100%);"></canvas>
-
+          
           <!-- Overlay UI -->
           <div id="canvas-overlay" class="absolute inset-0 pointer-events-none">
             <!-- Tooltip -->
             <div id="tooltip" class="absolute text-sm hidden pointer-events-none z-10">
             </div>
-
+            
             <!-- Context Menu -->
             <div id="context-menu" class="absolute shadow-lg hidden z-20 pointer-events-auto">
               <div class="py-1">

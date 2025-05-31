@@ -8,7 +8,6 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
@@ -59,29 +58,11 @@ func main() {
 		return nil
 	})
 
-	// Set up custom API routes
+	// Register unified API routes
+	pkg.RegisterAPIRoutes(app)
+
+	// Set up additional custom routes
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
-		// Map endpoint
-		e.Router.GET("/api/map", pkg.MapHandler(app))
-
-		// Game status endpoint
-		e.Router.GET("/api/status", func(c echo.Context) error {
-			currentTick := tick.GetCurrentTick(app)
-			ticksPerMinute := tick.GetTickRate()
-
-			return c.JSON(200, map[string]interface{}{
-				"current_tick":     currentTick,
-				"ticks_per_minute": ticksPerMinute,
-				"server_time":      time.Now().Format(time.RFC3339),
-			})
-		})
-
-		// Game action endpoints (require authentication)
-		e.Router.POST("/api/orders/fleet", pkg.FleetOrderHandler(app), apis.RequireRecordAuth())
-		e.Router.POST("/api/orders/build", pkg.BuildOrderHandler(app), apis.RequireRecordAuth())
-		e.Router.POST("/api/orders/trade", pkg.TradeOrderHandler(app), apis.RequireRecordAuth())
-		e.Router.POST("/api/diplomacy", pkg.DiplomacyHandler(app), apis.RequireRecordAuth())
-
 		// WebSocket endpoint for real-time updates
 		e.Router.GET("/api/stream", websocket.HandleWebSocket(app))
 

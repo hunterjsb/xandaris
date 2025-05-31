@@ -172,7 +172,7 @@ export class UIController {
       { type: 'mine', name: 'Mine', cost: 200, description: 'Produces ore' },
       { type: 'factory', name: 'Factory', cost: 300, description: 'Produces goods' },
       { type: 'shipyard', name: 'Shipyard', cost: 500, description: 'Enables fleet construction' },
-      { type: 'bank', name: 'Crypto Server', cost: 1000, description: 'Generates 1 credit per tick' }
+      { type: 'bank', name: 'Bank', cost: 1000, description: 'Generates 1 credit per tick' }
     ];
 
     const buildingOptions = buildings.map(building => `
@@ -364,35 +364,59 @@ export class UIController {
     `);
   }
 
-  showBankingPanel() {
-    const banks = this.gameState?.getPlayerBanks() || [];
-    const totalIncome = banks.reduce((sum, bank) => sum + (bank.credits_per_tick || 0), 0);
+  showBuildingsPanel() {
+    const buildings = this.gameState?.getPlayerBuildings() || [];
+    const banks = buildings.filter(b => b.type === 'bank');
+    const totalIncome = banks.reduce((sum, bank) => sum + (bank.credits_per_tick || 1), 0);
     
-    const bankList = banks.length > 0 ? banks.map(bank => `
-      <div class="bg-space-700 p-3 rounded mb-2">
-        <div class="font-semibold text-plasma-300">${bank.name || `CryptoServer-${bank.id.slice(-3)}`}</div>
-        <div class="text-sm text-space-300">
-          <div>System: ${bank.system_name || bank.system_id}</div>
-          <div>Security Level: ${bank.security_level || 1}</div>
-          <div>Processing Power: ${bank.processing_power || 10}</div>
-          <div class="text-nebula-300">Income: ${bank.credits_per_tick || 1} credits/tick</div>
-          <div class="text-xs ${bank.active ? 'text-green-400' : 'text-red-400'}">
-            ${bank.active ? 'Online' : 'Offline'}
-          </div>
+    // Group buildings by type
+    const buildingsByType = buildings.reduce((acc, building) => {
+      if (!acc[building.type]) acc[building.type] = [];
+      acc[building.type].push(building);
+      return acc;
+    }, {});
+
+    const buildingTypeNames = {
+      habitat: 'Habitats',
+      farm: 'Farms', 
+      mine: 'Mines',
+      factory: 'Factories',
+      shipyard: 'Shipyards',
+      bank: 'Banks'
+    };
+
+    const buildingSections = Object.entries(buildingsByType).map(([type, typeBuildings]) => `
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-plasma-300 mb-2">${buildingTypeNames[type] || type} (${typeBuildings.length})</h3>
+        <div class="space-y-2">
+          ${typeBuildings.map(building => `
+            <div class="bg-space-700 p-3 rounded">
+              <div class="font-semibold text-nebula-300">${building.name || `${buildingTypeNames[type]?.slice(0, -1) || type}-${building.id.slice(-3)}`}</div>
+              <div class="text-sm text-space-300">
+                <div>System: ${building.system_name || building.system_id}</div>
+                ${building.type === 'bank' ? `<div class="text-nebula-300">Income: ${building.credits_per_tick || 1} credits/tick</div>` : ''}
+                <div class="text-xs ${building.active !== false ? 'text-green-400' : 'text-red-400'}">
+                  ${building.active !== false ? 'Active' : 'Inactive'}
+                </div>
+              </div>
+            </div>
+          `).join('')}
         </div>
       </div>
-    `).join('') : '<div class="text-space-400">No crypto servers deployed</div>';
+    `).join('');
 
-    this.showModal('Crypto Banking Network', `
-      <div class="mb-4">
-        <div class="text-lg font-semibold text-plasma-300">Total Income: ${totalIncome} credits/tick</div>
-        <div class="text-sm text-space-400">${totalIncome * 6} credits/minute • ${totalIncome * 360} credits/hour</div>
-      </div>
-      <div class="space-y-2">
-        ${bankList}
-      </div>
+    this.showModal('Buildings Overview', `
+      ${banks.length > 0 ? `
+        <div class="mb-4 p-3 bg-space-800 rounded">
+          <div class="text-lg font-semibold text-plasma-300">Credit Income: ${totalIncome} credits/tick</div>
+          <div class="text-sm text-space-400">${totalIncome * 6} credits/minute • ${totalIncome * 360} credits/hour</div>
+        </div>
+      ` : ''}
+      
+      ${buildingSections || '<div class="text-space-400 text-center py-8">No buildings constructed</div>'}
+      
       <div class="mt-4 text-xs text-space-400 border-t border-space-600 pt-2">
-        💡 Build Crypto Servers at your systems to generate passive income
+        💡 Build structures at your systems to improve production and defense
       </div>
     `);
   }

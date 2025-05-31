@@ -16,11 +16,12 @@ XANDARIS is a numbers-only 4X-lite space strategy game that runs on a single AWS
 ## Build/Run Commands
 
 ### Backend (Go + PocketBase)
+- Navigate to backend: `cd backend`
 - Install dependencies: `go mod tidy`
 - Build: `go build -o xandaris cmd/main.go`
 - Run server: `./xandaris serve --dev --dir=pb_data`
 - Run migrations: `./xandaris migrate up`
-- Seed initial data: `go run cmd/seed.go`
+- Seed initial data: `go run cmd/seed/main.go`
 - Test: `go test ./...`
 
 ### Frontend (Vanilla JS + Vite)

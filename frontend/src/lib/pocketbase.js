@@ -227,7 +227,7 @@ export class GameDataManager {
       const filter = userId ? `a_id = "${userId}" || b_id = "${userId}"` : '';
       return await pb.collection('treaties').getFullList({
         filter,
-        sort: '-created_at'
+        sort: '-created'
       });
     } catch (error) {
       console.error('Failed to fetch treaties:', error);
@@ -235,15 +235,15 @@ export class GameDataManager {
     }
   }
 
-  async getBanks(userId = null) {
+  async getBuildings(userId = null) {
     try {
       const filter = userId ? `owner_id = "${userId}"` : '';
-      return await pb.collection('banks').getFullList({
+      return await pb.collection('buildings').getFullList({
         filter,
-        sort: '-created_at'
+        sort: '-created'
       });
     } catch (error) {
-      console.error('Failed to fetch banks:', error);
+      console.error('Failed to fetch buildings:', error);
       return [];
     }
   }
