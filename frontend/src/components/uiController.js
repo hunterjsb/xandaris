@@ -4,9 +4,18 @@ export class UIController {
     this.currentUser = null;
     this.gameState = null;
     this.tickTimer = null;
-    this.currentSystemId = null; // Track current system to prevent duplicate renders
+    this.currentSystemId = null; // Track current system/planet ID being viewed
     // Make instance available globally, for event handlers in dynamically created HTML
     window.uiController = this;
+    this.expandedView = document.getElementById("expanded-view-container");
+    if (this.expandedView) {
+        // Ensure it starts hidden and styled as a panel (though class will be set on show)
+        this.expandedView.classList.add('hidden', 'floating-panel');
+        this.expandedView.style.left = '-2000px'; // Start off-screen
+        this.expandedView.style.top = '-2000px';
+    } else {
+        console.error("#expanded-view-container not found during UIController construction");
+    }
   }
 
   getPlanetTypeIcon(planetTypeName) {
@@ -29,25 +38,83 @@ export class UIController {
   }
 
   clearExpandedView() {
-    const container = document.getElementById("expanded-view-container");
-    if (container) {
-      container.innerHTML = "";
-      container.classList.add("hidden");
+    if (this.expandedView) {
+      // Don't clear innerHTML here, as content might be reused or fade out.
+      // Content replacement will happen in displaySystemView/displayPlanetView.
+      this.expandedView.classList.add("hidden");
+      // Move it off-screen to prevent interaction and ensure it's visually gone
+      this.expandedView.style.left = '-2000px';
+      this.expandedView.style.top = '-2000px';
     }
-    this.currentSystemId = null; // Clear current system when view is cleared
+    this.currentSystemId = null;
   }
 
-  displaySystemView(system, planets) {
-    // Prevent duplicate renders of the same system
-    if (this.currentSystemId === system.id) {
-      return;
+  positionPanel(container, screenX, screenY) {
+    // Ensure container is not hidden to get accurate dimensions
+    const wasHidden = container.classList.contains('hidden');
+    if (wasHidden) {
+      container.classList.remove('hidden');
+      // Temporarily make it visible but off-screen to measure
+      container.style.left = '-9999px';
+      container.style.top = '-9999px';
     }
-    
-    const container = document.getElementById("expanded-view-container");
+
+    const panelWidth = container.offsetWidth;
+    const panelHeight = container.offsetHeight;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 15; // Margin from system icon and viewport edges
+
+    let top = screenY + margin;
+    let left = screenX + margin;
+
+    // Adjust if too close to right edge
+    if (left + panelWidth + margin > viewportWidth) {
+      left = screenX - panelWidth - margin; // Position to the left of the cursor
+    }
+    // Adjust if too close to bottom edge
+    if (top + panelHeight + margin > viewportHeight) {
+      top = viewportHeight - panelHeight - margin; // Align to bottom edge
+    }
+    // Adjust if too close to left edge (after potential flip)
+    if (left < margin) {
+      left = margin; // Align to left edge
+    }
+    // Adjust if too close to top edge
+    if (top < margin) {
+      top = margin; // Align to top edge
+    }
+
+    container.style.left = `${left}px`;
+    container.style.top = `${top}px`;
+
+    if (wasHidden && (container.style.left === '-9999px')) {
+      // If it was temp unhidden and not positioned, re-hide. Should not happen if positionPanel is called correctly.
+      // This case is unlikely if called after content is set and ready to be shown.
+      container.classList.add('hidden');
+    }
+  }
+
+  displaySystemView(system, planets, screenX, screenY) {
+    const container = this.expandedView;
     if (!container) {
+      console.error("#expanded-view-container not found in displaySystemView");
       return;
     }
+
+    // If it's the same system and the panel is already visible, and no new coords are given,
+    // we might not need to do anything, or just update content if planets data changed.
+    // For now, this simplified check allows re-rendering if called.
+    if (this.currentSystemId === system.id && !container.classList.contains("hidden") && screenX === undefined) {
+        // If planets data could change, we might need to proceed and update planet list.
+        // For now, assume if it's the same system and visible, content is up to date unless new position is given.
+        // This could be more sophisticated by checking if 'planets' data has actually changed.
+      // return; // Potentially skip if no new position and system is same.
+    }
+
+    container.className = 'floating-panel'; // Ensure base class is set, removes 'hidden' implicitly if it was only 'hidden'
     
+
     this.currentSystemId = system.id;
 
 
@@ -126,48 +193,245 @@ export class UIController {
       }).join("");
     }
 
+    // Determine if a full redraw of innerHTML is needed or if specific parts can be updated.
+    // For simplicity in this refactor, we'll redraw the inner content structure.
+    // More advanced would be to diff content if system.id is the same.
     container.innerHTML = `
-      <div class="p-4 h-full flex flex-col">
+      <div class="floating-panel-content p-4">
         <div class="flex justify-between items-start mb-4">
           <div>
-            <h2 class="text-2xl font-bold text-orange-300">${system.name || `System ${system.id.slice(-4)}`}</h2>
-            <div class="text-sm text-space-300 mt-1">
-              <span class="mr-3">📍 (${system.x}, ${system.y})</span>
-              <span>⭐ Richness: ${system.richness || 'Unknown'}</span>
+            <h2 id="system-name" class="text-2xl font-bold text-orange-300"></h2>
+              <div class="text-sm text-space-300 mt-1">
+                <span id="system-coords" class="mr-3"></span>
+                <span id="system-richness"></span>
+              </div>
+            </div>
+            <button onclick="window.uiController.clearExpandedView()"
+                    class="btn-icon">×</button>
+          </div>
+
+          <div id="system-stats-container" class="mb-4 p-3 bg-space-800 rounded-lg text-sm">
+            <div class="grid grid-cols-2 gap-2">
+              <div>Owner: <span id="system-owner" class="font-semibold text-space-200"></span></div>
+              <div>Planets: <span id="system-planets-count" class="font-semibold text-space-200"></span></div>
+              <div>Colonized: <span id="system-colonized-count" class="font-semibold text-space-200"></span></div>
+              <div>Your Colonies: <span id="system-player-colonies" class="font-semibold text-space-200"></span></div>
+            </div>
+            <div id="system-total-population-container" class="mt-2 pt-2 border-t border-space-700" style="display: none;">
+              Total Population: <span id="system-total-population" class="font-semibold text-space-200"></span>
             </div>
           </div>
-          <button onclick="window.uiController.clearExpandedView()" 
-                  class="text-gray-400 hover:text-white text-2xl transition-colors p-1 -m-1">×</button>
-        </div>
-        
-        <div class="mb-4 p-3 bg-space-800 rounded-lg text-sm">
-          <div class="grid grid-cols-2 gap-2">
-            <div>Owner: <span class="font-semibold text-space-200">${system.owner_name || "Uncontrolled"}</span></div>
-            <div>Planets: <span class="font-semibold text-space-200">${planets?.length || 0}</span></div>
-            <div>Colonized: <span class="font-semibold text-space-200">${colonizedCount}</span></div>
-            <div>Your Colonies: <span class="font-semibold ${ownedByPlayer > 0 ? 'text-green-400' : 'text-space-200'}">${ownedByPlayer}</span></div>
-          </div>
-          ${totalPopulation > 0 ? `<div class="mt-2 pt-2 border-t border-space-700">Total Population: <span class="font-semibold text-space-200">${totalPopulation.toLocaleString()}</span></div>` : ''}
-        </div>
-        
-        <div class="flex-1 overflow-hidden flex flex-col">
-          <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets in System</h3>
-          <ul class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            ${planetsHtml}
-          </ul>
-        </div>
-      </div>
-    `;
 
-    container.classList.remove("hidden");
+          <div class="flex-1 overflow-hidden flex flex-col">
+            <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets in System</h3>
+            <ul id="system-planets-list" class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            </ul>
+          </div>
+        </div>
+      `;
+      systemViewDiv = container.querySelector(`[data-system-id="${system.id}"]`);
+    }
+
+    // Update dynamic content
+    systemViewDiv.querySelector("#system-name").textContent = system.name || `System ${system.id.slice(-4)}`;
+    systemViewDiv.querySelector("#system-coords").textContent = `📍 (${system.x}, ${system.y})`;
+    systemViewDiv.querySelector("#system-richness").textContent = `⭐ Richness: ${system.richness || 'Unknown'}`;
+
+    systemViewDiv.querySelector("#system-owner").textContent = system.owner_name || "Uncontrolled";
+    systemViewDiv.querySelector("#system-planets-count").textContent = planets?.length || 0;
+    systemViewDiv.querySelector("#system-colonized-count").textContent = colonizedCount;
+    const playerColoniesSpan = systemViewDiv.querySelector("#system-player-colonies");
+    playerColoniesSpan.textContent = ownedByPlayer;
+    playerColoniesSpan.className = `font-semibold ${ownedByPlayer > 0 ? 'text-green-400' : 'text-space-200'}`;
+
+    const totalPopulationContainer = systemViewDiv.querySelector("#system-total-population-container");
+    if (totalPopulation > 0) {
+      systemViewDiv.querySelector("#system-total-population").textContent = totalPopulation.toLocaleString();
+      totalPopulationContainer.style.display = "block";
+    } else {
+      totalPopulationContainer.style.display = "none";
+    }
+
+    const planetsListUl = container.querySelector("#system-planets-list"); // Query within the new innerHTML
+    this.updatePlanetList(planetsListUl, planets, currentUserId);
+
+    container.dataset.viewType = 'system'; // For potential future logic
+    container.dataset.currentId = system.id;
+
+    // Position the panel
+    // Visibility is handled by removing/adding 'hidden' or by positioning
+    container.classList.remove('hidden'); // Make sure it's not hidden before positioning
+    if (screenX !== undefined && screenY !== undefined) {
+        this.positionPanel(container, screenX, screenY);
+    } else if (container.style.left === '-2000px' || container.style.left === '-9999px') {
+        // If it was off-screen (e.g. cleared or first load) and no new coords, place it default (e.g. top-right)
+        container.style.top = '20px';
+        container.style.right = '20px';
+        container.style.left = ''; // Clear left if setting right
+    }
+    // If already visible and no new coords, it just updates content in place and keeps current position.
   }
 
-  displayPlanetView(planet) {
-    const container = document.getElementById("expanded-view-container");
-    if (!container) {
-      console.error("Expanded view container not found!");
+  updatePlanetList(ulElement, planets, currentUserId) {
+    const existingPlanetElements = new Map();
+    ulElement.querySelectorAll("li[data-planet-id]").forEach(li => {
+      existingPlanetElements.set(li.dataset.planetId, li);
+    });
+
+    if (!planets || planets.length === 0) {
+      ulElement.innerHTML = '<div class="text-sm text-space-400">No planets detected in this system.</div>';
       return;
     }
+
+    let focusedElement = document.activeElement;
+    let focusedPlanetId = focusedElement && focusedElement.closest('li[data-planet-id]') ? focusedElement.closest('li[data-planet-id]').dataset.planetId : null;
+    let selectionStart, selectionEnd;
+    if (focusedElement && focusedElement.tagName === 'INPUT' || focusedElement.tagName === 'TEXTAREA') {
+        selectionStart = focusedElement.selectionStart;
+        selectionEnd = focusedElement.selectionEnd;
+    }
+
+
+    planets.forEach(planet => {
+      const planetId = planet.id;
+      const listItem = existingPlanetElements.get(planetId) || document.createElement("li");
+      listItem.dataset.planetId = planetId; // Ensure ID is set for new items
+
+      const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
+      const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type);
+      const isOwned = planet.colonized_by === currentUserId;
+      const population = planet.Pop || 0;
+      const maxPop = planet.MaxPopulation || 'N/A';
+
+      let statusHtml = '';
+      if (planet.colonized_by) {
+        if (isOwned) {
+          statusHtml = `<span class="text-xs text-green-400">✓ Your Colony</span>`;
+        } else {
+          statusHtml = `<span class="text-xs text-red-400">◆ ${planet.colonized_by_name || 'Occupied'}</span>`;
+        }
+      } else {
+        statusHtml = `<span class="text-xs text-gray-400">◇ Uncolonized</span>`;
+      }
+
+      let resourcesPreview = '';
+      if (isOwned && planet.Credits !== undefined) {
+        resourcesPreview = `
+          <div class="text-xs text-space-300 mt-1 flex gap-2">
+            <span>💰 ${planet.Credits || 0}</span>
+            <span>🧑‍🚀 ${population}/${maxPop}</span>
+            <span>😊 ${planet.Morale || 0}%</span>
+          </div>
+        `;
+      }
+
+      // It's generally better to update specific parts of the listItem's innerHTML
+      // or use more targeted DOM manipulation if performance becomes an issue here.
+      listItem.className = "mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md transition-all duration-200 border border-transparent hover:border-space-500";
+
+      let colonizeButtonHtml = '';
+      const COLONIZATION_COST = 500; // Define cost, ideally from gameState or config
+      const canPlayerColonize = !planet.colonized_by &&
+                                this.currentUser &&
+                                this.gameState?.playerResources?.credits >= COLONIZATION_COST;
+
+      if (canPlayerColonize) {
+        colonizeButtonHtml = `
+          <button class="btn btn-success btn-sm py-1 px-2 text-xs mt-2"
+                  onclick="event.stopPropagation(); console.log('Colonize button clicked for planet: ${planet.id}'); window.uiController.colonizePlanetWrapper('${planet.id}');">
+            Colonize (${COLONIZATION_COST} Cr)
+          </button>
+        `;
+      } else if (!planet.colonized_by) {
+        // Optional: Show a disabled/info button if uncolonized but player can't colonize
+        colonizeButtonHtml = `
+          <button class="btn btn-disabled btn-sm py-1 px-2 text-xs mt-2" disabled>
+            Colonize (${COLONIZATION_COST} Cr)
+          </button>
+        `;
+      }
+
+      listItem.innerHTML = `
+        <div class="flex items-start justify-between">
+          <div class="flex-1 ${isOwned || planet.colonized_by || !canPlayerColonize ? 'cursor-pointer' : ''}"
+               onclick="${isOwned || planet.colonized_by || !canPlayerColonize ? `window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))` : ''}">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">${planetIcon}</span>
+              <div>
+                <div class="font-semibold">${planetName}</div>
+                <div class="text-xs text-space-300">${planet.planet_type || planet.type || 'Unknown'} • Size ${planet.size || 'N/A'}</div>
+              </div>
+            </div>
+            ${resourcesPreview}
+          </div>
+          <div class="text-right flex flex-col items-end">
+            ${statusHtml}
+            ${colonizeButtonHtml}
+          </div>
+        </div>
+      `;
+
+      // If the planet is not colonized AND the player can colonize it,
+      // the main list item can also be made clickable for colonization for a larger target area.
+      if (!planet.colonized_by && canPlayerColonize) {
+        listItem.classList.add('cursor-pointer');
+        listItem.onclick = (e) => {
+            // Prevent click from bubbling if the click was on the button itself
+            if (e.target.closest('button')) return;
+            console.log('Colonize (list item) clicked for planet: ${planet.id}');
+            window.uiController.colonizePlanetWrapper(planet.id);
+        };
+      } else {
+        // If already colonized, or cannot be colonized by player, remove general click handler
+        // or ensure it only navigates (handled by the inner div's onclick now).
+        listItem.onclick = null;
+        // The inner div with class 'flex-1' handles the click to displayPlanetView for non-colonizable/owned planets.
+      }
+
+      if (!existingPlanetElements.has(planetId)) {
+        ulElement.appendChild(listItem);
+      }
+      existingPlanetElements.delete(planetId); // Remove from map as it's processed
+    });
+
+    // Remove old planet elements that are no longer in the list
+    existingPlanetElements.forEach(li => li.remove());
+
+    if (focusedPlanetId) {
+        const newFocusedElement = ulElement.querySelector(`li[data-planet-id="${focusedPlanetId}"]`);
+        if (newFocusedElement) {
+            let elementToFocus = newFocusedElement.querySelector('input, textarea, button, [tabindex="0"]') || newFocusedElement;
+            elementToFocus.focus();
+            if (elementToFocus.setSelectionRange && selectionStart !== undefined && selectionEnd !== undefined) {
+                elementToFocus.setSelectionRange(selectionStart, selectionEnd);
+            }
+        }
+    }
+  }
+
+
+  displayPlanetView(planet, screenX, screenY) { // Added screenX, screenY
+    const container = this.expandedView;
+    if (!container) {
+      console.error("#expanded-view-container not found in displayPlanetView");
+      return;
+    }
+
+    // Simplified check: if it's the same planet and no new coords, assume no major update needed.
+    // Could be more sophisticated by checking if 'planet' data has changed.
+    if (this.currentSystemId === planet.id && container.dataset.viewType === 'planet' && !container.classList.contains("hidden") && screenX === undefined) {
+      // return;
+    }
+
+    container.className = 'floating-panel'; // Ensure base class is set
+
+    // Use currentSystemId to track the currently displayed entity (system or planet)
+    // This might be better named e.g. currentViewEntityId if it can be a planet ID too.
+    // For now, reusing currentSystemId for simplicity, assuming planet IDs are distinct from system IDs
+    // or that context (system view vs planet view) is managed by viewType.
+    this.currentSystemId = planet.id;
+    container.dataset.viewType = 'planet';
+    container.dataset.currentId = planet.id;
 
     const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
     const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type);
@@ -277,76 +541,120 @@ export class UIController {
 
     const isColonized = planet.colonized_by && planet.colonized_by !== "";
     const isOwnedByPlayer = isColonized && planet.colonized_by === this.currentUser?.id;
-    const canColonize = !isColonized && this.currentUser && this.gameState.playerResources.credits >= 500;
+    const canColonize = !isColonized && this.currentUser && this.gameState && this.gameState.playerResources && this.gameState.playerResources.credits >= 500;
 
+    // Redraw inner content structure
     container.innerHTML = `
-      <div class="p-4 h-full flex flex-col">
+      <div class="floating-panel-content p-4" data-planet-id="${planet.id}">
         <div class="flex justify-between items-start mb-4">
           <div class="flex items-center gap-3">
-            <span class="text-4xl">${planetIcon}</span>
-            <div>
-              <h2 class="text-2xl font-bold text-orange-300">${planetName}</h2>
-              <div class="text-sm text-space-300">
-                ${planet.planet_type || planet.type || 'Unknown Type'} • Size ${planet.size || 'N/A'}
+            <span id="planet-icon" class="text-4xl"></span>
+              <div>
+                <h2 id="planet-name" class="text-2xl font-bold text-orange-300"></h2>
+                <div id="planet-type-size" class="text-sm text-space-300"></div>
               </div>
             </div>
+            <button onclick="window.uiController.clearExpandedView()"
+                    class="btn-icon">×</button>
           </div>
-          <button onclick="window.uiController.clearExpandedView()" 
-                  class="text-gray-400 hover:text-white text-2xl transition-colors p-1 -m-1">×</button>
-        </div>
-        
-        <div class="mb-4 p-3 bg-space-800 rounded-lg text-sm">
-          <div class="grid grid-cols-2 gap-2">
-            <div>System: <span class="font-semibold text-space-200">${systemName}</span></div>
-            <div>Status: <span class="font-semibold ${isOwnedByPlayer ? 'text-green-400' : isColonized ? 'text-red-400' : 'text-gray-400'}">
-              ${isOwnedByPlayer ? 'Your Colony' : planet.colonized_by_name || (isColonized ? 'Occupied' : 'Uncolonized')}
-            </span></div>
+
+          <div class="mb-4 p-3 bg-space-800 rounded-lg text-sm">
+            <div class="grid grid-cols-2 gap-2">
+              <div>System: <span id="planet-system-name" class="font-semibold text-space-200"></span></div>
+              <div>Status: <span id="planet-status" class="font-semibold"></span></div>
+            </div>
+          </div>
+
+          <div id="planet-details-scroll-container" class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+            <div id="planet-resources-container" style="display: none;">
+              <h3 class="text-lg font-semibold mb-3 text-nebula-200">Resources & Stats</h3>
+              <div id="planet-resources-html"></div>
+            </div>
+            <div id="planet-buildings-container" style="display: none;">
+              <h3 class="text-lg font-semibold mb-3 text-nebula-200">Buildings</h3>
+              <div id="planet-buildings-html"></div>
+            </div>
+          </div>
+
+          <div id="planet-actions-container" class="mt-4 space-y-2">
+            <!-- Action buttons will be dynamically added here -->
           </div>
         </div>
+      `;
+      planetViewDiv = container.querySelector(`[data-planet-id="${planet.id}"]`);
+    }
 
-        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          ${isOwnedByPlayer || planet.Credits !== undefined ? `
-          <div>
-            <h3 class="text-lg font-semibold mb-3 text-nebula-200">Resources & Stats</h3>
-            ${resourcesHtml}
-          </div>
-          ` : ''}
+    // Update header info
+    planetViewDiv.querySelector("#planet-icon").textContent = planetIcon;
+    planetViewDiv.querySelector("#planet-name").textContent = planetName;
+    planetViewDiv.querySelector("#planet-type-size").textContent =
+      `${planet.planet_type || planet.type || 'Unknown Type'} • Size ${planet.size || 'N/A'}`;
 
-          ${isOwnedByPlayer ? `
-          <div>
-            <h3 class="text-lg font-semibold mb-3 text-nebula-200">Buildings</h3>
-            ${buildingsHtml}
-          </div>
-          ` : ''}
-        </div>
+    // Update system and status
+    planetViewDiv.querySelector("#planet-system-name").textContent = systemName;
+    const statusSpan = planetViewDiv.querySelector("#planet-status");
+    statusSpan.textContent = isOwnedByPlayer ? 'Your Colony' : planet.colonized_by_name || (isColonized ? 'Occupied' : 'Uncolonized');
+    statusSpan.className = `font-semibold ${isOwnedByPlayer ? 'text-green-400' : isColonized ? 'text-red-400' : 'text-gray-400'}`;
 
-        <div class="mt-4 space-y-2">
-          ${canColonize ? `
-          <button class="w-full px-4 py-3 bg-emerald-700 hover:bg-emerald-600 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2"
-                  onclick="window.uiController.colonizePlanetWrapper('${planet.id}')">
-            <span>🚀</span> Colonize Planet (500 Credits)
-          </button>
-          ` : !canColonize && !isColonized && this.currentUser ? `
-          <button class="w-full px-4 py-3 bg-gray-700 rounded-lg text-gray-400 font-semibold cursor-not-allowed" disabled>
-            Insufficient Credits (Need 500)
-          </button>
-          ` : ''}
+    // Update resources and buildings
+    const resourcesContainer = planetViewDiv.querySelector("#planet-resources-container");
+    const buildingsContainer = planetViewDiv.querySelector("#planet-buildings-container");
 
-          ${isOwnedByPlayer ? `
-          <button class="w-full px-4 py-3 bg-blue-700 hover:bg-blue-600 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2"
-                  onclick="window.uiController.showPlanetBuildModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
-            <span>🏗️</span> Construct Building
-          </button>
-          ` : ''}
+    if (isOwnedByPlayer || planet.Credits !== undefined) {
+      planetViewDiv.querySelector("#planet-resources-html").innerHTML = resourcesHtml;
+      resourcesContainer.style.display = "block";
+    } else {
+      resourcesContainer.style.display = "none";
+    }
 
-          <button class="w-full px-4 py-3 bg-space-700 hover:bg-space-600 rounded-lg text-white transition-colors"
-                  onclick="window.uiController.goBackToSystemView('${planet.system_id}')">
-            ← Back to System
-          </button>
-        </div>
-      </div>
-    `;
-    container.classList.remove("hidden");
+    if (isOwnedByPlayer) {
+      planetViewDiv.querySelector("#planet-buildings-html").innerHTML = buildingsHtml;
+      buildingsContainer.style.display = "block";
+    } else {
+      buildingsContainer.style.display = "none";
+    }
+
+    // Update action buttons
+    const actionsContainer = planetViewDiv.querySelector("#planet-actions-container");
+    actionsContainer.innerHTML = ''; // Clear previous buttons
+
+    if (canColonize) {
+      const colonizeButton = document.createElement("button");
+      colonizeButton.className = "w-full btn btn-success py-3 flex items-center justify-center gap-2";
+      colonizeButton.innerHTML = `<span>🚀</span> Colonize Planet (500 Credits)`;
+      colonizeButton.onclick = () => window.uiController.colonizePlanetWrapper(planet.id);
+      actionsContainer.appendChild(colonizeButton);
+    } else if (!isColonized && this.currentUser && this.gameState && this.gameState.playerResources && this.gameState.playerResources.credits < 500) {
+      const insufficientCreditsButton = document.createElement("button");
+      insufficientCreditsButton.className = "w-full btn btn-disabled py-3 flex items-center justify-center gap-2";
+      insufficientCreditsButton.disabled = true;
+      insufficientCreditsButton.textContent = "Insufficient Credits (Need 500)";
+      actionsContainer.appendChild(insufficientCreditsButton);
+    }
+
+    if (isOwnedByPlayer) {
+      const constructButton = document.createElement("button");
+      constructButton.className = "w-full btn btn-primary py-3 flex items-center justify-center gap-2";
+      constructButton.innerHTML = `<span>🏗️</span> Construct Building`;
+      constructButton.onclick = () => window.uiController.showPlanetBuildModal(planet);
+      actionsContainer.appendChild(constructButton);
+    }
+
+    const backButton = document.createElement("button");
+    backButton.className = "w-full btn btn-secondary py-3 flex items-center justify-center gap-2";
+    backButton.textContent = "← Back to System";
+    backButton.onclick = () => window.uiController.goBackToSystemView(planet.system_id);
+    actionsContainer.appendChild(backButton);
+
+    container.classList.remove('hidden'); // Make sure it's not hidden before positioning
+    if (screenX !== undefined && screenY !== undefined) {
+        this.positionPanel(container, screenX, screenY);
+    } else if (container.style.left === '-2000px' || container.style.left === '-9999px') {
+        // Default position if no coords and was hidden (e.g. top-right)
+        container.style.top = '20px';
+        container.style.right = '20px';
+        container.style.left = '';
+    }
   }
 
   showPlanetBuildModal(planet) {
@@ -366,7 +674,7 @@ export class UIController {
       this.showModal(
         `Construct on ${planet.name || `Planet ${planet.id.slice(-4)}`}`,
         `<div class="text-space-400">No building types available or data is still loading.</div>
-         <button class="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white" onclick="window.uiController.hideModal()">Close</button>`
+         <button class="w-full mt-2 btn btn-secondary" onclick="window.uiController.hideModal()">Close</button>`
       );
       return;
     }
@@ -415,7 +723,7 @@ export class UIController {
       <div class="space-y-2 max-h-96 overflow-y-auto">
         ${buildingOptions.length > 0 ? buildingOptions : '<div class="text-space-400">No buildings available to construct.</div>'}
       </div>
-      <button class="w-full mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white" onclick="window.uiController.hideModal()">Cancel</button>
+      <button class="w-full mt-4 btn btn-secondary" onclick="window.uiController.hideModal()">Cancel</button>
     `
     );
   }
@@ -622,7 +930,7 @@ export class UIController {
       "Error",
       `
       <div class="text-red-400 mb-4">${message}</div>
-      <button class="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
+      <button class="w-full btn btn-secondary" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
         OK
       </button>
     `,
@@ -721,11 +1029,11 @@ export class UIController {
                  class="w-full p-2 bg-space-700 border border-space-600 rounded">
         </div>
         <div class="flex space-x-2">
-          <button type="submit" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 rounded">
+          <button type="submit" class="flex-1 btn btn-danger">
             Send Fleet
           </button>
           <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')"
-                  class="flex-1 px-4 py-2 bg-space-700 hover:bg-space-600 rounded">
+                  class="flex-1 btn btn-secondary">
             Cancel
           </button>
         </div>
@@ -805,11 +1113,11 @@ export class UIController {
                  class="w-full p-2 bg-space-700 border border-space-600 rounded">
         </div>
         <div class="flex space-x-2">
-          <button type="submit" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-500 rounded">
+          <button type="submit" class="flex-1 btn btn-success">
             Create Route
           </button>
           <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')"
-                  class="flex-1 px-4 py-2 bg-space-700 hover:bg-space-600 rounded">
+                  class="flex-1 btn btn-secondary">
             Cancel
           </button>
         </div>
@@ -1086,7 +1394,7 @@ export class UIController {
       "Success",
       `
       <div class="text-emerald-400 mb-4">${message}</div>
-      <button class="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
+      <button class="w-full btn btn-secondary" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
         OK
       </button>
     `,
