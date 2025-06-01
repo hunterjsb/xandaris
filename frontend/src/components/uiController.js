@@ -698,7 +698,7 @@ export class UIController {
         `;
       }
 
-      listItem.innerHTML = `
+      const listItemHtml = `
         <div class="flex items-start justify-between">
           <div class="flex-1 cursor-pointer"
                onclick="window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
@@ -719,6 +719,9 @@ export class UIController {
           </div>
         </div>
       `;
+      
+      console.log('Planet list HTML being set:', listItemHtml);
+      listItem.innerHTML = listItemHtml;
 
       // Make all planets clickable to show detailed view
       listItem.classList.add('cursor-pointer');
