@@ -48,6 +48,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.POST("/api/orders/build", queueBuilding(app))
 		e.Router.POST("/api/orders/trade", createTradeRoute(app))
 		e.Router.POST("/api/orders/colonize", colonizePlanet(app))
+		e.Router.POST("/api/orders/colonize_with_ship", colonizeWithShip(app))
 		e.Router.POST("/api/diplomacy", proposeTreaty(app))
 
 		// Status endpoint
@@ -539,17 +540,43 @@ func getFleets(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch fleets"})
 		}
 
-		fleetsData := make([]FleetData, len(fleets))
+		fleetsData := make([]map[string]interface{}, len(fleets))
 		for i, fleet := range fleets {
-			fleetsData[i] = FleetData{
-				ID:       fleet.Id,
-				OwnerID:  fleet.GetString("owner_id"),
-				Name:     fleet.GetString("name"),
-				FromID:   fleet.GetString("from_id"),
-				ToID:     fleet.GetString("to_id"),
-				ETA:      fleet.GetDateTime("eta").String(),
-				ETATick:  fleet.GetInt("eta_tick"),
-				Strength: fleet.GetInt("strength"),
+			// Get ships in this fleet
+			ships, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", fleet.Id), "", 0, 0)
+			if err != nil {
+				ships = []*models.Record{} // Empty if error
+			}
+
+			// Process ship data
+			shipData := make([]map[string]interface{}, len(ships))
+			for j, ship := range ships {
+				// Get ship type details
+				shipType, err := app.Dao().FindRecordById("ship_types", ship.GetString("ship_type"))
+				var shipTypeName string
+				if err == nil {
+					shipTypeName = shipType.GetString("name")
+				} else {
+					shipTypeName = "unknown"
+				}
+
+				shipData[j] = map[string]interface{}{
+					"id":             ship.Id,
+					"ship_type":      ship.GetString("ship_type"),
+					"ship_type_name": shipTypeName,
+					"count":          ship.GetInt("count"),
+					"health":         ship.GetFloat("health"),
+				}
+			}
+
+			fleetsData[i] = map[string]interface{}{
+				"id":                 fleet.Id,
+				"owner_id":           fleet.GetString("owner_id"),
+				"name":               fleet.GetString("name"),
+				"current_system":     fleet.GetString("current_system"),
+				"destination_system": fleet.GetString("destination_system"),
+				"eta":                fleet.GetDateTime("eta").String(),
+				"ships":              shipData,
 			}
 		}
 
@@ -917,6 +944,7 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		data := struct {
 			PlanetID string `json:"planet_id"`
+			FleetID  string `json:"fleet_id"`
 		}{}
 
 		if err := c.Bind(&data); err != nil {
@@ -939,29 +967,52 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError("Planet is already colonized", nil)
 		}
 
-		// Check if this is the user's first colony (starter colony is free)
-		existingColonies, err := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("colonized_by = '%s'", user.Id), "", 0, 0)
+		// Get the fleet
+		fleet, err := app.Dao().FindRecordById("fleets", data.FleetID)
 		if err != nil {
-			return apis.NewBadRequestError("Failed to check existing colonies", err)
+			return apis.NewBadRequestError("Fleet not found", err)
 		}
 
-		isFirstColony := len(existingColonies) == 0
+		// Verify fleet ownership
+		if fleet.GetString("owner_id") != user.Id {
+			return apis.NewUnauthorizedError("You don't own this fleet", nil)
+		}
 
-		if !isFirstColony {
-			// Check colonization cost for subsequent colonies
-			colonizationCost := 500 // Base cost to establish a colony
-			hasCredits, err := credits.HasSufficientCredits(app, user.Id, colonizationCost)
-			if err != nil {
-				return apis.NewBadRequestError("Failed to check credits", err)
-			}
-			if !hasCredits {
-				userCredits, _ := credits.GetUserCredits(app, user.Id)
-				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Colonization costs %d, you have %d", colonizationCost, userCredits), nil)
-			}
+		// Get the system the planet is in
+		system, err := app.Dao().FindRecordById("systems", planet.GetString("system_id"))
+		if err != nil {
+			return apis.NewBadRequestError("System not found", err)
+		}
 
-			// Deduct credits from user
-			if err := credits.DeductUserCredits(app, user.Id, colonizationCost); err != nil {
-				return apis.NewBadRequestError("Failed to deduct credits", err)
+		// Check if fleet is at the same system as the planet
+		if fleet.GetString("current_system") != system.Id {
+			return apis.NewBadRequestError("Fleet must be at the same system as the planet", nil)
+		}
+
+		// Find settler ship in the fleet
+		settlerShipType, err := app.Dao().FindFirstRecordByFilter("ship_types", "name='settler'")
+		if err != nil {
+			return apis.NewBadRequestError("Settler ship type not found", err)
+		}
+
+		settlerShip, err := app.Dao().FindFirstRecordByFilter("ships", 
+			fmt.Sprintf("fleet_id='%s' && ship_type='%s' && count > 0", fleet.Id, settlerShipType.Id))
+		if err != nil {
+			return apis.NewBadRequestError("No settler ships found in this fleet", nil)
+		}
+
+		// Consume one settler ship
+		currentCount := settlerShip.GetInt("count")
+		if currentCount <= 1 {
+			// Delete the ship record if it's the last one
+			if err := app.Dao().DeleteRecord(settlerShip); err != nil {
+				return apis.NewBadRequestError("Failed to consume settler ship", err)
+			}
+		} else {
+			// Decrease count by 1
+			settlerShip.Set("count", currentCount-1)
+			if err := app.Dao().SaveRecord(settlerShip); err != nil {
+				return apis.NewBadRequestError("Failed to consume settler ship", err)
 			}
 		}
 
@@ -987,8 +1038,29 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":   true,
 			"planet_id": planet.Id,
-			"message":   "Planet colonized successfully",
+			"fleet_id":  fleet.Id,
+			"message":   "Planet colonized successfully using settler ship",
 		})
+	}
+}
+
+func colonizeWithShip(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		data := struct {
+			PlanetID string `json:"planet_id"`
+			FleetID  string `json:"fleet_id"`
+		}{}
+
+		if err := c.Bind(&data); err != nil {
+			return apis.NewBadRequestError("Invalid request data", err)
+		}
+
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		return c.JSON(http.StatusOK, map[string]string{"message": "Feature not implemented"})
 	}
 }
 

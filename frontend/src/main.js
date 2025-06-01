@@ -70,8 +70,15 @@ class XanNationApp {
         this.mapRenderer.setLanes(state.mapData.lanes);
       }
 
-      // If this is the first load, fit to systems
-      if (state.systems.length > 0 && !this.mapRenderer.hasInitialFit) {
+      // Center on player's starting fleet system if specified
+      if (state.centerOnFleetSystem && !this.mapRenderer.hasCenteredOnFleet) {
+        this.mapRenderer.centerOnSystem(state.centerOnFleetSystem);
+        this.mapRenderer.hasCenteredOnFleet = true;
+        // Also zoom in a bit for better starting view
+        this.mapRenderer.zoom = 0.8;
+      }
+      // If this is the first load and no fleet to center on, fit to systems
+      else if (state.systems.length > 0 && !this.mapRenderer.hasInitialFit) {
         this.mapRenderer.fitToSystems();
         this.mapRenderer.hasInitialFit = true;
       }

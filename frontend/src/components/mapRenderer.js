@@ -559,34 +559,64 @@ drawSystems() {
 
   drawFleets(deltaTime) {
     this.fleets.forEach(fleet => {
-      // Calculate fleet position based on progress
-      const fromSystem = this.systems.find(s => s.id === fleet.from_id);
-      const toSystem = this.systems.find(s => s.id === fleet.to_id);
+      let worldX, worldY;
       
-      if (!fromSystem || !toSystem) return;
+      // Check if fleet is stationary (at current_system) or moving (to destination_system)
+      if (fleet.destination_system && fleet.destination_system !== fleet.current_system) {
+        // Fleet is moving between systems
+        const fromSystem = this.systems.find(s => s.id === fleet.current_system);
+        const toSystem = this.systems.find(s => s.id === fleet.destination_system);
+        
+        if (!fromSystem || !toSystem) return;
 
-      // TODO: Calculate actual progress based on ETA
-      const progress = 0.5; // Placeholder
-      const worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
-      const worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
+        // Calculate progress based on ETA
+        let progress = 0.5; // Default fallback
+        if (fleet.eta) {
+          const now = new Date();
+          const eta = new Date(fleet.eta);
+          const departureTime = new Date(eta.getTime() - (10 * 60 * 1000)); // Assume 10 minute journey
+          const totalTime = eta.getTime() - departureTime.getTime();
+          const elapsed = now.getTime() - departureTime.getTime();
+          progress = Math.max(0, Math.min(1, elapsed / totalTime));
+        }
+        
+        worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
+        worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
+      } else {
+        // Fleet is stationary at current system
+        const currentSystem = this.systems.find(s => s.id === fleet.current_system);
+        if (!currentSystem) return;
+        
+        // Offset fleet position slightly from system center to make it visible
+        worldX = currentSystem.x + 15;
+        worldY = currentSystem.y + 15;
+      }
       
       const screenPos = this.worldToScreen(worldX, worldY);
 
-      // Draw fleet
+      // Draw fleet icon (triangle for directional indication)
       this.ctx.fillStyle = this.colors.fleet;
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 1;
+      
+      const size = 6 * this.zoom;
       this.ctx.beginPath();
-      this.ctx.arc(screenPos.x, screenPos.y, 4 * this.zoom, 0, Math.PI * 2);
+      this.ctx.moveTo(screenPos.x, screenPos.y - size);
+      this.ctx.lineTo(screenPos.x - size, screenPos.y + size);
+      this.ctx.lineTo(screenPos.x + size, screenPos.y + size);
+      this.ctx.closePath();
       this.ctx.fill();
+      this.ctx.stroke();
 
-      // Draw strength indicator
-      if (this.zoom > 0.7) {
+      // Draw fleet name/identifier
+      if (this.zoom > 0.5) {
         this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = `${Math.floor(8 * this.zoom)}px monospace`;
+        this.ctx.font = `${Math.floor(10 * this.zoom)}px monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(
-          fleet.strength.toString(),
+          fleet.name || 'Fleet',
           screenPos.x,
-          screenPos.y - 8 * this.zoom
+          screenPos.y - 12 * this.zoom
         );
       }
     });

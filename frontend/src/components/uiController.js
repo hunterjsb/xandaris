@@ -328,23 +328,25 @@ export class UIController {
       listItem.className = "mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md transition-all duration-200 border border-transparent hover:border-space-500";
 
       let colonizeButtonHtml = '';
-      const COLONIZATION_COST = 500; // Define cost, ideally from gameState or config
+      
+      // Check if player has any fleets with settler ships at this system
+      const availableSettlerFleets = this.getAvailableSettlerFleets(planet.system_id);
       const canPlayerColonize = !planet.colonized_by &&
                                 this.currentUser &&
-                                this.gameState?.playerResources?.credits >= COLONIZATION_COST;
+                                availableSettlerFleets.length > 0;
 
       if (canPlayerColonize) {
         colonizeButtonHtml = `
           <button class="btn btn-success btn-sm py-1 px-2 text-xs mt-2"
                   onclick="event.stopPropagation(); console.log('Colonize button clicked for planet: ${planet.id}'); window.uiController.colonizePlanetWrapper('${planet.id}');">
-            Colonize (${COLONIZATION_COST} Cr)
+            Colonize (Settler Ship)
           </button>
         `;
       } else if (!planet.colonized_by) {
-        // Optional: Show a disabled/info button if uncolonized but player can't colonize
+        // Show disabled button if no settler ships available
         colonizeButtonHtml = `
           <button class="btn btn-disabled btn-sm py-1 px-2 text-xs mt-2" disabled>
-            Colonize (${COLONIZATION_COST} Cr)
+            Colonize (Need Settler Ship)
           </button>
         `;
       }
@@ -615,17 +617,20 @@ export class UIController {
     actionsContainer.innerHTML = ''; // Clear previous buttons
 
     if (canColonize) {
-      const colonizeButton = document.createElement("button");
-      colonizeButton.className = "w-full btn btn-success py-3 flex items-center justify-center gap-2";
-      colonizeButton.innerHTML = `<span>🚀</span> Colonize Planet (500 Credits)`;
-      colonizeButton.onclick = () => window.uiController.colonizePlanetWrapper(planet.id);
-      actionsContainer.appendChild(colonizeButton);
-    } else if (!isColonized && this.currentUser && this.gameState && this.gameState.playerResources && this.gameState.playerResources.credits < 500) {
-      const insufficientCreditsButton = document.createElement("button");
-      insufficientCreditsButton.className = "w-full btn btn-disabled py-3 flex items-center justify-center gap-2";
-      insufficientCreditsButton.disabled = true;
-      insufficientCreditsButton.textContent = "Insufficient Credits (Need 500)";
-      actionsContainer.appendChild(insufficientCreditsButton);
+      const availableSettlerFleets = this.getAvailableSettlerFleets(planet.system_id);
+      if (availableSettlerFleets.length > 0) {
+        const colonizeButton = document.createElement("button");
+        colonizeButton.className = "w-full btn btn-success py-3 flex items-center justify-center gap-2";
+        colonizeButton.innerHTML = `<span>🚀</span> Colonize Planet (Settler Ship)`;
+        colonizeButton.onclick = () => window.uiController.colonizePlanetWrapper(planet.id);
+        actionsContainer.appendChild(colonizeButton);
+      }
+    } else if (!isColonized && this.currentUser && this.gameState) {
+      const noSettlerButton = document.createElement("button");
+      noSettlerButton.className = "w-full btn btn-disabled py-3 flex items-center justify-center gap-2";
+      noSettlerButton.innerHTML = `<span>🚀</span> Colonize Planet (Need Settler Ship)`;
+      noSettlerButton.disabled = true;
+      actionsContainer.appendChild(noSettlerButton);
     }
 
     if (isOwnedByPlayer) {
@@ -722,6 +727,32 @@ export class UIController {
       <button class="w-full mt-4 btn btn-secondary" onclick="window.uiController.hideModal()">Cancel</button>
     `
     );
+  }
+
+  // Helper method to get fleets with settler ships at a specific system
+  getAvailableSettlerFleets(systemId) {
+    if (!this.gameState || !this.gameState.fleets) {
+      return [];
+    }
+
+    return this.gameState.fleets.filter(fleet => {
+      // Fleet must be at the target system
+      if (fleet.current_system !== systemId) {
+        return false;
+      }
+
+      // Fleet must be owned by the current user
+      if (fleet.owner_id !== this.currentUser?.id) {
+        return false;
+      }
+
+      // Check if fleet has settler ships
+      // Note: This is a simplified check. In practice, you might need to
+      // fetch ship details or have ship data included in fleet data
+      return fleet.ships && fleet.ships.some(ship => 
+        ship.ship_type_name === 'settler' && ship.count > 0
+      );
+    });
   }
 
   // Wrapper for colonizePlanet to fit new UI structure if needed
@@ -1347,6 +1378,18 @@ export class UIController {
         return;
       }
 
+      // Get the planet to find its system
+      const planet = await pb.collection("planets").getOne(planetId);
+      const availableSettlerFleets = this.getAvailableSettlerFleets(planet.system_id);
+      
+      if (availableSettlerFleets.length === 0) {
+        this.showError("No settler ships available at this system");
+        return;
+      }
+
+      // Use the first available fleet with settler ships
+      const fleetToUse = availableSettlerFleets[0];
+
       const response = await fetch(`${pb.baseUrl}/api/orders/colonize`, {
         method: "POST",
         headers: {
@@ -1355,6 +1398,7 @@ export class UIController {
         },
         body: JSON.stringify({
           planet_id: planetId,
+          fleet_id: fleetToUse.id,
         }),
       });
 
@@ -1363,7 +1407,7 @@ export class UIController {
       if (response.ok && result.success) {
         this.hideModal();
         this.showSuccessMessage(
-          "Planet colonized successfully! Your new colony has been established.",
+          "Planet colonized successfully! Your settler ship has established a new colony.",
         );
 
         // Refresh game state to show the new colony

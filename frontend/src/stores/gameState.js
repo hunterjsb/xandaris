@@ -122,6 +122,16 @@ export class GameState {
       }
 
       this.updatePlayerResources();
+      
+      // Center camera on player's first fleet if this is their first time
+      if (userId && this.fleets && this.fleets.length > 0 && this.systems && this.systems.length > 0) {
+        const firstFleet = this.fleets[0];
+        if (firstFleet && firstFleet.current_system) {
+          // Notify callbacks to trigger camera centering
+          this.centerOnFleetSystem = firstFleet.current_system;
+        }
+      }
+      
       this.notifyCallbacks();
     } catch (error) {
       console.error("Failed to load game data:", error);

@@ -515,6 +515,7 @@ func seedShipTypes(app *pocketbase.PocketBase) error {
 	}
 
 	shipTypes := []map[string]interface{}{
+		{"name": "settler", "cost": 100, "strength": 1, "cargo_capacity": 50},
 		{"name": "scout", "cost": 50, "strength": 1, "cargo_capacity": 10},
 		{"name": "fighter", "cost": 100, "strength": 5, "cargo_capacity": 5},
 		{"name": "frigate", "cost": 200, "strength": 15, "cargo_capacity": 20},
