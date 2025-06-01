@@ -7,6 +7,9 @@ export class MapRenderer {
     this.lanes = [];
     this.fleets = [];
     this.selectedSystem = null;
+    this.hoveredSystem = null;
+    this.hoveredTradeRoutes = [];
+    this.trades = [];
     
     // View settings
     this.viewX = 0;
@@ -82,10 +85,18 @@ export class MapRenderer {
         lastMouseX = e.offsetX;
         lastMouseY = e.offsetY;
       } else {
-        // Show tooltip for systems
         const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
-        const hoveredSystem = this.getSystemAt(worldPos.x, worldPos.y);
-        this.showTooltip(hoveredSystem, e.offsetX, e.offsetY);
+        // Update this.hoveredSystem. This will be used by drawSystems in the next render frame.
+        this.hoveredSystem = this.getSystemAt(worldPos.x, worldPos.y);
+        // Tooltip should still be shown based on the now updated this.hoveredSystem
+        this.showTooltip(this.hoveredSystem, e.offsetX, e.offsetY);
+        if (this.hoveredSystem && this.trades && this.trades.length > 0) {
+          this.hoveredTradeRoutes = this.trades.filter(trade =>
+            trade.from_id === this.hoveredSystem.id || trade.to_id === this.hoveredSystem.id
+          );
+        } else {
+          this.hoveredTradeRoutes = [];
+        }
       }
     });
 
@@ -269,151 +280,194 @@ export class MapRenderer {
     this.ctx.globalAlpha = 1;
   }
 
-  drawLanes() {
-    this.ctx.strokeStyle = this.colors.lane;
-    this.ctx.lineWidth = 2;
-    this.ctx.globalAlpha = 0.6;
+drawLanes() {
+          if (!this.trades || this.trades.length === 0) {
+            // If there are no trades, or trades data isn't loaded, try to draw old lanes if they exist
+            // This is a fallback for existing functionality if setTrades isn't called yet.
+            // Ideally, this.lanes would be deprecated if this.trades is reliably populated.
+            if (this.lanes && this.lanes.length > 0) {
+                this.ctx.strokeStyle = this.colors.lane;
+                this.ctx.lineWidth = 2;
+                this.ctx.globalAlpha = 0.6;
 
-    this.lanes.forEach(lane => {
-      const fromPos = this.worldToScreen(lane.fromX, lane.fromY);
-      const toPos = this.worldToScreen(lane.toX, lane.toY);
+                this.lanes.forEach(lane => {
+                    const fromPos = this.worldToScreen(lane.fromX, lane.fromY);
+                    const toPos = this.worldToScreen(lane.toX, lane.toY);
 
-      this.ctx.beginPath();
-      this.ctx.moveTo(fromPos.x, fromPos.y);
-      this.ctx.lineTo(toPos.x, toPos.y);
-      this.ctx.stroke();
-    });
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(fromPos.x, fromPos.y);
+                    this.ctx.lineTo(toPos.x, toPos.y);
+                    this.ctx.stroke();
+                });
+                this.ctx.globalAlpha = 1;
+            }
+            return;
+          }
 
-    this.ctx.globalAlpha = 1;
-  }
+          this.ctx.globalAlpha = 0.7; // Default alpha for lanes
 
-  drawSystems() {
-    this.systems.forEach(system => {
-      const screenPos = this.worldToScreen(system.x, system.y);
-      
-      // Skip if outside visible area
-      if (screenPos.x < -50 || screenPos.x > this.canvas.width + 50 ||
-          screenPos.y < -50 || screenPos.y > this.canvas.height + 50) {
-        return;
-      }
+          this.trades.forEach(trade => {
+            const fromSystem = this.systems.find(s => s.id === trade.from_id);
+            const toSystem = this.systems.find(s => s.id === trade.to_id);
 
-      // Determine system color based on ownership
-      let color = this.colors.star;
-      if (system.owner_id) {
-        // TODO: Check if owner is current player or ally/enemy
-        color = this.colors.starOwned; // For now, assume owned = friendly
-      }
+            if (!fromSystem || !toSystem) {
+              return; // Skip if systems not found
+            }
 
-      const radius = 6 * this.zoom;
-      const glowRadius = 20 * this.zoom;
+            const fromPos = this.worldToScreen(fromSystem.x, fromSystem.y);
+            const toPos = this.worldToScreen(toSystem.x, toSystem.y);
 
-      // Draw star glow effect
-      const gradient = this.ctx.createRadialGradient(
-        screenPos.x, screenPos.y, 0,
-        screenPos.x, screenPos.y, glowRadius
-      );
-      gradient.addColorStop(0, color + '40'); // 25% opacity
-      gradient.addColorStop(0.3, color + '20'); // 12% opacity  
-      gradient.addColorStop(1, color + '00'); // 0% opacity
-      
-      this.ctx.fillStyle = gradient;
-      this.ctx.beginPath();
-      this.ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
-      this.ctx.fill();
+            const isHovered = this.hoveredTradeRoutes.some(htr => htr.id === trade.id);
 
-      // Draw main star body with inner glow
-      const innerGradient = this.ctx.createRadialGradient(
-        screenPos.x, screenPos.y, 0,
-        screenPos.x, screenPos.y, radius
-      );
-      innerGradient.addColorStop(0, '#ffffff');
-      innerGradient.addColorStop(0.7, color);
-      innerGradient.addColorStop(1, color + 'cc'); // 80% opacity
-      
-      this.ctx.fillStyle = innerGradient;
-      this.ctx.beginPath();
-      this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-      this.ctx.fill();
+            if (isHovered) {
+              this.ctx.strokeStyle = this.colors.laneActive; // Use a more prominent color
+              this.ctx.lineWidth = 4; // Thicker line for hovered routes
+              this.ctx.globalAlpha = 1; // More opaque
+            } else {
+              this.ctx.strokeStyle = this.colors.lane;
+              this.ctx.lineWidth = 2;
+              this.ctx.globalAlpha = 0.6; // Default alpha
+            }
 
-      // Add sparkle effect for owned systems
-      if (system.owner_id && this.zoom > 0.6) {
-        this.ctx.strokeStyle = this.colors.starOwned;
-        this.ctx.lineWidth = 1;
-        this.ctx.globalAlpha = 0.8;
-        
-        // Draw cross sparkles
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos.x - radius * 1.5, screenPos.y);
-        this.ctx.lineTo(screenPos.x + radius * 1.5, screenPos.y);
-        this.ctx.moveTo(screenPos.x, screenPos.y - radius * 1.5);
-        this.ctx.lineTo(screenPos.x, screenPos.y + radius * 1.5);
-        this.ctx.stroke();
-        
-        this.ctx.globalAlpha = 1;
-      }
+            this.ctx.beginPath();
+            this.ctx.moveTo(fromPos.x, fromPos.y);
+            this.ctx.lineTo(toPos.x, toPos.y);
+            this.ctx.stroke();
+          });
 
-      // Draw selection ring with pulsing effect
-      if (this.selectedSystem && this.selectedSystem.id === system.id) {
-        const time = Date.now() * 0.005;
-        const pulseRadius = (12 + Math.sin(time) * 2) * this.zoom;
-        
-        this.ctx.strokeStyle = this.colors.selection;
-        this.ctx.lineWidth = 2;
-        this.ctx.globalAlpha = 0.8 + Math.sin(time) * 0.2;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, pulseRadius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-      }
+          this.ctx.globalAlpha = 1; // Reset globalAlpha
+        }
 
-      // Draw system name with glow
-      if (this.zoom > 0.8) {
-        const fontSize = Math.floor(11 * this.zoom);
-        this.ctx.font = `${fontSize}px monospace`;
-        this.ctx.textAlign = 'center';
-        
-        // Text shadow/glow
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        this.ctx.fillText(
-          system.name || `S${system.id.slice(-3)}`,
-          screenPos.x + 1,
-          screenPos.y - 15 * this.zoom + 1
-        );
-        
-        // Main text
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        this.ctx.fillText(
-          system.name || `S${system.id.slice(-3)}`,
-          screenPos.x,
-          screenPos.y - 15 * this.zoom
-        );
-      }
+drawSystems() {
+          this.systems.forEach(system => {
+            const screenPos = this.worldToScreen(system.x, system.y);
 
-      // Draw population indicator with plasma styling
-      if (system.pop > 0 && this.zoom > 0.5) {
-        const popFontSize = Math.floor(9 * this.zoom);
-        this.ctx.font = `${popFontSize}px monospace`;
-        this.ctx.textAlign = 'center';
-        
-        // Population background
-        this.ctx.fillStyle = 'rgba(241, 169, 255, 0.2)';
-        this.ctx.fillRect(
-          screenPos.x - 8 * this.zoom,
-          screenPos.y + 12 * this.zoom,
-          16 * this.zoom,
-          12 * this.zoom
-        );
-        
-        // Population text
-        this.ctx.fillStyle = '#f1a9ff';
-        this.ctx.fillText(
-          system.pop.toString(),
-          screenPos.x,
-          screenPos.y + 21 * this.zoom
-        );
-      }
-    });
-  }
+            if (screenPos.x < -50 || screenPos.x > this.canvas.width + 50 ||
+                screenPos.y < -50 || screenPos.y > this.canvas.height + 50) {
+              return;
+            }
+
+            let scaleFactor = 1;
+            if (this.hoveredSystem && this.hoveredSystem.id === system.id) {
+              scaleFactor = 1.2;
+            }
+
+            let color = this.colors.star;
+            if (system.owner_id) {
+              color = this.colors.starOwned;
+            }
+
+            const baseSystemDrawRadius = 6 * this.zoom;
+            const systemDrawRadius = baseSystemDrawRadius * scaleFactor;
+            const glowDrawRadius = (20 * this.zoom) * scaleFactor;
+
+            const gradient = this.ctx.createRadialGradient(
+              screenPos.x, screenPos.y, 0,
+              screenPos.x, screenPos.y, glowDrawRadius
+            );
+            gradient.addColorStop(0, color + '40');
+            gradient.addColorStop(0.3, color + '20');
+            gradient.addColorStop(1, color + '00');
+
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, glowDrawRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            const innerGradient = this.ctx.createRadialGradient(
+              screenPos.x, screenPos.y, 0,
+              screenPos.x, screenPos.y, systemDrawRadius
+            );
+            innerGradient.addColorStop(0, '#ffffff');
+            innerGradient.addColorStop(0.7, color);
+            innerGradient.addColorStop(1, color + 'cc');
+
+            this.ctx.fillStyle = innerGradient;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, systemDrawRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            if (system.owner_id && this.zoom > 0.6) {
+              this.ctx.strokeStyle = this.colors.starOwned;
+              this.ctx.lineWidth = 1;
+              this.ctx.globalAlpha = 0.8;
+
+              this.ctx.beginPath();
+              this.ctx.moveTo(screenPos.x - baseSystemDrawRadius * 1.5, screenPos.y);
+              this.ctx.lineTo(screenPos.x + baseSystemDrawRadius * 1.5, screenPos.y);
+              this.ctx.moveTo(screenPos.x, screenPos.y - baseSystemDrawRadius * 1.5);
+              this.ctx.lineTo(screenPos.x, screenPos.y + baseSystemDrawRadius * 1.5);
+              this.ctx.stroke();
+
+              this.ctx.globalAlpha = 1;
+            }
+
+            if (this.selectedSystem && this.selectedSystem.id === system.id) {
+              const time = Date.now() * 0.005;
+              const pulseRadius = (12 + Math.sin(time) * 2) * this.zoom * scaleFactor;
+
+              this.ctx.strokeStyle = this.colors.selection;
+              this.ctx.lineWidth = 2;
+              this.ctx.globalAlpha = 0.8 + Math.sin(time) * 0.2;
+              this.ctx.beginPath();
+              this.ctx.arc(screenPos.x, screenPos.y, pulseRadius, 0, Math.PI * 2);
+              this.ctx.stroke();
+              this.ctx.globalAlpha = 1;
+            }
+
+            if (this.zoom > 0.8) {
+              const fontSize = Math.floor(11 * this.zoom);
+              this.ctx.font = `${fontSize}px monospace`;
+              this.ctx.textAlign = 'center';
+
+              const textYOffset = systemDrawRadius + (5 * this.zoom);
+
+              this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+              this.ctx.fillText(
+                system.name || `S${system.id.slice(-3)}`,
+                screenPos.x + 1,
+                screenPos.y - textYOffset + 1
+              );
+
+              this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+              this.ctx.fillText(
+                system.name || `S${system.id.slice(-3)}`,
+                screenPos.x,
+                screenPos.y - textYOffset
+              );
+            }
+
+            if (system.pop > 0 && this.zoom > 0.5) {
+              const popFontSize = Math.floor(9 * this.zoom);
+              this.ctx.font = `${popFontSize}px monospace`;
+              this.ctx.textAlign = 'center';
+
+              const popRectBaseWidth = 16 * this.zoom;
+              const popRectBaseHeight = 12 * this.zoom;
+
+              const popRectWidth = popRectBaseWidth * scaleFactor;
+              const popRectHeight = popRectBaseHeight * scaleFactor;
+
+              const popRectY = screenPos.y + systemDrawRadius + (2 * this.zoom);
+              const popTextY = popRectY + popRectHeight - (3 * this.zoom * scaleFactor);
+
+              this.ctx.fillStyle = 'rgba(241, 169, 255, 0.2)';
+              this.ctx.fillRect(
+                screenPos.x - popRectWidth / 2,
+                popRectY,
+                popRectWidth,
+                popRectHeight
+              );
+
+              this.ctx.fillStyle = '#f1a9ff';
+              this.ctx.fillText(
+                system.pop.toString(),
+                screenPos.x,
+                popTextY
+              );
+            }
+          });
+        }
 
   drawFleets(deltaTime) {
     this.fleets.forEach(fleet => {
@@ -470,6 +524,10 @@ export class MapRenderer {
   setSystems(systems) {
     console.log('MapRenderer: Setting systems', systems.length, 'systems');
     this.systems = systems;
+  }
+
+  setTrades(trades) {
+    this.trades = trades || []; // Ensure trades is an array
   }
 
   setLanes(lanes) {
