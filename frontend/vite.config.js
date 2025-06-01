@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Load environment variables (e.g., VITE_POCKETBASE_URL) from project root
+  envDir: '../',
   plugins: [
     {
       name: 'configure-server',
