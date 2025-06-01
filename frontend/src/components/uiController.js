@@ -229,24 +229,22 @@ export class UIController {
           </div>
         </div>
       `;
-      systemViewDiv = container.querySelector(`[data-system-id="${system.id}"]`);
-    }
 
     // Update dynamic content
-    systemViewDiv.querySelector("#system-name").textContent = system.name || `System ${system.id.slice(-4)}`;
-    systemViewDiv.querySelector("#system-coords").textContent = `📍 (${system.x}, ${system.y})`;
-    systemViewDiv.querySelector("#system-richness").textContent = `⭐ Richness: ${system.richness || 'Unknown'}`;
+    container.querySelector("#system-name").textContent = system.name || `System ${system.id.slice(-4)}`;
+    container.querySelector("#system-coords").textContent = `📍 (${system.x}, ${system.y})`;
+    container.querySelector("#system-richness").textContent = `⭐ Richness: ${system.richness || 'Unknown'}`;
 
-    systemViewDiv.querySelector("#system-owner").textContent = system.owner_name || "Uncontrolled";
-    systemViewDiv.querySelector("#system-planets-count").textContent = planets?.length || 0;
-    systemViewDiv.querySelector("#system-colonized-count").textContent = colonizedCount;
-    const playerColoniesSpan = systemViewDiv.querySelector("#system-player-colonies");
+    container.querySelector("#system-owner").textContent = system.owner_name || "Uncontrolled";
+    container.querySelector("#system-planets-count").textContent = planets?.length || 0;
+    container.querySelector("#system-colonized-count").textContent = colonizedCount;
+    const playerColoniesSpan = container.querySelector("#system-player-colonies");
     playerColoniesSpan.textContent = ownedByPlayer;
     playerColoniesSpan.className = `font-semibold ${ownedByPlayer > 0 ? 'text-green-400' : 'text-space-200'}`;
 
-    const totalPopulationContainer = systemViewDiv.querySelector("#system-total-population-container");
+    const totalPopulationContainer = container.querySelector("#system-total-population-container");
     if (totalPopulation > 0) {
-      systemViewDiv.querySelector("#system-total-population").textContent = totalPopulation.toLocaleString();
+      container.querySelector("#system-total-population").textContent = totalPopulation.toLocaleString();
       totalPopulationContainer.style.display = "block";
     } else {
       totalPopulationContainer.style.display = "none";
@@ -581,41 +579,39 @@ export class UIController {
           </div>
         </div>
       `;
-      planetViewDiv = container.querySelector(`[data-planet-id="${planet.id}"]`);
-    }
 
     // Update header info
-    planetViewDiv.querySelector("#planet-icon").textContent = planetIcon;
-    planetViewDiv.querySelector("#planet-name").textContent = planetName;
-    planetViewDiv.querySelector("#planet-type-size").textContent =
+    container.querySelector("#planet-icon").textContent = planetIcon;
+    container.querySelector("#planet-name").textContent = planetName;
+    container.querySelector("#planet-type-size").textContent =
       `${planet.planet_type || planet.type || 'Unknown Type'} • Size ${planet.size || 'N/A'}`;
 
     // Update system and status
-    planetViewDiv.querySelector("#planet-system-name").textContent = systemName;
-    const statusSpan = planetViewDiv.querySelector("#planet-status");
+    container.querySelector("#planet-system-name").textContent = systemName;
+    const statusSpan = container.querySelector("#planet-status");
     statusSpan.textContent = isOwnedByPlayer ? 'Your Colony' : planet.colonized_by_name || (isColonized ? 'Occupied' : 'Uncolonized');
     statusSpan.className = `font-semibold ${isOwnedByPlayer ? 'text-green-400' : isColonized ? 'text-red-400' : 'text-gray-400'}`;
 
     // Update resources and buildings
-    const resourcesContainer = planetViewDiv.querySelector("#planet-resources-container");
-    const buildingsContainer = planetViewDiv.querySelector("#planet-buildings-container");
+    const resourcesContainer = container.querySelector("#planet-resources-container");
+    const buildingsContainer = container.querySelector("#planet-buildings-container");
 
     if (isOwnedByPlayer || planet.Credits !== undefined) {
-      planetViewDiv.querySelector("#planet-resources-html").innerHTML = resourcesHtml;
+      container.querySelector("#planet-resources-html").innerHTML = resourcesHtml;
       resourcesContainer.style.display = "block";
     } else {
       resourcesContainer.style.display = "none";
     }
 
     if (isOwnedByPlayer) {
-      planetViewDiv.querySelector("#planet-buildings-html").innerHTML = buildingsHtml;
+      container.querySelector("#planet-buildings-html").innerHTML = buildingsHtml;
       buildingsContainer.style.display = "block";
     } else {
       buildingsContainer.style.display = "none";
     }
 
     // Update action buttons
-    const actionsContainer = planetViewDiv.querySelector("#planet-actions-container");
+    const actionsContainer = container.querySelector("#planet-actions-container");
     actionsContainer.innerHTML = ''; // Clear previous buttons
 
     if (canColonize) {
