@@ -63,23 +63,29 @@ func seedNewSchema(app *pocketbase.PocketBase) error {
 		return fmt.Errorf("failed to seed resource nodes: %w", err)
 	}
 
-	// 8. Create sample user and colonize some planets
+	// 8. Create sample user and colonize some planets (optional)
 	if err := seedSampleUserAndColonies(app); err != nil {
 		return fmt.Errorf("failed to seed sample user and colonies: %w", err)
 	}
+
+	fmt.Println("✅ Universe generation complete:")
+	fmt.Printf("  - Resource types, planet types, building types, ship types created\n")
+	fmt.Printf("  - Galaxy map generated with systems and planets\n")
+	fmt.Printf("  - Resource nodes distributed across planets\n")
 
 	return nil
 }
 
 func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 	// Get all existing users
-	allUsers, err := app.Dao().FindRecordsByExpr("users", nil, nil)
+	allUsers, err := app.Dao().FindRecordsByExpr("_pb_users_auth_", nil, nil)
 	if err != nil {
 		return err
 	}
 
 	if len(allUsers) == 0 {
-		fmt.Println("No users found in the database. Please create a user first.")
+		fmt.Println("No users found in the database. Skipping colony creation.")
+		fmt.Println("✅ Universe seeded successfully without user colonies")
 		return nil
 	}
 
@@ -108,8 +114,11 @@ func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 
 	// Give each user some colonies
 	for _, user := range allUsers {
-		username := user.GetString("username")
-		email := user.GetString("email")
+		userID := user.Id
+		userEmail := user.GetString("email")
+		if userEmail == "" {
+			userEmail = "no-email"
+		}
 
 		// Check how many planets this user already has colonized
 		existingColonies, err := app.Dao().FindRecordsByFilter("planets", "colonized_by = '"+user.Id+"'", "", 0, 0)
@@ -118,7 +127,7 @@ func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 		}
 
 		if len(existingColonies) >= coloniesPerUser {
-			fmt.Printf("  %s (%s) already has %d colonies\n", username, email, len(existingColonies))
+			fmt.Printf("  %s (%s) already has %d colonies\n", userID, userEmail, len(existingColonies))
 			continue
 		}
 
@@ -153,7 +162,7 @@ func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 		}
 
 		totalColonies := len(existingColonies) + colonized
-		fmt.Printf("  %s (%s) now has %d colonies\n", username, email, totalColonies)
+		fmt.Printf("  %s (%s) now has %d colonies\n", userID, userEmail, totalColonies)
 	}
 	return nil
 }
@@ -225,19 +234,22 @@ func seedResourceTypes(app *pocketbase.PocketBase) error {
 	}
 
 	resources := []map[string]interface{}{
-		{"name": "food", "description": "Essential for population growth and happiness", "is_consumable": true},
-		{"name": "ore", "description": "Raw materials for construction and manufacturing", "is_consumable": false},
-		{"name": "goods", "description": "Manufactured products for trade and population", "is_consumable": true},
-		{"name": "fuel", "description": "Energy source for ships and industry", "is_consumable": true},
-		{"name": "water", "description": "Life-sustaining resource", "is_consumable": true},
-		{"name": "rare_metals", "description": "Advanced materials for high-tech construction", "is_consumable": false},
+		{"name": "food", "description": "Sustains population growth and survival", "produced_in": "farm"},
+		{"name": "ore", "description": "Basic raw material used in metal production and construction.", "produced_in": "mine"},
+		{"name": "fuel", "description": "Energy source for ships and industry", "produced_in": "refinery"},
+		{"name": "titanium", "description": "High-grade material for advanced construction and ships", "produced_in": "deep_mine"},
+		{"name": "metal", "description": "Building material for ships and construction", "produced_in": "refinery"},
+		{"name": "oil", "description": "Essential for fuel production and ship manufacturing", "produced_in": "oil_rig"},
+		{"name": "xanium", "description": "Most lit material", "produced_in": "Shady Alley"},
+		{"name": "credits", "description": "Standard currency used exclusively for player-to-player trading", "produced_in": "crypto_server"},
+		{"name": "all", "description": "placeholder for storage", "produced_in": "none"},
 	}
 
 	for _, resource := range resources {
 		record := models.NewRecord(collection)
 		record.Set("name", resource["name"])
 		record.Set("description", resource["description"])
-		record.Set("is_consumable", resource["is_consumable"])
+		record.Set("produced_in", resource["produced_in"])
 		if err := app.Dao().SaveRecord(record); err != nil {
 			return err
 		}
@@ -253,19 +265,22 @@ func seedPlanetTypes(app *pocketbase.PocketBase) error {
 	}
 
 	planetTypes := []map[string]interface{}{
-		{"name": "terran", "base_max_population": 1000, "habitability": 1.0},
-		{"name": "arid", "base_max_population": 600, "habitability": 0.7},
-		{"name": "ocean", "base_max_population": 800, "habitability": 0.8},
-		{"name": "arctic", "base_max_population": 400, "habitability": 0.5},
-		{"name": "volcanic", "base_max_population": 300, "habitability": 0.4},
-		{"name": "gas_giant", "base_max_population": 0, "habitability": 0.0},
+		{"name": "Highlands", "spawn_prob": 0.038},
+		{"name": "Abundant", "spawn_prob": 0.013},
+		{"name": "Fertile", "spawn_prob": 0.05},
+		{"name": "Mountain", "spawn_prob": 0.05},
+		{"name": "Desert", "spawn_prob": 0.025},
+		{"name": "Volcanic", "spawn_prob": 0.025},
+		{"name": "Swamp", "spawn_prob": 0.038},
+		{"name": "Barren", "spawn_prob": 0.005},
+		{"name": "Radiant", "spawn_prob": 0.005},
+		{"name": "Barred", "spawn_prob": 0.001},
 	}
 
 	for _, planetType := range planetTypes {
 		record := models.NewRecord(collection)
 		record.Set("name", planetType["name"])
-		record.Set("base_max_population", planetType["base_max_population"])
-		record.Set("habitability", planetType["habitability"])
+		record.Set("spawn_prob", planetType["spawn_prob"])
 		if err := app.Dao().SaveRecord(record); err != nil {
 			return err
 		}
@@ -280,21 +295,215 @@ func seedBuildingTypes(app *pocketbase.PocketBase) error {
 		return err
 	}
 
+	// Get resource types for relationships
+	resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	// Create a map for easy lookup
+	resourceMap := make(map[string]string)
+	for _, resource := range resourceTypes {
+		resourceMap[resource.GetString("name")] = resource.Id
+	}
+
 	buildingTypes := []map[string]interface{}{
-		{"name": "farm", "cost": 100, "worker_capacity": 50, "max_level": 10},
-		{"name": "mine", "cost": 150, "worker_capacity": 30, "max_level": 8},
-		{"name": "factory", "cost": 200, "worker_capacity": 40, "max_level": 12},
-		{"name": "power_plant", "cost": 300, "worker_capacity": 20, "max_level": 6},
-		{"name": "spaceport", "cost": 500, "worker_capacity": 100, "max_level": 5},
-		{"name": "research_lab", "cost": 400, "worker_capacity": 25, "max_level": 15},
+		{
+			"name": "farm",
+			"cost": 100,
+			"strength": "weak",
+			"power_consumption": 10,
+			"res1_type": "food",
+			"res1_quantity": 5,
+			"res1_capacity": 100,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "mine",
+			"cost": 100,
+			"strength": "strong",
+			"power_consumption": 20,
+			"res1_type": "ore",
+			"res1_quantity": 12,
+			"res1_capacity": 100,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "metal_refinery",
+			"cost": 200,
+			"strength": "na",
+			"power_consumption": 50,
+			"res1_type": "metal",
+			"res1_quantity": 18,
+			"res1_capacity": 100,
+			"res2_type": "ore",
+			"res2_quantity": -24,
+			"res2_capacity": 100,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "power_plant",
+			"cost": 500,
+			"strength": "na",
+			"power_consumption": -100,
+			"res1_type": "fuel",
+			"res1_quantity": -1,
+			"res1_capacity": 100,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "spaceport",
+			"cost": 1000,
+			"strength": "na",
+			"power_consumption": 100,
+			"res1_quantity": 0,
+			"res1_capacity": 0,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "oil_rig",
+			"cost": 200,
+			"strength": "weak",
+			"power_consumption": 25,
+			"res1_type": "oil",
+			"res1_quantity": 5,
+			"res1_capacity": 100,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "deep_mine",
+			"cost": 500,
+			"strength": "na",
+			"power_consumption": 50,
+			"res1_type": "titanium",
+			"res1_quantity": 5,
+			"res1_capacity": 100,
+			"res2_type": "oil",
+			"res2_quantity": -1,
+			"res2_capacity": 100,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "crypto_server",
+			"cost": 1000,
+			"strength": "na",
+			"power_consumption": 50,
+			"res1_type": "credits",
+			"res1_quantity": 1,
+			"res1_capacity": 10000,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "shady_alley",
+			"cost": 5000,
+			"strength": "weak",
+			"power_consumption": 200,
+			"res1_type": "xanium",
+			"res1_quantity": 1,
+			"res1_capacity": 20,
+			"res2_type": "food",
+			"res2_quantity": -20,
+			"res2_capacity": 200,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "oil_refinery",
+			"cost": 200,
+			"strength": "na",
+			"power_consumption": 50,
+			"res1_type": "fuel",
+			"res1_quantity": 18,
+			"res1_capacity": 100,
+			"res2_type": "oil",
+			"res2_quantity": -24,
+			"res2_capacity": 100,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "base",
+			"cost": 0,
+			"strength": "na",
+			"power_consumption": -100,
+			"res1_type": "all",
+			"res1_quantity": 0,
+			"res1_capacity": 100,
+			"res2_type": "xanium",
+			"res2_quantity": 0,
+			"res2_capacity": 5,
+			"description": "",
+			"node_requirement": "",
+		},
+		{
+			"name": "storage_depo",
+			"cost": 200,
+			"strength": "na",
+			"power_consumption": 0,
+			"res1_type": "all",
+			"res1_quantity": 0,
+			"res1_capacity": 1000,
+			"res2_quantity": 0,
+			"res2_capacity": 0,
+			"description": "",
+			"node_requirement": "",
+		},
 	}
 
 	for _, building := range buildingTypes {
 		record := models.NewRecord(collection)
 		record.Set("name", building["name"])
 		record.Set("cost", building["cost"])
-		record.Set("worker_capacity", building["worker_capacity"])
-		record.Set("max_level", building["max_level"])
+		record.Set("strength", building["strength"])
+		record.Set("power_consumption", building["power_consumption"])
+		
+		if res1Type, ok := building["res1_type"]; ok {
+			if resourceID, exists := resourceMap[res1Type.(string)]; exists {
+				record.Set("res1_type", resourceID)
+			}
+		}
+		if res1Qty, ok := building["res1_quantity"]; ok {
+			record.Set("res1_quantity", res1Qty)
+		}
+		if res1Cap, ok := building["res1_capacity"]; ok {
+			record.Set("res1_capacity", res1Cap)
+		}
+		
+		if res2Type, ok := building["res2_type"]; ok {
+			if resourceID, exists := resourceMap[res2Type.(string)]; exists {
+				record.Set("res2_type", resourceID)
+			}
+		}
+		if res2Qty, ok := building["res2_quantity"]; ok {
+			record.Set("res2_quantity", res2Qty)
+		}
+		if res2Cap, ok := building["res2_capacity"]; ok {
+			record.Set("res2_capacity", res2Cap)
+		}
+		
+		record.Set("description", building["description"])
+		record.Set("node_requirement", building["node_requirement"])
+		
 		if err := app.Dao().SaveRecord(record); err != nil {
 			return err
 		}

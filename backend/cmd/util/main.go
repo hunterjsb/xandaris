@@ -46,7 +46,7 @@ func checkColonies(app *pocketbase.PocketBase) {
 	
 	// Get counts
 	allPlanets, _ := app.Dao().FindRecordsByExpr("planets", nil, nil)
-	users, _ := app.Dao().FindRecordsByExpr("users", nil, nil)
+	users, _ := app.Dao().FindRecordsByExpr("_pb_users_auth_", nil, nil)
 	populations, _ := app.Dao().FindRecordsByExpr("populations", nil, nil)
 	buildings, _ := app.Dao().FindRecordsByExpr("buildings", nil, nil)
 
