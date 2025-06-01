@@ -24,6 +24,10 @@ class XanNationApp {
     // Initialize UI controller
     this.uiController = window.uiController; // Use global uiController
 
+    // Apply initial user settings
+    const initialSettings = this.uiController.loadUserSettings();
+    this.uiController.applySettings(initialSettings);
+
     // Initialize map renderer
     this.mapRenderer = new MapRenderer("game-canvas");
 

@@ -15,6 +15,255 @@
   }
 }
 
+/* Theme Styles */
+/* Light Theme */
+html.light body {
+  background-color: #f0f0f0;
+  color: #333333;
+  /* Override the radial gradient from dark theme */
+  background-image: none;
+}
+html.light .aerogel-panel,
+html.light .void-surface,
+html.light .bg-space-700,
+html.light .bg-space-800,
+html.light .bg-space-900, /* Added for consistency */
+html.light .bg-space-950, /* Added for consistency */
+html.light .bg-gradient-to-r.from-space-700.to-space-800,
+html.light #modal-content, /* Target modal content */
+html.light ::-webkit-scrollbar-track, /* Scrollbar track */
+html.light .custom-scrollbar::-webkit-scrollbar-track /* Custom Scrollbar track */
+{
+  background-color: #ffffff;
+  border-color: #dddddd !important; /* Important to override existing borders */
+  color: #333333;
+}
+html.light .bg-gradient-to-r.from-void-600.to-space-700, /* Settings button example */
+html.light .bg-gradient-to-r.from-green-600.to-teal-700 /* Settings save button example */
+{
+  background-image: linear-gradient(to right, #e0e0e0, #d0d0d0); /* Generic light gradient */
+  color: #333333;
+}
+html.light .text-white { color: #333333 !important; }
+html.light .text-space-100 { color: #444444 !important; }
+html.light .text-space-200 { color: #555555 !important; }
+html.light .text-space-300 { color: #666666 !important; }
+html.light .text-space-400 { color: #777777 !important; }
+html.light .text-gray-400 { color: #888888 !important; } /* Example for modal close */
+html.light .gradient-heading {
+  background: linear-gradient(45deg, #007bff, #17a2b8, #28a745); /* Brighter gradient for light theme */
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+html.light .text-nebula-300 { color: #0056b3 !important; } /* Darker blue */
+html.light .text-sky-300 { color: #117a8b !important; } /* Darker cyan */
+html.light .text-green-300 { color: #1e7e34 !important; } /* Darker green */
+html.light .text-green-400 { color: #218838 !important; }
+html.light .text-amber-300 { color: #d39e00 !important; } /* Darker yellow/amber */
+html.light .text-orange-300 { color: #cc5c00 !important; } /* Darker orange */
+html.light .text-red-400 { color: #c82333 !important; } /* Darker red */
+html.light .text-yellow-300 { color: #ddb400 !important; }
+html.light .text-lime-300 { color: #5cb85c !important; } /* Example for Food resource */
+html.light .text-gray-300 { color: #5a6268 !important; } /* Example for Ore resource */
+html.light .text-purple-300 { color: #543873 !important; } /* Example for Fuel resource */
+html.light input[type="text"],
+html.light input[type="number"],
+html.light select {
+  background-color: #f8f9fa;
+  border: 1px solid #ced4da;
+  color: #495057;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cccccc, #bbbbbb);
+  border: 1px solid #aaaaaa;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #bbbbbb, #aaaaaa);
+}
+html.light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cccccc, #bbbbbb);
+}
+html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #bbbbbb, #aaaaaa);
+}
+
+
+/* Archaic Theme (example: sepia-toned) */
+html.archaic body {
+  background-color: #f5e8d0; /* Sepia-like background */
+  color: #5B4636; /* Dark brown text */
+  font-family: 'Times New Roman', Times, serif; /* Optional: change font */
+  background-image: none;
+}
+html.archaic .aerogel-panel,
+html.archaic .void-surface,
+html.archaic .bg-space-700,
+html.archaic .bg-space-800,
+html.archaic .bg-space-900,
+html.archaic .bg-space-950,
+html.archaic .bg-gradient-to-r.from-space-700.to-space-800,
+html.archaic #modal-content,
+html.archaic ::-webkit-scrollbar-track,
+html.archaic .custom-scrollbar::-webkit-scrollbar-track
+{
+  background-color: #e6d5b8;
+  border-color: #c8b89d !important;
+  color: #5B4636;
+}
+html.archaic .bg-gradient-to-r.from-void-600.to-space-700,
+html.archaic .bg-gradient-to-r.from-green-600.to-teal-700
+{
+  background-image: linear-gradient(to right, #d8c5a8, #c8b89d); /* Generic archaic gradient */
+  color: #5B4636;
+  border: 1px solid #b8a88d;
+}
+html.archaic .text-white { color: #5B4636 !important; }
+html.archaic .text-space-100 { color: #6B5646 !important; }
+html.archaic .text-space-200 { color: #7B6656 !important; }
+html.archaic .text-space-300 { color: #8B7666 !important; }
+html.archaic .text-space-400 { color: #9B8676 !important; }
+html.archaic .text-gray-400 { color: #705c4c !important; }
+html.archaic .gradient-heading {
+  background: linear-gradient(45deg, #800000, #A0522D, #D2691E); /* Maroon, Sienna, Chocolate */
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+html.archaic .text-nebula-300 { color: #800000 !important; } /* Maroon */
+html.archaic .text-sky-300 { color: #4682B4 !important; } /* SteelBlue */
+html.archaic .text-green-300 { color: #006400 !important; } /* DarkGreen */
+html.archaic .text-green-400 { color: #228B22 !important; } /* ForestGreen */
+html.archaic .text-amber-300 { color: #B8860B !important; } /* DarkGoldenRod */
+html.archaic .text-orange-300 { color: #A0522D !important; } /* Sienna */
+html.archaic .text-red-400 { color: #8B0000 !important; } /* DarkRed */
+html.archaic .text-yellow-300 { color: #BC8F8F !important; } /* RosyBrown for yellow */
+html.archaic .text-lime-300 { color: #556B2F !important; } /* DarkOliveGreen for lime */
+html.archaic .text-gray-300 { color: #696969 !important; } /* DimGray for gray */
+html.archaic .text-purple-300 { color: #483D8B !important; } /* DarkSlateBlue for purple */
+html.archaic input[type="text"],
+html.archaic input[type="number"],
+html.archaic select {
+  background-color: #faf0e6; /* Linen */
+  border: 1px solid #d3c0a5; /* Tan */
+  color: #5B4636;
+  font-family: 'Times New Roman', Times, serif;
+}
+html.archaic ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #c8b89d, #b8a88d);
+  border: 1px solid #a8987d;
+}
+html.archaic ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #b8a88d, #a8987d);
+}
+html.archaic .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #c8b89d, #b8a88d);
+}
+html.archaic .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #b8a88d, #a8987d);
+}
+
+
+/* Map Animation Disabling Styles */
+body.map-animations-disabled * {
+  /* Be very specific to override existing Tailwind or component styles if necessary */
+  transition-property: none !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important; /* Added for good measure */
+  animation-name: none !important; /* Changed from 'animation' to 'animation-name' to be more specific */
+  animation-duration: 0s !important;
+  animation-iteration-count: 1 !important; /* Stop infinite animations */
+  /* For JS controlled animations, this might not be enough, but good for CSS ones */
+}
+
+/* Display Density Styles */
+/* Compact Density */
+body.density-compact .p-4 { padding: 0.5rem !important; }
+body.density-compact .p-3 { padding: 0.4rem !important; }
+body.density-compact .p-2 { padding: 0.3rem !important; }
+body.density-compact .py-2 { padding-top: 0.3rem !important; padding-bottom: 0.3rem !important; } /* Example */
+body.density-compact .px-4 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; } /* Example */
+body.density-compact .text-sm { font-size: 0.8rem !important; }
+body.density-compact .text-xs { font-size: 0.7rem !important; }
+body.density-compact .text-base { font-size: 0.9rem !important; } /* Adjust base size too */
+body.density-compact .text-lg { font-size: 1rem !important; }
+body.density-compact .text-xl { font-size: 1.1rem !important; }
+body.density-compact .text-2xl { font-size: 1.25rem !important; }
+body.density-compact .py-1 { padding-top: 0.15rem !important; padding-bottom: 0.15rem !important; }
+body.density-compact .px-3 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+body.density-compact .px-2 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
+body.density-compact .mb-1 { margin-bottom: 0.15rem !important; }
+body.density-compact .mb-2 { margin-bottom: 0.25rem !important; }
+body.density-compact .mb-3 { margin-bottom: 0.4rem !important; }
+body.density-compact .mb-4 { margin-bottom: 0.5rem !important; }
+body.density-compact .mt-1 { margin-top: 0.15rem !important; }
+body.density-compact .mt-2 { margin-top: 0.25rem !important; }
+body.density-compact .mt-3 { margin-top: 0.4rem !important; }
+body.density-compact .mt-4 { margin-top: 0.5rem !important; }
+body.density-compact .space-x-1 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.15rem !important; }
+body.density-compact .space-x-2 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.25rem !important; }
+body.density-compact .space-x-3 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.5rem !important; }
+body.density-compact .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.15rem !important; }
+body.density-compact .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.25rem !important; }
+body.density-compact .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.4rem !important; }
+body.density-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem !important; }
+body.density-compact .gap-1 { gap: 0.15rem !important; }
+body.density-compact .gap-2 { gap: 0.25rem !important; }
+body.density-compact .gap-3 { gap: 0.5rem !important; }
+body.density-compact .gap-4 { gap: 0.75rem !important; }
+body.density-compact button, body.density-compact .button { /* Target buttons more broadly */
+  padding-top: 0.25rem !important; padding-bottom: 0.25rem !important;
+  padding-left: 0.5rem !important; padding-right: 0.5rem !important;
+  font-size: 0.8rem !important;
+}
+body.density-compact th, body.density-compact td {
+    padding: 0.25rem !important;
+}
+
+
+/* Spacious Density */
+body.density-spacious .p-4 { padding: 1.5rem !important; }
+body.density-spacious .p-3 { padding: 1.25rem !important; }
+body.density-spacious .p-2 { padding: 1rem !important; }
+body.density-spacious .py-2 { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+body.density-spacious .px-4 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
+body.density-spacious .text-sm { font-size: 1rem !important; }
+body.density-spacious .text-xs { font-size: 0.9rem !important; }
+body.density-spacious .text-base { font-size: 1.1rem !important; }
+body.density-spacious .text-lg { font-size: 1.25rem !important; }
+body.density-spacious .text-xl { font-size: 1.4rem !important; }
+body.density-spacious .text-2xl { font-size: 1.75rem !important; }
+body.density-spacious .py-1 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+body.density-spacious .px-3 { padding-left: 1rem !important; padding-right: 1rem !important; }
+body.density-spacious .px-2 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+body.density-spacious .mb-1 { margin-bottom: 0.5rem !important; }
+body.density-spacious .mb-2 { margin-bottom: 1rem !important; }
+body.density-spacious .mb-3 { margin-bottom: 1.25rem !important; }
+body.density-spacious .mb-4 { margin-bottom: 1.5rem !important; }
+body.density-spacious .mt-1 { margin-top: 0.5rem !important; }
+body.density-spacious .mt-2 { margin-top: 1rem !important; }
+body.density-spacious .mt-3 { margin-top: 1.25rem !important; }
+body.density-spacious .mt-4 { margin-top: 1.5rem !important; }
+body.density-spacious .space-x-1 > :not([hidden]) ~ :not([hidden]) { margin-left: 0.5rem !important; }
+body.density-spacious .space-x-2 > :not([hidden]) ~ :not([hidden]) { margin-left: 1rem !important; }
+body.density-spacious .space-x-3 > :not([hidden]) ~ :not([hidden]) { margin-left: 1.25rem !important; }
+body.density-spacious .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem !important; }
+body.density-spacious .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem !important; }
+body.density-spacious .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.25rem !important; }
+body.density-spacious .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.5rem !important; }
+body.density-spacious .gap-1 { gap: 0.5rem !important; }
+body.density-spacious .gap-2 { gap: 1rem !important; }
+body.density-spacious .gap-3 { gap: 1.25rem !important; }
+body.density-spacious .gap-4 { gap: 1.5rem !important; }
+body.density-spacious button, body.density-spacious .button {
+  padding-top: 0.75rem !important; padding-bottom: 0.75rem !important;
+  padding-left: 1.25rem !important; padding-right: 1.25rem !important;
+  font-size: 1rem !important;
+}
+body.density-spacious th, body.density-spacious td {
+    padding: 0.75rem !important;
+}
+
 @layer utilities {
   .gradient-heading {
     background: linear-gradient(45deg, #4080ff, #8b5cf6, #f1a9ff);

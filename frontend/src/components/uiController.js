@@ -1,4 +1,12 @@
 // UI Controller for handling all UI interactions and updates
+
+const USER_SETTINGS_KEY = 'xanNationUserSettings';
+const DEFAULT_USER_SETTINGS = {
+  theme: 'dark',
+  mapAnimationsEnabled: true,
+  displayDensity: 'comfortable',
+};
+
 export class UIController {
   constructor() {
     this.currentUser = null;
@@ -8,6 +16,125 @@ export class UIController {
     // Make instance available globally, for event handlers in dynamically created HTML
     window.uiController = this;
   }
+
+  // User Settings Functionality
+  loadUserSettings() {
+    try {
+      const settings = localStorage.getItem(USER_SETTINGS_KEY);
+      if (settings) {
+        return JSON.parse(settings);
+      }
+    } catch (error) {
+      console.error('Error loading user settings from localStorage:', error);
+      // Fallback to default settings if localStorage is unavailable or data is corrupted
+    }
+    return { ...DEFAULT_USER_SETTINGS }; // Return a copy
+  }
+
+  saveUserSettings(settings) {
+    try {
+      localStorage.setItem(USER_SETTINGS_KEY, JSON.stringify(settings));
+      this.applySettings(settings); // Apply settings immediately after saving
+    } catch (error) {
+      console.error('Error saving user settings to localStorage:', error);
+      // Potentially show an error to the user if saving fails
+      this.showError('Failed to save settings. Your browser might not support localStorage or is in private mode.');
+    }
+  }
+
+  applySettings(settings) {
+    console.log('Applying settings:', settings);
+    const root = document.documentElement; // <html> tag
+    const body = document.body;
+
+    // 1. Apply Theme
+    root.classList.remove('dark', 'light', 'archaic'); // Remove any existing theme
+    if (settings.theme && ['dark', 'light', 'archaic'].includes(settings.theme)) {
+      root.classList.add(settings.theme);
+    } else {
+      root.classList.add(DEFAULT_USER_SETTINGS.theme); // Fallback to default theme
+    }
+
+    // 2. Apply Map Animations Setting
+    if (settings.mapAnimationsEnabled === false) { // Explicitly check for false
+      body.classList.add('map-animations-disabled');
+    } else {
+      body.classList.remove('map-animations-disabled');
+    }
+
+    // 3. Apply Display Density
+    body.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
+    if (settings.displayDensity && ['compact', 'comfortable', 'spacious'].includes(settings.displayDensity)) {
+      body.classList.add(`density-${settings.displayDensity}`);
+    } else {
+      body.classList.add(`density-${DEFAULT_USER_SETTINGS.displayDensity}`); // Fallback to default density
+    }
+  }
+
+  showSettingsModal() {
+    const currentSettings = this.loadUserSettings();
+
+    const settingsModalHtml = `
+      <form id="user-settings-form" class="space-y-4">
+        <div>
+          <label for="theme-select" class="block text-sm font-medium text-space-300 mb-1">Theme</label>
+          <select id="theme-select" name="theme" class="w-full p-2 bg-space-700 border border-space-600 rounded text-white">
+            <option value="dark" ${currentSettings.theme === 'dark' ? 'selected' : ''}>Dark</option>
+            <option value="light" ${currentSettings.theme === 'light' ? 'selected' : ''}>Light (Experimental)</option>
+            <option value="archaic" ${currentSettings.theme === 'archaic' ? 'selected' : ''}>Archaic (Retro)</option>
+          </select>
+        </div>
+        <div>
+          <label for="map-animations-toggle" class="block text-sm font-medium text-space-300 mb-1">Map Animations</label>
+          <div class="flex items-center">
+            <input type="checkbox" id="map-animations-toggle" name="mapAnimationsEnabled" class="form-checkbox h-5 w-5 text-blue-600 bg-space-700 border-space-600 rounded focus:ring-blue-500"
+                   ${currentSettings.mapAnimationsEnabled ? 'checked' : ''}>
+            <span class="ml-2 text-sm text-space-300">Enable map animations (e.g., fleet movements)</span>
+          </div>
+        </div>
+        <div>
+          <label for="display-density-select" class="block text-sm font-medium text-space-300 mb-1">Display Density</label>
+          <select id="display-density-select" name="displayDensity" class="w-full p-2 bg-space-700 border border-space-600 rounded text-white">
+            <option value="compact" ${currentSettings.displayDensity === 'compact' ? 'selected' : ''}>Compact</option>
+            <option value="comfortable" ${currentSettings.displayDensity === 'comfortable' ? 'selected' : ''}>Comfortable</option>
+            <option value="spacious" ${currentSettings.displayDensity === 'spacious' ? 'selected' : ''}>Spacious</option>
+          </select>
+        </div>
+        <div class="flex justify-end space-x-3 pt-4">
+          <button type="button" id="settings-cancel-btn" class="px-4 py-2 bg-space-600 hover:bg-space-500 rounded text-white transition-colors">Cancel</button>
+          <button type="submit" id="settings-save-btn" class="px-4 py-2 bg-gradient-to-r from-green-600 to-teal-700 hover:from-green-500 hover:to-teal-600 rounded text-white font-semibold transition-all duration-200">Save Settings</button>
+        </div>
+      </form>
+    `;
+
+    this.showModal('User Settings', settingsModalHtml);
+
+    // Attach event listeners after modal is shown
+    const form = document.getElementById('user-settings-form');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const newSettings = {
+          theme: formData.get('theme'),
+          mapAnimationsEnabled: formData.get('mapAnimationsEnabled') === 'on', // FormData returns 'on' or null for checkboxes
+          displayDensity: formData.get('displayDensity'),
+        };
+        this.saveUserSettings(newSettings);
+        // applySettings is called within saveUserSettings
+        this.hideModal();
+        this.showSuccessMessage('Settings saved successfully!');
+      });
+    }
+
+    const cancelBtn = document.getElementById('settings-cancel-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            this.hideModal();
+        });
+    }
+  }
+  // End User Settings Functionality
 
   getPlanetTypeIcon(planetTypeName) {
     if (!planetTypeName) return '❓'; // Default for undefined/empty type name
@@ -487,15 +614,34 @@ export class UIController {
     const loginBtn = document.getElementById("login-btn");
     const userInfo = document.getElementById("user-info");
     const username = document.getElementById("username");
+    let settingsBtn = document.getElementById("settings-btn");
 
     if (user) {
       loginBtn.classList.add("hidden");
       userInfo.classList.remove("hidden");
       username.textContent = user.username;
+
+      if (!settingsBtn) {
+        settingsBtn = document.createElement('button');
+        settingsBtn.id = 'settings-btn';
+        settingsBtn.className = 'ml-2 px-2 py-1 bg-gradient-to-r from-void-600 to-space-700 hover:from-void-500 hover:to-space-600 rounded text-xs text-white transition-all duration-200';
+        settingsBtn.textContent = 'Settings';
+        settingsBtn.addEventListener('click', () => this.showSettingsModal());
+        // Append to user-info, ensuring it's placed appropriately (e.g., after username span or logout button)
+        const logoutButton = userInfo.querySelector('#logout-btn'); // Assuming logout button has id 'logout-btn'
+        if (logoutButton) {
+            logoutButton.insertAdjacentElement('beforebegin', settingsBtn);
+        } else {
+            userInfo.appendChild(settingsBtn); // Fallback if logout button isn't found
+        }
+      }
     } else {
       loginBtn.classList.remove("hidden");
       userInfo.classList.add("hidden");
       username.textContent = "";
+      if (settingsBtn) {
+        settingsBtn.remove();
+      }
     }
   }
 
@@ -1068,8 +1214,11 @@ export class UIController {
         );
 
         // Refresh game state to show the new colony
-        const { gameState } = await import("../stores/gameState.js");
-        gameState.refreshGameData();
+        // Ensure gameState is imported or accessible if this line is to be kept.
+        // For now, assuming it's handled by the caller or broader app structure.
+        // const { gameState } = await import("../stores/gameState.js");
+        // gameState.refreshGameData();
+        // TODO: Check if gameState import is needed here or if refresh should be event-driven
       } else {
         throw new Error(
           result.error || result.message || "Failed to colonize planet",
@@ -1086,10 +1235,10 @@ export class UIController {
       "Success",
       `
       <div class="text-emerald-400 mb-4">${message}</div>
-      <button class="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
+      <button class.="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded" onclick="window.uiController.hideModal()">
         OK
       </button>
-    `,
+    `, // Used window.uiController.hideModal() for consistency
     );
   }
 }
