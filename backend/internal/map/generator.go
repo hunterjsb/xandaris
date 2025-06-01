@@ -243,7 +243,7 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 
 	// fetch planets (if collection exists)
 	planetsData := make([]map[string]interface{}, 0)
-	if planetRecords, err := app.Dao().FindRecordsByFilter("planets", "", "", 0, 0); err == nil {
+	if planetRecords, err := app.Dao().FindRecordsByExpr("planets", nil, nil); err == nil {
 		planetsData = make([]map[string]interface{}, len(planetRecords))
 		for i, p := range planetRecords {
 			planetsData[i] = map[string]interface{}{
@@ -269,7 +269,6 @@ func generateLanes(systems []map[string]interface{}) []map[string]interface{} {
 	lanes := make([]map[string]interface{}, 0)
 	minDistance := 200.0 // Minimum distance to avoid too many close connections
 	maxDistance := 650.0 // Maximum distance for lane connections (scaled for larger galaxy)
-	maxConnections := 2  // Strict cap: maximum 2 connections per system
 
 	systemConnections := make(map[string]int) // Track connections per system
 	connected := make(map[string]bool)        // Track which systems are in main component
@@ -280,7 +279,6 @@ func generateLanes(systems []map[string]interface{}) []map[string]interface{} {
 		connected[sys["id"].(string)] = false
 	}
 	
-	fmt.Printf("DEBUG: Starting lane generation with %d systems, max %d connections per system\n", len(systems), maxConnections)
 
 	// Phase 1: Build minimum spanning tree to ensure connectivity
 	// Start with the center-most system
@@ -363,7 +361,7 @@ func generateLanes(systems []map[string]interface{}) []map[string]interface{} {
 		}
 	}
 	
-	fmt.Printf("DEBUG: Phase 1 (MST) complete - added %d lanes for connectivity\n", len(lanes))
+
 
 	// Phase 2: Add strategic additional connections (avoiding crossings)
 	// Allow up to 60 additional strategic connections for redundant paths and loops (scaled for 200 systems)
@@ -470,8 +468,7 @@ func generateLanes(systems []map[string]interface{}) []map[string]interface{} {
 		}
 	}
 	
-	fmt.Printf("DEBUG: Phase 2 (additional) complete - added %d non-crossing lanes\n", additionalAdded)
-	fmt.Printf("DEBUG: Final result - %d total lanes generated\n", len(lanes))
+
 
 	return lanes
 }
