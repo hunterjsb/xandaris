@@ -1,4 +1,4 @@
-// UI Controller for handling all UI interactions and updates
+  // UI Controller for handling all UI interactions and updates
 export class UIController {
   constructor() {
     this.currentUser = null;
@@ -164,45 +164,77 @@ export class UIController {
     return gradientMap[dominantType] || 'from-nebula-900/30 to-plasma-900/30';
   }
 
-  getResourceIcons(planet) {
+  async getResourceNodes(planetId) {
+    if (!this.pb) return [];
+    
+    try {
+      const resourceNodes = await this.pb.collection('resource_nodes').getFullList({
+        filter: `planet_id = "${planetId}"`,
+        expand: 'resource_type'
+      });
+      return resourceNodes;
+    } catch (error) {
+      console.warn('Failed to load resource nodes:', error);
+      return [];
+    }
+  }
+
+  async loadResourceTypes() {
+    if (!this.pb) return [];
+    
+    try {
+      const resourceTypes = await this.pb.collection('resource_types').getFullList();
+      return resourceTypes;
+    } catch (error) {
+      console.warn('Failed to load resource types:', error);
+      return [];
+    }
+  }
+
+  async getResourceIcons(planet) {
     const icons = [];
     
-    // Show resource availability based on planet type and actual resources
-    if (planet.Credits > 0 || planet.planet_type === 'terrestrial') {
-      icons.push('<span class="material-icons text-yellow-400" title="Credits">account_balance_wallet</span>');
-    }
-    if (planet.Food > 0 || planet.planet_type === 'terrestrial' || planet.planet_type === 'gaia') {
-      icons.push('<span class="material-icons text-green-400" title="Food">restaurant</span>');
-    }
-    if (planet.Ore > 0 || planet.planet_type === 'volcanic' || planet.planet_type === 'barren') {
-      icons.push('<span class="material-icons text-gray-400" title="Ore">construction</span>');
-    }
-    if (planet.Goods > 0 || planet.planet_type === 'terrestrial') {
-      icons.push('<span class="material-icons text-orange-400" title="Goods">inventory_2</span>');
+    // Show resource availability based on planet's resource nodes
+    if (planet.resourceNodes && planet.resourceNodes.length > 0) {
+      // Get resource types for lookup
+      const resourceTypes = await this.loadResourceTypes();
+      const resourceTypeMap = {};
+      resourceTypes.forEach(rt => {
+        resourceTypeMap[rt.id] = rt;
+      });
+      
+      const uniqueResourceTypes = new Set();
+      planet.resourceNodes.forEach(node => {
+        let resourceType, resourceTypeData;
+        
+        // Check if expand worked
+        if (node.expand && node.expand.resource_type) {
+          resourceTypeData = node.expand.resource_type;
+        } else {
+          // Fallback: use the resource type ID to lookup
+          resourceTypeData = resourceTypeMap[node.resource_type];
+        }
+        
+        if (resourceTypeData) {
+          const resourceKey = resourceTypeData.name.toLowerCase();
+          
+          if (!uniqueResourceTypes.has(resourceKey)) {
+            uniqueResourceTypes.add(resourceKey);
+            
+            // Use the actual icon from the resource type
+            const iconUrl = resourceTypeData.icon || '/placeholder-planet.svg';
+            const resourceName = resourceTypeData.name;
+            
+            icons.push(`<img src="${iconUrl}" class="w-5 h-5" title="${resourceName}" alt="${resourceName}" />`);
+          }
+        }
+      });
     }
     
     return icons;
   }
 
-  getResourceIcons(planet) {
-    const icons = [];
-    
-    // Show resource availability based on planet type and actual resources
-    if (planet.Credits > 0 || planet.planet_type === 'terrestrial') {
-      icons.push('<span class="material-icons text-yellow-400" title="Credits">account_balance_wallet</span>');
-    }
-    if (planet.Food > 0 || planet.planet_type === 'terrestrial' || planet.planet_type === 'gaia') {
-      icons.push('<span class="material-icons text-green-400" title="Food">restaurant</span>');
-    }
-    if (planet.Ore > 0 || planet.planet_type === 'volcanic' || planet.planet_type === 'barren') {
-      icons.push('<span class="material-icons text-gray-400" title="Ore">construction</span>');
-    }
-    if (planet.Goods > 0 || planet.planet_type === 'terrestrial') {
-      icons.push('<span class="material-icons text-orange-400" title="Goods">inventory_2</span>');
-    }
-    
-    return icons;
-  }
+
 
   clearExpandedView() {
     if (this.expandedView) {
@@ -691,12 +723,16 @@ export class UIController {
   }
 
 
-  displayPlanetView(planet, screenX, screenY) { // Added screenX, screenY
+  async displayPlanetView(planet, screenX, screenY) { // Added screenX, screenY
     const container = this.expandedView;
     if (!container) {
       console.error("#expanded-view-container not found in displayPlanetView");
       return;
     }
+
+    // Fetch resource nodes for this planet
+    const resourceNodes = await this.getResourceNodes(planet.id);
+    planet.resourceNodes = resourceNodes;
 
     // Simplified check: if it's the same planet and no new coords, assume no major update needed.
     // Could be more sophisticated by checking if 'planet' data has changed.
@@ -887,18 +923,81 @@ export class UIController {
     `;
 
     // Update resource icons
-    const resourceIcons = this.getResourceIcons(planet);
+    const resourceIcons = await this.getResourceIcons(planet);
     container.querySelector("#planet-resources-icons").innerHTML = resourceIcons.join('');
+
+    // Generate resource nodes HTML
+    let resourceNodesHtml = '<div class="text-sm text-space-400">No resource deposits detected.</div>';
+    if (resourceNodes && resourceNodes.length > 0) {
+      // Get all resource types for lookup (since expand might not be working)
+      const resourceTypesPromise = this.loadResourceTypes();
+      const resourceTypes = await resourceTypesPromise;
+      const resourceTypeMap = {};
+      resourceTypes.forEach(rt => {
+        resourceTypeMap[rt.id] = rt;
+      });
+      
+      const resourcesByType = {};
+      resourceNodes.forEach(node => {
+        let resourceType, resourceTypeData;
+        
+        // Check if expand worked
+        if (node.expand && node.expand.resource_type) {
+          resourceType = node.expand.resource_type.name;
+          resourceTypeData = node.expand.resource_type;
+        } else {
+          // Fallback: use the resource type ID to lookup
+          resourceTypeData = resourceTypeMap[node.resource_type];
+          resourceType = resourceTypeData ? resourceTypeData.name : node.resource_type;
+        }
+        
+        if (resourceType) {
+          if (!resourcesByType[resourceType]) {
+            resourcesByType[resourceType] = { nodes: [], resourceTypeData };
+          }
+          resourcesByType[resourceType].nodes.push(node);
+        }
+      });
+
+      const resourceEntries = Object.entries(resourcesByType).map(([resourceType, data]) => {
+        const { nodes, resourceTypeData } = data;
+        const totalRichness = nodes.reduce((sum, node) => sum + node.richness, 0);
+        const avgRichness = (totalRichness / nodes.length).toFixed(1);
+        const nodeCount = nodes.length;
+        
+        const iconUrl = resourceTypeData?.icon || '/placeholder-planet.svg';
+        
+        return `
+          <li class="p-3 bg-space-700 rounded-md flex items-center justify-between hover:bg-space-600 transition-colors">
+            <div class="flex items-center gap-3">
+              <img src="${iconUrl}" class="w-6 h-6" title="${resourceType}" alt="${resourceType}" />
+              <div>
+                <span class="font-semibold">${resourceType}</span>
+                <div class="text-xs text-space-400">${nodeCount} deposit${nodeCount > 1 ? 's' : ''}</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-medium">Richness: ${avgRichness}</div>
+              <div class="text-xs text-space-400">Total: ${totalRichness}</div>
+            </div>
+          </li>
+        `;
+      }).join("");
+      resourceNodesHtml = `<ul class="space-y-2">${resourceEntries}</ul>`;
+    }
 
     // Update resources and buildings
     const resourcesContainer = container.querySelector("#planet-resources-container");
     const buildingsContainer = container.querySelector("#planet-buildings-container");
 
-    if (isOwnedByPlayer || planet.Credits !== undefined) {
-      container.querySelector("#planet-resources-html").innerHTML = resourcesHtml;
-      resourcesContainer.style.display = "block";
-    } else {
-      resourcesContainer.style.display = "none";
+    // Always show resource nodes for any planet
+    container.querySelector("#planet-resources-html").innerHTML = resourceNodesHtml;
+    resourcesContainer.style.display = "block";
+    
+    // Update the section title to reflect resource nodes
+    const resourcesTitle = resourcesContainer.querySelector("h3");
+    if (resourcesTitle) {
+      resourcesTitle.textContent = "Resource Deposits";
     }
 
     if (isOwnedByPlayer) {
@@ -978,11 +1077,24 @@ export class UIController {
       return;
     }
 
+    // Get available resource types on this planet
+    const availableResources = new Set();
+    if (planet.resourceNodes && planet.resourceNodes.length > 0) {
+      planet.resourceNodes.forEach(node => {
+        if (node.expand && node.expand.resource_type) {
+          availableResources.add(node.expand.resource_type.name.toLowerCase());
+        }
+      });
+    }
+
     const buildingOptions = buildingTypes
       .map((buildingType) => {
         let costString = "Cost: ";
-        if (buildingType.cost === undefined) { // Check if cost is defined at all
-            costString += "N/A (data missing)";
+        let canBuild = true;
+        let missingResources = [];
+        
+        if (buildingType.cost === undefined) {
+          costString += "N/A (data missing)";
         } else if (typeof buildingType.cost === "number") {
           costString += `${buildingType.cost} Credits`;
         } else if (typeof buildingType.cost === "object" && buildingType.cost !== null) {
@@ -990,35 +1102,86 @@ export class UIController {
             map[rt.id] = rt.name;
             return map;
           }, {});
-          costString += Object.entries(buildingType.cost)
-            .map(([resourceId, amount]) => {
-              const resourceName = resourceTypesMap[resourceId] || resourceId;
-              return `${amount} ${resourceName}`;
-            })
-            .join(", ");
-            if (Object.keys(buildingType.cost).length === 0) costString += "Free"; // Handle empty cost object
+          
+          const costEntries = Object.entries(buildingType.cost).map(([resourceId, amount]) => {
+            const resourceName = resourceTypesMap[resourceId] || resourceId;
+            const hasResource = availableResources.has(resourceName.toLowerCase());
+            
+            if (!hasResource) {
+              canBuild = false;
+              missingResources.push(resourceName);
+            }
+            
+            const colorClass = hasResource ? "text-green-400" : "text-red-400";
+            return `<span class="${colorClass}">${amount} ${resourceName}</span>`;
+          });
+          
+          costString += costEntries.join(", ");
+          if (Object.keys(buildingType.cost).length === 0) costString += "Free";
         } else {
-          costString += "N/A"; // Fallback for null or other unexpected types
+          costString += "N/A";
         }
 
-        // Safely stringify planet.id and buildingType.id for the onclick handler
+        // Check if building requires specific resources
+        const requiresResources = buildingType.resource_nodes && buildingType.resource_nodes.length > 0;
+        if (requiresResources) {
+          const requiredResourceIds = buildingType.resource_nodes;
+          const resourceTypesMap = (this.gameState?.resourceTypes || []).reduce((map, rt) => {
+            map[rt.id] = rt.name;
+            return map;
+          }, {});
+          
+          requiredResourceIds.forEach(resourceId => {
+            const resourceName = resourceTypesMap[resourceId] || resourceId;
+            if (!availableResources.has(resourceName.toLowerCase())) {
+              canBuild = false;
+              missingResources.push(resourceName);
+            }
+          });
+        }
+
         const safePlanetId = planet.id.replace(/'/g, "\\'");
         const safeBuildingTypeId = buildingType.id.replace(/'/g, "\\'");
+        
+        const buttonClass = canBuild 
+          ? "w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left cursor-pointer"
+          : "w-full p-3 bg-space-800 rounded mb-2 text-left cursor-not-allowed opacity-60";
+        
+        const onclickHandler = canBuild 
+          ? `onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}'); window.uiController.hideModal();"`
+          : "";
+
+        let requirementsText = "";
+        if (!canBuild && missingResources.length > 0) {
+          requirementsText = `<div class="text-xs text-red-400 mt-1">Missing: ${missingResources.join(", ")}</div>`;
+        }
 
         return `
-      <button class="w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left"
-              onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}'); window.uiController.hideModal();">
-        <div class="font-semibold">${buildingType.name || "Unknown Building"}</div>
+      <button class="${buttonClass}" ${onclickHandler} ${!canBuild ? 'disabled' : ''}>
+        <div class="font-semibold ${canBuild ? '' : 'text-space-400'}">${buildingType.name || "Unknown Building"}</div>
         <div class="text-sm text-space-300">${buildingType.description || "No description available."}</div>
-        <div class="text-sm text-green-400">${costString}</div>
+        <div class="text-sm">${costString}</div>
+        ${requirementsText}
       </button>
     `;
       })
       .join("");
 
+    // Show resource summary
+    const resourceSummary = availableResources.size > 0 
+      ? `<div class="mb-4 p-3 bg-space-800 rounded">
+           <div class="text-sm font-semibold mb-2">Available Resources:</div>
+           <div class="text-xs text-space-300">${Array.from(availableResources).map(r => 
+             r.charAt(0).toUpperCase() + r.slice(1)).join(", ")}</div>
+         </div>`
+      : `<div class="mb-4 p-3 bg-space-800 rounded">
+           <div class="text-sm text-red-400">No resource deposits found on this planet.</div>
+         </div>`;
+
     this.showModal(
       `Construct on ${planet.name || `Planet ${planet.id.slice(-4)}`}`,
       `
+      ${resourceSummary}
       <div class="space-y-2 max-h-96 overflow-y-auto">
         ${buildingOptions.length > 0 ? buildingOptions : '<div class="text-space-400">No buildings available to construct.</div>'}
       </div>

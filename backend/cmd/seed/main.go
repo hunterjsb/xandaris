@@ -233,15 +233,15 @@ func seedResourceTypes(app *pocketbase.PocketBase) error {
 	}
 
 	resources := []map[string]interface{}{
-		{"name": "food", "description": "Sustains population growth and survival", "produced_in": "farm"},
-		{"name": "ore", "description": "Basic raw material used in metal production and construction.", "produced_in": "mine"},
-		{"name": "fuel", "description": "Energy source for ships and industry", "produced_in": "refinery"},
-		{"name": "titanium", "description": "High-grade material for advanced construction and ships", "produced_in": "deep_mine"},
-		{"name": "metal", "description": "Building material for ships and construction", "produced_in": "refinery"},
-		{"name": "oil", "description": "Essential for fuel production and ship manufacturing", "produced_in": "oil_rig"},
-		{"name": "xanium", "description": "Most lit material", "produced_in": "Shady Alley"},
-		{"name": "credits", "description": "Standard currency used exclusively for player-to-player trading", "produced_in": "crypto_server"},
-		{"name": "all", "description": "placeholder for storage", "produced_in": "none"},
+		{"name": "food", "description": "Sustains population growth and survival", "produced_in": "farm", "icon": "/icons/restaurant.svg"},
+		{"name": "ore", "description": "Basic raw material used in metal production and construction.", "produced_in": "mine", "icon": "/icons/construction.svg"},
+		{"name": "fuel", "description": "Energy source for ships and industry", "produced_in": "refinery", "icon": "/icons/local_gas_station.svg"},
+		{"name": "titanium", "description": "High-grade material for advanced construction and ships", "produced_in": "deep_mine", "icon": "/icons/precision_manufacturing.svg"},
+		{"name": "metal", "description": "Building material for ships and construction", "produced_in": "refinery", "icon": "/icons/build.svg"},
+		{"name": "oil", "description": "Essential for fuel production and ship manufacturing", "produced_in": "oil_rig", "icon": "/icons/water_drop.svg"},
+		{"name": "xanium", "description": "Most lit material", "produced_in": "Shady Alley", "icon": "/icons/auto_awesome.svg"},
+		{"name": "credits", "description": "Standard currency used exclusively for player-to-player trading", "produced_in": "crypto_server", "icon": "/icons/account_balance_wallet.svg"},
+		{"name": "all", "description": "placeholder for storage", "produced_in": "none", "icon": "/icons/inventory_2.svg"},
 	}
 
 	for _, resource := range resources {
@@ -249,6 +249,7 @@ func seedResourceTypes(app *pocketbase.PocketBase) error {
 		record.Set("name", resource["name"])
 		record.Set("description", resource["description"])
 		record.Set("produced_in", resource["produced_in"])
+		record.Set("icon", resource["icon"])
 		if err := app.Dao().SaveRecord(record); err != nil {
 			return err
 		}

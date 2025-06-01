@@ -456,8 +456,8 @@ func init() {
 				}
 			],
 			"indexes": ["CREATE INDEX idx_resource_nodes_planet ON resource_nodes (planet_id)"],
-			"listRule": null,
-			"viewRule": null,
+			"listRule": "",
+			"viewRule": "",
 			"createRule": null,
 			"updateRule": null,
 			"deleteRule": null,
