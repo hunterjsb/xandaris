@@ -64,9 +64,13 @@ export class UIController {
   displaySystemView(system, planets) {
     const container = document.getElementById("expanded-view-container");
     if (!container) {
-      console.error("Expanded view container not found!");
+      // console.error("[UIController] #expanded-view-container NOT FOUND in displaySystemView!"); // REMOVED
       return;
     }
+    // console.log("[UIController] displaySystemView called for system:", system.id); // REMOVED
+
+    // const oldHtmlLength = container.innerHTML.length; // REMOVED
+    // console.log("[UIController] #expanded-view-container current innerHTML length (before update):", oldHtmlLength); // REMOVED
 
     let planetsHtml = '<div class="text-sm text-space-400">No planets listed for this system.</div>';
     if (planets && planets.length > 0) {
@@ -102,7 +106,22 @@ export class UIController {
         </ul>
       </div>
     `;
+    // systemViewHTML is the variable name for the string literal above, used for clarity in previous diff.
+    // The actual code directly assigns the template literal to container.innerHTML.
+
+    container.innerHTML = systemViewHTML;
+
+    // console.log("[UIController] #expanded-view-container new innerHTML length (after update):", container.innerHTML.length); // REMOVED
+    // console.log("[UIController] #expanded-view-container classes BEFORE remove hidden:", container.classList.toString()); // REMOVED
     container.classList.remove("hidden");
+    // console.log("[UIController] #expanded-view-container classes AFTER remove hidden:", container.classList.toString()); // REMOVED
+
+    // if (container.classList.contains("hidden")) { // REMOVED
+    //     console.warn("[UIController] #expanded-view-container STILL HAS 'hidden' class after attempting removal!"); // REMOVED
+    // } // REMOVED
+    // if (getComputedStyle(container).display === 'none') { // REMOVED
+    //     console.warn("[UIController] #expanded-view-container computed style is 'display: none' AFTER attempting removal of hidden class!"); // REMOVED
+    // } // REMOVED
   }
 
   displayPlanetView(planet) {
