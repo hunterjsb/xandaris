@@ -75,6 +75,80 @@ export class UIController {
     return planetType ? planetType.name : 'Unknown';
   }
 
+  getPlanetTypeGradient(planetTypeId) {
+    if (!planetTypeId) return 'from-nebula-900/30 to-plasma-900/30';
+    
+    // Try lookup by ID first, then by name (lowercase)
+    let planetType = this.planetTypes.get(planetTypeId);
+    if (!planetType) {
+      planetType = this.planetTypes.get(planetTypeId.toLowerCase());
+    }
+    
+    if (!planetType) return 'from-nebula-900/30 to-plasma-900/30';
+    
+    // Planet type specific gradients
+    const gradientMap = {
+      'highlands': 'from-green-900/30 to-emerald-800/30',
+      'abundant': 'from-green-800/30 to-lime-700/30',
+      'fertile': 'from-green-700/30 to-green-600/30',
+      'mountain': 'from-gray-800/30 to-slate-700/30',
+      'desert': 'from-yellow-800/30 to-orange-700/30',
+      'volcanic': 'from-red-900/30 to-orange-800/30',
+      'swamp': 'from-cyan-900/30 to-teal-800/30',
+      'barren': 'from-gray-900/30 to-gray-800/30',
+      'radiant': 'from-yellow-600/30 to-amber-500/30',
+      'barred': 'from-red-800/30 to-red-900/30'
+    };
+    
+    return gradientMap[planetType.name.toLowerCase()] || 'from-nebula-900/30 to-plasma-900/30';
+  }
+
+  getSystemGradient(planets) {
+    if (!planets || planets.length === 0) return 'from-nebula-900/30 to-plasma-900/30';
+    
+    // Count planet types
+    const typeCounts = {};
+    planets.forEach(planet => {
+      const planetTypeValue = planet.planet_type || planet.type;
+      if (planetTypeValue) {
+        let planetType = this.planetTypes.get(planetTypeValue);
+        if (!planetType) {
+          planetType = this.planetTypes.get(planetTypeValue.toLowerCase());
+        }
+        if (planetType) {
+          const typeName = planetType.name.toLowerCase();
+          typeCounts[typeName] = (typeCounts[typeName] || 0) + 1;
+        }
+      }
+    });
+    
+    // Find the most common planet type
+    let dominantType = 'unknown';
+    let maxCount = 0;
+    for (const [type, count] of Object.entries(typeCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        dominantType = type;
+      }
+    }
+    
+    // Use the dominant planet type's gradient for the system
+    const gradientMap = {
+      'highlands': 'from-green-900/30 to-emerald-800/30',
+      'abundant': 'from-green-800/30 to-lime-700/30',
+      'fertile': 'from-green-700/30 to-green-600/30',
+      'mountain': 'from-gray-800/30 to-slate-700/30',
+      'desert': 'from-yellow-800/30 to-orange-700/30',
+      'volcanic': 'from-red-900/30 to-orange-800/30',
+      'swamp': 'from-cyan-900/30 to-teal-800/30',
+      'barren': 'from-gray-900/30 to-gray-800/30',
+      'radiant': 'from-yellow-600/30 to-amber-500/30',
+      'barred': 'from-red-800/30 to-red-900/30'
+    };
+    
+    return gradientMap[dominantType] || 'from-nebula-900/30 to-plasma-900/30';
+  }
+
   getResourceIcons(planet) {
     const icons = [];
     
@@ -285,20 +359,23 @@ export class UIController {
     // More advanced would be to diff content if system.id is the same.
     container.innerHTML = `
       <div class="floating-panel-content">
-        <div class="panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50" draggable="false">
+        <div id="system-header" class="panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r from-nebula-900/30 to-plasma-900/30" draggable="false">
           <div class="flex items-center gap-2">
             <span class="material-icons text-space-400 drag-handle">drag_indicator</span>
-            <h2 id="system-name" class="text-xl font-bold text-orange-300"></h2>
+            <span id="system-name" class="text-xl font-bold text-nebula-200"></span>
           </div>
-          <button onclick="window.uiController.clearExpandedView()"
-                  class="btn-icon hover:bg-space-700 rounded">
-            <span class="material-icons text-sm">close</span>
-          </button>
+          <div class="flex items-center gap-4">
+            <div class="text-right">
+              <div id="system-seed" class="font-semibold text-nebula-200 text-sm"></div>
+              <div id="system-coords" class="font-mono text-xs text-gray-500"></div>
+            </div>
+            <button onclick="window.uiController.clearExpandedView()"
+                    class="btn-icon hover:bg-space-700 rounded">
+              <span class="material-icons text-sm">close</span>
+            </button>
+          </div>
         </div>
         <div class="p-4">
-          <div class="mb-4">
-            <div id="system-coords" class="text-center p-3 bg-gradient-to-r from-nebula-900/30 to-plasma-900/30 rounded-lg border border-nebula-600/20"></div>
-          </div>
 
           <div class="flex-1 overflow-hidden flex flex-col">
             <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets in System</h3>
@@ -309,13 +386,14 @@ export class UIController {
       </div>
       `;
 
-    // Update dynamic content - system name now handled in coords section
-    container.querySelector("#system-coords").innerHTML = `
-      <div class="flex items-center justify-between">
-        <span class="font-semibold text-nebula-200">${system.name || `System ${system.id.slice(-4)}`}</span>
-        <span class="font-mono text-sm text-gray-500">${system.x}, ${system.y}</span>
-      </div>
-    `;
+    // Update dynamic content - set gradient and content for top bar
+    const systemGradient = this.getSystemGradient(planets);
+    const systemHeader = container.querySelector("#system-header");
+    systemHeader.className = `panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r ${systemGradient}`;
+    
+    container.querySelector("#system-name").textContent = system.name || `System ${system.id.slice(-4)}`;
+    container.querySelector("#system-seed").textContent = `Seed: ${system.id.slice(-8)}`;
+    container.querySelector("#system-coords").textContent = `${system.x}, ${system.y}`;
 
     const planetsListUl = container.querySelector("#system-planets-list"); // Query within the new innerHTML
     this.updatePlanetList(planetsListUl, planets, currentUserId);
@@ -716,16 +794,22 @@ export class UIController {
     // Redraw inner content structure
     container.innerHTML = `
       <div class="floating-panel-content">
-        <div class="panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50" draggable="false">
+        <div id="planet-header" class="panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r from-nebula-900/30 to-plasma-900/30" draggable="false">
           <div class="flex items-center gap-2">
             <span class="material-icons text-space-400 drag-handle">drag_indicator</span>
             <span id="planet-icon" class="text-2xl"></span>
-            <h2 id="planet-name" class="text-xl font-bold text-orange-300"></h2>
+            <span id="planet-name" class="text-xl font-bold text-nebula-200"></span>
           </div>
-          <button onclick="window.uiController.clearExpandedView()"
-                  class="btn-icon hover:bg-space-700 rounded">
-            <span class="material-icons text-sm">close</span>
-          </button>
+          <div class="flex items-center gap-4">
+            <div class="text-right">
+              <div id="planet-seed" class="font-semibold text-nebula-200 text-sm"></div>
+              <div id="planet-system" class="font-mono text-xs text-gray-500"></div>
+            </div>
+            <button onclick="window.uiController.clearExpandedView()"
+                    class="btn-icon hover:bg-space-700 rounded">
+              <span class="material-icons text-sm">close</span>
+            </button>
+          </div>
         </div>
         <div class="p-4">
           <div class="mb-4">
@@ -752,8 +836,14 @@ export class UIController {
       `;
 
     // Update header info
-    container.querySelector("#planet-icon").textContent = planetIcon;
+    const planetTypeGradient = this.getPlanetTypeGradient(planetTypeValue);
+    const planetHeader = container.querySelector("#planet-header");
+    planetHeader.className = `panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r ${planetTypeGradient}`;
+    
+    container.querySelector("#planet-icon").innerHTML = planetIcon;
     container.querySelector("#planet-name").textContent = planetName;
+    container.querySelector("#planet-seed").textContent = `Seed: ${planet.id.slice(-8)}`;
+    container.querySelector("#planet-system").textContent = systemName;
     container.querySelector("#planet-type-size").innerHTML = `
       <div class="text-center">
         <div class="font-medium">${planetTypeName}</div>
