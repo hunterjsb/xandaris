@@ -94,22 +94,44 @@ func generateSystems(count int) []System {
 		clusterCount = 1
 	}
 
-	clusterSpacing := 600 // Distance between cluster centers
-	clusterRadius := 200  // Radius around each center for system placement
+	clusterSpacing := 400 // Average distance between cluster centers
+	clusterRadius := 150  // Radius around each center for system placement
 
-	clusterGridSize := int(math.Ceil(math.Sqrt(float64(clusterCount))))
 	centers := make([][2]int, clusterCount)
+	centers[0] = [2]int{0, 0}
 
-	// Generate cluster centers on a grid with slight randomization
-	for i := 0; i < clusterCount; i++ {
-		gridX := i % clusterGridSize
-		gridY := i / clusterGridSize
+	// Helper to calculate distance between two points
+	dist := func(a, b [2]int) float64 {
+		dx := float64(a[0] - b[0])
+		dy := float64(a[1] - b[1])
+		return math.Sqrt(dx*dx + dy*dy)
+	}
 
-		offsetX := rand.Intn(clusterSpacing/2) - clusterSpacing/4
-		offsetY := rand.Intn(clusterSpacing/2) - clusterSpacing/4
+	// Place remaining cluster centers relative to existing ones to ensure connectivity
+	for i := 1; i < clusterCount; i++ {
+		for attempts := 0; attempts < 10; attempts++ {
+			parent := centers[rand.Intn(i)]
 
-		centers[i][0] = gridX*clusterSpacing + offsetX
-		centers[i][1] = gridY*clusterSpacing + offsetY
+			angle := rand.Float64() * 2 * math.Pi
+			distance := float64(clusterSpacing) + rand.Float64()*float64(clusterSpacing/4) - float64(clusterSpacing/8)
+
+			newX := parent[0] + int(math.Cos(angle)*distance)
+			newY := parent[1] + int(math.Sin(angle)*distance)
+			candidate := [2]int{newX, newY}
+
+			tooClose := false
+			for j := 0; j < i; j++ {
+				if dist(candidate, centers[j]) < float64(clusterRadius)/2 {
+					tooClose = true
+					break
+				}
+			}
+
+			if !tooClose || attempts == 9 {
+				centers[i] = candidate
+				break
+			}
+		}
 	}
 
 	// Place systems around random cluster centers
