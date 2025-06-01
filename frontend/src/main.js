@@ -1,6 +1,6 @@
 // Main application entry point
 import "./styles.css";
-import { authManager, pb } from "./lib/pocketbase.js";
+import { authManager, gameData, pb } from "./lib/pocketbase.js";
 import { gameState } from "./stores/gameState.js";
 import { MapRenderer } from "./components/mapRenderer.js";
 import { UIController } from "./components/uiController.js";
@@ -274,6 +274,121 @@ class XanNationApp {
     this.uiController.showColonizeModal(selectedSystem);
   }
 
+  getConnectedSystems(currentSystem) {
+    if (!currentSystem || !gameState.systems) return {};
+
+    const connected = {};
+    const currentX = currentSystem.x;
+    const currentY = currentSystem.y;
+
+    // Find systems by direction relative to current system
+    gameState.systems.forEach(system => {
+      if (system.id === currentSystem.id) return;
+
+      const deltaX = system.x - currentX;
+      const deltaY = system.y - currentY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      // Only consider reasonably close systems (within ~800 units)
+      if (distance > 800) return;
+
+      // Determine primary direction
+      const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+      
+      // Convert angle to direction (with some tolerance)
+      if (angle >= -45 && angle <= 45) {
+        // Right
+        if (!connected.right || distance < connected.right.distance) {
+          connected.right = { system, distance };
+        }
+      } else if (angle >= 45 && angle <= 135) {
+        // Down
+        if (!connected.down || distance < connected.down.distance) {
+          connected.down = { system, distance };
+        }
+      } else if (angle >= 135 || angle <= -135) {
+        // Left
+        if (!connected.left || distance < connected.left.distance) {
+          connected.left = { system, distance };
+        }
+      } else {
+        // Up
+        if (!connected.up || distance < connected.up.distance) {
+          connected.up = { system, distance };
+        }
+      }
+    });
+
+    return connected;
+  }
+
+  navigateToSystem(direction) {
+    const currentSystem = gameState.getSelectedSystem();
+    if (!currentSystem) return;
+
+    const connected = this.getConnectedSystems(currentSystem);
+    const target = connected[direction];
+
+    if (target && target.system) {
+      // Select and center on the new system
+      gameState.selectSystem(target.system.id);
+      this.mapRenderer.centerOnSystem(target.system.id);
+      
+      // Get planets for the new system and show the system view
+      const planetsInSystem = gameState.mapData?.planets?.filter(p => p.system_id === target.system.id) || [];
+      
+      this.uiController.displaySystemView(target.system, planetsInSystem);
+    }
+  }
+
+  async sendFleetToSystem(direction) {
+    const currentSystem = gameState.getSelectedSystem();
+    if (!currentSystem) {
+      this.uiController.showError("Select a system first");
+      return;
+    }
+
+    if (!authManager.isLoggedIn()) {
+      this.uiController.showError("Please log in to send fleets");
+      return;
+    }
+
+    const connected = this.getConnectedSystems(currentSystem);
+    const target = connected[direction];
+
+    if (!target || !target.system) {
+      this.uiController.showError(`No system found to the ${direction}`);
+      return;
+    }
+
+    // Check if player has fleets at the current system
+    const playerFleets = gameState.fleets?.filter(fleet => 
+      fleet.owner_id === authManager.getUser()?.id && 
+      fleet.current_system === currentSystem.id &&
+      !fleet.destination_system
+    ) || [];
+
+    if (playerFleets.length === 0) {
+      this.uiController.showError("No available fleets at this system");
+      return;
+    }
+
+    try {
+      // Send fleet with default strength
+      const response = await gameData.sendFleet(currentSystem.id, target.system.id, 10);
+      
+      if (response) {
+        this.uiController.showSuccessMessage(`Fleet dispatched to ${target.system.name || `System ${target.system.id.slice(-4)}`}`);
+        
+        // Visual feedback - draw a temporary line
+        this.mapRenderer.showFleetRoute(currentSystem, target.system);
+      }
+    } catch (error) {
+      console.error("Failed to send fleet:", error);
+      this.uiController.showError("Failed to send fleet: " + (error.message || "Unknown error"));
+    }
+  }
+
   handleKeyboardInput(e) {
     // Only handle keyboard shortcuts when not in input fields
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
@@ -284,6 +399,38 @@ class XanNationApp {
       case "escape":
         this.uiController.hideModal();
         document.getElementById("context-menu").classList.add("hidden");
+        break;
+      case "arrowup":
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.sendFleetToSystem('up');
+        } else {
+          this.navigateToSystem('up');
+        }
+        break;
+      case "arrowdown":
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.sendFleetToSystem('down');
+        } else {
+          this.navigateToSystem('down');
+        }
+        break;
+      case "arrowleft":
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.sendFleetToSystem('left');
+        } else {
+          this.navigateToSystem('left');
+        }
+        break;
+      case "arrowright":
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.sendFleetToSystem('right');
+        } else {
+          this.navigateToSystem('right');
+        }
         break;
       case "f":
         this.handleSendFleetAction();

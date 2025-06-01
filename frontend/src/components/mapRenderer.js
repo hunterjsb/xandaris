@@ -11,6 +11,8 @@ export class MapRenderer {
     this.hoveredTradeRoutes = [];
     this.trades = [];
     this.currentUserId = null; // Added to store current player's ID
+    this.connectedSystems = new Map(); // Track systems connected to selected system
+    this.fleetRoutes = []; // Track temporary fleet routes for visualization
     
     // View settings - adjusted for larger galaxy (6000x4500)
     this.viewX = 0;
@@ -210,6 +212,43 @@ export class MapRenderer {
     // Event dispatch with coordinates is now handled in mousedown
   }
 
+  updateConnectedSystems() {
+    this.connectedSystems.clear();
+    if (!this.selectedSystem) return;
+
+    const currentX = this.selectedSystem.x;
+    const currentY = this.selectedSystem.y;
+
+    this.systems.forEach(system => {
+      if (system.id === this.selectedSystem.id) return;
+
+      const deltaX = system.x - currentX;
+      const deltaY = system.y - currentY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      // Only consider reasonably close systems (within ~800 units)
+      if (distance > 800) return;
+
+      // Determine primary direction
+      const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+      
+      let direction;
+      if (angle >= -45 && angle <= 45) {
+        direction = 'right';
+      } else if (angle >= 45 && angle <= 135) {
+        direction = 'down';
+      } else if (angle >= 135 || angle <= -135) {
+        direction = 'left';
+      } else {
+        direction = 'up';
+      }
+
+      if (!this.connectedSystems.has(direction) || distance < this.connectedSystems.get(direction).distance) {
+        this.connectedSystems.set(direction, { system, distance, direction });
+      }
+    });
+  }
+
   showTooltip(system, screenX, screenY) {
     const tooltip = document.getElementById('tooltip');
     if (system && window.gameState) { // Ensure gameState is available
@@ -260,9 +299,11 @@ export class MapRenderer {
       // Smooth camera movement
       this.updateCamera(deltaTime);
       
+      // Call draw methods in order
       this.clear();
       this.drawBackground();
       this.drawLanes();
+      this.drawFleetRoutes();
       this.drawSystems();
       this.drawFleets(deltaTime);
       this.drawUI();
@@ -344,63 +385,159 @@ export class MapRenderer {
     this.ctx.globalAlpha = 1;
   }
 
-drawLanes() {
-          if (!this.trades || this.trades.length === 0) {
-            // If there are no trades, or trades data isn't loaded, try to draw old lanes if they exist
-            // This is a fallback for existing functionality if setTrades isn't called yet.
-            // Ideally, this.lanes would be deprecated if this.trades is reliably populated.
-            if (this.lanes && this.lanes.length > 0) {
-                this.ctx.strokeStyle = this.colors.lane;
-                this.ctx.lineWidth = 2;
-                this.ctx.globalAlpha = 0.6;
+          drawLanes() {
+            // Draw navigation hyperlanes first (based on our navigation logic)
+            this.drawNavigationLanes();
 
-                this.lanes.forEach(lane => {
-                    const fromPos = this.worldToScreen(lane.fromX, lane.fromY);
-                    const toPos = this.worldToScreen(lane.toX, lane.toY);
+            if (!this.trades || this.trades.length === 0) {
+              // If there are no trades, or trades data isn't loaded, try to draw old lanes if they exist
+              // This is a fallback for existing functionality if setTrades isn't called yet.
+              // Ideally, this.lanes would be deprecated if this.trades is reliably populated.
+              if (this.lanes && this.lanes.length > 0) {
+                  this.ctx.strokeStyle = this.colors.lane;
+                  this.ctx.lineWidth = 2;
+                  this.ctx.globalAlpha = 0.6;
 
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(fromPos.x, fromPos.y);
-                    this.ctx.lineTo(toPos.x, toPos.y);
-                    this.ctx.stroke();
-                });
-                this.ctx.globalAlpha = 1;
+                  this.lanes.forEach(lane => {
+                      const fromPos = this.worldToScreen(lane.fromX, lane.fromY);
+                      const toPos = this.worldToScreen(lane.toX, lane.toY);
+
+                      this.ctx.beginPath();
+                      this.ctx.moveTo(fromPos.x, fromPos.y);
+                      this.ctx.lineTo(toPos.x, toPos.y);
+                      this.ctx.stroke();
+                  });
+                  this.ctx.globalAlpha = 1;
+              }
+              return;
             }
-            return;
+
+            this.ctx.globalAlpha = 0.7; // Default alpha for lanes
+
+            this.trades.forEach(trade => {
+              const fromSystem = this.systems.find(s => s.id === trade.from_id);
+              const toSystem = this.systems.find(s => s.id === trade.to_id);
+
+              if (!fromSystem || !toSystem) {
+                return; // Skip if systems not found
+              }
+
+              const fromPos = this.worldToScreen(fromSystem.x, fromSystem.y);
+              const toPos = this.worldToScreen(toSystem.x, toSystem.y);
+
+              // Color based on hover state
+              let color = this.colors.lane;
+              if (this.hoveredTradeRoutes && this.hoveredTradeRoutes.some(route => route.id === trade.id)) {
+                color = this.colors.laneActive;
+                this.ctx.lineWidth = 3;
+              } else {
+                this.ctx.lineWidth = 2;
+              }
+
+              this.ctx.strokeStyle = color;
+              this.ctx.beginPath();
+              this.ctx.moveTo(fromPos.x, fromPos.y);
+              this.ctx.lineTo(toPos.x, toPos.y);
+              this.ctx.stroke();
+            });
+
+            this.ctx.globalAlpha = 1; // Reset globalAlpha
           }
 
-          this.ctx.globalAlpha = 0.7; // Default alpha for lanes
+  drawNavigationLanes() {
+    if (!this.selectedSystem || this.systems.length === 0) return;
 
-          this.trades.forEach(trade => {
-            const fromSystem = this.systems.find(s => s.id === trade.from_id);
-            const toSystem = this.systems.find(s => s.id === trade.to_id);
+    this.ctx.strokeStyle = 'rgba(64, 128, 255, 0.15)';
+    this.ctx.lineWidth = 1;
+    this.ctx.globalAlpha = 0.8;
+    this.ctx.setLineDash([3, 6]);
 
-            if (!fromSystem || !toSystem) {
-              return; // Skip if systems not found
-            }
+    const currentX = this.selectedSystem.x;
+    const currentY = this.selectedSystem.y;
 
-            const fromPos = this.worldToScreen(fromSystem.x, fromSystem.y);
-            const toPos = this.worldToScreen(toSystem.x, toSystem.y);
+    // Draw lanes to all systems within navigation range
+    this.systems.forEach(system => {
+      if (system.id === this.selectedSystem.id) return;
 
-            const isHovered = this.hoveredTradeRoutes.some(htr => htr.id === trade.id);
+      const deltaX = system.x - currentX;
+      const deltaY = system.y - currentY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-            if (isHovered) {
-              this.ctx.strokeStyle = this.colors.laneActive; // Use a more prominent color
-              this.ctx.lineWidth = 4; // Thicker line for hovered routes
-              this.ctx.globalAlpha = 1; // More opaque
-            } else {
-              this.ctx.strokeStyle = this.colors.lane;
-              this.ctx.lineWidth = 2;
-              this.ctx.globalAlpha = 0.6; // Default alpha
-            }
+      // Only draw lanes within navigation range
+      if (distance > 800) return;
 
-            this.ctx.beginPath();
-            this.ctx.moveTo(fromPos.x, fromPos.y);
-            this.ctx.lineTo(toPos.x, toPos.y);
-            this.ctx.stroke();
-          });
+      const fromPos = this.worldToScreen(currentX, currentY);
+      const toPos = this.worldToScreen(system.x, system.y);
 
-          this.ctx.globalAlpha = 1; // Reset globalAlpha
-        }
+      this.ctx.beginPath();
+      this.ctx.moveTo(fromPos.x, fromPos.y);
+      this.ctx.lineTo(toPos.x, toPos.y);
+      this.ctx.stroke();
+    });
+
+    this.ctx.setLineDash([]);
+    this.ctx.globalAlpha = 1;
+  }
+
+  drawFleetRoutes() {
+    if (this.fleetRoutes.length === 0) return;
+
+    this.ctx.strokeStyle = '#8b5cf6';
+    this.ctx.lineWidth = 3;
+    this.ctx.globalAlpha = 0.8;
+
+    this.fleetRoutes.forEach(route => {
+      const fromPos = this.worldToScreen(route.from.x, route.from.y);
+      const toPos = this.worldToScreen(route.to.x, route.to.y);
+
+      // Draw animated line
+      this.ctx.setLineDash([10, 5]);
+      this.ctx.lineDashOffset = -Date.now() / 50;
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(fromPos.x, fromPos.y);
+      this.ctx.lineTo(toPos.x, toPos.y);
+      this.ctx.stroke();
+
+      // Draw arrow at destination
+      const angle = Math.atan2(toPos.y - fromPos.y, toPos.x - fromPos.x);
+      const arrowLength = 15;
+      
+      this.ctx.setLineDash([]);
+      this.ctx.fillStyle = '#8b5cf6';
+      this.ctx.beginPath();
+      this.ctx.moveTo(toPos.x, toPos.y);
+      this.ctx.lineTo(
+        toPos.x - arrowLength * Math.cos(angle - Math.PI / 6),
+        toPos.y - arrowLength * Math.sin(angle - Math.PI / 6)
+      );
+      this.ctx.lineTo(
+        toPos.x - arrowLength * Math.cos(angle + Math.PI / 6),
+        toPos.y - arrowLength * Math.sin(angle + Math.PI / 6)
+      );
+      this.ctx.closePath();
+      this.ctx.fill();
+    });
+
+    this.ctx.setLineDash([]);
+    this.ctx.globalAlpha = 1;
+  }
+
+  showFleetRoute(fromSystem, toSystem) {
+    // Add temporary route visualization
+    this.fleetRoutes.push({
+      from: fromSystem,
+      to: toSystem,
+      timestamp: Date.now()
+    });
+
+    // Remove route after 3 seconds
+    setTimeout(() => {
+      this.fleetRoutes = this.fleetRoutes.filter(route => 
+        route.timestamp !== this.fleetRoutes[this.fleetRoutes.length - 1].timestamp
+      );
+    }, 3000);
+  }
 
 drawSystems() {
           this.systems.forEach(system => {
@@ -417,6 +554,16 @@ drawSystems() {
             }
 
             let color;
+            let isConnected = false;
+            
+            // Check if this system is connected to selected system
+            for (const [direction, connectedData] of this.connectedSystems) {
+              if (connectedData.system.id === system.id) {
+                isConnected = true;
+                break;
+              }
+            }
+
             if (!system.owner_id) {
               color = this.colors.starUnowned;
             } else if (system.owner_id === this.currentUserId) {
@@ -448,6 +595,17 @@ drawSystems() {
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, glowDrawRadius, 0, Math.PI * 2);
             this.ctx.fill();
+
+            // Add navigation hint for connected systems
+            if (isConnected && this.selectedSystem) {
+              this.ctx.strokeStyle = '#ffffff80';
+              this.ctx.lineWidth = 2;
+              this.ctx.setLineDash([5, 5]);
+              this.ctx.beginPath();
+              this.ctx.arc(screenPos.x, screenPos.y, systemDrawRadius + 4, 0, Math.PI * 2);
+              this.ctx.stroke();
+              this.ctx.setLineDash([]);
+            }
 
             const innerGradient = this.ctx.createRadialGradient(
               screenPos.x, screenPos.y, 0,
@@ -564,29 +722,47 @@ drawSystems() {
   drawFleets(deltaTime) {
     this.fleets.forEach(fleet => {
       let worldX, worldY;
+      let isMoving = false;
+      let movementAngle = 0;
       
-      // Check if fleet is stationary (at current_system) or moving (to destination_system)
-      if (fleet.destination_system && fleet.destination_system !== fleet.current_system) {
+      // Check if fleet is in transit (has both current_system and destination_system)
+      if (fleet.destination_system && fleet.destination_system !== "" && 
+          fleet.current_system && fleet.current_system !== "" && 
+          fleet.destination_system !== fleet.current_system) {
         // Fleet is moving between systems
         const fromSystem = this.systems.find(s => s.id === fleet.current_system);
         const toSystem = this.systems.find(s => s.id === fleet.destination_system);
         
         if (!fromSystem || !toSystem) return;
 
+        // Validate hyperlane range (same as navigation system)
+        const deltaX = toSystem.x - fromSystem.x;
+        const deltaY = toSystem.y - fromSystem.y;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        // Only allow movement within hyperlane range
+        if (distance > 800) return;
+
+        isMoving = true;
+        
         // Calculate progress based on ETA
         let progress = 0.5; // Default fallback
         if (fleet.eta) {
           const now = new Date();
           const eta = new Date(fleet.eta);
-          const departureTime = new Date(eta.getTime() - (10 * 60 * 1000)); // Assume 10 minute journey
+          const departureTime = new Date(eta.getTime() - (2 * 60 * 1000)); // 2 minute journey
           const totalTime = eta.getTime() - departureTime.getTime();
           const elapsed = now.getTime() - departureTime.getTime();
           progress = Math.max(0, Math.min(1, elapsed / totalTime));
         }
-        
+
+        // Interpolate position along the hyperlane
         worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
         worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
-      } else {
+        
+        // Calculate movement angle for directional arrow
+        movementAngle = Math.atan2(toSystem.y - fromSystem.y, toSystem.x - fromSystem.x);
+      } else if (fleet.current_system && fleet.current_system !== "") {
         // Fleet is stationary at current system
         const currentSystem = this.systems.find(s => s.id === fleet.current_system);
         if (!currentSystem) return;
@@ -594,33 +770,75 @@ drawSystems() {
         // Offset fleet position slightly from system center to make it visible
         worldX = currentSystem.x + 15;
         worldY = currentSystem.y + 15;
+      } else {
+        // Fleet has no valid position, skip rendering
+        return;
       }
-      
+
       const screenPos = this.worldToScreen(worldX, worldY);
 
-      // Draw fleet icon (triangle for directional indication)
-      this.ctx.fillStyle = this.colors.fleet;
-      this.ctx.strokeStyle = '#ffffff';
-      this.ctx.lineWidth = 1;
-      
-      const size = 6 * this.zoom;
-      this.ctx.beginPath();
-      this.ctx.moveTo(screenPos.x, screenPos.y - size);
-      this.ctx.lineTo(screenPos.x - size, screenPos.y + size);
-      this.ctx.lineTo(screenPos.x + size, screenPos.y + size);
-      this.ctx.closePath();
-      this.ctx.fill();
-      this.ctx.stroke();
+      if (isMoving) {
+        // Draw moving fleet as directional arrow along hyperlane
+        this.ctx.fillStyle = '#8b5cf6';
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 2;
+
+        const size = 12 * this.zoom;
+        
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.rotate(movementAngle);
+        
+        // Draw arrow pointing in direction of movement
+        this.ctx.beginPath();
+        this.ctx.moveTo(size, 0);
+        this.ctx.lineTo(-size/2, -size/2);
+        this.ctx.lineTo(-size/4, 0);
+        this.ctx.lineTo(-size/2, size/2);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.restore();
+        
+        // Draw pulsing glow effect for moving fleets
+        const glowRadius = (15 + Math.sin(Date.now() / 200) * 5) * this.zoom;
+        const gradient = this.ctx.createRadialGradient(
+          screenPos.x, screenPos.y, 0,
+          screenPos.x, screenPos.y, glowRadius
+        );
+        gradient.addColorStop(0, 'rgba(139, 92, 246, 0.3)');
+        gradient.addColorStop(1, 'rgba(139, 92, 246, 0)');
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+      } else {
+        // Draw stationary fleet as triangle
+        this.ctx.fillStyle = this.colors.fleet;
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 1;
+
+        const size = 8 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y - size);
+        this.ctx.lineTo(screenPos.x - size, screenPos.y + size);
+        this.ctx.lineTo(screenPos.x + size, screenPos.y + size);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+      }
 
       // Draw fleet name/identifier
       if (this.zoom > 0.5) {
         this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = `${Math.floor(10 * this.zoom)}px monospace`;
+        this.ctx.font = `${10 * this.zoom}px Arial`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(
           fleet.name || 'Fleet',
           screenPos.x,
-          screenPos.y - 12 * this.zoom
+          screenPos.y - 16 * this.zoom
         );
       }
     });
@@ -690,6 +908,7 @@ drawSystems() {
 
   setSelectedSystem(system) {
     this.selectedSystem = system;
+    this.updateConnectedSystems();
   }
 
   // Center view on a specific system with smooth movement

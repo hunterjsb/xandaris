@@ -53,7 +53,7 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		// Validate input
-		if req.FromID == "" || req.ToID == "" || req.Strength <= 0 {
+		if req.FromID == "" || req.ToID == "" {
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error": "Missing required fields",
 			})
@@ -61,21 +61,14 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		user := info.(*models.Record)
 
-		// Verify ownership of source system
-		fromSystem, err := app.Dao().FindRecordById("systems", req.FromID)
+		// Check if both systems exist
+		_, err := app.Dao().FindRecordById("systems", req.FromID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
 				"error": "Source system not found",
 			})
 		}
 
-		if fromSystem.GetString("owner_id") != user.Id {
-			return c.JSON(http.StatusForbidden, map[string]string{
-				"error": "You don't own the source system",
-			})
-		}
-
-		// Check if target system exists
 		_, err = app.Dao().FindRecordById("systems", req.ToID)
 		if err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{
@@ -83,50 +76,48 @@ func FleetOrderHandler(app *pocketbase.PocketBase) echo.HandlerFunc {
 			})
 		}
 
-		// Check if source has enough population
-		if fromSystem.GetInt("pop") < req.Strength*10 {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "Insufficient population for fleet strength",
-			})
-		}
-
-		// Calculate ETA (12 ticks travel time = 2 minutes at 6 ticks/minute)
-		currentTick := tick.GetCurrentTick(app)
-		travelTime := int64(12)
-		etaTick := currentTick + travelTime
-
-		// Create fleet record
-		fleetCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
+		// Find an existing fleet at the source system that's NOT already moving
+		fleetFilter := fmt.Sprintf("owner_id='%s' && current_system='%s' && (destination_system='' || destination_system IS NULL)", user.Id, req.FromID)
+		fmt.Printf("DEBUG: Fleet filter: %s\n", fleetFilter)
+		fleets, err := app.Dao().FindRecordsByFilter("fleets", fleetFilter, "", 1, 0)
 		if err != nil {
+			fmt.Printf("DEBUG: Fleet query error: %v\n", err)
 			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Fleet collection not found",
+				"error": "Failed to find fleets: " + err.Error(),
 			})
 		}
 
-		fleet := models.NewRecord(fleetCollection)
-		fleet.Set("owner_id", user.Id)
-		fleet.Set("from_id", req.FromID)
-		fleet.Set("to_id", req.ToID)
-		fleet.Set("eta_tick", etaTick)
-		fleet.Set("strength", req.Strength)
+		fmt.Printf("DEBUG: Found %d fleets\n", len(fleets))
+		if len(fleets) == 0 {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "No available fleets at source system",
+			})
+		}
+
+		// Use the first available fleet
+		fleet := fleets[0]
+		fmt.Printf("DEBUG: Moving fleet %s from %s to %s\n", fleet.Id, fleet.GetString("current_system"), req.ToID)
+
+		// Calculate ETA (2 minutes from now)
+		etaTime := time.Now().Add(2 * time.Minute)
+
+		// Move the existing fleet by setting destination and ETA
+		fleet.Set("destination_system", req.ToID)
+		fleet.Set("eta", etaTime)
+		fmt.Printf("DEBUG: Set destination_system=%s, eta=%s\n", req.ToID, etaTime.Format("2006-01-02 15:04:05"))
 
 		if err := app.Dao().SaveRecord(fleet); err != nil {
+			fmt.Printf("DEBUG: Failed to save fleet: %v\n", err)
 			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to create fleet",
+				"error": "Failed to move fleet: " + err.Error(),
 			})
 		}
-
-		// Reduce population from source system
-		fromSystem.Set("pop", fromSystem.GetInt("pop")-req.Strength*10)
-		if err := app.Dao().SaveRecord(fromSystem); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error": "Failed to update source system",
-			})
-		}
+		fmt.Printf("DEBUG: Fleet saved successfully!\n")
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"fleet_id": fleet.Id,
-			"eta_tick": etaTick,
+			"success":  true,
+			"message":  fmt.Sprintf("Fleet %s dispatched from %s to %s", fleet.Id[:8], req.FromID[:8], req.ToID[:8]),
 		})
 	}
 }

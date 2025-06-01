@@ -222,27 +222,43 @@ export class UIController {
     const panelHeight = container.offsetHeight;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const margin = 15; // Margin from system icon and viewport edges
+    const margin = 20; // Base margin from viewport edges
+    const systemOffset = 120; // Distance from system center to avoid covering navigation options
 
-    let top = screenY + margin;
-    let left = screenX + margin;
+    // Start with a larger offset from the system to avoid covering nearby systems
+    let top = screenY - systemOffset;
+    let left = screenX + systemOffset;
 
-    // Adjust if too close to right edge
-    if (left + panelWidth + margin > viewportWidth) {
-      left = screenX - panelWidth - margin; // Position to the left of the cursor
+    // Try different positions in order of preference to avoid covering the system
+    const positions = [
+      { left: screenX + systemOffset, top: screenY - systemOffset }, // Top-right
+      { left: screenX - panelWidth - systemOffset, top: screenY - systemOffset }, // Top-left
+      { left: screenX + systemOffset, top: screenY + systemOffset }, // Bottom-right
+      { left: screenX - panelWidth - systemOffset, top: screenY + systemOffset }, // Bottom-left
+      { left: screenX + systemOffset, top: screenY - panelHeight / 2 }, // Center-right
+      { left: screenX - panelWidth - systemOffset, top: screenY - panelHeight / 2 } // Center-left
+    ];
+
+    // Find the first position that fits within viewport
+    let bestPosition = positions[0];
+    for (const pos of positions) {
+      if (pos.left >= margin && 
+          pos.left + panelWidth + margin <= viewportWidth &&
+          pos.top >= margin && 
+          pos.top + panelHeight + margin <= viewportHeight) {
+        bestPosition = pos;
+        break;
+      }
     }
-    // Adjust if too close to bottom edge
-    if (top + panelHeight + margin > viewportHeight) {
-      top = viewportHeight - panelHeight - margin; // Align to bottom edge
-    }
-    // Adjust if too close to left edge (after potential flip)
-    if (left < margin) {
-      left = margin; // Align to left edge
-    }
-    // Adjust if too close to top edge
-    if (top < margin) {
-      top = margin; // Align to top edge
-    }
+
+    left = bestPosition.left;
+    top = bestPosition.top;
+
+    // Final boundary adjustments if no perfect position was found
+    if (left < margin) left = margin;
+    if (left + panelWidth + margin > viewportWidth) left = viewportWidth - panelWidth - margin;
+    if (top < margin) top = margin;
+    if (top + panelHeight + margin > viewportHeight) top = viewportHeight - panelHeight - margin;
 
     container.style.left = `${left}px`;
     container.style.top = `${top}px`;
@@ -378,7 +394,11 @@ export class UIController {
         <div class="p-4">
 
           <div class="flex-1 overflow-hidden flex flex-col">
-            <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets in System</h3>
+            <div class="flex justify-end mb-2">
+              <div class="text-xs text-space-400">
+                <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">↑↓←→</kbd> Navigate • <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">Shift+↑↓←→</kbd> Send Fleet
+              </div>
+            </div>
             <ul id="system-planets-list" class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             </ul>
           </div>

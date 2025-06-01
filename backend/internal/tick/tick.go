@@ -165,6 +165,7 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, resourceType string
 	return nil
 }
 
+
 // ResolveFleetArrivals handles fleet arrivals and combat
 func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
 	// Get all fleets that have an ETA in the past (should have arrived)
@@ -176,14 +177,13 @@ func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
 	}
 
 	for _, fleet := range fleets {
-		if err := resolveFleetArrival(app, fleet); err != nil {
-			log.Printf("Failed to resolve fleet %s arrival: %v", fleet.Id, err)
-			continue
-		}
+		// Move fleet to destination (set current_system, clear destination and eta)
+		fleet.Set("current_system", fleet.GetString("destination_system"))
+		fleet.Set("destination_system", "")
+		fleet.Set("eta", "")
 
-		// Delete the fleet record (it has arrived)
-		if err := app.Dao().DeleteRecord(fleet); err != nil {
-			log.Printf("Failed to delete fleet %s: %v", fleet.Id, err)
+		if err := app.Dao().SaveRecord(fleet); err != nil {
+			log.Printf("Failed to save arrived fleet %s: %v", fleet.Id, err)
 		}
 	}
 

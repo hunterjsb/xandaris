@@ -678,21 +678,50 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewUnauthorizedError("Authentication required", nil)
 		}
 
-		// Create fleet record
-		collection, err := app.Dao().FindCollectionByNameOrId("fleets")
+		// Find an existing fleet at the source system that's NOT already moving
+		fleetFilter := fmt.Sprintf("owner_id='%s' && current_system='%s' && destination_system=''", user.Id, data.FromID)
+		fmt.Printf("DEBUG Fleet Filter: %s\n", fleetFilter)
+		fleets, err := app.Dao().FindRecordsByFilter("fleets", fleetFilter, "", 1, 0)
 		if err != nil {
-			return apis.NewBadRequestError("Fleets collection not found", err)
+			fmt.Printf("DEBUG Fleet Filter Error: %v\n", err)
+			return apis.NewBadRequestError("Failed to find fleets", err)
+		}
+		fmt.Printf("DEBUG Found %d fleets\n", len(fleets))
+
+		if len(fleets) == 0 {
+			return apis.NewBadRequestError("No available fleets at source system", nil)
 		}
 
-		fleet := models.NewRecord(collection)
-		fleet.Set("owner_id", user.Id)
-		fleet.Set("from_id", data.FromID)
-		fleet.Set("to_id", data.ToID)
-		fleet.Set("strength", data.Strength)
-		fleet.Set("eta_tick", 12) // 2 hours = 12 ticks
+		// Use the first available fleet
+		fleet := fleets[0]
+
+		// Validate hyperlane range (same as navigation system - 800 units max)
+		fromSystem, err := app.Dao().FindRecordById("systems", data.FromID)
+		if err != nil {
+			return apis.NewBadRequestError("Source system not found", err)
+		}
+		toSystem, err := app.Dao().FindRecordById("systems", data.ToID)
+		if err != nil {
+			return apis.NewBadRequestError("Target system not found", err)
+		}
+
+		deltaX := toSystem.GetFloat("x") - fromSystem.GetFloat("x")
+		deltaY := toSystem.GetFloat("y") - fromSystem.GetFloat("y")
+		distance := math.Sqrt(deltaX*deltaX + deltaY*deltaY)
+
+		if distance > 800 {
+			return apis.NewBadRequestError("Target system too far - outside hyperlane range", nil)
+		}
+
+		// Calculate ETA (2 minutes from now)
+		etaTime := time.Now().Add(2 * time.Minute)
+
+		// Move the existing fleet by setting destination and ETA, keeping current_system for hyperlane tracking
+		fleet.Set("destination_system", data.ToID)
+		fleet.Set("eta", etaTime)
 
 		if err := app.Dao().SaveRecord(fleet); err != nil {
-			return apis.NewBadRequestError("Failed to create fleet", err)
+			return apis.NewBadRequestError("Failed to move fleet", err)
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{

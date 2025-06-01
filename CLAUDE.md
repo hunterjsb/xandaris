@@ -21,6 +21,7 @@ XANDARIS is a real-time 4X space strategy game featuring complex colony manageme
 - Install dependencies: `go mod tidy`
 - Build server: `go build -o xandaris cmd/main.go`
 - Run server: `./xandaris serve --dev --dir=pb_data`
+- **Restart server**: `./scripts/restart.sh` (builds, stops, and starts server)
 - Run migrations: `./xandaris migrate up`
 
 ### Database Management
@@ -181,6 +182,7 @@ To enable Discord OAuth:
 1. Create migration: `./xandaris migrate create "description"`
 2. Apply migration: `./xandaris migrate up`
 3. Reset if needed: `./util clean && ./seed`
+4. After code changes: `./scripts/restart.sh` (auto-builds and restarts)
 
 ### Debugging Economy
 - Check colony distribution: `./util check`
