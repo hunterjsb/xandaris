@@ -27,6 +27,12 @@ class XanNationApp {
 
     // Initialize map renderer
     this.mapRenderer = new MapRenderer("game-canvas");
+    
+    // Set initial user ID if already logged in
+    const currentUser = authManager.getUser();
+    if (currentUser) {
+      this.mapRenderer.setCurrentUserId(currentUser.id);
+    }
 
     // Subscribe to auth changes
     authManager.subscribe((user) => {
@@ -46,6 +52,11 @@ class XanNationApp {
 
   handleAuthChange(user) {
     this.uiController.updateAuthUI(user);
+
+    // Set current user ID on map renderer for ownership checks
+    if (this.mapRenderer) {
+      this.mapRenderer.setCurrentUserId(user?.id || null);
+    }
 
     if (user) {
       console.log("User logged in:", user.username);

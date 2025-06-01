@@ -30,7 +30,7 @@ export class MapRenderer {
     this.colors = {
       background: '#000508',
       starUnowned: '#4080ff',        // Nebula blue for unowned (original 'star')
-      starPlayerOwned: '#00ffea', // Bright cyan/teal for player-owned
+      starPlayerOwned: '#00ff66', // Bright green for player-owned colonized planets
       starOtherOwned: '#f1a9ff',   // Plasma pink for other AI/players (original 'starOwned')
       starEnemy: '#ff6b6b',   // Bright red for enemies (already distinct)
       // starNeutral: '#8cb3ff', // Lighter blue for neutral - can be an alias for starUnowned or specific if needed
@@ -254,13 +254,17 @@ export class MapRenderer {
     if (system && window.gameState) { // Ensure gameState is available
       const planets = window.gameState.getSystemPlanets(system.id);
       const totalSystemPop = planets.reduce((sum, p) => sum + (p.Pop || 0), 0);
+      
+      // Check if player owns any planets in this system
+      const isPlayerOwned = planets.some(planet => planet.colonized_by === this.currentUserId);
+      const ownerText = isPlayerOwned ? 'You' : 'Uncolonized';
 
       tooltip.innerHTML = `
         <div class="font-semibold">${system.name || `System ${system.id.slice(-4)}`}</div>
         <div class="text-xs">
           <div>Position: ${system.x}, ${system.y}</div>
           <div>Population: ${totalSystemPop.toLocaleString()}</div>
-          <div>Owner: ${system.owner_name || 'Uncolonized'}</div>
+          <div>Owner: ${ownerText}</div>
           <div>Planets: ${planets.length}</div>
         </div>
       `;
@@ -555,6 +559,7 @@ drawSystems() {
 
             let color;
             let isConnected = false;
+            let isPlayerOwned = false;
             
             // Check if this system is connected to selected system
             for (const [direction, connectedData] of this.connectedSystems) {
@@ -564,10 +569,16 @@ drawSystems() {
               }
             }
 
-            if (!system.owner_id) {
-              color = this.colors.starUnowned;
-            } else if (system.owner_id === this.currentUserId) {
+            // Check if player owns any planets in this system
+            if (window.gameState) {
+              const planets = window.gameState.getSystemPlanets(system.id);
+              isPlayerOwned = planets.some(planet => planet.colonized_by === this.currentUserId);
+            }
+
+            if (isPlayerOwned) {
               color = this.colors.starPlayerOwned;
+            } else if (!system.owner_id) {
+              color = this.colors.starUnowned;
             } else {
               // Here, you might distinguish between neutral AI and enemy AI if data allows.
               // For now, any other owner uses starOtherOwned.
@@ -620,8 +631,19 @@ drawSystems() {
             this.ctx.arc(screenPos.x, screenPos.y, systemDrawRadius, 0, Math.PI * 2);
             this.ctx.fill();
 
-            if (system.owner_id && this.zoom > 0.6) {
-              this.ctx.strokeStyle = this.colors.starOwned;
+            // Add border for colonized planets (player-owned)
+            if (isPlayerOwned) {
+              this.ctx.strokeStyle = '#00ff88'; // Slightly brighter green for border
+              this.ctx.lineWidth = 2 * this.zoom * scaleFactor;
+              this.ctx.globalAlpha = 0.9;
+              this.ctx.beginPath();
+              this.ctx.arc(screenPos.x, screenPos.y, systemDrawRadius + 2, 0, Math.PI * 2);
+              this.ctx.stroke();
+              this.ctx.globalAlpha = 1;
+            }
+
+            if (isPlayerOwned && this.zoom > 0.6) {
+              this.ctx.strokeStyle = this.colors.starPlayerOwned;
               this.ctx.lineWidth = 1;
               this.ctx.globalAlpha = 0.8;
 
