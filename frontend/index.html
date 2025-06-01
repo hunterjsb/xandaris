@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <link rel="icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <title>Xan Nation</title>
   </head>
   <body class="text-space-100">
@@ -29,15 +30,13 @@
           <div class="flex items-center space-x-6"> <!-- Increased spacing for the new group -->
             <div id="game-status-indicators" class="flex items-center space-x-3 text-sm">
               <span id="game-tick-display" class="text-sky-300">Tick: 0</span>
-              <span id="player-count-display" class="text-green-300">Active Factions: 0</span>
               <span id="next-tick-display" class="text-amber-300">Next Tick: --:--</span>
             </div>
             <div id="resources" class="flex space-x-3 text-sm">
-              <span class="text-nebula-300">Credits: <span id="credits">0</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span></span>
-              <span class="text-space-300">Food: <span id="food">0</span></span>
-              <span class="text-void-300">Ore: <span id="ore">0</span></span>
-              <span class="text-plasma-300">Goods: <span id="goods">0</span></span>
-              <span class="text-space-400">Fuel: <span id="fuel">0</span></span>
+              <button id="credits-btn" class="text-nebula-300 hover:text-nebula-200 hover:bg-nebula-900/20 px-2 py-1 rounded transition-all cursor-pointer border border-nebula-600/30 hover:border-nebula-500/50 flex items-center gap-1">
+                <span class="material-icons text-base">account_balance_wallet</span>
+                <span id="credits">0</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span>
+              </button>
             </div>
             <div id="auth-section">
               <button id="login-btn" class="px-3 py-1 bg-gradient-to-r from-nebula-600 to-plasma-600 hover:from-nebula-500 hover:to-plasma-500 rounded text-sm transition-all duration-200">

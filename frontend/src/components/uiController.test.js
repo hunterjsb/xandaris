@@ -28,7 +28,6 @@ describe('UIController', () => {
       </div>
       <button id="login-btn"></button>
       <div id="game-tick-display">Tick: 0</div>
-      <div id="player-count-display">Active Factions: 0</div>
       <div id="next-tick-display">Next Tick: (10s period)</div>
     `;
     mockExpandedViewContainer = document.getElementById('expanded-view-container');

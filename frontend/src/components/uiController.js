@@ -813,13 +813,6 @@ export class UIController {
   updateResourcesUI(resources) {
     document.getElementById("credits").textContent =
       resources.credits?.toLocaleString();
-    document.getElementById("food").textContent =
-      resources.food.toLocaleString();
-    document.getElementById("ore").textContent = resources.ore.toLocaleString();
-    document.getElementById("goods").textContent =
-      resources.goods.toLocaleString();
-    document.getElementById("fuel").textContent =
-      resources.fuel.toLocaleString();
 
     // Show credit income if available
     const incomeElement = document.getElementById("credit-income");
@@ -828,6 +821,12 @@ export class UIController {
       incomeElement.style.display = "inline";
     } else {
       incomeElement.style.display = "none";
+    }
+
+    // Set up credits button click handler for breakdown modal
+    const creditsBtn = document.getElementById("credits-btn");
+    if (creditsBtn) {
+      creditsBtn.onclick = () => this.showCreditsBreakdown();
     }
   }
 
@@ -854,11 +853,7 @@ export class UIController {
       }
     }
 
-    const playerCountElement = document.getElementById("player-count-display");
-    if (playerCountElement) {
-      // This counts systems with owners, which is "Active Factions"
-      playerCountElement.textContent = `Active Factions: ${state.systems.filter((s) => s.owner_id).length}`;
-    }
+
 
     // Update tick rate display (this part of the logic might be combined with startTickTimer or be static if only countdown changes)
     const nextTickRateElement = document.getElementById("next-tick-display");
@@ -1396,4 +1391,90 @@ export class UIController {
     `,
     );
   }
-}
+
+  showCreditsBreakdown() {
+      if (!this.currentUser) {
+        this.showError("Please log in to view credit breakdown");
+        return;
+      }
+
+      // Get all crypto_server buildings for the user
+      const buildings = this.gameState?.getPlayerBuildings() || [];
+      const cryptoServers = buildings.filter(building => {
+        const buildingTypeName = this.gameState?.buildingTypes?.find(bt => bt.id === building.type)?.name;
+        return buildingTypeName === 'crypto_server';
+      });
+
+      let totalCredits = this.gameState?.playerResources?.credits || 0;
+      let totalProduction = 0;
+
+      // Calculate total production per tick
+      cryptoServers.forEach(building => {
+        if (building.credits_per_tick) {
+          totalProduction += building.credits_per_tick;
+        }
+      });
+
+      const buildingsList = cryptoServers.length > 0 ? 
+        cryptoServers.map(building => {
+          const systemName = building.system_name || `System ${building.system_id?.slice(-3)}`;
+          const storedCredits = building.stored_credits || 'Unknown';
+          const production = building.credits_per_tick || 1;
+        
+          return `
+            <div class="bg-space-700 p-3 rounded mb-2">
+              <div class="flex justify-between items-center">
+                <div>
+                  <div class="font-semibold text-nebula-300">Crypto Server</div>
+                  <div class="text-sm text-space-300">Location: ${systemName}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-nebula-300">+${production}/tick</div>
+                  <div class="text-xs text-space-400">Level ${building.level || 1}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('') :
+        '<div class="text-space-400 text-center py-4">No crypto servers found</div>';
+
+      this.showModal(
+        '<span class="flex items-center gap-2"><span class="material-icons">account_balance_wallet</span>Credits Breakdown</span>',
+        `
+          <div class="space-y-4">
+            <div class="bg-space-800 p-4 rounded-lg">
+              <div class="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div class="text-2xl font-bold text-nebula-300">${totalCredits.toLocaleString()}</div>
+                  <div class="text-sm text-space-400">Total Credits</div>
+                </div>
+                <div>
+                  <div class="text-2xl font-bold text-plasma-300">+${totalProduction}</div>
+                  <div class="text-sm text-space-400">Per Tick</div>
+                </div>
+              </div>
+            </div>
+          
+            <div>
+              <h3 class="text-lg font-semibold mb-3 text-nebula-200">Credit Sources</h3>
+              <div class="max-h-60 overflow-y-auto custom-scrollbar">
+                ${buildingsList}
+              </div>
+            </div>
+
+            ${cryptoServers.length === 0 ? `
+              <div class="bg-amber-900/20 border border-amber-600/30 p-3 rounded">
+                <div class="text-amber-300 text-sm">
+                  💡 <strong>Tip:</strong> Build Crypto Servers on your planets to generate credits over time!
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        
+          <button class="w-full btn btn-secondary mt-4" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
+            Close
+          </button>
+        `
+      );
+    }
+  }
