@@ -50,6 +50,25 @@
   }
 }
 
+/* Floating Panel Style */
+@layer components {
+  .floating-panel {
+    @apply fixed bg-space-800/90 backdrop-blur-lg p-0 rounded-lg shadow-2xl border border-space-700/50;
+    /* bg-space-800/90 for slight transparency. Or use @apply aerogel-panel; for the full glass effect */
+    z-index: 20; /* Above canvas, below modals (modal z-index is typically higher e.g. 50 for overlay) */
+    width: 384px; /* Standardized width (12 * 32px or 8 * 48px), common sidebar width */
+    max-height: calc(100vh - 40px); /* Max height considering some viewport padding */
+    /* overflow-y: auto; -- Handled by custom-scrollbar on child elements if needed */
+    /* Default hidden, to be shown by JS */
+    /* transform-origin: top left; */ /* Useful if scaling animations are added */
+  }
+  /* Ensure child elements that need scroll have it, like the planet list or details */
+  .floating-panel-content {
+     @apply h-full overflow-y-auto custom-scrollbar; /* p-4 applied to content div inside */
+  }
+}
+
+
 /* Canvas and UI specific styles */
 #game-canvas {
   image-rendering: pixelated;
@@ -72,6 +91,7 @@
   background: rgba(0, 5, 8, 0.8);
   backdrop-filter: blur(10px) saturate(120%);
   animation: fadeIn 0.3s ease-out;
+  z-index: 40; /* Ensure overlay is above floating panels but below modal content */
 }
 
 #modal-content {
@@ -79,6 +99,7 @@
   border-radius: 16px;
   animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   color: rgba(255, 255, 255, 0.95);
+  z-index: 50; /* Ensure modal content is on top */
 }
 
 @keyframes fadeIn {
@@ -97,7 +118,58 @@
   }
 }
 
-/* Button hover effects */
+/* === Button Styles === */
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-semibold text-white transition-all duration-200 ease-in-out focus:outline-none;
+    /* Basic hover transform and shadow, can be customized by specific btn types */
+    @apply hover:translate-y-[-1px] hover:shadow-[0_4px_8px_rgba(0,0,0,0.2)];
+  }
+
+  .btn-primary {
+    @apply btn bg-nebula-600 hover:bg-nebula-500 text-white;
+    /* Example: Specific shadow for primary buttons */
+    @apply hover:shadow-[0_6px_12px_rgba(0,102,255,0.3)];
+  }
+
+  .btn-secondary {
+    @apply btn bg-space-700 hover:bg-space-600 text-space-100;
+    @apply hover:shadow-[0_4px_8px_rgba(0,0,0,0.3)];
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 hover:bg-red-500 text-white;
+    @apply hover:shadow-[0_6px_12px_rgba(255,0,0,0.3)];
+  }
+
+  .btn-success {
+    @apply btn bg-emerald-600 hover:bg-emerald-500 text-white;
+     @apply hover:shadow-[0_6px_12px_rgba(0,255,102,0.3)];
+  }
+
+  .btn-warning {
+    @apply btn bg-yellow-500 hover:bg-yellow-400 text-space-900;
+    @apply hover:shadow-[0_6px_12px_rgba(255,255,0,0.3)];
+  }
+
+  .btn-text {
+    @apply btn bg-transparent hover:bg-space-700 text-space-100;
+  }
+
+  .btn-disabled {
+    @apply btn bg-gray-700 text-gray-400 cursor-not-allowed opacity-60 hover:translate-y-0 hover:shadow-none;
+  }
+
+  /* Icon button variant - minimal padding for close buttons etc. */
+  .btn-icon {
+    @apply p-1 -m-1 rounded-md text-gray-400 hover:text-white transition-colors;
+     /* No transform/shadow by default for icon buttons, can be added if needed */
+  }
+}
+
+
+/* Button hover effects - Deprecated by .btn component hover styles */
+/*
 .btn-hover {
   @apply transition-all duration-200 ease-in-out;
 }
@@ -106,6 +178,7 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
+*/
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {

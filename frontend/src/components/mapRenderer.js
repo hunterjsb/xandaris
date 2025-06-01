@@ -10,6 +10,7 @@ export class MapRenderer {
     this.hoveredSystem = null;
     this.hoveredTradeRoutes = [];
     this.trades = [];
+    this.currentUserId = null; // Added to store current player's ID
     
     // View settings
     this.viewX = 0;
@@ -21,10 +22,11 @@ export class MapRenderer {
     // Deep Space Colors
     this.colors = {
       background: '#000508',
-      star: '#4080ff',        // Nebula blue for unowned
-      starOwned: '#f1a9ff',   // Plasma pink for owned 
-      starEnemy: '#ff6b6b',   // Bright red for enemies
-      starNeutral: '#8cb3ff', // Lighter blue for neutral
+      starUnowned: '#4080ff',        // Nebula blue for unowned (original 'star')
+      starPlayerOwned: '#00ffea', // Bright cyan/teal for player-owned
+      starOtherOwned: '#f1a9ff',   // Plasma pink for other AI/players (original 'starOwned')
+      starEnemy: '#ff6b6b',   // Bright red for enemies (already distinct)
+      // starNeutral: '#8cb3ff', // Lighter blue for neutral - can be an alias for starUnowned or specific if needed
       lane: 'rgba(64, 128, 255, 0.2)',  // Faint blue lanes
       laneActive: 'rgba(241, 169, 255, 0.6)', // Active plasma lanes
       fleet: '#8b5cf6',       // Void purple for fleets
@@ -66,8 +68,17 @@ export class MapRenderer {
         const clickedSystem = this.getSystemAt(worldPos.x, worldPos.y);
         
         if (clickedSystem) {
-          this.selectSystem(clickedSystem);
+          this.selectSystem(clickedSystem); // Selects and centers
+          // Dispatch event with coordinates for UI panel positioning
+          const planetsInSystem = window.gameState.getSystemPlanets(clickedSystem.id);
+          this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
+            detail: { system: clickedSystem, planets: planetsInSystem, screenX: e.offsetX, screenY: e.offsetY },
+            bubbles: true
+          }));
         } else {
+          this.selectSystem(null); // Deselect system visually on map
+          // Dispatch event for UI to hide panel
+          this.canvas.dispatchEvent(new CustomEvent('mapClickedEmpty', { bubbles: true }));
           isPanning = true;
           lastMouseX = e.offsetX;
           lastMouseY = e.offsetY;
@@ -163,18 +174,19 @@ export class MapRenderer {
   }
 
   selectSystem(system) {
-    // Prevent selecting the same system multiple times
-    if (this.selectedSystem && this.selectedSystem.id === system.id) {
+    // If the same system is clicked, and it's already selected, do nothing.
+    // Allows re-triggering panel if it was closed by other means by handling event in mousedown.
+    if (this.selectedSystem && system && this.selectedSystem.id === system.id) {
+      // Still center, as focus might have shifted.
+      this.centerOnSystem(system.id);
       return;
     }
     
-    this.selectedSystem = system;
-    // Emit custom event for UI to handle, now including planets in that system
-    const planetsInSystem = window.gameState.getSystemPlanets(system.id);
-    this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
-      detail: { system, planets: planetsInSystem },
-      bubbles: true
-    }));
+    this.selectedSystem = system; // Set or clear selected system
+    if (system) {
+      this.centerOnSystem(system.id); // Center map on newly selected system
+    }
+    // Event dispatch with coordinates is now handled in mousedown
   }
 
   showTooltip(system, screenX, screenY) {
@@ -363,9 +375,16 @@ drawSystems() {
               scaleFactor = 1.2;
             }
 
-            let color = this.colors.star;
-            if (system.owner_id) {
-              color = this.colors.starOwned;
+            let color;
+            if (!system.owner_id) {
+              color = this.colors.starUnowned;
+            } else if (system.owner_id === this.currentUserId) {
+              color = this.colors.starPlayerOwned;
+            } else {
+              // Here, you might distinguish between neutral AI and enemy AI if data allows.
+              // For now, any other owner uses starOtherOwned.
+              // if (system.isEnemy) color = this.colors.starEnemy; else
+              color = this.colors.starOtherOwned;
             }
 
             const baseSystemDrawRadius = 6 * this.zoom;
@@ -414,16 +433,26 @@ drawSystems() {
             }
 
             if (this.selectedSystem && this.selectedSystem.id === system.id) {
-              const time = Date.now() * 0.005;
-              const pulseRadius = (12 + Math.sin(time) * 2) * this.zoom * scaleFactor;
+              const time = Date.now() * 0.005; // Keep time for pulse
 
+              // Enhanced: Persistent thicker border for selected system
+              const selectedBorderRadius = (baseSystemDrawRadius + 8 * this.zoom) * scaleFactor; // Slightly larger than pulse
+              this.ctx.strokeStyle = this.colors.selection; // Use a distinct selection color
+              this.ctx.lineWidth = 3 * this.zoom * scaleFactor; // Thicker line
+              this.ctx.globalAlpha = 0.9; // Strong alpha
+              this.ctx.beginPath();
+              this.ctx.arc(screenPos.x, screenPos.y, selectedBorderRadius, 0, Math.PI * 2);
+              this.ctx.stroke();
+
+              // Pulse animation (slightly increased radius and opacity)
+              const pulseRadius = (baseSystemDrawRadius + (6 + Math.sin(time) * 3) * this.zoom) * scaleFactor; // Increased pulse range
               this.ctx.strokeStyle = this.colors.selection;
-              this.ctx.lineWidth = 2;
-              this.ctx.globalAlpha = 0.8 + Math.sin(time) * 0.2;
+              this.ctx.lineWidth = 2 * this.zoom * scaleFactor; // Standard pulse line width
+              this.ctx.globalAlpha = 0.7 + Math.sin(time) * 0.3; // More variance in opacity
               this.ctx.beginPath();
               this.ctx.arc(screenPos.x, screenPos.y, pulseRadius, 0, Math.PI * 2);
               this.ctx.stroke();
-              this.ctx.globalAlpha = 1;
+              this.ctx.globalAlpha = 1; // Reset alpha
             }
 
             if (this.zoom > 0.8) {
@@ -554,6 +583,10 @@ drawSystems() {
 
   setFleets(fleets) {
     this.fleets = fleets;
+  }
+
+  setCurrentUserId(userId) { // New method
+    this.currentUserId = userId;
   }
 
   setSelectedSystem(system) {
