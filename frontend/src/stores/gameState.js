@@ -26,9 +26,11 @@ export class GameState {
 
     this.callbacks = [];
     this.initialized = false;
+    this.updatingResources = false; // Prevent overlapping resource updates
     
     // Debouncing and update prevention
     this.updateTimer = null;
+    this.tickRefreshTimer = null; // Debounce tick refreshes
     this.pendingUpdate = false;
     this.isUpdating = false;
 
@@ -257,10 +259,17 @@ export class GameState {
   handleTick(tickData) {
     this.currentTick = tickData.tick || this.currentTick + 1;
 
-    // Refresh data every tick, which includes resource calculation.
-    // Consider optimizing if performance becomes an issue.
-    this.refreshGameData();
-    // notifyCallbacks() is called within refreshGameData and updatePlayerResources
+    // Debounce tick updates to prevent rapid refreshes
+    if (this.tickRefreshTimer) {
+      clearTimeout(this.tickRefreshTimer);
+    }
+    
+    this.tickRefreshTimer = setTimeout(() => {
+      // Refresh data every tick, which includes resource calculation.
+      // Consider optimizing if performance becomes an issue.
+      this.refreshGameData();
+      // notifyCallbacks() is called within refreshGameData and updatePlayerResources
+    }, 100); // 100ms debounce
   }
 
   async updatePlayerResources() {
@@ -271,8 +280,21 @@ export class GameState {
       return;
     }
 
-    // Get user resources from the new API endpoint
-    const userResources = await gameData.getUserResources();
+    // Prevent overlapping resource updates
+    if (this.updatingResources) {
+      return;
+    }
+    this.updatingResources = true;
+
+    try {
+      // Get user resources from the new API endpoint
+      const userResources = await gameData.getUserResources();
+      
+      // Handle auto-cancellation gracefully
+      if (userResources === null) {
+        // Request was cancelled, skip this update
+        return;
+      }
     
     if (!this.mapData || !this.mapData.planets) {
       this.playerResources = userResources;
@@ -324,6 +346,9 @@ export class GameState {
 
     // No notifyCallbacks() here, it's usually called by the initiator (e.g. loadGameData, handleTick)
     // However, since refreshGameData calls this, and refreshGameData calls notifyCallbacks, it's covered.
+    } finally {
+      this.updatingResources = false;
+    }
   }
 
   getSystemPlanets(systemId) {

@@ -227,9 +227,16 @@ export class GameDataManager {
     try {
       const response = await pb.send('/api/user/resources', {
         method: 'GET',
+        requestKey: `getUserResources-${Date.now()}`,
       });
       return response.resources;
     } catch (error) {
+      // Handle auto-cancellation silently - it's expected behavior
+      if (error.status === 0 && error.message?.includes('autocancelled')) {
+        console.debug("User resources request was auto-cancelled (expected behavior)");
+        // Return null to indicate cancellation, caller should handle gracefully
+        return null;
+      }
       console.error("Failed to fetch user resources:", error);
       return {
         credits: 0,

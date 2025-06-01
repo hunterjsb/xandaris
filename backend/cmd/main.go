@@ -49,7 +49,7 @@ func main() {
 				log.Printf("Error updating user resource timestamp for user %s: %v", user.Id, err)
 				return err
 			}
-			
+
 			log.Printf("Initialized user %s", user.Id)
 		}
 		return nil

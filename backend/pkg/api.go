@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
 	"github.com/hunterjsb/xandaris/internal/credits"
+	"github.com/hunterjsb/xandaris/internal/tick"
 )
 
 // RegisterAPIRoutes sets up all game API endpoints
@@ -1053,9 +1054,9 @@ func createInitialBuildings(app *pocketbase.PocketBase, planet *models.Record) e
 func getStatus(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"current_tick":     1,
-			"ticks_per_minute": 6,
-			"server_time":      "2025-05-31T12:00:00Z",
+			"current_tick":     tick.GetCurrentTick(app),
+			"ticks_per_minute": tick.GetTickRate(),
+			"server_time":      time.Now().Format(time.RFC3339),
 		})
 	}
 }

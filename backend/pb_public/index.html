@@ -6,30 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <title>Xan Nation</title>
-    <script type="module" crossorigin src="/assets/main-CMrXbG0y.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/main-Bp6NNWnW.css">
+    <script type="module" crossorigin src="/assets/main-BY1yyj3Z.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/main-Dq6W2Ms8.css">
   </head>
   <body class="text-space-100">
     <div id="app">
-      <!-- Navigation Bar -->
+      <!-- Top Bar -->
       <nav class="aerogel-panel border-b border-space-700/20 p-4">
         <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <h1 class="text-2xl font-bold gradient-heading">XAN NATION</h1>
-            <button id="fleet-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
-              Fleet
-            </button>
-            <button id="trade-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
-              Trade
-            </button>
-            <button id="diplo-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
-              Diplomacy
-            </button>
-            <button id="buildings-btn" class="px-3 py-1 void-surface hover:nebula-glow rounded text-sm transition-all duration-200">
-              Buildings
-            </button>
-          </div>
-          <div class="flex items-center space-x-6"> <!-- Increased spacing for the new group -->
+          <h1 class="text-2xl font-bold gradient-heading">XAN NATION</h1>
+          <div class="flex items-center space-x-6">
             <div id="game-status-indicators" class="flex items-center space-x-3 text-sm">
               <span id="game-tick-display" class="text-sky-300">Tick: 0</span>
               <span id="next-tick-display" class="text-amber-300">Next Tick: --:--</span>
@@ -57,6 +43,21 @@
 
       <!-- Main Content -->
       <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <nav class="w-16 aerogel-panel border-r border-space-700/20 flex flex-col items-center py-4 space-y-3">
+          <button id="fleet-btn" class="w-12 h-12 void-surface hover:nebula-glow rounded text-sm transition-all duration-200 flex items-center justify-center" title="Fleet">
+            <span class="material-icons text-lg">rocket_launch</span>
+          </button>
+          <button id="trade-btn" class="w-12 h-12 void-surface hover:nebula-glow rounded text-sm transition-all duration-200 flex items-center justify-center" title="Trade">
+            <span class="material-icons text-lg">swap_horiz</span>
+          </button>
+          <button id="diplo-btn" class="w-12 h-12 void-surface hover:nebula-glow rounded text-sm transition-all duration-200 flex items-center justify-center" title="Diplomacy">
+            <span class="material-icons text-lg">handshake</span>
+          </button>
+          <button id="buildings-btn" class="w-12 h-12 void-surface hover:nebula-glow rounded text-sm transition-all duration-200 flex items-center justify-center" title="Buildings">
+            <span class="material-icons text-lg">domain</span>
+          </button>
+        </nav>
         <!-- Main Game Canvas -->
         <div class="flex-1 relative">
           <canvas id="game-canvas" class="w-full h-full cursor-crosshair" style="background: radial-gradient(ellipse at center, #001433 0%, #000508 70%, #000000 100%);"></canvas>
@@ -88,7 +89,7 @@
         </div>
       </div>
       <!-- Expanded View Container -->
-      <div id="expanded-view-container" class="absolute top-16 left-0 w-96 max-w-md h-[calc(100vh-4rem)] hidden z-10 aerogel-panel rounded-r-lg shadow-2xl overflow-hidden">
+      <div id="expanded-view-container" class="absolute top-16 left-16 w-96 max-w-md h-[calc(100vh-4rem)] hidden z-10 aerogel-panel rounded-r-lg shadow-2xl overflow-hidden">
           <!-- Content will be dynamically inserted here by uiController.js -->
       </div>
     </div>
