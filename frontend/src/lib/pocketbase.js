@@ -223,6 +223,27 @@ export class GameDataManager {
     }
   }
 
+  async getUserResources() {
+    try {
+      const response = await pb.send('/api/user/resources', {
+        method: 'GET',
+      });
+      return response.resources;
+    } catch (error) {
+      console.error("Failed to fetch user resources:", error);
+      return {
+        credits: 0,
+        food: 0,
+        ore: 0,
+        fuel: 0,
+        metal: 0,
+        oil: 0,
+        titanium: 0,
+        xanium: 0
+      };
+    }
+  }
+
   async getSystem(id) {
     try {
       return await pb.collection("systems").getOne(id);

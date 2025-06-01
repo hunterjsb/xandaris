@@ -88,14 +88,7 @@ export class GameState {
         this.buildings = await gameData.getBuildings(userId);
         await new Promise((resolve) => setTimeout(resolve, 50));
 
-        const player = await gameData.getPlayer(userId);
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        if (player) {
-          this.playerResources.credits = player.credits;
-        } else {
-          this.playerResources.credits = 0;
-          console.warn("Player data could not be loaded, defaulting credits to 0.");
-        }
+        // Player resources will be loaded via updatePlayerResources()
       }
 
       // Load status last
@@ -272,12 +265,18 @@ export class GameState {
 
   async updatePlayerResources() {
     const user = authManager.getUser(); // Get current user
-    if (!user || !this.mapData || !this.mapData.planets) {
-      // Try to set base credits if user exists, otherwise zero everything out.
-      const baseCredits = user ? (await gameData.getPlayer(user.id))?.credits || 0 : 0;
-      this.playerResources = { credits: baseCredits, food: 0, ore: 0, goods: 0, fuel: 0 };
+    if (!user) {
+      this.playerResources = { credits: 0, food: 0, ore: 0, goods: 0, fuel: 0 };
       this.creditIncome = 0;
-      // Don't notify callbacks here - let the caller handle it
+      return;
+    }
+
+    // Get user resources from the new API endpoint
+    const userResources = await gameData.getUserResources();
+    
+    if (!this.mapData || !this.mapData.planets) {
+      this.playerResources = userResources;
+      this.creditIncome = 0;
       return;
     }
 
@@ -314,12 +313,8 @@ export class GameState {
       }
     }
 
-    // Fetch current global credits for the player (e.g., from their user record)
-    const playerData = await gameData.getPlayer(user.id);
-    const baseCredits = playerData?.credits || 0; // Credits player has, not including income for this tick.
-
     this.playerResources = {
-      credits: baseCredits, // Base credits from player object. Income will be "added" by game loop or implicitly.
+      credits: userResources.credits, // Credits from crypto_server buildings
       food: totalFood,
       ore: totalOre,
       goods: totalGoods,

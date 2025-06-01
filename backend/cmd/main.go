@@ -41,18 +41,16 @@ func main() {
 	app.OnModelAfterCreate().Add(func(e *core.ModelEvent) error {
 		if e.Model.TableName() == "users" {
 			user := e.Model.(*models.Record)
-			log.Printf("New user created: %s, setting starting resources", user.Id)
+			log.Printf("New user created: %s, setting last resource update", user.Id)
 
-			// Set starting resources - stored in a separate table or user fields
-			// For now, we'll use user custom fields
-			user.Set("credits", 1000) // Starting credits
+			// Set last resource update time on user record
 			user.Set("last_resource_update", time.Now())
-
 			if err := app.Dao().SaveRecord(user); err != nil {
-				log.Printf("Error setting starting resources for user %s: %v", user.Id, err)
+				log.Printf("Error updating user resource timestamp for user %s: %v", user.Id, err)
 				return err
 			}
-			log.Printf("Set starting resources for user %s: 1000 credits", user.Id)
+			
+			log.Printf("Initialized user %s", user.Id)
 		}
 		return nil
 	})

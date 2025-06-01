@@ -11,6 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
+	"github.com/hunterjsb/xandaris/internal/credits"
 )
 
 // RegisterAPIRoutes sets up all game API endpoints
@@ -41,6 +42,9 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		// Status endpoint
 		e.Router.GET("/api/status", getStatus(app))
 
+		// User resources endpoint
+		e.Router.GET("/api/user/resources", getUserResources(app))
+
 		// Building and Resource Types
 		e.Router.GET("/api/building_types", getBuildingTypes(app))
 		e.Router.GET("/api/resource_types", getResourceTypes(app))
@@ -66,15 +70,15 @@ type SystemData struct {
 }
 
 type PlanetData struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	SystemID      string `json:"system_id"`
-	PlanetType    string `json:"type"`
-	Size          int    `json:"size"`
-	Population    int    `json:"population"`
-	MaxPopulation int    `json:"max_population"`
-	ColonizedBy   string `json:"colonized_by"`
-	ColonizedAt   string `json:"colonized_at"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	SystemID      string                 `json:"system_id"`
+	PlanetType    string                 `json:"type"`
+	Size          int                    `json:"size"`
+	Population    int                    `json:"population"`
+	MaxPopulation int                    `json:"max_population"`
+	ColonizedBy   string                 `json:"colonized_by"`
+	ColonizedAt   string                 `json:"colonized_at"`
 	Pop           int                    `json:"pop"`
 	Morale        int                    `json:"morale"`
 	Food          int                    `json:"food"`
@@ -178,12 +182,12 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 		systemsData := make([]SystemData, len(systems))
 		for i, system := range systems {
 			systemsData[i] = SystemData{
-				ID:        system.Id,
-				Name:      system.GetString("name"),
-				X:         system.GetInt("x"),
-				Y:         system.GetInt("y"),
-				OwnerID:   system.GetString("owner_id"),
-				Richness:  system.GetInt("richness"),
+				ID:       system.Id,
+				Name:     system.GetString("name"),
+				X:        system.GetInt("x"),
+				Y:        system.GetInt("y"),
+				OwnerID:  system.GetString("owner_id"),
+				Richness: system.GetInt("richness"),
 			}
 		}
 
@@ -489,7 +493,7 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 				SystemID:       systemID,
 				OwnerID:        ownerID,
 				SystemName:     systemName,
-				Type:           buildingTypeID,    // Store the ID of the building type
+				Type:           buildingTypeID,                                                         // Store the ID of the building type
 				Name:           fmt.Sprintf("%s Level %d", buildingTypeName, building.GetInt("level")), // Use fetched name
 				Level:          building.GetInt("level"),
 				Active:         building.GetBool("active"),
@@ -707,18 +711,30 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		switch costValue := costRaw.(type) {
 		case int64:
 			cost := int(costValue)
-			userCredits := user.GetInt("credits")
-			if userCredits < cost {
+			hasCredits, err := credits.HasSufficientCredits(app, user.Id, cost)
+			if err != nil {
+				return apis.NewBadRequestError("Failed to check credits", err)
+			}
+			if !hasCredits {
+				userCredits, _ := credits.GetUserCredits(app, user.Id)
 				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
 			}
-			user.Set("credits", userCredits-cost)
+			if err := credits.DeductUserCredits(app, user.Id, cost); err != nil {
+				return apis.NewBadRequestError("Failed to deduct credits", err)
+			}
 		case float64:
 			cost := int(costValue)
-			userCredits := user.GetInt("credits")
-			if userCredits < cost {
+			hasCredits, err := credits.HasSufficientCredits(app, user.Id, cost)
+			if err != nil {
+				return apis.NewBadRequestError("Failed to check credits", err)
+			}
+			if !hasCredits {
+				userCredits, _ := credits.GetUserCredits(app, user.Id)
 				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
 			}
-			user.Set("credits", userCredits-cost)
+			if err := credits.DeductUserCredits(app, user.Id, cost); err != nil {
+				return apis.NewBadRequestError("Failed to deduct credits", err)
+			}
 		case map[string]interface{}:
 			costMap := costValue
 			for resourceId, amountInterface := range costMap {
@@ -727,19 +743,41 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
 				}
 				amountInt := int(amount)
-				currentResourceValue := user.GetInt(resourceId)
-				if currentResourceValue < amountInt {
-					return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceId, amountInt, currentResourceValue), nil)
+
+				// Get resource name from ID
+				resourceType, err := app.Dao().FindRecordById("resource_types", resourceId)
+				if err != nil {
+					return apis.NewBadRequestError(fmt.Sprintf("Invalid resource ID %s", resourceId), err)
 				}
-				user.Set(resourceId, currentResourceValue-amountInt)
+				resourceName := resourceType.GetString("name")
+
+				// For now, only handle credits - other resources still use legacy system
+				if resourceName == "credits" {
+					hasCredits, err := credits.HasSufficientCredits(app, user.Id, amountInt)
+					if err != nil {
+						return apis.NewBadRequestError("Failed to check credits", err)
+					}
+					if !hasCredits {
+						currentCredits, _ := credits.GetUserCredits(app, user.Id)
+						return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", amountInt, currentCredits), nil)
+					}
+					if err := credits.DeductUserCredits(app, user.Id, amountInt); err != nil {
+						return apis.NewBadRequestError("Failed to deduct credits", err)
+					}
+				} else {
+					// Legacy system for other resources
+					currentResourceValue := user.GetInt(resourceName)
+					if currentResourceValue < amountInt {
+						return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceName, amountInt, currentResourceValue), nil)
+					}
+					user.Set(resourceName, currentResourceValue-amountInt)
+					if err := app.Dao().SaveRecord(user); err != nil {
+						return apis.NewBadRequestError("Failed to update user resources", err)
+					}
+				}
 			}
 		default:
 			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
-		}
-
-		// Save user record after all deductions
-		if err := app.Dao().SaveRecord(user); err != nil {
-			return apis.NewBadRequestError("Failed to save user record after deducting costs", err)
 		}
 
 		// Create building record
@@ -754,15 +792,29 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		building.Set("level", 1)
 		building.Set("active", true)
 
+		// Initialize crypto_server buildings with starting credits
+		if buildingTypeRecord.GetString("name") == "crypto_server" {
+			// Get credits resource type ID
+			creditsResource, err := app.Dao().FindFirstRecordByFilter("resource_types", "name = 'credits'")
+			if err == nil && buildingTypeRecord.GetString("res1_type") == creditsResource.Id {
+				// Start with full capacity of credits
+				capacity := buildingTypeRecord.GetInt("res1_capacity")
+				building.Set("res1_stored", capacity)
+			}
+		}
+
 		if err := app.Dao().SaveRecord(building); err != nil {
 			return apis.NewBadRequestError("Failed to create building", err)
 		}
 
+		// Get current credits for response
+		currentCredits, _ := credits.GetUserCredits(app, user.Id)
+
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":           true,
 			"building_id":       building.Id,
-			"cost":              originalCostPayload,    // Return the original cost structure
-			"credits_remaining": user.GetInt("credits"), // Return current credits
+			"cost":              originalCostPayload, // Return the original cost structure
+			"credits_remaining": currentCredits,      // Return current credits
 		})
 	}
 }
@@ -876,17 +928,30 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError("Planet is already colonized", nil)
 		}
 
-		// Check colonization cost
-		colonizationCost := 500 // Base cost to establish a colony
-		userCredits := user.GetInt("credits")
-		if userCredits < colonizationCost {
-			return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Colonization costs %d, you have %d", colonizationCost, userCredits), nil)
+		// Check if this is the user's first colony (starter colony is free)
+		existingColonies, err := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("colonized_by = '%s'", user.Id), "", 0, 0)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to check existing colonies", err)
 		}
 
-		// Deduct credits from user
-		user.Set("credits", userCredits-colonizationCost)
-		if err := app.Dao().SaveRecord(user); err != nil {
-			return apis.NewBadRequestError("Failed to deduct credits", err)
+		isFirstColony := len(existingColonies) == 0
+
+		if !isFirstColony {
+			// Check colonization cost for subsequent colonies
+			colonizationCost := 500 // Base cost to establish a colony
+			hasCredits, err := credits.HasSufficientCredits(app, user.Id, colonizationCost)
+			if err != nil {
+				return apis.NewBadRequestError("Failed to check credits", err)
+			}
+			if !hasCredits {
+				userCredits, _ := credits.GetUserCredits(app, user.Id)
+				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Colonization costs %d, you have %d", colonizationCost, userCredits), nil)
+			}
+
+			// Deduct credits from user
+			if err := credits.DeductUserCredits(app, user.Id, colonizationCost); err != nil {
+				return apis.NewBadRequestError("Failed to deduct credits", err)
+			}
 		}
 
 		// Set colonization data
@@ -932,29 +997,57 @@ func createInitialPopulation(app *pocketbase.PocketBase, planet *models.Record, 
 }
 
 func createInitialBuildings(app *pocketbase.PocketBase, planet *models.Record) error {
-	// Get building types
-	buildingTypes, err := app.Dao().FindRecordsByFilter("building_types", "name = 'Command Center'", "", 1, 0)
-	if err != nil || len(buildingTypes) == 0 {
-		// If no Command Center, try to get any building type
-		buildingTypes, err = app.Dao().FindRecordsByExpr("building_types", nil, nil)
-		if err != nil || len(buildingTypes) == 0 {
-			return fmt.Errorf("no building types found")
-		}
+	// Check if this is the user's first colony by checking if they have any other colonies
+	ownerID := planet.GetString("colonized_by")
+	existingColonies, err := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("colonized_by = '%s'", ownerID), "", 0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to check existing colonies: %w", err)
 	}
+
+	isFirstColony := len(existingColonies) <= 1 // 1 because we just created this colony
 
 	buildingCollection, err := app.Dao().FindCollectionByNameOrId("buildings")
 	if err != nil {
 		return err
 	}
 
-	// Create one initial building (Command Center or first available)
-	building := models.NewRecord(buildingCollection)
-	building.Set("planet_id", planet.Id)
-	building.Set("building_type", buildingTypes[0].Id)
-	building.Set("level", 1)
-	building.Set("active", true)
+	if isFirstColony {
+		// For first colony, create a starter crypto_server with credits
+		cryptoServerType, err := app.Dao().FindFirstRecordByFilter("building_types", "name = 'crypto_server'")
+		if err != nil {
+			return fmt.Errorf("crypto_server building type not found: %w", err)
+		}
 
-	return app.Dao().SaveRecord(building)
+		building := models.NewRecord(buildingCollection)
+		building.Set("planet_id", planet.Id)
+		building.Set("building_type", cryptoServerType.Id)
+		building.Set("level", 1)
+		building.Set("active", true)
+
+		// Initialize with starter credits
+		creditsResource, err := app.Dao().FindFirstRecordByFilter("resource_types", "name = 'credits'")
+		if err == nil && cryptoServerType.GetString("res1_type") == creditsResource.Id {
+			// Start with half capacity of credits for bootstrapping
+			capacity := cryptoServerType.GetInt("res1_capacity")
+			building.Set("res1_stored", capacity/2)
+		}
+
+		return app.Dao().SaveRecord(building)
+	} else {
+		// For subsequent colonies, create a basic base building
+		baseType, err := app.Dao().FindFirstRecordByFilter("building_types", "name = 'base'")
+		if err != nil {
+			return fmt.Errorf("base building type not found: %w", err)
+		}
+
+		building := models.NewRecord(buildingCollection)
+		building.Set("planet_id", planet.Id)
+		building.Set("building_type", baseType.Id)
+		building.Set("level", 1)
+		building.Set("active", true)
+
+		return app.Dao().SaveRecord(building)
+	}
 }
 
 func getStatus(app *pocketbase.PocketBase) echo.HandlerFunc {
@@ -963,6 +1056,39 @@ func getStatus(app *pocketbase.PocketBase) echo.HandlerFunc {
 			"current_tick":     1,
 			"ticks_per_minute": 6,
 			"server_time":      "2025-05-31T12:00:00Z",
+		})
+	}
+}
+
+func getUserResources(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Get credits from crypto_server buildings
+		userCredits, err := credits.GetUserCredits(app, user.Id)
+		if err != nil {
+			log.Printf("Failed to get credits for user %s: %v", user.Id, err)
+			userCredits = 0
+		}
+
+		// Get other resources from user record (legacy system)
+		resourceData := map[string]interface{}{
+			"credits": userCredits,
+			"food":     user.GetInt("food"),
+			"ore":      user.GetInt("ore"),
+			"fuel":     user.GetInt("fuel"),
+			"metal":    user.GetInt("metal"),
+			"oil":      user.GetInt("oil"),
+			"titanium": user.GetInt("titanium"),
+			"xanium":   user.GetInt("xanium"),
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"user_id":   user.Id,
+			"resources": resourceData,
 		})
 	}
 }
