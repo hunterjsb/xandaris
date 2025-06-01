@@ -128,22 +128,22 @@ class XanNationApp {
       this.handleLogout();
     });
 
-    // Action buttons
-    document.getElementById("build-btn").addEventListener("click", () => {
-      this.handleBuildAction();
-    });
-
-    document.getElementById("send-fleet-btn").addEventListener("click", () => {
-      this.handleSendFleetAction();
-    });
-
-    document.getElementById("trade-route-btn").addEventListener("click", () => {
-      this.handleTradeRouteAction();
-    });
-
-    document.getElementById("colonize-btn").addEventListener("click", () => {
-      this.handleColonizeAction();
-    });
+    // Action buttons (Listeners removed as these buttons were part of the old static sidebar)
+    // document.getElementById("build-btn").addEventListener("click", () => {
+    //   this.handleBuildAction();
+    // });
+    //
+    // document.getElementById("send-fleet-btn").addEventListener("click", () => {
+    //   this.handleSendFleetAction();
+    // });
+    //
+    // document.getElementById("trade-route-btn").addEventListener("click", () => {
+    //   this.handleTradeRouteAction();
+    // });
+    //
+    // document.getElementById("colonize-btn").addEventListener("click", () => {
+    //   this.handleColonizeAction();
+    // });
 
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
