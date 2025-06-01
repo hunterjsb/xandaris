@@ -326,14 +326,14 @@ export class GameDataManager {
     }
   }
 
-  async queueBuilding(systemId, buildingType) {
+  async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
       return await pb.send("/api/orders/build", {
         method: "POST",
         body: JSON.stringify({
-          system_id: systemId,
+          planet_id: planetId, // Changed system_id to planet_id
           building_type: buildingType,
         }),
         headers: {

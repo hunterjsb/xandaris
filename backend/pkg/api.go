@@ -649,7 +649,7 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		data := struct {
-			SystemID     string `json:"system_id"`
+			PlanetID     string `json:"planet_id"` // Changed from SystemID
 			BuildingType string `json:"building_type"`
 		}{}
 
@@ -706,15 +706,65 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
 		}
 
-		// Find a planet in the system to build on
-		planets := []*PlanetData{}
-		err = app.Dao().RecordQuery("planets").
-			// AndWhere(dbx.HashExp{"system_id": data.SystemID}).
-			Limit(10).
-			All(&planets)
-		fmt.Printf("Found planets in system %s, %d planets found", data.SystemID, len(planets))
-		if err != nil || len(planets) == 0 {
-			return apis.NewBadRequestError("No planets found in system", err)
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Verify Planet Ownership/Validity
+		targetPlanet, err := app.Dao().FindRecordById("planets", data.PlanetID)
+		if err != nil {
+			return apis.NewNotFoundError("Planet not found.", err)
+		}
+		if targetPlanet.GetString("colonized_by") != user.Id {
+			// Additionally, check if the system containing the planet is owned by the user,
+			// if direct planet ownership isn't the only criteria.
+			// For now, strict planet ownership (colonization) is checked.
+			return apis.NewForbiddenError("You do not own this planet and cannot build on it.", nil)
+		}
+
+
+		// Get building type to check cost (this part remains similar)
+		buildingTypeRecord, err := app.Dao().FindRecordById("building_types", data.BuildingType)
+		if err != nil {
+			return apis.NewBadRequestError(fmt.Sprintf("Building type %s not found", data.BuildingType), err)
+		}
+
+		// Check building cost and deduct resources (this part remains similar)
+		costRaw := buildingTypeRecord.Get("cost")
+		originalCostPayload := buildingTypeRecord.Get("cost")
+
+		switch costValue := costRaw.(type) {
+		case int64:
+			cost := int(costValue)
+			userCredits := user.GetInt("credits")
+			if userCredits < cost {
+				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+			}
+			user.Set("credits", userCredits-cost)
+		case float64:
+			cost := int(costValue)
+			userCredits := user.GetInt("credits")
+			if userCredits < cost {
+				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+			}
+			user.Set("credits", userCredits-cost)
+		case map[string]interface{}:
+			costMap := costValue
+			for resourceId, amountInterface := range costMap {
+				amount, ok := amountInterface.(float64)
+				if !ok {
+					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
+				}
+				amountInt := int(amount)
+				currentResourceValue := user.GetInt(resourceId)
+				if currentResourceValue < amountInt {
+					return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceId, amountInt, currentResourceValue), nil)
+				}
+				user.Set(resourceId, currentResourceValue-amountInt)
+			}
+		default:
+			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
 		}
 
 		// Save user record after all deductions
@@ -729,7 +779,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		building := models.NewRecord(collection)
-		building.Set("planet_id", planets[0].ID)
+		building.Set("planet_id", data.PlanetID) // Use PlanetID from request
 		building.Set("building_type", data.BuildingType)
 		building.Set("level", 1)
 		building.Set("active", true)

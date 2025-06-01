@@ -373,8 +373,8 @@ export class GameState {
     return await gameData.sendFleet(fromId, toId, strength);
   }
 
-  async queueBuilding(systemId, buildingType) {
-    return await gameData.queueBuilding(systemId, buildingType);
+  async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
+    return await gameData.queueBuilding(planetId, buildingType); // Pass planetId
   }
 
   async createTradeRoute(fromId, toId, cargo, capacity) {

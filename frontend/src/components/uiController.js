@@ -186,9 +186,9 @@ export class UIController {
         ` : ''}
 
         ${isColonized && planet.colonized_by === this.currentUser?.id ? `
-        <button class="w-full mt-4 px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded text-white font-semibold"
-                onclick="window.uiController.manageColony('${planet.id}')">
-          Manage Colony
+        <button class="w-full mt-4 px-4 py-2 bg-green-700 hover:bg-green-600 rounded text-white font-semibold"
+                onclick="window.uiController.showPlanetBuildModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
+          Construct New Building
         </button>
         ` : ''}
 
@@ -199,6 +199,77 @@ export class UIController {
       </div>
     `;
     container.classList.remove("hidden");
+  }
+
+  showPlanetBuildModal(planet) {
+    if (!this.currentUser) {
+      this.showError("Please log in to construct buildings.");
+      return;
+    }
+    if (!planet || !planet.id) {
+      this.showError("Invalid planet data provided for construction.");
+      return;
+    }
+
+    const buildingTypes = this.gameState?.buildingTypes;
+
+    if (!buildingTypes || buildingTypes.length === 0) {
+      console.warn("Building types not available or empty in gameState for showPlanetBuildModal.");
+      this.showModal(
+        `Construct on ${planet.name || `Planet ${planet.id.slice(-4)}`}`,
+        `<div class="text-space-400">No building types available or data is still loading.</div>
+         <button class="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white" onclick="window.uiController.hideModal()">Close</button>`
+      );
+      return;
+    }
+
+    const buildingOptions = buildingTypes
+      .map((buildingType) => {
+        let costString = "Cost: ";
+        if (buildingType.cost === undefined) { // Check if cost is defined at all
+            costString += "N/A (data missing)";
+        } else if (typeof buildingType.cost === "number") {
+          costString += `${buildingType.cost} Credits`;
+        } else if (typeof buildingType.cost === "object" && buildingType.cost !== null) {
+          const resourceTypesMap = (this.gameState?.resourceTypes || []).reduce((map, rt) => {
+            map[rt.id] = rt.name;
+            return map;
+          }, {});
+          costString += Object.entries(buildingType.cost)
+            .map(([resourceId, amount]) => {
+              const resourceName = resourceTypesMap[resourceId] || resourceId;
+              return `${amount} ${resourceName}`;
+            })
+            .join(", ");
+            if (Object.keys(buildingType.cost).length === 0) costString += "Free"; // Handle empty cost object
+        } else {
+          costString += "N/A"; // Fallback for null or other unexpected types
+        }
+
+        // Safely stringify planet.id and buildingType.id for the onclick handler
+        const safePlanetId = planet.id.replace(/'/g, "\\'");
+        const safeBuildingTypeId = buildingType.id.replace(/'/g, "\\'");
+
+        return `
+      <button class="w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left"
+              onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}'); window.uiController.hideModal();">
+        <div class="font-semibold">${buildingType.name || "Unknown Building"}</div>
+        <div class="text-sm text-space-300">${buildingType.description || "No description available."}</div>
+        <div class="text-sm text-green-400">${costString}</div>
+      </button>
+    `;
+      })
+      .join("");
+
+    this.showModal(
+      `Construct on ${planet.name || `Planet ${planet.id.slice(-4)}`}`,
+      `
+      <div class="space-y-2 max-h-96 overflow-y-auto">
+        ${buildingOptions.length > 0 ? buildingOptions : '<div class="text-space-400">No buildings available to construct.</div>'}
+      </div>
+      <button class="w-full mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white" onclick="window.uiController.hideModal()">Cancel</button>
+    `
+    );
   }
 
   // Wrapper for colonizePlanet to fit new UI structure if needed
