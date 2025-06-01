@@ -760,39 +760,85 @@ drawSystems() {
         }
 
   drawCachedTerritorialBorders() {
-    if (!this.currentUserId) return;
+    if (!window.gameState) return;
 
-    // Get all player-owned systems
-    const playerSystems = this.systems.filter(system => {
-      if (window.gameState) {
-        const planets = window.gameState.getSystemPlanets(system.id);
-        return planets.some(planet => planet.colonized_by === this.currentUserId);
-      }
-      return false;
+    // Get all unique player IDs that own colonies
+    const allPlayerIds = new Set();
+    this.systems.forEach(system => {
+      const planets = window.gameState.getSystemPlanets(system.id);
+      planets.forEach(planet => {
+        if (planet.colonized_by) {
+          allPlayerIds.add(planet.colonized_by);
+        }
+      });
     });
 
-    if (playerSystems.length < 1) return;
-
-    // Create cache key based on player systems and zoom/view
-    const cacheKey = this.createTerritorialCacheKey(playerSystems);
+    // Define colors for different players
+    const playerColors = {
+      [this.currentUserId]: '0, 255, 102', // Current player: bright green
+    };
     
-    // Only recompute if cache is invalid
-    if (this.territorialCacheKey !== cacheKey) {
-      this.cachedTerritorialContours = this.computeTerritorialContours(playerSystems);
-      this.territorialCacheKey = cacheKey;
-    }
+    // Generate colors for other players
+    const otherPlayerColors = [
+      '241, 169, 255', // Plasma pink
+      '255, 107, 107', // Bright red  
+      '139, 92, 246',  // Void purple
+      '34, 197, 94',   // Emerald green
+      '249, 115, 22',  // Orange
+      '236, 72, 153',  // Pink
+      '14, 165, 233',  // Sky blue
+      '168, 85, 247',  // Purple
+    ];
+    
+    let colorIndex = 0;
+    allPlayerIds.forEach(playerId => {
+      if (playerId !== this.currentUserId) {
+        playerColors[playerId] = otherPlayerColors[colorIndex % otherPlayerColors.length];
+        colorIndex++;
+      }
+    });
 
-    // Draw cached contours
-    if (this.cachedTerritorialContours) {
-      this.drawTerritorialContours(this.cachedTerritorialContours);
-    }
+    // Draw territories for each player
+    allPlayerIds.forEach(playerId => {
+      // Get systems owned by this player
+      const playerSystems = this.systems.filter(system => {
+        const planets = window.gameState.getSystemPlanets(system.id);
+        return planets.some(planet => planet.colonized_by === playerId);
+      });
+
+      if (playerSystems.length < 1) return;
+
+      // Create cache key for this player
+      const cacheKey = this.createTerritorialCacheKey(playerSystems, playerId);
+      
+      // Use separate cache for each player
+      if (!this.playerTerritorialCaches) {
+        this.playerTerritorialCaches = {};
+      }
+      
+      // Only recompute if cache is invalid
+      if (this.playerTerritorialCaches[playerId]?.cacheKey !== cacheKey) {
+        this.playerTerritorialCaches[playerId] = {
+          cacheKey: cacheKey,
+          contours: this.computeTerritorialContours(playerSystems)
+        };
+      }
+
+      // Draw cached contours with player's color
+      const cachedData = this.playerTerritorialCaches[playerId];
+      if (cachedData?.contours) {
+        const color = playerColors[playerId] || '128, 128, 128'; // Default gray
+        const isCurrentPlayer = playerId === this.currentUserId;
+        this.drawTerritorialContours(cachedData.contours, color, isCurrentPlayer);
+      }
+    });
   }
 
-  createTerritorialCacheKey(playerSystems) {
+  createTerritorialCacheKey(playerSystems, playerId) {
     // Create a simple cache key based on system positions and current view
     const systemKey = playerSystems.map(s => `${s.id}:${s.x}:${s.y}`).sort().join('|');
     const viewKey = `${Math.floor(this.viewX/50)}:${Math.floor(this.viewY/50)}:${Math.floor(this.zoom*10)}`;
-    return `${systemKey}@${viewKey}`;
+    return `${playerId}:${systemKey}@${viewKey}`;
   }
 
   computeTerritorialContours(playerSystems) {
@@ -805,13 +851,38 @@ drawSystems() {
     return this.extractTerritorialContours(influenceField, bounds, gridSize);
   }
 
-  drawUnifiedTerritories(playerSystems) {
+  drawUnifiedTerritories(playerSystems, colorRGB = '0, 255, 102', isCurrentPlayer = true) {
     // Much simpler approach - just draw extended borders around player systems
     const maxDistance = 200; // Reduced from 500
     
     playerSystems.forEach(system => {
-      this.drawSimpleInfluenceBorder(system, playerSystems, maxDistance);
+      this.drawSimpleInfluenceBorder(system, playerSystems, maxDistance, colorRGB, isCurrentPlayer);
     });
+  }
+
+  drawSimpleInfluenceBorder(system, playerSystems, maxDistance, colorRGB, isCurrentPlayer) {
+    // Simple implementation - draw circles around player systems
+    this.ctx.save();
+    
+    const screenPos = this.worldToScreen(system.x, system.y);
+    const radius = maxDistance * this.zoom;
+    
+    // Create gradient
+    const gradient = this.ctx.createRadialGradient(
+      screenPos.x, screenPos.y, 0,
+      screenPos.x, screenPos.y, radius
+    );
+    
+    const alpha = isCurrentPlayer ? 0.1 : 0.05;
+    gradient.addColorStop(0, `rgba(${colorRGB}, ${alpha})`);
+    gradient.addColorStop(1, `rgba(${colorRGB}, 0)`);
+    
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    this.ctx.restore();
   }
 
   getVisibleWorldBounds() {
@@ -975,7 +1046,7 @@ drawSystems() {
     });
   }
 
-  drawTerritorialContours(contours) {
+  drawTerritorialContours(contours, colorRGB = '34, 197, 94', isCurrentPlayer = true) {
     if (contours.length === 0) return;
     
     this.ctx.save();
@@ -1010,20 +1081,21 @@ drawSystems() {
         bounds.centerX, bounds.centerY, bounds.radius
       );
       
-      const baseColor = '34, 197, 94';
-      const alpha = Math.max(0.1, 0.25 * this.zoom);
+      // Make current player's territory more visible
+      const baseAlpha = isCurrentPlayer ? 0.25 : 0.15;
+      const alpha = Math.max(0.1, baseAlpha * this.zoom);
       
-      gradient.addColorStop(0, `rgba(${baseColor}, ${alpha * 0.05})`);
-      gradient.addColorStop(0.7, `rgba(${baseColor}, ${alpha * 0.3})`);
-      gradient.addColorStop(0.9, `rgba(${baseColor}, ${alpha * 0.6})`);
-      gradient.addColorStop(1, `rgba(${baseColor}, 0)`);
+      gradient.addColorStop(0, `rgba(${colorRGB}, ${alpha * 0.05})`);
+      gradient.addColorStop(0.7, `rgba(${colorRGB}, ${alpha * 0.3})`);
+      gradient.addColorStop(0.9, `rgba(${colorRGB}, ${alpha * 0.6})`);
+      gradient.addColorStop(1, `rgba(${colorRGB}, 0)`);
       
       this.ctx.fillStyle = gradient;
       this.ctx.fill();
       
       // Add border stroke
-      this.ctx.strokeStyle = `rgba(${baseColor}, ${alpha * 0.8})`;
-      this.ctx.lineWidth = 2 * this.zoom;
+      this.ctx.strokeStyle = `rgba(${colorRGB}, ${alpha * 0.8})`;
+      this.ctx.lineWidth = isCurrentPlayer ? 2 * this.zoom : 1.5 * this.zoom;
       this.ctx.stroke();
     });
     
