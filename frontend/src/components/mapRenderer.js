@@ -163,22 +163,33 @@ export class MapRenderer {
   }
 
   selectSystem(system) {
+    // Prevent selecting the same system multiple times
+    if (this.selectedSystem && this.selectedSystem.id === system.id) {
+      return;
+    }
+    
     this.selectedSystem = system;
-    // Emit custom event for UI to handle
+    // Emit custom event for UI to handle, now including planets in that system
+    const planetsInSystem = window.gameState.getSystemPlanets(system.id);
     this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
-      detail: { system }
+      detail: { system, planets: planetsInSystem },
+      bubbles: true
     }));
   }
 
   showTooltip(system, screenX, screenY) {
     const tooltip = document.getElementById('tooltip');
-    if (system) {
+    if (system && window.gameState) { // Ensure gameState is available
+      const planets = window.gameState.getSystemPlanets(system.id);
+      const totalSystemPop = planets.reduce((sum, p) => sum + (p.Pop || 0), 0);
+
       tooltip.innerHTML = `
-        <div class="font-semibold">${system.name || `System ${system.id}`}</div>
+        <div class="font-semibold">${system.name || `System ${system.id.slice(-4)}`}</div>
         <div class="text-xs">
           <div>Position: ${system.x}, ${system.y}</div>
-          <div>Population: ${system.pop || 0}</div>
+          <div>Population: ${totalSystemPop.toLocaleString()}</div>
           <div>Owner: ${system.owner_name || 'Uncolonized'}</div>
+          <div>Planets: ${planets.length}</div>
         </div>
       `;
       tooltip.style.left = `${screenX + 10}px`;
@@ -437,7 +448,14 @@ drawSystems() {
               );
             }
 
-            if (system.pop > 0 && this.zoom > 0.5) {
+            // Calculate total population for the system
+            let totalSystemPop = 0;
+            if (window.gameState) { // Check if gameState is available
+                const planets = window.gameState.getSystemPlanets(system.id);
+                totalSystemPop = planets.reduce((sum, p) => sum + (p.Pop || 0), 0);
+            }
+
+            if (totalSystemPop > 0 && this.zoom > 0.5) {
               const popFontSize = Math.floor(9 * this.zoom);
               this.ctx.font = `${popFontSize}px monospace`;
               this.ctx.textAlign = 'center';
@@ -461,7 +479,7 @@ drawSystems() {
 
               this.ctx.fillStyle = '#f1a9ff';
               this.ctx.fillText(
-                system.pop.toString(),
+                totalSystemPop.toLocaleString(),
                 screenPos.x,
                 popTextY
               );

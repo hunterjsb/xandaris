@@ -142,29 +142,60 @@ func resetColonies(app *pocketbase.PocketBase) {
 }
 
 func cleanGameData(app *pocketbase.PocketBase) {
-	fmt.Println("=== CLEANING ALL GAME DATA ===")
+	fmt.Println("=== CLEANING GAME DATA ===")
+	fmt.Println("ℹ️  Preserving all user accounts and auth settings")
 	
-	collections := []string{"populations", "buildings", "ships", "fleets", "trade_routes"}
+	// First, show how many users we're preserving
+	if users, err := app.Dao().FindRecordsByExpr("users", nil, nil); err == nil {
+		fmt.Printf("✅ Preserving %d user accounts\n", len(users))
+		for _, user := range users {
+			username := user.GetString("username")
+			email := user.GetString("email")
+			fmt.Printf("  - %s (%s)\n", username, email)
+		}
+	}
+	
+	fmt.Println("\n🗑️  Deleting game data...")
+	
+	// List of all game data collections to delete (NOT including users)
+	collections := []string{
+		// Game data
+		"systems", 
+		"planets", 
+		"populations", 
+		"buildings", 
+		"ships", 
+		"fleets", 
+		"trade_routes",
+		"resource_nodes",
+		"treaties",
+		"treaty_proposals",
+		"battle_logs",
+		"colonies",
+		// Type definitions (will be recreated by seed)
+		"resource_types",
+		"planet_types",
+		"building_types",
+		"ship_types",
+	}
+	
 	for _, collName := range collections {
 		if records, err := app.Dao().FindRecordsByExpr(collName, nil, nil); err == nil {
+			count := len(records)
 			for _, record := range records {
-				app.Dao().DeleteRecord(record)
+				if err := app.Dao().DeleteRecord(record); err != nil {
+					fmt.Printf("Error deleting %s record: %v\n", collName, err)
+				}
 			}
-			fmt.Printf("Cleared %d %s records\n", len(records), collName)
+			if count > 0 {
+				fmt.Printf("  Deleted %d %s records\n", count, collName)
+			}
 		}
 	}
 
-	// Reset planets
-	if planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil); err == nil {
-		for _, planet := range planets {
-			planet.Set("colonized_by", nil)
-			planet.Set("colonized_at", nil)
-			app.Dao().SaveRecord(planet)
-		}
-		fmt.Printf("Reset %d planets to uncolonized\n", len(planets))
-	}
-
-	fmt.Println("✅ Clean complete")
+	fmt.Println("\n✅ Clean complete - all game data deleted")
+	fmt.Println("✅ User accounts and authentication preserved")
+	fmt.Println("💡 Run the seed command to regenerate the universe")
 }
 
 func createPopulation(app *pocketbase.PocketBase, planetID, ownerID string) {

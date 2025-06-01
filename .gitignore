@@ -34,3 +34,7 @@ go.work.sum
 # Logs
 *.log
 logs/
+
+backend/seed
+backend/util
+temp.json

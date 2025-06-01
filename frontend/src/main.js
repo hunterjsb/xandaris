@@ -59,7 +59,11 @@ class XanNationApp {
       this.mapRenderer.setSystems(state.systems);
       this.mapRenderer.setFleets(state.fleets);
       this.mapRenderer.setTrades(state.trades); // Added line
-      this.mapRenderer.setSelectedSystem(state.selectedSystem);
+      
+      // Only update selected system if it changed
+      if (this.mapRenderer.selectedSystem?.id !== state.selectedSystem?.id) {
+        this.mapRenderer.setSelectedSystem(state.selectedSystem);
+      }
 
       // Set lanes if available
       if (state.mapData && state.mapData.lanes) {
@@ -82,7 +86,16 @@ class XanNationApp {
     const canvas = document.getElementById("game-canvas");
 
     canvas.addEventListener("systemSelected", (e) => {
-      gameState.selectSystem(e.detail.system.id);
+      const system = e.detail.system;
+      const planets = e.detail.planets;
+      
+      // Only select if it's a different system
+      if (!gameState.selectedSystem || gameState.selectedSystem.id !== system.id) {
+        gameState.selectSystem(system.id);
+      }
+      
+      // Update UI directly to avoid circular updates
+      this.uiController.displaySystemView(system, planets);
     });
 
     // Context menu actions
@@ -128,22 +141,22 @@ class XanNationApp {
       this.handleLogout();
     });
 
-    // Action buttons
-    document.getElementById("build-btn").addEventListener("click", () => {
-      this.handleBuildAction();
-    });
-
-    document.getElementById("send-fleet-btn").addEventListener("click", () => {
-      this.handleSendFleetAction();
-    });
-
-    document.getElementById("trade-route-btn").addEventListener("click", () => {
-      this.handleTradeRouteAction();
-    });
-
-    document.getElementById("colonize-btn").addEventListener("click", () => {
-      this.handleColonizeAction();
-    });
+    // Action buttons (Listeners removed as these buttons were part of the old static sidebar)
+    // document.getElementById("build-btn").addEventListener("click", () => {
+    //   this.handleBuildAction();
+    // });
+    //
+    // document.getElementById("send-fleet-btn").addEventListener("click", () => {
+    //   this.handleSendFleetAction();
+    // });
+    //
+    // document.getElementById("trade-route-btn").addEventListener("click", () => {
+    //   this.handleTradeRouteAction();
+    // });
+    //
+    // document.getElementById("colonize-btn").addEventListener("click", () => {
+    //   this.handleColonizeAction();
+    // });
 
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {

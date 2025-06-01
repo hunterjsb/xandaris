@@ -10,6 +10,7 @@ export class GameState {
     this.buildings = [];
     this.mapData = null;
     this.selectedSystem = null;
+    this.selectedSystemPlanets = []; // Added to store planets of the selected system
     this.currentTick = 1;
     this.ticksPerMinute = 6;
     this.buildingTypes = [];
@@ -21,9 +22,15 @@ export class GameState {
       goods: 0,
       fuel: 0,
     };
+    this.creditIncome = 0; // To store calculated income per tick
 
     this.callbacks = [];
     this.initialized = false;
+    
+    // Debouncing and update prevention
+    this.updateTimer = null;
+    this.pendingUpdate = false;
+    this.isUpdating = false;
 
     // Subscribe to auth changes
     authManager.subscribe((user) => {
@@ -144,6 +151,7 @@ export class GameState {
     this.buildings = [];
     this.mapData = null;
     this.selectedSystem = null;
+    this.selectedSystemPlanets = [];
     this.currentTick = 1;
     this.ticksPerMinute = 6;
     this.buildingTypes = [];
@@ -155,22 +163,15 @@ export class GameState {
       goods: 0,
       fuel: 0,
     };
+    this.creditIncome = 0;
     this.initialized = false;
     this.notifyCallbacks();
   }
 
   async loadMapData() {
     try {
-      console.log("GameState: Loading map data...");
-      // Load map data (systems) even without authentication
       const mapData = await gameData.getMap();
-      console.log("GameState: Received map data", mapData);
       if (mapData && mapData.systems) {
-        console.log(
-          "GameState: Setting systems",
-          mapData.systems.length,
-          "systems",
-        );
         this.systems = mapData.systems;
         this.mapData = mapData;
         this.notifyCallbacks();
@@ -190,7 +191,30 @@ export class GameState {
   }
 
   notifyCallbacks() {
-    this.callbacks.forEach((callback) => callback(this));
+    // Prevent recursive updates
+    if (this.isUpdating) return;
+    
+    // Debounce rapid updates
+    if (this.updateTimer) {
+      this.pendingUpdate = true;
+      return;
+    }
+    
+    this.updateTimer = setTimeout(() => {
+      this.updateTimer = null;
+      this.isUpdating = true;
+      
+      try {
+        this.callbacks.forEach((callback) => callback(this));
+      } finally {
+        this.isUpdating = false;
+      }
+      
+      if (this.pendingUpdate) {
+        this.pendingUpdate = false;
+        this.notifyCallbacks();
+      }
+    }, 16); // ~60fps update rate
   }
 
   updateSystems(systemsData) {
@@ -239,78 +263,100 @@ export class GameState {
 
   handleTick(tickData) {
     this.currentTick = tickData.tick || this.currentTick + 1;
-    console.log(
-      "Tick update received:",
-      tickData,
-      "Current tick:",
-      this.currentTick,
-    );
 
-    // Notify UI of tick update immediately
-    this.notifyCallbacks();
-
-    // Optional: Refresh data periodically, but not every tick
-    if (this.currentTick % 6 === 0) {
-      // Refresh every minute (6 ticks)
-      this.refreshGameData();
-    }
+    // Refresh data every tick, which includes resource calculation.
+    // Consider optimizing if performance becomes an issue.
+    this.refreshGameData();
+    // notifyCallbacks() is called within refreshGameData and updatePlayerResources
   }
 
   async updatePlayerResources() {
-    const user = await gameData.getPlayer(authManager.getUser()?.id); // Safe navigation for id
-    let userCredits = 0; // Initialize userCredits to 0
-
-    if (!user) {
-      console.warn("Cannot update player resources: user data not found. Defaulting user credits to 0.");
-      // Also, reset player resources to 0 and return, as no further calculation is meaningful.
-      this.playerResources = {
-        credits: 0,
-        food: 0,
-        ore: 0,
-        goods: 0,
-        fuel: 0,
-      };
-      this.creditIncome = 0; // Explicitly set income to 0
-      this.notifyCallbacks(); // Notify UI about the reset state for this part
+    const user = authManager.getUser(); // Get current user
+    if (!user || !this.mapData || !this.mapData.planets) {
+      // Try to set base credits if user exists, otherwise zero everything out.
+      const baseCredits = user ? (await gameData.getPlayer(user.id))?.credits || 0 : 0;
+      this.playerResources = { credits: baseCredits, food: 0, ore: 0, goods: 0, fuel: 0 };
+      this.creditIncome = 0;
+      // Don't notify callbacks here - let the caller handle it
       return;
-    } else {
-      userCredits = user.credits;
     }
 
-    // Calculate income from buildings
-    const userBuildings = this.getPlayerBuildings();
-    const creditsPerTick = userBuildings
-      .filter(
-        (building) => building.type === "bank" && building.active !== false,
-      )
-      .reduce((sum, building) => sum + (building.credits_per_tick || 1), 0);
+    let totalFood = 0;
+    let totalOre = 0;
+    let totalGoods = 0;
+    let totalFuel = 0;
+    let calculatedCreditIncome = 0;
 
-    // Calculate total resources from owned systems
-    const userId = user ? user.id : null;
-    const ownedSystems = userId ? this.systems.filter((s) => s.owner_id === userId) : [];
-    this.playerResources = ownedSystems.reduce(
-      (total, system) => ({
-        credits: total.credits + (system.credits || 0),
-        food: total.food + (system.food || 0),
-        ore: total.ore + (system.ore || 0),
-        goods: total.goods + (system.goods || 0),
-        fuel: total.fuel + (system.fuel || 0),
-      }),
-      {
-        credits: userCredits, // Start with user's global credits
-        food: 0,
-        ore: 0,
-        goods: 0,
-        fuel: 0,
-      },
-    );
+    // Iterate through all planets to find those owned by the player
+    for (const planet of this.mapData.planets) {
+      if (planet.colonized_by === user.id) {
+        totalFood += planet.Food || 0;
+        totalOre += planet.Ore || 0;
+        totalGoods += planet.Goods || 0;
+        totalFuel += planet.Fuel || 0;
+        // planet.Credits are accumulated resources on planet, not direct income to player from planet itself.
+        // Income comes from buildings.
 
-    // Store building income for UI display
-    this.creditIncome = creditsPerTick;
+        if (planet.Buildings) {
+          for (const [buildingIdOrName, level] of Object.entries(planet.Buildings)) {
+            // Find building type details. The ID in planet.Buildings could be the type's ID or its name.
+            const buildingType = this.buildingTypes.find(bt => bt.id === buildingIdOrName || (bt.name && bt.name.toLowerCase() === buildingIdOrName.toLowerCase()));
+            if (buildingType && buildingType.name && buildingType.name.toLowerCase() === 'bank') {
+              // Example: banks generate 1 credit per level per tick.
+              // This should align with backend calculations or game design.
+              calculatedCreditIncome += (level || 1) * 1;
+            }
+            // TODO: Add other resource-generating buildings here if they contribute to per-tick income
+            // For example, if farms directly add to playerResources.Food per tick beyond what's stored on planet.
+            // For now, assuming Food, Ore, Goods, Fuel on planet are the current stockpile.
+          }
+        }
+      }
+    }
+
+    // Fetch current global credits for the player (e.g., from their user record)
+    const playerData = await gameData.getPlayer(user.id);
+    const baseCredits = playerData?.credits || 0; // Credits player has, not including income for this tick.
+
+    this.playerResources = {
+      credits: baseCredits, // Base credits from player object. Income will be "added" by game loop or implicitly.
+      food: totalFood,
+      ore: totalOre,
+      goods: totalGoods,
+      fuel: totalFuel,
+    };
+    this.creditIncome = calculatedCreditIncome; // Store income calculated from buildings for UI display
+
+    // No notifyCallbacks() here, it's usually called by the initiator (e.g. loadGameData, handleTick)
+    // However, since refreshGameData calls this, and refreshGameData calls notifyCallbacks, it's covered.
+  }
+
+  getSystemPlanets(systemId) {
+    if (!this.mapData || !this.mapData.planets) {
+      return [];
+    }
+    // Remove excessive logging
+    const filtered = this.mapData.planets.filter(planet => {
+      // The backend returns system_id as a string
+      return planet.system_id === systemId;
+    });
+    return filtered;
   }
 
   selectSystem(systemId) {
+    // Prevent unnecessary updates if selecting the same system
+    if (this.selectedSystem && this.selectedSystem.id === systemId) {
+      return;
+    }
+    
     this.selectedSystem = this.systems.find((s) => s.id === systemId) || null;
+    if (this.selectedSystem) {
+      this.selectedSystemPlanets = this.getSystemPlanets(this.selectedSystem.id);
+    } else {
+      this.selectedSystemPlanets = [];
+    }
+    // The primary update path for UIController's expanded view is via 'systemSelected' event from mapRenderer.
+    // This notifyCallbacks is for other direct subscribers to gameState if any.
     this.notifyCallbacks();
   }
 
@@ -341,8 +387,8 @@ export class GameState {
     return await gameData.sendFleet(fromId, toId, strength);
   }
 
-  async queueBuilding(systemId, buildingType) {
-    return await gameData.queueBuilding(systemId, buildingType);
+  async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
+    return await gameData.queueBuilding(planetId, buildingType); // Pass planetId
   }
 
   async createTradeRoute(fromId, toId, cargo, capacity) {
