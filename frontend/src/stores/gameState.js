@@ -26,6 +26,11 @@ export class GameState {
 
     this.callbacks = [];
     this.initialized = false;
+    
+    // Debouncing and update prevention
+    this.updateTimer = null;
+    this.pendingUpdate = false;
+    this.isUpdating = false;
 
     // Subscribe to auth changes
     authManager.subscribe((user) => {
@@ -165,16 +170,8 @@ export class GameState {
 
   async loadMapData() {
     try {
-      console.log("GameState: Loading map data...");
-      // Load map data (systems) even without authentication
       const mapData = await gameData.getMap();
-      console.log("GameState: Received map data", mapData);
       if (mapData && mapData.systems) {
-        console.log(
-          "GameState: Setting systems",
-          mapData.systems.length,
-          "systems",
-        );
         this.systems = mapData.systems;
         this.mapData = mapData;
         this.notifyCallbacks();
@@ -194,7 +191,30 @@ export class GameState {
   }
 
   notifyCallbacks() {
-    this.callbacks.forEach((callback) => callback(this));
+    // Prevent recursive updates
+    if (this.isUpdating) return;
+    
+    // Debounce rapid updates
+    if (this.updateTimer) {
+      this.pendingUpdate = true;
+      return;
+    }
+    
+    this.updateTimer = setTimeout(() => {
+      this.updateTimer = null;
+      this.isUpdating = true;
+      
+      try {
+        this.callbacks.forEach((callback) => callback(this));
+      } finally {
+        this.isUpdating = false;
+      }
+      
+      if (this.pendingUpdate) {
+        this.pendingUpdate = false;
+        this.notifyCallbacks();
+      }
+    }, 16); // ~60fps update rate
   }
 
   updateSystems(systemsData) {
@@ -243,12 +263,6 @@ export class GameState {
 
   handleTick(tickData) {
     this.currentTick = tickData.tick || this.currentTick + 1;
-    console.log(
-      "Tick update received:",
-      tickData,
-      "Current tick:",
-      this.currentTick,
-    );
 
     // Refresh data every tick, which includes resource calculation.
     // Consider optimizing if performance becomes an issue.
@@ -259,12 +273,11 @@ export class GameState {
   async updatePlayerResources() {
     const user = authManager.getUser(); // Get current user
     if (!user || !this.mapData || !this.mapData.planets) {
-      console.warn("Cannot update player resources: user, mapData, or planets not available.");
       // Try to set base credits if user exists, otherwise zero everything out.
       const baseCredits = user ? (await gameData.getPlayer(user.id))?.credits || 0 : 0;
       this.playerResources = { credits: baseCredits, food: 0, ore: 0, goods: 0, fuel: 0 };
       this.creditIncome = 0;
-      this.notifyCallbacks();
+      // Don't notify callbacks here - let the caller handle it
       return;
     }
 
@@ -320,21 +333,22 @@ export class GameState {
 
   getSystemPlanets(systemId) {
     if (!this.mapData || !this.mapData.planets) {
-      console.warn("getSystemPlanets called before mapData or planets are loaded.");
       return [];
     }
-    return this.mapData.planets.filter(planet => {
-      // PocketBase relation field might store system_id as an array of IDs (if it's a multi-relation)
-      // or as a single ID string (if it's a single-relation).
-      // The current backend api.go for PlanetData defines SystemID as `json:"system_id"`, implying a single string.
-      if (Array.isArray(planet.system_id)) { // Defensive check
-        return planet.system_id.includes(systemId);
-      }
+    // Remove excessive logging
+    const filtered = this.mapData.planets.filter(planet => {
+      // The backend returns system_id as a string
       return planet.system_id === systemId;
     });
+    return filtered;
   }
 
   selectSystem(systemId) {
+    // Prevent unnecessary updates if selecting the same system
+    if (this.selectedSystem && this.selectedSystem.id === systemId) {
+      return;
+    }
+    
     this.selectedSystem = this.systems.find((s) => s.id === systemId) || null;
     if (this.selectedSystem) {
       this.selectedSystemPlanets = this.getSystemPlanets(this.selectedSystem.id);

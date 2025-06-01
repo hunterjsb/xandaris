@@ -4,34 +4,9 @@ export class UIController {
     this.currentUser = null;
     this.gameState = null;
     this.tickTimer = null;
+    this.currentSystemId = null; // Track current system to prevent duplicate renders
     // Make instance available globally, for event handlers in dynamically created HTML
     window.uiController = this;
-
-    // Listen for system selection events
-    document.addEventListener("systemSelected", (event) => {
-      if (event.detail && event.detail.system) {
-        // Attempt to get planets directly from event if provided by mapRenderer
-        let planetsInSystem = event.detail.planets;
-        if (!planetsInSystem && this.gameState && this.gameState.mapData && this.gameState.mapData.planets) {
-          // Fallback: Filter planets from global game state if not provided in event
-          // This assumes system_id in PlanetData matches the full system ID.
-          // Pocketbase relation fields often store just the ID.
-          // If planet.system_id is an array of IDs, adjust accordingly.
-          planetsInSystem = this.gameState.mapData.planets.filter(p => {
-            if (Array.isArray(p.system_id)) {
-              return p.system_id.includes(event.detail.system.id);
-            }
-            return p.system_id === event.detail.system.id;
-          });
-        } else if (!planetsInSystem) {
-          planetsInSystem = []; // Ensure it's an array
-        }
-        this.displaySystemView(event.detail.system, planetsInSystem);
-      } else {
-        console.warn("systemSelected event triggered without system data", event.detail);
-        this.clearExpandedView();
-      }
-    });
   }
 
   getPlanetTypeIcon(planetTypeName) {
@@ -59,69 +34,132 @@ export class UIController {
       container.innerHTML = "";
       container.classList.add("hidden");
     }
+    this.currentSystemId = null; // Clear current system when view is cleared
   }
 
   displaySystemView(system, planets) {
-    const container = document.getElementById("expanded-view-container");
-    if (!container) {
-      // console.error("[UIController] #expanded-view-container NOT FOUND in displaySystemView!"); // REMOVED
+    // Prevent duplicate renders of the same system
+    if (this.currentSystemId === system.id) {
       return;
     }
-    // console.log("[UIController] displaySystemView called for system:", system.id); // REMOVED
+    
+    const container = document.getElementById("expanded-view-container");
+    if (!container) {
+      return;
+    }
+    
+    this.currentSystemId = system.id;
 
-    // const oldHtmlLength = container.innerHTML.length; // REMOVED
-    // console.log("[UIController] #expanded-view-container current innerHTML length (before update):", oldHtmlLength); // REMOVED
 
-    let planetsHtml = '<div class="text-sm text-space-400">No planets listed for this system.</div>';
+    
+    // Calculate system stats
+    let totalPopulation = 0;
+    let colonizedCount = 0;
+    let ownedByPlayer = 0;
+    const currentUserId = this.currentUser?.id;
+    
+    if (planets && planets.length > 0) {
+      planets.forEach(planet => {
+        if (planet.colonized_by) {
+          colonizedCount++;
+          if (planet.colonized_by === currentUserId) {
+            ownedByPlayer++;
+          }
+        }
+        totalPopulation += planet.Pop || 0;
+      });
+    }
+    
+    let planetsHtml = '<div class="text-sm text-space-400">No planets detected in this system.</div>';
     if (planets && planets.length > 0) {
       planetsHtml = planets.map(planet => {
         const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
-        const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type); // Support both 'planet_type' and 'type'
-        // Note: Ensure planet object is serializable or pass only ID if issues arise with complex objects in onclick
+        const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type);
+        const isOwned = planet.colonized_by === currentUserId;
+        const population = planet.Pop || 0;
+        const maxPop = planet.MaxPopulation || 'N/A';
+        
+        // Status indicators
+        let statusHtml = '';
+        if (planet.colonized_by) {
+          if (isOwned) {
+            statusHtml = `<span class="text-xs text-green-400">✓ Your Colony</span>`;
+          } else {
+            statusHtml = `<span class="text-xs text-red-400">◆ ${planet.colonized_by_name || 'Occupied'}</span>`;
+          }
+        } else {
+          statusHtml = `<span class="text-xs text-gray-400">◇ Uncolonized</span>`;
+        }
+        
+        // Resources preview for owned planets
+        let resourcesPreview = '';
+        if (isOwned && planet.Credits !== undefined) {
+          resourcesPreview = `
+            <div class="text-xs text-space-300 mt-1 flex gap-2">
+              <span>💰 ${planet.Credits || 0}</span>
+              <span>🧑‍🚀 ${population}/${maxPop}</span>
+              <span>😊 ${planet.Morale || 0}%</span>
+            </div>
+          `;
+        }
+        
         return `
-          <li class="mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md cursor-pointer transition-colors"
+          <li class="mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md cursor-pointer transition-all duration-200 border border-transparent hover:border-space-500"
               onclick="window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
-            <span class="text-xl mr-2">${planetIcon}</span>
-            <span class="font-semibold">${planetName}</span>
-            <div class="text-xs text-space-300">${planet.planet_type || planet.type || 'Unknown Type'} - Size: ${planet.size || 'N/A'}</div>
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">${planetIcon}</span>
+                  <div>
+                    <div class="font-semibold">${planetName}</div>
+                    <div class="text-xs text-space-300">${planet.planet_type || planet.type || 'Unknown'} • Size ${planet.size || 'N/A'}</div>
+                  </div>
+                </div>
+                ${resourcesPreview}
+              </div>
+              <div class="text-right">
+                ${statusHtml}
+              </div>
+            </div>
           </li>
         `;
       }).join("");
     }
 
     container.innerHTML = `
-      <div class="p-2">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-2xl font-bold text-orange-300">${system.name || `System ${system.id.slice(-4)}`}</h2>
-          <button onclick="window.uiController.clearExpandedView()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+      <div class="p-4 h-full flex flex-col">
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <h2 class="text-2xl font-bold text-orange-300">${system.name || `System ${system.id.slice(-4)}`}</h2>
+            <div class="text-sm text-space-300 mt-1">
+              <span class="mr-3">📍 (${system.x}, ${system.y})</span>
+              <span>⭐ Richness: ${system.richness || 'Unknown'}</span>
+            </div>
+          </div>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-gray-400 hover:text-white text-2xl transition-colors p-1 -m-1">×</button>
         </div>
-        <div class="mb-4 text-sm">
-          <div>Coordinates: (${system.x}, ${system.y})</div>
-          <div>Owner: ${system.owner_name || "Uncolonized"}</div>
-          <div>Richness: ${system.richness || 'N/A'}</div>
+        
+        <div class="mb-4 p-3 bg-space-800 rounded-lg text-sm">
+          <div class="grid grid-cols-2 gap-2">
+            <div>Owner: <span class="font-semibold text-space-200">${system.owner_name || "Uncontrolled"}</span></div>
+            <div>Planets: <span class="font-semibold text-space-200">${planets?.length || 0}</span></div>
+            <div>Colonized: <span class="font-semibold text-space-200">${colonizedCount}</span></div>
+            <div>Your Colonies: <span class="font-semibold ${ownedByPlayer > 0 ? 'text-green-400' : 'text-space-200'}">${ownedByPlayer}</span></div>
+          </div>
+          ${totalPopulation > 0 ? `<div class="mt-2 pt-2 border-t border-space-700">Total Population: <span class="font-semibold text-space-200">${totalPopulation.toLocaleString()}</span></div>` : ''}
         </div>
-        <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets:</h3>
-        <ul class="space-y-1 overflow-y-auto max-h-96">
-          ${planetsHtml}
-        </ul>
+        
+        <div class="flex-1 overflow-hidden flex flex-col">
+          <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets in System</h3>
+          <ul class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            ${planetsHtml}
+          </ul>
+        </div>
       </div>
     `;
-    // systemViewHTML is the variable name for the string literal above, used for clarity in previous diff.
-    // The actual code directly assigns the template literal to container.innerHTML.
 
-    container.innerHTML = systemViewHTML;
-
-    // console.log("[UIController] #expanded-view-container new innerHTML length (after update):", container.innerHTML.length); // REMOVED
-    // console.log("[UIController] #expanded-view-container classes BEFORE remove hidden:", container.classList.toString()); // REMOVED
     container.classList.remove("hidden");
-    // console.log("[UIController] #expanded-view-container classes AFTER remove hidden:", container.classList.toString()); // REMOVED
-
-    // if (container.classList.contains("hidden")) { // REMOVED
-    //     console.warn("[UIController] #expanded-view-container STILL HAS 'hidden' class after attempting removal!"); // REMOVED
-    // } // REMOVED
-    // if (getComputedStyle(container).display === 'none') { // REMOVED
-    //     console.warn("[UIController] #expanded-view-container computed style is 'display: none' AFTER attempting removal of hidden class!"); // REMOVED
-    // } // REMOVED
   }
 
   displayPlanetView(planet) {
@@ -135,86 +173,177 @@ export class UIController {
     const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type);
     const systemName = planet.system_name || (this.gameState && this.gameState.mapData.systems.find(s => s.id === planet.system_id)?.name) || planet.system_id;
 
+    // Calculate population percentage
+    const popPercentage = planet.MaxPopulation ? Math.round((planet.Pop || 0) / planet.MaxPopulation * 100) : 0;
+    const popBarColor = popPercentage > 80 ? 'bg-green-500' : popPercentage > 50 ? 'bg-yellow-500' : 'bg-orange-500';
 
-    let resourcesHtml = '<div class="text-sm text-space-400">No resource data.</div>';
-    if (planet.Credits !== undefined) { // Check one of the new fields
+    let resourcesHtml = '<div class="text-sm text-space-400">No resource data available.</div>';
+    if (planet.Credits !== undefined) {
       resourcesHtml = `
-        <div class="grid grid-cols-2 gap-2 text-sm">
-          <div>💰 Credits: <span class="font-semibold text-yellow-300">${planet.Credits?.toLocaleString() || 0}</span></div>
-          <div>🧑‍🚀 Population: <span class="font-semibold text-blue-300">${planet.Pop?.toLocaleString() || 0} / ${planet.MaxPopulation?.toLocaleString() || 'N/A'}</span></div>
-          <div>😊 Morale: <span class="font-semibold text-green-300">${planet.Morale || 0}%</span></div>
-          <div>🍞 Food: <span class="font-semibold text-lime-300">${planet.Food?.toLocaleString() || 0}</span></div>
-          <div>⛏️ Ore: <span class="font-semibold text-gray-300">${planet.Ore?.toLocaleString() || 0}</span></div>
-          <div>📦 Goods: <span class="font-semibold text-orange-300">${planet.Goods?.toLocaleString() || 0}</span></div>
-          <div>⛽ Fuel: <span class="font-semibold text-purple-300">${planet.Fuel?.toLocaleString() || 0}</span></div>
+        <div class="space-y-3">
+          <!-- Population Bar -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm">🧑‍🚀 Population</span>
+              <span class="text-sm font-semibold">${planet.Pop?.toLocaleString() || 0} / ${planet.MaxPopulation?.toLocaleString() || 'N/A'}</span>
+            </div>
+            <div class="w-full bg-space-700 rounded-full h-2">
+              <div class="${popBarColor} h-2 rounded-full transition-all duration-300" style="width: ${popPercentage}%"></div>
+            </div>
+          </div>
+          
+          <!-- Morale Bar -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-sm">😊 Morale</span>
+              <span class="text-sm font-semibold">${planet.Morale || 0}%</span>
+            </div>
+            <div class="w-full bg-space-700 rounded-full h-2">
+              <div class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: ${planet.Morale || 0}%"></div>
+            </div>
+          </div>
+          
+          <!-- Resources Grid -->
+          <div class="grid grid-cols-2 gap-3 mt-4 p-3 bg-space-800 rounded-lg">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">💰</span>
+              <div>
+                <div class="text-xs text-space-400">Credits</div>
+                <div class="font-semibold text-yellow-300">${planet.Credits?.toLocaleString() || 0}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🍞</span>
+              <div>
+                <div class="text-xs text-space-400">Food</div>
+                <div class="font-semibold text-lime-300">${planet.Food?.toLocaleString() || 0}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl">⛏️</span>
+              <div>
+                <div class="text-xs text-space-400">Ore</div>
+                <div class="font-semibold text-gray-300">${planet.Ore?.toLocaleString() || 0}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl">📦</span>
+              <div>
+                <div class="text-xs text-space-400">Goods</div>
+                <div class="font-semibold text-orange-300">${planet.Goods?.toLocaleString() || 0}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl">⛽</span>
+              <div>
+                <div class="text-xs text-space-400">Fuel</div>
+                <div class="font-semibold text-purple-300">${planet.Fuel?.toLocaleString() || 0}</div>
+              </div>
+            </div>
+          </div>
         </div>
       `;
     }
 
-    let buildingsHtml = '<div class="text-sm text-space-400">No buildings on this planet.</div>';
+    let buildingsHtml = '<div class="text-sm text-space-400">No buildings constructed.</div>';
     if (planet.Buildings && Object.keys(planet.Buildings).length > 0) {
-      buildingsHtml = Object.entries(planet.Buildings).map(([buildingName, level]) => {
-        // Attempt to get a nicer name from buildingTypes if available
+      const buildingEntries = Object.entries(planet.Buildings).map(([buildingName, level]) => {
         let displayName = buildingName;
+        let buildingIcon = '🏢';
         if (this.gameState && this.gameState.buildingTypes) {
             const buildingType = this.gameState.buildingTypes.find(bt => bt.id === buildingName || bt.name.toLowerCase() === buildingName.toLowerCase());
-            if (buildingType) displayName = buildingType.name;
+            if (buildingType) {
+              displayName = buildingType.name;
+              // Add icons based on building type
+              if (displayName.toLowerCase().includes('farm')) buildingIcon = '🌾';
+              else if (displayName.toLowerCase().includes('mine')) buildingIcon = '⛏️';
+              else if (displayName.toLowerCase().includes('factory')) buildingIcon = '🏭';
+              else if (displayName.toLowerCase().includes('bank')) buildingIcon = '🏦';
+              else if (displayName.toLowerCase().includes('research')) buildingIcon = '🔬';
+            }
         }
         return `
-          <li class="p-2 bg-space-700 rounded-md">
-            <span class="font-semibold">${displayName}</span>: Level ${level}
+          <li class="p-3 bg-space-700 rounded-md flex items-center justify-between hover:bg-space-600 transition-colors">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">${buildingIcon}</span>
+              <span class="font-semibold">${displayName}</span>
+            </div>
+            <span class="text-sm text-space-300">Level ${level}</span>
           </li>
         `;
       }).join("");
-      buildingsHtml = `<ul class="space-y-1 text-sm">${buildingsHtml}</ul>`;
+      buildingsHtml = `<ul class="space-y-2">${buildingEntries}</ul>`;
     }
 
     const isColonized = planet.colonized_by && planet.colonized_by !== "";
-    const canColonize = !isColonized && this.currentUser; // Add other conditions like proximity or resources if needed
+    const isOwnedByPlayer = isColonized && planet.colonized_by === this.currentUser?.id;
+    const canColonize = !isColonized && this.currentUser && this.gameState.playerResources.credits >= 500;
 
     container.innerHTML = `
-      <div class="p-2">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-2xl font-bold text-orange-300">
-            <span class="text-3xl mr-2">${planetIcon}</span>${planetName}
-          </h2>
-          <button onclick="window.uiController.clearExpandedView()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+      <div class="p-4 h-full flex flex-col">
+        <div class="flex justify-between items-start mb-4">
+          <div class="flex items-center gap-3">
+            <span class="text-4xl">${planetIcon}</span>
+            <div>
+              <h2 class="text-2xl font-bold text-orange-300">${planetName}</h2>
+              <div class="text-sm text-space-300">
+                ${planet.planet_type || planet.type || 'Unknown Type'} • Size ${planet.size || 'N/A'}
+              </div>
+            </div>
+          </div>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-gray-400 hover:text-white text-2xl transition-colors p-1 -m-1">×</button>
         </div>
-        <div class="mb-3 text-sm">
-          <div>Type: <span class="font-semibold">${planet.planet_type || planet.type || 'Unknown Type'}</span></div>
-          <div>Size: <span class="font-semibold">${planet.size || 'N/A'}</span></div>
-          <div>System: <span class="font-semibold">${systemName}</span></div>
-           <div>Colonized by: <span class="font-semibold">${planet.colonized_by_name || (planet.colonized_by ? 'Another Player' : 'Uncolonized')}</span></div>
+        
+        <div class="mb-4 p-3 bg-space-800 rounded-lg text-sm">
+          <div class="grid grid-cols-2 gap-2">
+            <div>System: <span class="font-semibold text-space-200">${systemName}</span></div>
+            <div>Status: <span class="font-semibold ${isOwnedByPlayer ? 'text-green-400' : isColonized ? 'text-red-400' : 'text-gray-400'}">
+              ${isOwnedByPlayer ? 'Your Colony' : planet.colonized_by_name || (isColonized ? 'Occupied' : 'Uncolonized')}
+            </span></div>
+          </div>
         </div>
 
-        <div class="mb-3">
-          <h3 class="text-md font-semibold mb-1 text-nebula-200">Resources & Stats:</h3>
-          ${resourcesHtml}
+        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+          ${isOwnedByPlayer || planet.Credits !== undefined ? `
+          <div>
+            <h3 class="text-lg font-semibold mb-3 text-nebula-200">Resources & Stats</h3>
+            ${resourcesHtml}
+          </div>
+          ` : ''}
+
+          ${isOwnedByPlayer ? `
+          <div>
+            <h3 class="text-lg font-semibold mb-3 text-nebula-200">Buildings</h3>
+            ${buildingsHtml}
+          </div>
+          ` : ''}
         </div>
 
-        <div class="mb-3">
-          <h3 class="text-md font-semibold mb-1 text-nebula-200">Buildings:</h3>
-          ${buildingsHtml}
+        <div class="mt-4 space-y-2">
+          ${canColonize ? `
+          <button class="w-full px-4 py-3 bg-emerald-700 hover:bg-emerald-600 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2"
+                  onclick="window.uiController.colonizePlanetWrapper('${planet.id}')">
+            <span>🚀</span> Colonize Planet (500 Credits)
+          </button>
+          ` : !canColonize && !isColonized && this.currentUser ? `
+          <button class="w-full px-4 py-3 bg-gray-700 rounded-lg text-gray-400 font-semibold cursor-not-allowed" disabled>
+            Insufficient Credits (Need 500)
+          </button>
+          ` : ''}
+
+          ${isOwnedByPlayer ? `
+          <button class="w-full px-4 py-3 bg-blue-700 hover:bg-blue-600 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2"
+                  onclick="window.uiController.showPlanetBuildModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
+            <span>🏗️</span> Construct Building
+          </button>
+          ` : ''}
+
+          <button class="w-full px-4 py-3 bg-space-700 hover:bg-space-600 rounded-lg text-white transition-colors"
+                  onclick="window.uiController.goBackToSystemView('${planet.system_id}')">
+            ← Back to System
+          </button>
         </div>
-
-        ${canColonize ? `
-        <button class="w-full mt-4 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-white font-semibold"
-                onclick="window.uiController.colonizePlanetWrapper('${planet.id}')">
-          Colonize Planet (Cost: 500 Credits)
-        </button>
-        ` : ''}
-
-        ${isColonized && planet.colonized_by === this.currentUser?.id ? `
-        <button class="w-full mt-4 px-4 py-2 bg-green-700 hover:bg-green-600 rounded text-white font-semibold"
-                onclick="window.uiController.showPlanetBuildModal(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
-          Construct New Building
-        </button>
-        ` : ''}
-
-        <button class="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white"
-                onclick="window.uiController.goBackToSystemView('${planet.system_id}')">
-          Back to System View
-        </button>
       </div>
     `;
     container.classList.remove("hidden");

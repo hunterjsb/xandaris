@@ -163,11 +163,17 @@ export class MapRenderer {
   }
 
   selectSystem(system) {
+    // Prevent selecting the same system multiple times
+    if (this.selectedSystem && this.selectedSystem.id === system.id) {
+      return;
+    }
+    
     this.selectedSystem = system;
     // Emit custom event for UI to handle, now including planets in that system
-    const planetsInSystem = window.gameState.getSystemPlanets(system.id); // Ensure window.gameState is available or passed
+    const planetsInSystem = window.gameState.getSystemPlanets(system.id);
     this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
-      detail: { system, planets: planetsInSystem }
+      detail: { system, planets: planetsInSystem },
+      bubbles: true
     }));
   }
 

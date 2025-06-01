@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"time"
 
+	_ "github.com/hunterjsb/xandaris/migrations"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/models"
-	_ "github.com/hunterjsb/xandaris/migrations"
 )
 
 func main() {
@@ -72,106 +72,89 @@ func seedNewSchema(app *pocketbase.PocketBase) error {
 }
 
 func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
-	// Check if sample user already exists
-	existingUsers, err := app.Dao().FindRecordsByFilter("users", "username = 'testplayer'", "", 1, 0)
+	// Get all existing users
+	allUsers, err := app.Dao().FindRecordsByExpr("users", nil, nil)
 	if err != nil {
 		return err
 	}
 
-	var sampleUser *models.Record
-	if len(existingUsers) > 0 {
-		// User already exists, use existing user
-		sampleUser = existingUsers[0]
-		fmt.Printf("Using existing user: %s\n", sampleUser.GetString("username"))
-	} else {
-		// Create a new sample user
-		userCollection, err := app.Dao().FindCollectionByNameOrId("users")
-		if err != nil {
-			return err
-		}
-
-		sampleUser = models.NewRecord(userCollection)
-		sampleUser.Set("username", "testplayer")
-		sampleUser.Set("email", "test@example.com") 
-		sampleUser.Set("password", "testpassword123")
-		sampleUser.Set("credits", 5000)
-		sampleUser.Set("food", 1000)
-		sampleUser.Set("ore", 500)
-		sampleUser.Set("goods", 200)
-		sampleUser.Set("fuel", 300)
-
-		if err := app.Dao().SaveRecord(sampleUser); err != nil {
-			return err
-		}
-		fmt.Printf("Created new user: %s\n", sampleUser.GetString("username"))
-	}
-
-	// Check how many planets this user already has colonized
-	existingColonies, err := app.Dao().FindRecordsByFilter("planets", "colonized_by = '"+sampleUser.Id+"'", "", 0, 0)
-	if err != nil {
-		return err
-	}
-
-	if len(existingColonies) >= 3 {
-		fmt.Printf("User already has %d colonized planets, skipping colonization\n", len(existingColonies))
+	if len(allUsers) == 0 {
+		fmt.Println("No users found in the database. Please create a user first.")
 		return nil
 	}
 
-	// Get all planets and filter uncolonized ones in Go (PocketBase filter has issues with relation fields)
+	fmt.Printf("Found %d users to give colonies\n", len(allUsers))
+
+	// Get all planets and filter uncolonized ones in Go
 	allPlanets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
 	if err != nil {
 		return err
 	}
 
-	// Filter uncolonized planets in Go
+	// Filter uncolonized planets
 	var uncolonizedPlanets []*models.Record
 	for _, planet := range allPlanets {
 		if planet.GetString("colonized_by") == "" {
 			uncolonizedPlanets = append(uncolonizedPlanets, planet)
-			if len(uncolonizedPlanets) >= 10 { // Limit to 10 for seeding
-				break
+		}
+	}
+
+	if len(uncolonizedPlanets) < len(allUsers)*3 {
+		fmt.Printf("Warning: Not enough uncolonized planets (%d) for all users to get 3 colonies each\n", len(uncolonizedPlanets))
+	}
+
+	planetIndex := 0
+	coloniesPerUser := 3
+
+	// Give each user some colonies
+	for _, user := range allUsers {
+		username := user.GetString("username")
+		email := user.GetString("email")
+
+		// Check how many planets this user already has colonized
+		existingColonies, err := app.Dao().FindRecordsByFilter("planets", "colonized_by = '"+user.Id+"'", "", 0, 0)
+		if err != nil {
+			return err
+		}
+
+		if len(existingColonies) >= coloniesPerUser {
+			fmt.Printf("  %s (%s) already has %d colonies\n", username, email, len(existingColonies))
+			continue
+		}
+
+		// Colonize planets for this user
+		planetsToColonize := coloniesPerUser - len(existingColonies)
+		colonized := 0
+
+		for j := 0; j < planetsToColonize && planetIndex < len(uncolonizedPlanets); j++ {
+			planet := uncolonizedPlanets[planetIndex]
+			planetIndex++
+
+			// Colonize planet
+			planet.Set("colonized_by", user.Id)
+			planet.Set("colonized_at", time.Now())
+
+			if err := app.Dao().SaveRecord(planet); err != nil {
+				fmt.Printf("    Error colonizing planet: %v\n", err)
+				continue
 			}
-		}
-	}
 
-	if len(uncolonizedPlanets) == 0 {
-		fmt.Printf("No uncolonized planets found\n")
-		return nil
-	}
+			// Add population to this planet
+			if err := seedPopulationForPlanet(app, planet, user.Id); err != nil {
+				fmt.Printf("    Error adding population: %v\n", err)
+			}
 
-	// Colonize up to 3 planets total
-	planetsToColonize := 3 - len(existingColonies)
-	if len(uncolonizedPlanets) < planetsToColonize {
-		planetsToColonize = len(uncolonizedPlanets)
-	}
+			// Add some buildings
+			if err := seedBuildingsForPlanet(app, planet); err != nil {
+				fmt.Printf("    Error adding buildings: %v\n", err)
+			}
 
-
-	
-	for i := 0; i < planetsToColonize; i++ {
-		planet := uncolonizedPlanets[i]
-		
-		// Colonize planet
-		planet.Set("colonized_by", sampleUser.Id)
-		planet.Set("colonized_at", time.Now())
-
-		if err := app.Dao().SaveRecord(planet); err != nil {
-			return err
+			colonized++
 		}
 
-		// Add population to this planet
-		if err := seedPopulationForPlanet(app, planet, sampleUser.Id); err != nil {
-			return err
-		}
-
-		// Add some buildings
-		if err := seedBuildingsForPlanet(app, planet); err != nil {
-			return err
-		}
+		totalColonies := len(existingColonies) + colonized
+		fmt.Printf("  %s (%s) now has %d colonies\n", username, email, totalColonies)
 	}
-
-	totalColonies := len(existingColonies) + planetsToColonize
-
-	fmt.Printf("User '%s' now has %d colonized planets\n", sampleUser.GetString("username"), totalColonies)
 	return nil
 }
 
@@ -184,7 +167,7 @@ func seedPopulationForPlanet(app *pocketbase.PocketBase, planet *models.Record, 
 	population := models.NewRecord(populationCollection)
 	population.Set("owner_id", ownerID)
 	population.Set("planet_id", planet.Id)
-	population.Set("count", rand.Intn(200)+50) // 50-250 population
+	population.Set("count", rand.Intn(200)+50)    // 50-250 population
 	population.Set("happiness", rand.Intn(30)+70) // 70-100 happiness
 
 	return app.Dao().SaveRecord(population)
@@ -445,7 +428,7 @@ func seedResourceNodes(app *pocketbase.PocketBase) error {
 
 	for _, planet := range planets {
 		planetSize := planet.GetInt("size")
-		
+
 		// Larger planets have more resource nodes
 		nodeCount := planetSize + rand.Intn(3)
 
