@@ -89,16 +89,28 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 		}
 	}
 
-	if totalPop == 0 {
-		return nil // No population to simulate
-	}
-
-	// Get buildings on this planet
+	// Get buildings on this planet first (some buildings like crypto_server work without population)
 	buildings, err := app.Dao().FindRecordsByFilter("buildings", 
 		fmt.Sprintf("planet_id = '%s' && active = true", planet.Id), "", 0, 0)
 	if err != nil {
 		log.Printf("Failed to get buildings for planet %s: %v", planet.Id, err)
 		return nil
+	}
+
+	// Check if there are any crypto_servers that can work without population
+	hasCryptoServers := false
+	for _, building := range buildings {
+		buildingTypeID := building.GetString("building_type")
+		buildingType, err := app.Dao().FindRecordById("building_types", buildingTypeID)
+		if err == nil && buildingType.GetString("name") == "crypto_server" {
+			hasCryptoServers = true
+			break
+		}
+	}
+
+	// Only skip if no population AND no crypto servers
+	if totalPop == 0 && !hasCryptoServers {
+		return nil // No population or crypto servers to simulate
 	}
 
 	// Get resource nodes on this planet
@@ -148,8 +160,31 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 			efficiency = 1.0
 		}
 
-		// Different building types produce different resources
+		// Handle crypto_servers first (they work without workers)
 		buildingName := buildingType.GetString("name")
+		if buildingName == "crypto_server" {
+			// Crypto servers produce credits automatically without needing workers
+			creditsProduced := buildingType.GetInt("res1_quantity") * level
+			
+			// Add credits to the building's storage (up to capacity)
+			currentStored := building.GetInt("res1_stored")
+			capacity := buildingType.GetInt("res1_capacity") * level
+			newStored := currentStored + creditsProduced
+			if newStored > capacity {
+				newStored = capacity
+			}
+			
+			building.Set("res1_stored", newStored)
+			if err := app.Dao().SaveRecord(building); err != nil {
+				log.Printf("Failed to update crypto_server storage: %v", err)
+			} else {
+				log.Printf("Crypto server %s produced %d credits (stored: %d/%d)", 
+					building.Id, creditsProduced, newStored, capacity)
+			}
+			continue // Skip worker-dependent processing for crypto_servers
+		}
+
+		// Different building types produce different resources (worker-dependent)
 		baseProduction := int(float64(level*20) * efficiency)
 
 		switch buildingName {
@@ -175,12 +210,6 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 		}
 	}
 
-	// Basic consumption for population
-	consumption := map[string]int{
-		"food": totalPop / 5,
-		"fuel": totalPop / 10,
-	}
-
 	// Get owner's current resources (stored globally per user)
 	owner, err := app.Dao().FindRecordById("users", ownerID)
 	if err != nil {
@@ -188,48 +217,57 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 		return nil
 	}
 
-	// Update owner's resources
+	// Update owner's resources from production
 	for resource, amount := range production {
 		currentAmount := owner.GetInt(resource)
 		owner.Set(resource, currentAmount + amount)
 	}
 
-	for resource, amount := range consumption {
-		currentAmount := owner.GetInt(resource)
-		newAmount := currentAmount - amount
-		if newAmount < 0 {
-			// Resource shortage affects happiness
-			for _, pop := range populations {
-				happiness := pop.GetInt("happiness")
-				happiness -= 5
-				if happiness < 0 {
-					happiness = 0
+	// Only process consumption and population growth if there's population
+	if totalPop > 0 {
+		// Basic consumption for population
+		consumption := map[string]int{
+			"food": totalPop / 5,
+			"fuel": totalPop / 10,
+		}
+
+		for resource, amount := range consumption {
+			currentAmount := owner.GetInt(resource)
+			newAmount := currentAmount - amount
+			if newAmount < 0 {
+				// Resource shortage affects happiness
+				for _, pop := range populations {
+					happiness := pop.GetInt("happiness")
+					happiness -= 5
+					if happiness < 0 {
+						happiness = 0
+					}
+					pop.Set("happiness", happiness)
+					app.Dao().SaveRecord(pop)
 				}
-				pop.Set("happiness", happiness)
-				app.Dao().SaveRecord(pop)
+				newAmount = 0
 			}
-			newAmount = 0
-		}
-		owner.Set(resource, newAmount)
-	}
-
-	// Population growth/decline
-	if totalHappiness > 70 && production["food"] > consumption["food"] && totalPop < maxPop {
-		// Population growth
-		growthRate := 0.02 * (float64(totalHappiness) / 100.0)
-		growth := int(float64(totalPop) * growthRate)
-		if growth < 1 {
-			growth = 1
+			owner.Set(resource, newAmount)
 		}
 
-		if len(populations) > 0 {
-			mainPop := populations[0]
-			newCount := mainPop.GetInt("count") + growth
-			if totalPop + growth > maxPop {
-				newCount = maxPop - (totalPop - mainPop.GetInt("count"))
+		// Population growth/decline
+		if totalHappiness > 70 && production["food"] > consumption["food"] && totalPop < maxPop {
+			// Population growth
+			growthRate := 0.02 * (float64(totalHappiness) / 100.0)
+			growth := int(float64(totalPop) * growthRate)
+			if growth < 1 {
+				growth = 1
 			}
-			mainPop.Set("count", newCount)
-			app.Dao().SaveRecord(mainPop)
+
+			if len(populations) > 0 {
+				mainPop := populations[0]
+				newCount := mainPop.GetInt("count") + growth
+				if totalPop + growth > maxPop {
+					newCount = maxPop - (totalPop - mainPop.GetInt("count"))
+				}
+				mainPop.Set("count", newCount)
+				app.Dao().SaveRecord(mainPop)
+			}
 		}
 	}
 

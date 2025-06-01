@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
@@ -64,12 +65,12 @@ func main() {
 		e.Router.GET("/api/stream", websocket.HandleWebSocket(app))
 
 		// Debug endpoint to manually trigger a tick
-		// e.Router.POST("/api/debug/tick", func(c echo.Context) error {
-		// 	if err := tick.ProcessTick(app); err != nil {
-		// 		return c.JSON(500, map[string]string{"error": err.Error()})
-		// 	}
-		// 	return c.JSON(200, map[string]string{"status": "tick processed"})
-		// })
+		e.Router.POST("/api/debug/tick", func(c echo.Context) error {
+			if err := tick.ProcessTick(app); err != nil {
+				return c.JSON(500, map[string]string{"error": err.Error()})
+			}
+			return c.JSON(200, map[string]string{"status": "tick processed"})
+		})
 
 		return nil
 	})

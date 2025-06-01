@@ -38,3 +38,4 @@ logs/
 backend/seed
 backend/util
 temp.json
+backend/server.pid
