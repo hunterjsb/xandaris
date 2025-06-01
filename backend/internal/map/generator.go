@@ -31,7 +31,7 @@ func GenerateMap(app *pocketbase.PocketBase, systemCount int) error {
 		return fmt.Errorf("systems collection not found: %w", err)
 	}
 	fmt.Println("Found systems collection")
-	
+
 	// Check if planets collection exists (optional)
 	planetCollection, err := app.Dao().FindCollectionByNameOrId("planets")
 	planetsEnabled := err == nil
@@ -88,20 +88,39 @@ type System struct {
 func generateSystems(count int) []System {
 	systems := make([]System, 0, count)
 
-	// Use a simple grid with some randomization
-	gridSize := int(math.Ceil(math.Sqrt(float64(count))))
-	spacing := 200 // Distance between systems
+	// Determine number of clusters based on system count
+	clusterCount := int(math.Ceil(math.Sqrt(float64(count)) / 2))
+	if clusterCount < 1 {
+		clusterCount = 1
+	}
 
+	clusterSpacing := 600 // Distance between cluster centers
+	clusterRadius := 200  // Radius around each center for system placement
+
+	clusterGridSize := int(math.Ceil(math.Sqrt(float64(clusterCount))))
+	centers := make([][2]int, clusterCount)
+
+	// Generate cluster centers on a grid with slight randomization
+	for i := 0; i < clusterCount; i++ {
+		gridX := i % clusterGridSize
+		gridY := i / clusterGridSize
+
+		offsetX := rand.Intn(clusterSpacing/2) - clusterSpacing/4
+		offsetY := rand.Intn(clusterSpacing/2) - clusterSpacing/4
+
+		centers[i][0] = gridX*clusterSpacing + offsetX
+		centers[i][1] = gridY*clusterSpacing + offsetY
+	}
+
+	// Place systems around random cluster centers
 	for i := 0; i < count; i++ {
-		gridX := i % gridSize
-		gridY := i / gridSize
+		center := centers[rand.Intn(clusterCount)]
 
-		// Add randomization to grid positions
-		offsetX := rand.Intn(spacing/2) - spacing/4
-		offsetY := rand.Intn(spacing/2) - spacing/4
+		offsetX := rand.Intn(clusterRadius*2) - clusterRadius
+		offsetY := rand.Intn(clusterRadius*2) - clusterRadius
 
-		x := gridX*spacing + offsetX
-		y := gridY*spacing + offsetY
+		x := center[0] + offsetX
+		y := center[1] + offsetY
 
 		// Generate richness (1-10, with bias toward middle values)
 		richness := 3 + rand.Intn(5) // 3-7 base
