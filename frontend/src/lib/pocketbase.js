@@ -268,11 +268,17 @@ export class GameDataManager {
 
   async getBuildings(userId = null) {
     try {
-      // Buildings don't have owner_id, they belong to planets
-      // For now, return all buildings for authenticated users
-      return await pb.collection("buildings").getFullList({
-        sort: "created",
+      let url = "/api/buildings";
+      const params = {};
+      if (userId) {
+        params.owner_id = userId;
+      }
+
+      const response = await pb.send(url, {
+        method: "GET",
+        params: params, // PocketBase SDK handles adding this to query string
       });
+      return response.items || [];
     } catch (error) {
       try {
         suppressAutoCancelError(error);
@@ -409,6 +415,38 @@ export class GameDataManager {
         console.error("Failed to fetch status:", e);
       }
       return null;
+    }
+  }
+
+  async getBuildingTypes() {
+    try {
+      const response = await pb.send("/api/building_types", {
+        method: "GET",
+      });
+      return response.items || [];
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error("Failed to fetch building types:", e);
+      }
+      return [];
+    }
+  }
+
+  async getResourceTypes() {
+    try {
+      const response = await pb.send("/api/resource_types", {
+        method: "GET",
+      });
+      return response.items || [];
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error("Failed to fetch resource types:", e);
+      }
+      return [];
     }
   }
 }

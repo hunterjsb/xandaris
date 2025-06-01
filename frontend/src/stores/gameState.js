@@ -12,6 +12,8 @@ export class GameState {
     this.selectedSystem = null;
     this.currentTick = 1;
     this.ticksPerMinute = 6;
+    this.buildingTypes = [];
+    this.resourceTypes = [];
     this.playerResources = {
       credits: 0,
       food: 0,
@@ -96,6 +98,27 @@ export class GameState {
         this.ticksPerMinute = status.ticks_per_minute || 6;
       }
 
+      // Load building and resource types
+      try {
+        const buildingTypesData = await gameData.getBuildingTypes();
+        if (buildingTypesData) {
+          this.buildingTypes = buildingTypesData;
+        }
+      } catch (error) {
+        console.warn("Failed to load building types:", error);
+        this.buildingTypes = []; // Ensure it's an array even on failure
+      }
+
+      try {
+        const resourceTypesData = await gameData.getResourceTypes();
+        if (resourceTypesData) {
+          this.resourceTypes = resourceTypesData;
+        }
+      } catch (error) {
+        console.warn("Failed to load resource types:", error);
+        this.resourceTypes = []; // Ensure it's an array even on failure
+      }
+
       this.updatePlayerResources();
       this.notifyCallbacks();
     } catch (error) {
@@ -123,6 +146,8 @@ export class GameState {
     this.selectedSystem = null;
     this.currentTick = 1;
     this.ticksPerMinute = 6;
+    this.buildingTypes = [];
+    this.resourceTypes = [];
     this.playerResources = {
       credits: 0,
       food: 0,
