@@ -95,7 +95,6 @@ export class UIController {
     
     // Default GIF to use when specific ones aren't available
     const defaultGifPath = '/planets/default.gif';
-    console.log('getPlanetAnimatedGif called with:', planetTypeName);
     
     // Map planet types to their preferred animated GIF files
     const gifMap = {
@@ -120,13 +119,10 @@ export class UIController {
     
     const typeName = planetType ? planetType.name.toLowerCase() : planetTypeName.toLowerCase();
     
-    // For now, always use the default GIF since we only have one
-    // TODO: When more GIFs are added, implement file existence checking
-    const gifPath = defaultGifPath; // gifMap[typeName] || defaultGifPath;
+    // Use specific GIF if available, otherwise fall back to default
+    const gifPath = gifMap[typeName] || defaultGifPath;
     
-    const gifHtml = `<img src="${gifPath}" class="w-12 h-12 rounded-full border-2 border-space-400 shadow-lg" alt="${typeName} planet" title="${typeName} planet" />`;
-    console.log('Returning GIF HTML:', gifHtml);
-    return gifHtml;
+    return `<img src="${gifPath}" class="w-12 h-12 rounded-full border-2 border-space-400 shadow-lg" alt="${typeName} planet" title="${typeName} planet" />`;
   }
 
   getPlanetTypeGradient(planetTypeId) {
@@ -356,7 +352,7 @@ export class UIController {
     }
   }
 
-  displaySystemView(system, planets, screenX, screenY) {
+  async displaySystemView(system, planets, screenX, screenY) {
     const container = this.expandedView;
     if (!container) {
       console.error("#expanded-view-container not found in displaySystemView");
@@ -502,7 +498,7 @@ export class UIController {
     container.querySelector("#system-coords").textContent = `${system.x}, ${system.y}`;
 
     const planetsListUl = container.querySelector("#system-planets-list"); // Query within the new innerHTML
-    this.updatePlanetList(planetsListUl, planets, currentUserId);
+    await this.updatePlanetList(planetsListUl, planets, currentUserId);
 
     container.dataset.viewType = 'system'; // For potential future logic
     container.dataset.currentId = system.id;
@@ -620,135 +616,104 @@ export class UIController {
     container._dragCleanup = cleanup;
   }
 
-  updatePlanetList(ulElement, planets, currentUserId) {
-    const existingPlanetElements = new Map();
-    ulElement.querySelectorAll("li[data-planet-id]").forEach(li => {
-      existingPlanetElements.set(li.dataset.planetId, li);
-    });
-
+  async updatePlanetList(ulElement, planets, currentUserId) {
     if (!planets || planets.length === 0) {
       ulElement.innerHTML = '<div class="text-sm text-space-400">No planets detected in this system.</div>';
       return;
     }
 
-    let focusedElement = document.activeElement;
-    let focusedPlanetId = focusedElement && focusedElement.closest('li[data-planet-id]') ? focusedElement.closest('li[data-planet-id]').dataset.planetId : null;
-    let selectionStart, selectionEnd;
-    if (focusedElement && focusedElement.tagName === 'INPUT' || focusedElement.tagName === 'TEXTAREA') {
-        selectionStart = focusedElement.selectionStart;
-        selectionEnd = focusedElement.selectionEnd;
+    // Clear existing content
+    ulElement.innerHTML = '';
+
+    // Create embedded planet containers
+    for (const planet of planets) {
+      const planetContainer = await this.createEmbeddedPlanetContainer(planet, currentUserId);
+      ulElement.appendChild(planetContainer);
+    }
+  }
+
+  async createEmbeddedPlanetContainer(planet, currentUserId) {
+    const planetId = planet.id;
+    const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
+    const planetTypeValue = planet.planet_type || planet.type;
+    const planetTypeName = this.getPlanetTypeName(planetTypeValue);
+    const planetGif = this.getPlanetAnimatedGif(planetTypeValue);
+    const isOwned = planet.colonized_by === currentUserId;
+    const population = planet.Pop || 0;
+    const maxPop = planet.MaxPopulation || 'N/A';
+
+    // Fetch resource nodes for this planet (same as planet modal)
+    const resourceNodes = await this.getResourceNodes(planet.id);
+    planet.resourceNodes = resourceNodes;
+
+    // Get resource icons (await since it's async)
+    const resourceIcons = await this.getResourceIcons(planet);
+
+    // Status
+    let statusHtml = '';
+    if (planet.colonized_by) {
+      if (isOwned) {
+        statusHtml = `<span class="text-xs text-green-400 flex items-center gap-1"><span class="material-icons text-xs">check_circle</span>Your Colony</span>`;
+      } else {
+        statusHtml = `<span class="text-xs text-red-400 flex items-center gap-1"><span class="material-icons text-xs">block</span>${planet.colonized_by_name || 'Occupied'}</span>`;
+      }
+    } else {
+      statusHtml = `<span class="text-xs text-gray-400 flex items-center gap-1"><span class="material-icons text-xs">radio_button_unchecked</span>Uncolonized</span>`;
     }
 
+    const container = document.createElement('div');
+    container.className = "mb-3 p-3 bg-space-700/30 border border-space-600/50 rounded-lg hover:bg-space-650/40 transition-all duration-200 cursor-pointer";
+    container.dataset.planetId = planetId;
 
-    planets.forEach(planet => {
-      const planetId = planet.id;
-      const listItem = existingPlanetElements.get(planetId) || document.createElement("li");
-      listItem.dataset.planetId = planetId; // Ensure ID is set for new items
-
-      const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
-      const planetTypeValue = planet.planet_type || planet.type;
-      const planetIcon = this.getPlanetTypeIcon(planetTypeValue);
-      const planetTypeName = this.getPlanetTypeName(planetTypeValue);
-      const planetGif = this.getPlanetAnimatedGif(planetTypeValue);
-      const isOwned = planet.colonized_by === currentUserId;
-      const population = planet.Pop || 0;
-      const maxPop = planet.MaxPopulation || 'N/A';
-
-      let statusHtml = '';
-      if (planet.colonized_by) {
-        if (isOwned) {
-          statusHtml = `<span class="text-xs text-green-400 flex items-center gap-1"><span class="material-icons text-xs">check_circle</span>Your Colony</span>`;
-        } else {
-          statusHtml = `<span class="text-xs text-red-400 flex items-center gap-1"><span class="material-icons text-xs">block</span>${planet.colonized_by_name || 'Occupied'}</span>`;
-        }
-      } else {
-        statusHtml = `<span class="text-xs text-gray-400 flex items-center gap-1"><span class="material-icons text-xs">radio_button_unchecked</span>Uncolonized</span>`;
-      }
-
-      // Resource icons preview
-      const resourceIcons = this.getResourceIcons(planet);
-      let resourcesPreview = '';
-      if (resourceIcons.length > 0) {
-        resourcesPreview = `
-          <div class="mt-2 flex gap-1 items-center">
-            ${resourceIcons.join('')}
-          </div>
-        `;
-      }
-
-      // It's generally better to update specific parts of the listItem's innerHTML
-      // or use more targeted DOM manipulation if performance becomes an issue here.
-      listItem.className = "mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md transition-all duration-200 border border-transparent hover:border-space-500";
-
-      // Show hint to click for resources and colonization
-      let actionHintHtml = '';
-      if (!planet.colonized_by) {
-        actionHintHtml = `
-          <div class="text-xs text-blue-400 mt-2 flex gap-1 items-center">
-            <span class="material-icons text-xs">touch_app</span>
-            <span>Click for resources & colonization</span>
-          </div>
-        `;
-      } else {
-        actionHintHtml = `
-          <div class="text-xs text-green-400 mt-2 flex gap-1 items-center">
-            <span class="material-icons text-xs">touch_app</span>
-            <span>Click for details</span>
-          </div>
-        `;
-      }
-
-      const listItemHtml = `
-        <div class="flex items-start justify-between">
-          <div class="flex-1 cursor-pointer"
-               onclick="window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
-            <div class="flex items-center gap-3">
-              <div class="flex items-center justify-center">
-                ${planetGif}
-              </div>
-              <div>
-                <div class="font-semibold">${planetName}</div>
-                <div class="text-xs text-space-300">${planetTypeName} • Size ${planet.size || 'N/A'}</div>
-              </div>
-            </div>
-            ${resourcesPreview}
-          </div>
-          <div class="text-right flex flex-col items-end">
-            ${statusHtml}
-            ${actionHintHtml}
+    container.innerHTML = `
+      <div class="flex items-start gap-4">
+        <!-- Planet Icon -->
+        <div class="flex-shrink-0">
+          <div class="planet-icon-container w-16 h-16 flex items-center justify-center">
+            <!-- GIF will be set via DOM manipulation -->
           </div>
         </div>
-      `;
-      
-      console.log('Planet list HTML being set:', listItemHtml);
-      listItem.innerHTML = listItemHtml;
+        
+        <!-- Planet Info -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between mb-2">
+            <div>
+              <h3 class="font-semibold text-lg text-nebula-200">${planetName}</h3>
+              <div class="text-sm text-space-300">${planetTypeName} • Size ${planet.size || 'N/A'}</div>
+            </div>
+            <div class="text-right">
+              ${statusHtml}
+              ${population > 0 ? `<div class="text-sm text-green-400 mt-1">${population.toLocaleString()}/${maxPop} pop</div>` : ''}
+            </div>
+          </div>
+          
+          <!-- Resources -->
+          ${resourceIcons.length > 0 ? `
+            <div class="mb-2">
+              <div class="text-xs text-space-400 mb-1">Resources:</div>
+              <div class="flex items-center gap-1 flex-wrap">
+                ${resourceIcons.join('')}
+              </div>
+            </div>
+          ` : '<div class="text-xs text-space-500 mb-2">No resources detected</div>'}
+          
 
-      // Make all planets clickable to show detailed view
-      listItem.classList.add('cursor-pointer');
-      listItem.onclick = (e) => {
-          // Navigate to planet detail view for all planets
-          window.uiController.displayPlanetView(planet);
-      };
+        </div>
+      </div>
+    `;
 
-      if (!existingPlanetElements.has(planetId)) {
-        ulElement.appendChild(listItem);
-      }
-      existingPlanetElements.delete(planetId); // Remove from map as it's processed
-    });
-
-    // Remove old planet elements that are no longer in the list
-    existingPlanetElements.forEach(li => li.remove());
-
-    if (focusedPlanetId) {
-        const newFocusedElement = ulElement.querySelector(`li[data-planet-id="${focusedPlanetId}"]`);
-        if (newFocusedElement) {
-            let elementToFocus = newFocusedElement.querySelector('input, textarea, button, [tabindex="0"]') || newFocusedElement;
-            elementToFocus.focus();
-            if (elementToFocus.setSelectionRange && selectionStart !== undefined && selectionEnd !== undefined) {
-                elementToFocus.setSelectionRange(selectionStart, selectionEnd);
-            }
-        }
+    // Set the planet GIF after container is created
+    const iconContainer = container.querySelector('.planet-icon-container');
+    if (iconContainer && planetGif) {
+      iconContainer.innerHTML = planetGif;
     }
+
+    // Make the whole container clickable
+    container.onclick = () => {
+      window.uiController.displayPlanetView(planet);
+    };
+
+    return container;
   }
 
 
