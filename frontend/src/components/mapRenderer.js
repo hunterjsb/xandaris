@@ -11,6 +11,10 @@ export class MapRenderer {
     this.hoveredTradeRoutes = [];
     this.trades = [];
     this.currentUserId = null; // Added to store current player's ID
+    
+    // Cache for territorial contours
+    this.cachedTerritorialContours = null;
+    this.territorialCacheKey = null;
     this.connectedSystems = new Map(); // Track systems connected to selected system
     this.fleetRoutes = []; // Track temporary fleet routes for visualization
     
@@ -308,6 +312,7 @@ export class MapRenderer {
       this.drawBackground();
       this.drawLanes();
       this.drawFleetRoutes();
+      this.drawCachedTerritorialBorders();
       this.drawSystems();
       this.drawFleets(deltaTime);
       this.drawUI();
@@ -741,6 +746,297 @@ drawSystems() {
           });
         }
 
+  drawCachedTerritorialBorders() {
+    if (!this.currentUserId) return;
+
+    // Get all player-owned systems
+    const playerSystems = this.systems.filter(system => {
+      if (window.gameState) {
+        const planets = window.gameState.getSystemPlanets(system.id);
+        return planets.some(planet => planet.colonized_by === this.currentUserId);
+      }
+      return false;
+    });
+
+    if (playerSystems.length < 1) return;
+
+    // Create cache key based on player systems and zoom/view
+    const cacheKey = this.createTerritorialCacheKey(playerSystems);
+    
+    // Only recompute if cache is invalid
+    if (this.territorialCacheKey !== cacheKey) {
+      this.cachedTerritorialContours = this.computeTerritorialContours(playerSystems);
+      this.territorialCacheKey = cacheKey;
+    }
+
+    // Draw cached contours
+    if (this.cachedTerritorialContours) {
+      this.drawTerritorialContours(this.cachedTerritorialContours);
+    }
+  }
+
+  createTerritorialCacheKey(playerSystems) {
+    // Create a simple cache key based on system positions and current view
+    const systemKey = playerSystems.map(s => `${s.id}:${s.x}:${s.y}`).sort().join('|');
+    const viewKey = `${Math.floor(this.viewX/50)}:${Math.floor(this.viewY/50)}:${Math.floor(this.zoom*10)}`;
+    return `${systemKey}@${viewKey}`;
+  }
+
+  computeTerritorialContours(playerSystems) {
+    // Create influence field across visible area
+    const bounds = this.getVisibleWorldBounds();
+    const gridSize = 40; // Larger grid for better performance
+    const influenceField = this.calculateInfluenceField(playerSystems, bounds, gridSize);
+    
+    // Extract contours from influence field
+    return this.extractTerritorialContours(influenceField, bounds, gridSize);
+  }
+
+  drawUnifiedTerritories(playerSystems) {
+    // Much simpler approach - just draw extended borders around player systems
+    const maxDistance = 200; // Reduced from 500
+    
+    playerSystems.forEach(system => {
+      this.drawSimpleInfluenceBorder(system, playerSystems, maxDistance);
+    });
+  }
+
+  getVisibleWorldBounds() {
+    const padding = 200;
+    const topLeft = this.screenToWorld(-padding, -padding);
+    const bottomRight = this.screenToWorld(this.canvas.width + padding, this.canvas.height + padding);
+    
+    return {
+      minX: topLeft.x,
+      minY: topLeft.y,
+      maxX: bottomRight.x,
+      maxY: bottomRight.y
+    };
+  }
+
+  calculateInfluenceField(playerSystems, bounds, gridSize) {
+    const width = Math.ceil((bounds.maxX - bounds.minX) / gridSize);
+    const height = Math.ceil((bounds.maxY - bounds.minY) / gridSize);
+    const field = new Array(height).fill(null).map(() => new Array(width).fill(0));
+    
+    // Smaller influence range for performance and more reasonable borders
+    const maxInfluenceRange = 150;
+    
+    // Calculate influence at each grid point
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const worldX = bounds.minX + x * gridSize;
+        const worldY = bounds.minY + y * gridSize;
+        
+        let playerInfluence = 0;
+        let otherInfluence = 0;
+        
+        // Only check nearby systems for performance
+        const nearbySystems = this.systems.filter(system => {
+          const deltaX = system.x - worldX;
+          const deltaY = system.y - worldY;
+          return Math.abs(deltaX) < maxInfluenceRange && Math.abs(deltaY) < maxInfluenceRange;
+        });
+        
+        nearbySystems.forEach(system => {
+          const deltaX = system.x - worldX;
+          const deltaY = system.y - worldY;
+          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          
+          if (distance < maxInfluenceRange) {
+            const influence = Math.max(0, 1 - (distance / maxInfluenceRange));
+            const isPlayerOwned = playerSystems.some(ps => ps.id === system.id);
+            
+            if (isPlayerOwned) {
+              playerInfluence += influence * influence;
+            } else {
+              // Check if it's an enemy system (has colonies)
+              if (window.gameState) {
+                const planets = window.gameState.getSystemPlanets(system.id);
+                const hasColonies = planets.some(planet => planet.colonized_by && planet.colonized_by !== this.currentUserId);
+                if (hasColonies) {
+                  otherInfluence += influence * influence * 0.6;
+                }
+              }
+            }
+          }
+        });
+        
+        // Store net player influence
+        field[y][x] = playerInfluence - otherInfluence;
+      }
+    }
+    
+    return field;
+  }
+
+  extractTerritorialContours(field, bounds, gridSize) {
+    const contours = [];
+    const height = field.length;
+    const width = field[0].length;
+    const visited = new Array(height).fill(null).map(() => new Array(width).fill(false));
+    
+    // Find contour lines where player influence > threshold
+    const threshold = 0.2;
+    
+    for (let y = 0; y < height - 1; y++) {
+      for (let x = 0; x < width - 1; x++) {
+        if (visited[y][x]) continue;
+        
+        const current = field[y][x];
+        if (current > threshold) {
+          // Start tracing a contour
+          const contour = this.traceContour(field, x, y, threshold, bounds, gridSize, visited);
+          if (contour.length > 4) { // Only keep substantial contours
+            contours.push(contour);
+          }
+        }
+      }
+    }
+    
+    return contours;
+  }
+
+  traceContour(field, startX, startY, threshold, bounds, gridSize, visited) {
+    const contour = [];
+    const height = field.length;
+    const width = field[0].length;
+    
+    // Simple flood fill to find territory boundary
+    const queue = [{x: startX, y: startY}];
+    const territoryPoints = new Set();
+    
+    while (queue.length > 0) {
+      const {x, y} = queue.shift();
+      
+      if (x < 0 || x >= width || y < 0 || y >= height) continue;
+      if (visited[y][x] || field[y][x] <= threshold) continue;
+      
+      visited[y][x] = true;
+      territoryPoints.add(`${x},${y}`);
+      
+      // Add neighbors
+      queue.push({x: x + 1, y}, {x: x - 1, y}, {x, y: y + 1}, {x, y: y - 1});
+    }
+    
+    // Find boundary points
+    territoryPoints.forEach(pointStr => {
+      const [x, y] = pointStr.split(',').map(Number);
+      
+      // Check if this point is on the boundary
+      const neighbors = [
+        {x: x + 1, y}, {x: x - 1, y}, {x, y: y + 1}, {x, y: y - 1}
+      ];
+      
+      const isBoundary = neighbors.some(neighbor => {
+        if (neighbor.x < 0 || neighbor.x >= width || neighbor.y < 0 || neighbor.y >= height) {
+          return true; // Edge of grid
+        }
+        return field[neighbor.y][neighbor.x] <= threshold; // Adjacent to non-territory
+      });
+      
+      if (isBoundary) {
+        const worldX = bounds.minX + x * gridSize;
+        const worldY = bounds.minY + y * gridSize;
+        const screenPos = this.worldToScreen(worldX, worldY);
+        contour.push({x: screenPos.x, y: screenPos.y, worldX, worldY});
+      }
+    });
+    
+    // Sort boundary points to form a proper contour
+    return this.orderContourPoints(contour);
+  }
+
+  orderContourPoints(points) {
+    if (points.length < 3) return points;
+    
+    // Find center point
+    const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+    const centerY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+    
+    // Sort by angle from center
+    return points.sort((a, b) => {
+      const angleA = Math.atan2(a.y - centerY, a.x - centerX);
+      const angleB = Math.atan2(b.y - centerY, b.x - centerX);
+      return angleA - angleB;
+    });
+  }
+
+  drawTerritorialContours(contours) {
+    if (contours.length === 0) return;
+    
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = 'screen';
+    
+    contours.forEach(contour => {
+      if (contour.length < 3) return;
+      
+      // Create smooth path
+      this.ctx.beginPath();
+      this.ctx.moveTo(contour[0].x, contour[0].y);
+      
+      // Use smooth curves to connect points
+      for (let i = 1; i < contour.length; i++) {
+        const current = contour[i];
+        const next = contour[(i + 1) % contour.length];
+        
+        // Calculate control point for smooth curve
+        const cpX = current.x + (next.x - current.x) * 0.5;
+        const cpY = current.y + (next.y - current.y) * 0.5;
+        
+        this.ctx.quadraticCurveTo(current.x, current.y, cpX, cpY);
+      }
+      
+      // Close the path
+      this.ctx.closePath();
+      
+      // Create gradient fill for border effect
+      const bounds = this.getContourBounds(contour);
+      const gradient = this.ctx.createRadialGradient(
+        bounds.centerX, bounds.centerY, bounds.radius * 0.7,
+        bounds.centerX, bounds.centerY, bounds.radius
+      );
+      
+      const baseColor = '34, 197, 94';
+      const alpha = Math.max(0.1, 0.25 * this.zoom);
+      
+      gradient.addColorStop(0, `rgba(${baseColor}, ${alpha * 0.05})`);
+      gradient.addColorStop(0.7, `rgba(${baseColor}, ${alpha * 0.3})`);
+      gradient.addColorStop(0.9, `rgba(${baseColor}, ${alpha * 0.6})`);
+      gradient.addColorStop(1, `rgba(${baseColor}, 0)`);
+      
+      this.ctx.fillStyle = gradient;
+      this.ctx.fill();
+      
+      // Add border stroke
+      this.ctx.strokeStyle = `rgba(${baseColor}, ${alpha * 0.8})`;
+      this.ctx.lineWidth = 2 * this.zoom;
+      this.ctx.stroke();
+    });
+    
+    this.ctx.restore();
+  }
+
+  getContourBounds(contour) {
+    let minX = contour[0].x, maxX = contour[0].x;
+    let minY = contour[0].y, maxY = contour[0].y;
+    
+    contour.forEach(point => {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    });
+    
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const radius = Math.max(maxX - minX, maxY - minY) / 2;
+    
+    return { centerX, centerY, radius };
+  }
+
+
+
   drawFleets(deltaTime) {
     this.fleets.forEach(fleet => {
       let worldX, worldY;
@@ -925,7 +1221,11 @@ drawSystems() {
   }
 
   setCurrentUserId(userId) { // New method
-    this.currentUserId = userId;
+    if (this.currentUserId !== userId) {
+      this.currentUserId = userId;
+      // Invalidate territorial cache when user changes
+      this.territorialCacheKey = null;
+    }
   }
 
   setSelectedSystem(system) {
