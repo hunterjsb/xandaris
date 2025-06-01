@@ -286,8 +286,9 @@ describe('MapRenderer', () => {
         const dispatchedEvent = mockCanvas.dispatchEvent.mock.calls[0][0];
         expect(dispatchedEvent.type).toBe('systemSelected');
         expect(dispatchedEvent.detail.system).toBe(mockSystem);
-        expect(dispatchedEvent.detail.screenX).toBe(screenClickX);
-        expect(dispatchedEvent.detail.screenY).toBe(screenClickY);
+        // Coordinates should now be centered screen position (offset from center)
+        expect(dispatchedEvent.detail.screenX).toBe(mapRenderer.canvas.width / 2 + 30);
+        expect(dispatchedEvent.detail.screenY).toBe(mapRenderer.canvas.height / 2 - 20);
     });
   });
 

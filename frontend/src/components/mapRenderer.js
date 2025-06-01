@@ -80,10 +80,14 @@ export class MapRenderer {
         
         if (clickedSystem) {
           this.selectSystem(clickedSystem); // Selects and centers
-          // Dispatch event with coordinates for UI panel positioning
+          // Calculate where the system will appear after centering (offset slightly from center)
+          const centeredScreenPos = {
+            x: this.canvas.width / 2 + 30, // Offset right to avoid covering system icon
+            y: this.canvas.height / 2 - 20  // Offset up slightly
+          };
           const planetsInSystem = window.gameState.getSystemPlanets(clickedSystem.id);
           this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
-            detail: { system: clickedSystem, planets: planetsInSystem, screenX: e.offsetX, screenY: e.offsetY },
+            detail: { system: clickedSystem, planets: planetsInSystem, screenX: centeredScreenPos.x, screenY: centeredScreenPos.y },
             bubbles: true
           }));
         } else {

@@ -1,6 +1,6 @@
 // Main application entry point
 import "./styles.css";
-import { authManager } from "./lib/pocketbase.js";
+import { authManager, pb } from "./lib/pocketbase.js";
 import { gameState } from "./stores/gameState.js";
 import { MapRenderer } from "./components/mapRenderer.js";
 import { UIController } from "./components/uiController.js";
@@ -23,6 +23,7 @@ class XanNationApp {
 
     // Initialize UI controller
     this.uiController = window.uiController; // Use global uiController
+    this.uiController.setPocketBase(pb); // Set PocketBase instance
 
     // Initialize map renderer
     this.mapRenderer = new MapRenderer("game-canvas");
@@ -95,6 +96,8 @@ class XanNationApp {
     canvas.addEventListener("systemSelected", (e) => {
       const system = e.detail.system;
       const planets = e.detail.planets;
+      const screenX = e.detail.screenX;
+      const screenY = e.detail.screenY;
       
       // Only select if it's a different system
       if (!gameState.selectedSystem || gameState.selectedSystem.id !== system.id) {
@@ -102,7 +105,7 @@ class XanNationApp {
       }
       
       // Update UI directly to avoid circular updates
-      this.uiController.displaySystemView(system, planets);
+      this.uiController.displaySystemView(system, planets, screenX, screenY);
     });
 
     // Context menu actions

@@ -53,21 +53,55 @@
 /* Floating Panel Style */
 @layer components {
   .floating-panel {
-    @apply fixed bg-space-800/90 backdrop-blur-lg p-0 rounded-lg shadow-2xl border border-space-700/50;
-    /* bg-space-800/90 for slight transparency. Or use @apply aerogel-panel; for the full glass effect */
+    @apply fixed aerogel-panel p-0 rounded-lg shadow-2xl;
     z-index: 20; /* Above canvas, below modals (modal z-index is typically higher e.g. 50 for overlay) */
-    width: 384px; /* Standardized width (12 * 32px or 8 * 48px), common sidebar width */
+    width: 400px; /* Slightly wider for better content layout */
     max-height: calc(100vh - 40px); /* Max height considering some viewport padding */
-    /* overflow-y: auto; -- Handled by custom-scrollbar on child elements if needed */
-    /* Default hidden, to be shown by JS */
+    transition: all 0.2s ease-in-out;
     /* transform-origin: top left; */ /* Useful if scaling animations are added */
   }
+  
+  .floating-panel:hover {
+    box-shadow: 
+      0 12px 40px rgba(0, 0, 0, 0.4),
+      0 0 30px rgba(64, 128, 255, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+  
+  /* Panel header styling */
+  .panel-header {
+    background: linear-gradient(135deg, 
+      rgba(64, 128, 255, 0.05) 0%,
+      rgba(139, 92, 246, 0.03) 50%,
+      rgba(241, 169, 255, 0.05) 100%);
+    backdrop-filter: blur(10px);
+    transition: background 0.2s ease-in-out;
+  }
+  
+  .panel-header:hover {
+    background: linear-gradient(135deg, 
+      rgba(64, 128, 255, 0.08) 0%,
+      rgba(139, 92, 246, 0.05) 50%,
+      rgba(241, 169, 255, 0.08) 100%);
+  }
+  
+  .drag-handle {
+    transition: color 0.2s ease-in-out;
+  }
+  
+  .panel-header:hover .drag-handle {
+    color: rgba(64, 128, 255, 0.7);
+  }
+  
   /* Ensure child elements that need scroll have it, like the planet list or details */
   .floating-panel-content {
-     @apply h-full overflow-y-auto custom-scrollbar; /* p-4 applied to content div inside */
+     @apply h-full overflow-hidden flex flex-col;
+  }
+  
+  .floating-panel-content > div:last-child {
+    @apply flex-1 overflow-y-auto custom-scrollbar;
   }
 }
-
 
 /* Canvas and UI specific styles */
 #game-canvas {
