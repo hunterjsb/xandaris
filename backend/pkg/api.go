@@ -52,6 +52,10 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/building_types", getBuildingTypes(app))
 		e.Router.GET("/api/resource_types", getResourceTypes(app))
 
+		// Worldgen endpoints
+		e.Router.GET("/api/worldgen", getWorldgen(app))
+		e.Router.GET("/api/worldgen/:seed", getWorldgenWithSeed(app))
+
 		return nil
 	})
 }
@@ -175,8 +179,24 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch systems"})
 		}
 
-		// Get all planets
-		planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
+		// Get Null planet type ID once
+		nullPlanetTypes, err := app.Dao().FindRecordsByFilter("planet_types", "name = 'Null'", "", 1, 0)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planet types"})
+		}
+		
+		var nullPlanetTypeID string
+		if len(nullPlanetTypes) > 0 {
+			nullPlanetTypeID = nullPlanetTypes[0].Id
+		}
+
+		// Get all non-Null planets efficiently
+		var planets []*models.Record
+		if nullPlanetTypeID != "" {
+			planets, err = app.Dao().FindRecordsByFilter("planets", "planet_type != '"+nullPlanetTypeID+"'", "", 0, 0)
+		} else {
+			planets, err = app.Dao().FindRecordsByExpr("planets", nil, nil)
+		}
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
 		}
@@ -383,8 +403,17 @@ func getSystem(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "System not found"})
 		}
 
-		// Get planets in this system
-		planets, _ := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", systemID), "", 0, 0)
+		// Get Null planet type ID once
+		nullPlanetTypes, _ := app.Dao().FindRecordsByFilter("planet_types", "name = 'Null'", "", 1, 0)
+		
+		// Get non-Null planets in this system efficiently
+		var planets []*models.Record
+		if len(nullPlanetTypes) > 0 {
+			nullPlanetTypeID := nullPlanetTypes[0].Id
+			planets, _ = app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s' AND planet_type != '%s'", systemID, nullPlanetTypeID), "", 0, 0)
+		} else {
+			planets, _ = app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", systemID), "", 0, 0)
+		}
 
 		planetsData := make([]PlanetData, len(planets))
 		for i, planet := range planets {
@@ -1516,11 +1545,26 @@ func getPlanets(app *pocketbase.PocketBase) echo.HandlerFunc {
 		systemID := c.QueryParam("system_id")
 
 		var planets []*models.Record
-		var err error
+
+		// Get Null planet type ID once
+		nullPlanetTypes, err := app.Dao().FindRecordsByFilter("planet_types", "name = 'Null'", "", 1, 0)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planet types"})
+		}
+		
+		var nullPlanetTypeID string
+		if len(nullPlanetTypes) > 0 {
+			nullPlanetTypeID = nullPlanetTypes[0].Id
+		}
 
 		if systemID != "" {
-			// Get all planets and filter in Go since PocketBase relation field filtering is tricky
-			allPlanets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
+			// Get all non-Null planets and filter by system
+			var allPlanets []*models.Record
+			if nullPlanetTypeID != "" {
+				allPlanets, err = app.Dao().FindRecordsByFilter("planets", "planet_type != '"+nullPlanetTypeID+"'", "", 0, 0)
+			} else {
+				allPlanets, err = app.Dao().FindRecordsByExpr("planets", nil, nil)
+			}
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
 			}
@@ -1539,7 +1583,11 @@ func getPlanets(app *pocketbase.PocketBase) echo.HandlerFunc {
 			}
 			planets = filteredPlanets
 		} else {
-			planets, err = app.Dao().FindRecordsByExpr("planets", nil, nil)
+			if nullPlanetTypeID != "" {
+				planets, err = app.Dao().FindRecordsByFilter("planets", "planet_type != '"+nullPlanetTypeID+"'", "", 0, 0)
+			} else {
+				planets, err = app.Dao().FindRecordsByExpr("planets", nil, nil)
+			}
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch planets"})
 			}

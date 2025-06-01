@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	mapgen "github.com/hunterjsb/xandaris/internal/map"
 	"github.com/hunterjsb/xandaris/internal/tick"
+	"github.com/hunterjsb/xandaris/internal/worldgen"
 )
 
 // MapHandler returns the current map data
@@ -442,4 +444,38 @@ func handleBankConstruction(app *pocketbase.PocketBase, c echo.Context, user *mo
 		"cost":        cost,
 		"new_balance": userCredits - cost,
 	})
+}
+
+// getWorldgen generates a random system using worldgen
+func getWorldgen(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Generate a random seed
+		seed32 := worldgen.GenerateRandomSystemSeed()
+		system := worldgen.ProcessSystemSeed(seed32)
+		return c.JSON(http.StatusOK, system)
+	}
+}
+
+// getWorldgenWithSeed generates a system using a provided seed
+func getWorldgenWithSeed(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		seedStr := c.PathParam("seed")
+		if seedStr == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Seed parameter required",
+			})
+		}
+
+		// Parse seed as big.Int
+		seed32 := new(big.Int)
+		_, ok := seed32.SetString(seedStr, 10)
+		if !ok {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error": "Invalid seed format",
+			})
+		}
+
+		system := worldgen.ProcessSystemSeed(seed32)
+		return c.JSON(http.StatusOK, system)
+	}
 }

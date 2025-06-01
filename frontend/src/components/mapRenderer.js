@@ -50,6 +50,8 @@ export class MapRenderer {
     // Animation
     this.animationFrame = null;
     this.lastTime = 0;
+    this.isDirty = true; // Flag to track if re-render is needed
+    this.isMoving = false; // Flag to track if camera is moving
     
     this.setupCanvas();
     this.setupEventListeners();
@@ -112,8 +114,9 @@ export class MapRenderer {
       if (isPanning) {
         const deltaX = e.offsetX - lastMouseX;
         const deltaY = e.offsetY - lastMouseY;
-        this.viewX += deltaX / this.zoom;
-        this.viewY += deltaY / this.zoom;
+        this.targetViewX += deltaX / this.zoom;
+        this.targetViewY += deltaY / this.zoom;
+        this.isDirty = true;
         // Update target to current position during manual panning
         this.targetViewX = this.viewX;
         this.targetViewY = this.viewY;
@@ -122,7 +125,11 @@ export class MapRenderer {
       } else {
         const worldPos = this.screenToWorld(e.offsetX, e.offsetY);
         // Update this.hoveredSystem. This will be used by drawSystems in the next render frame.
-        this.hoveredSystem = this.getSystemAt(worldPos.x, worldPos.y);
+        const newHoveredSystem = this.getSystemAt(worldPos.x, worldPos.y);
+        if (newHoveredSystem !== this.hoveredSystem) {
+          this.hoveredSystem = newHoveredSystem;
+          this.isDirty = true;
+        }
         // Tooltip should still be shown based on the now updated this.hoveredSystem
         this.showTooltip(this.hoveredSystem, e.offsetX, e.offsetY);
         if (this.hoveredSystem && this.trades && this.trades.length > 0) {
@@ -173,6 +180,7 @@ export class MapRenderer {
         // Update target to current position during zoom
         this.targetViewX = this.viewX;
         this.targetViewY = this.viewY;
+        this.isDirty = true;
       }
     });
   }
@@ -307,15 +315,20 @@ export class MapRenderer {
       // Smooth camera movement
       this.updateCamera(deltaTime);
       
-      // Call draw methods in order
-      this.clear();
-      this.drawBackground();
-      this.drawLanes();
-      this.drawFleetRoutes();
-      this.drawCachedTerritorialBorders();
-      this.drawSystems();
-      this.drawFleets(deltaTime);
-      this.drawUI();
+      // Only render if something changed or camera is moving
+      if (this.isDirty || this.isMoving) {
+        // Call draw methods in order
+        this.clear();
+        this.drawBackground();
+        this.drawLanes();
+        this.drawFleetRoutes();
+        this.drawCachedTerritorialBorders();
+        this.drawSystems();
+        this.drawFleets(deltaTime);
+        this.drawUI();
+        
+        this.isDirty = false;
+      }
       
       this.animationFrame = requestAnimationFrame(render);
     };
@@ -329,14 +342,15 @@ export class MapRenderer {
     const dx = this.targetViewX - this.viewX;
     const dy = this.targetViewY - this.viewY;
     
-    // Only move if we're not close enough
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
       this.viewX += dx * speed;
       this.viewY += dy * speed;
+      this.isMoving = true;
+      this.isDirty = true;
     } else {
-      // Snap to target when close enough
       this.viewX = this.targetViewX;
       this.viewY = this.targetViewY;
+      this.isMoving = false;
     }
   }
 
@@ -1191,6 +1205,8 @@ drawSystems() {
       this.fitToSystems();
       this.initialViewSet = true;
     }
+    
+    this.isDirty = true;
   }
 
   setTrades(trades) {
@@ -1218,6 +1234,7 @@ drawSystems() {
 
   setFleets(fleets) {
     this.fleets = fleets;
+    this.isDirty = true;
   }
 
   setCurrentUserId(userId) { // New method

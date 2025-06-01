@@ -275,6 +275,7 @@ func seedPlanetTypes(app *pocketbase.PocketBase) error {
 		{"name": "Barren", "spawn_prob": 0.005, "icon": "/icons/circle.svg"},
 		{"name": "Radiant", "spawn_prob": 0.005, "icon": "/icons/flare.svg"},
 		{"name": "Barred", "spawn_prob": 0.001, "icon": "/icons/block.svg"},
+		{"name": "Null", "spawn_prob": 0.75, "icon": "/icons/hide.svg"},
 	}
 
 	for _, planetType := range planetTypes {

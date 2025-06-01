@@ -1,0 +1,3 @@
+[submodule "backend/worldgen-source"]
+	path = backend/worldgen-source
+	url = https://github.com/LePogoZ/xandris-worldgen.git
