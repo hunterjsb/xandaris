@@ -317,52 +317,60 @@ export class UIController {
 
 
   updateGameStatusUI(state) {
-    const tickElement = document.getElementById("current-turn");
-    const prevTick = tickElement.textContent;
-    const newTick = `Tick ${state.currentTick}`;
+    const tickElement = document.getElementById("game-tick-display");
+    if (tickElement) {
+      const prevTick = tickElement.textContent;
+      const newTick = `Tick: ${state.currentTick}`; // Label added for consistency
+      tickElement.textContent = newTick;
 
-    tickElement.textContent = newTick;
-
-    // Add flash animation if tick changed
-    if (prevTick !== newTick) {
-      tickElement.style.animation = "none";
-      tickElement.offsetHeight; // Trigger reflow
-      tickElement.style.animation = "flash 0.5s ease-out";
+      // Add flash animation if tick changed
+      if (prevTick !== newTick && prevTick !== "Tick: 0") { // Avoid flash on initial load
+        tickElement.style.animation = "none";
+        tickElement.offsetHeight; // Trigger reflow
+        tickElement.style.animation = "flash 0.5s ease-out";
+      }
     }
 
-    document.getElementById("player-count").textContent = state.systems.filter(
-      (s) => s.owner_id,
-    ).length;
+    const playerCountElement = document.getElementById("player-count-display");
+    if (playerCountElement) {
+      // This counts systems with owners, which is "Active Factions"
+      playerCountElement.textContent = `Active Factions: ${state.systems.filter((s) => s.owner_id).length}`;
+    }
 
-    // Update tick rate display
-    const tickRate = state.ticksPerMinute || 6;
-    const secondsPerTick = Math.round(60 / tickRate);
-    document.getElementById("next-tick").textContent =
-      `${tickRate}/min (${secondsPerTick}s)`;
+    // Update tick rate display (this part of the logic might be combined with startTickTimer or be static if only countdown changes)
+    const nextTickRateElement = document.getElementById("next-tick-display");
+    if (nextTickRateElement && !this.tickTimer) { // Only set this if timer isn't running
+        const tickRate = state.ticksPerMinute || 6;
+        const secondsPerTick = Math.round(60 / tickRate);
+        nextTickRateElement.textContent = `Next Tick: (${secondsPerTick}s period)`;
+    }
   }
 
   startTickTimer(nextTickTime) {
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
     }
+    const nextTickDisplayElement = document.getElementById("next-tick-display");
 
     const updateTimer = () => {
       const now = new Date();
       const remaining = nextTickTime - now;
 
       if (remaining <= 0) {
-        document.getElementById("next-tick").textContent = "Processing...";
+        if (nextTickDisplayElement) nextTickDisplayElement.textContent = "Next Tick: Processing...";
         clearInterval(this.tickTimer);
+        this.tickTimer = null; // Clear timer instance
         return;
       }
 
       const minutes = Math.floor(remaining / 60000);
       const seconds = Math.floor((remaining % 60000) / 1000);
-      document.getElementById("next-tick").textContent =
-        `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      if (nextTickDisplayElement) {
+        nextTickDisplayElement.textContent = `Next Tick: ${minutes}:${seconds.toString().padStart(2, "0")}`;
+      }
     };
 
-    updateTimer();
+    updateTimer(); // Call immediately to set initial value
     this.tickTimer = setInterval(updateTimer, 1000);
   }
 

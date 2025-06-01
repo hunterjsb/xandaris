@@ -26,7 +26,12 @@
               Buildings
             </button>
           </div>
-          <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-6"> <!-- Increased spacing for the new group -->
+            <div id="game-status-indicators" class="flex items-center space-x-3 text-sm">
+              <span id="game-tick-display" class="text-sky-300">Tick: 0</span>
+              <span id="player-count-display" class="text-green-300">Active Factions: 0</span>
+              <span id="next-tick-display" class="text-amber-300">Next Tick: --:--</span>
+            </div>
             <div id="resources" class="flex space-x-3 text-sm">
               <span class="text-nebula-300">Credits: <span id="credits">0</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span></span>
               <span class="text-space-300">Food: <span id="food">0</span></span>
