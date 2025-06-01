@@ -344,12 +344,12 @@ class XanNationApp {
   async sendFleetToSystem(direction) {
     const currentSystem = gameState.getSelectedSystem();
     if (!currentSystem) {
-      this.uiController.showError("Select a system first");
+      this.uiController.showToast("❌ Select a system first", 'error');
       return;
     }
 
     if (!authManager.isLoggedIn()) {
-      this.uiController.showError("Please log in to send fleets");
+      this.uiController.showToast("❌ Please log in to send fleets", 'error');
       return;
     }
 
@@ -357,7 +357,7 @@ class XanNationApp {
     const target = connected[direction];
 
     if (!target || !target.system) {
-      this.uiController.showError(`No system found to the ${direction}`);
+      this.uiController.showToast(`❌ No system found to the ${direction}`, 'error');
       return;
     }
 
@@ -369,7 +369,7 @@ class XanNationApp {
     ) || [];
 
     if (playerFleets.length === 0) {
-      this.uiController.showError("No available fleets at this system");
+      this.uiController.showToast("❌ No available fleets at this system", 'error');
       return;
     }
 
@@ -378,14 +378,14 @@ class XanNationApp {
       const response = await gameData.sendFleet(currentSystem.id, target.system.id, 10);
       
       if (response) {
-        this.uiController.showSuccessMessage(`Fleet dispatched to ${target.system.name || `System ${target.system.id.slice(-4)}`}`);
+        this.uiController.showToast(`🚀 Fleet dispatched to ${target.system.name || `System ${target.system.id.slice(-4)}`}`);
         
         // Visual feedback - draw a temporary line
         this.mapRenderer.showFleetRoute(currentSystem, target.system);
       }
     } catch (error) {
       console.error("Failed to send fleet:", error);
-      this.uiController.showError("Failed to send fleet: " + (error.message || "Unknown error"));
+      this.uiController.showToast(`❌ Failed to send fleet: ${error.message || "Unknown error"}`, 'error');
     }
   }
 

@@ -1719,24 +1719,63 @@ export class UIController {
       });
   }
 
-  showSuccessMessage(message) {
-    this.showModal(
-      "Success",
-      `
-      <div class="text-emerald-400 mb-4">${message}</div>
-      <button class="w-full btn btn-secondary" onclick="document.getElementById('modal-overlay').classList.add('hidden')">
-        OK
-      </button>
-    `,
-    );
+  showToast(message, type = 'success') {
+    // Remove any existing toast
+    const existingToast = document.getElementById('fleet-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.id = 'fleet-toast';
+    toast.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border transition-all duration-300 max-w-sm`;
     
-    // Auto-close success message after 3 seconds
+    if (type === 'success') {
+      toast.className += ' bg-emerald-900/90 border-emerald-600 text-emerald-200';
+    } else if (type === 'error') {
+      toast.className += ' bg-red-900/90 border-red-600 text-red-200';
+    }
+
+    toast.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-icons text-sm">${type === 'success' ? 'check_circle' : 'error'}</span>
+          <span class="text-sm">${message}</span>
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-70 hover:opacity-100">
+          <span class="material-icons text-sm">close</span>
+        </button>
+      </div>
+      <div class="text-xs mt-1 opacity-70">Press Space or Esc to dismiss</div>
+    `;
+
+    // Add to page
+    document.body.appendChild(toast);
+
+    // Auto-dismiss after 4 seconds
     setTimeout(() => {
-      const modal = document.getElementById('modal-overlay');
-      if (modal && !modal.classList.contains('hidden')) {
-        modal.classList.add('hidden');
+      if (toast.parentElement) {
+        toast.remove();
       }
-    }, 3000);
+    }, 4000);
+
+    // Set up keyboard dismissal
+    const handleKeyPress = (e) => {
+      if (e.code === 'Space' || e.code === 'Escape') {
+        e.preventDefault();
+        if (toast.parentElement) {
+          toast.remove();
+        }
+        document.removeEventListener('keydown', handleKeyPress);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyPress);
+  }
+
+  showSuccessMessage(message) {
+    this.showToast(message, 'success');
   }
 
   showCreditsBreakdown() {
