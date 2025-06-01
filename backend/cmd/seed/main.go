@@ -9,6 +9,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/models"
 	mapgen "github.com/hunterjsb/xandaris/internal/map"
+	"github.com/hunterjsb/xandaris/internal/worldgen"
 	_ "github.com/hunterjsb/xandaris/migrations"
 )
 
@@ -71,6 +72,8 @@ func seedNewSchema(app *pocketbase.PocketBase) error {
 
 	return nil
 }
+
+
 
 func seedSampleUserAndColonies(app *pocketbase.PocketBase) error {
 	// Get all existing users
@@ -261,22 +264,23 @@ func seedPlanetTypes(app *pocketbase.PocketBase) error {
 	}
 
 	planetTypes := []map[string]interface{}{
-		{"name": "Highlands", "spawn_prob": 0.038},
-		{"name": "Abundant", "spawn_prob": 0.013},
-		{"name": "Fertile", "spawn_prob": 0.05},
-		{"name": "Mountain", "spawn_prob": 0.05},
-		{"name": "Desert", "spawn_prob": 0.025},
-		{"name": "Volcanic", "spawn_prob": 0.025},
-		{"name": "Swamp", "spawn_prob": 0.038},
-		{"name": "Barren", "spawn_prob": 0.005},
-		{"name": "Radiant", "spawn_prob": 0.005},
-		{"name": "Barred", "spawn_prob": 0.001},
+		{"name": "Highlands", "spawn_prob": 0.038, "icon": "/icons/terrain.svg"},
+		{"name": "Abundant", "spawn_prob": 0.013, "icon": "/icons/eco.svg"},
+		{"name": "Fertile", "spawn_prob": 0.05, "icon": "/icons/grass.svg"},
+		{"name": "Mountain", "spawn_prob": 0.05, "icon": "/icons/landscape.svg"},
+		{"name": "Desert", "spawn_prob": 0.025, "icon": "/icons/wb_sunny.svg"},
+		{"name": "Volcanic", "spawn_prob": 0.025, "icon": "/icons/whatshot.svg"},
+		{"name": "Swamp", "spawn_prob": 0.038, "icon": "/icons/water.svg"},
+		{"name": "Barren", "spawn_prob": 0.005, "icon": "/icons/circle.svg"},
+		{"name": "Radiant", "spawn_prob": 0.005, "icon": "/icons/flare.svg"},
+		{"name": "Barred", "spawn_prob": 0.001, "icon": "/icons/block.svg"},
 	}
 
 	for _, planetType := range planetTypes {
 		record := models.NewRecord(collection)
 		record.Set("name", planetType["name"])
 		record.Set("spawn_prob", planetType["spawn_prob"])
+		record.Set("icon", planetType["icon"])
 		if err := app.Dao().SaveRecord(record); err != nil {
 			return err
 		}
@@ -615,44 +619,13 @@ func seedPlanets(app *pocketbase.PocketBase) error {
 }
 
 func seedResourceNodes(app *pocketbase.PocketBase) error {
-	// Get all planets
-	planets, err := app.Dao().FindRecordsByExpr("planets", nil, nil)
-	if err != nil {
-		return err
+	fmt.Println("🌍 Generating enhanced resource nodes using world generation system...")
+	
+	// Use worldgen to generate all resource nodes based on planet types
+	if err := worldgen.GenerateResourceNodesForAllPlanets(app); err != nil {
+		return fmt.Errorf("worldgen resource generation failed: %w", err)
 	}
-
-	// Get resource types
-	resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
-	if err != nil {
-		return err
-	}
-
-	resourceNodeCollection, err := app.Dao().FindCollectionByNameOrId("resource_nodes")
-	if err != nil {
-		return err
-	}
-
-	for _, planet := range planets {
-		planetSize := planet.GetInt("size")
-
-		// Larger planets have more resource nodes
-		nodeCount := planetSize + rand.Intn(3)
-
-		for j := 0; j < nodeCount; j++ {
-			// Random resource type
-			resourceType := resourceTypes[rand.Intn(len(resourceTypes))]
-
-			record := models.NewRecord(resourceNodeCollection)
-			record.Set("planet_id", planet.Id)
-			record.Set("resource_type", resourceType.Id)
-			record.Set("richness", rand.Intn(10)+1) // Richness 1-10
-			record.Set("exhausted", false)
-
-			if err := app.Dao().SaveRecord(record); err != nil {
-				return err
-			}
-		}
-	}
-
+	
+	fmt.Println("✅ Enhanced resource node generation complete")
 	return nil
 }

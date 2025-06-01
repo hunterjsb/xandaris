@@ -47,7 +47,7 @@ export class UIController {
   }
 
   getPlanetTypeIcon(planetTypeName) {
-    if (!planetTypeName) return '<img src="/placeholder-planet.png" class="w-6 h-6" alt="Unknown planet type" />';
+    if (!planetTypeName) return '<img src="/placeholder-planet.svg" class="w-6 h-6" alt="Unknown planet type" />';
     
     // Try lookup by ID first, then by name (lowercase)
     let planetType = this.planetTypes.get(planetTypeName);
@@ -56,11 +56,26 @@ export class UIController {
     }
     
     if (planetType && planetType.icon) {
-      return `<img src="${planetType.icon}" class="w-6 h-6" alt="${planetType.name}" />`;
+      // Color border for different planet types
+      const colorMap = {
+        'highlands': 'border-green-400',
+        'abundant': 'border-emerald-400', 
+        'fertile': 'border-lime-400',
+        'mountain': 'border-stone-400',
+        'desert': 'border-yellow-400',
+        'volcanic': 'border-red-400',
+        'swamp': 'border-blue-400',
+        'barren': 'border-gray-400',
+        'radiant': 'border-purple-400',
+        'barred': 'border-red-600'
+      };
+      
+      const colorClass = colorMap[planetType.name.toLowerCase()] || 'border-space-300';
+      return `<img src="${planetType.icon}" class="w-6 h-6 rounded border-2 ${colorClass}" alt="${planetType.name}" title="${planetType.name}" />`;
     }
     
     // Fallback if no icon URL is set
-    return '<img src="/placeholder-planet.png" class="w-6 h-6" alt="Unknown planet type" />';
+    return '<img src="/placeholder-planet.svg" class="w-6 h-6" alt="Unknown planet type" />';
   }
 
   getPlanetTypeName(planetTypeId) {

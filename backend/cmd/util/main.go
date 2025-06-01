@@ -157,29 +157,31 @@ func cleanGameData(app *pocketbase.PocketBase) {
 	
 	fmt.Println("\n🗑️  Deleting game data...")
 	
-	// List of all game data collections to delete (NOT including users)
-	collections := []string{
-		// Game data
-		"systems", 
-		"planets", 
-		"populations", 
-		"buildings", 
-		"ships", 
-		"fleets", 
-		"trade_routes",
-		"resource_nodes",
+	// Delete collections in order respecting foreign key constraints
+	// First delete child records, then parent records
+	deleteOrder := []string{
+		// Child records first
+		"resource_nodes",    // references planets
+		"populations",       // references planets  
+		"buildings",         // references planets
+		"ships",            // references fleets
+		"trade_routes",     // references systems
+		"fleets",           // references systems
 		"treaties",
-		"treaty_proposals",
+		"treaty_proposals", 
 		"battle_logs",
 		"colonies",
+		// Parent records
+		"planets",          // references systems and planet_types
+		"systems",          // parent of planets
 		// Type definitions (will be recreated by seed)
 		"resource_types",
-		"planet_types",
+		"planet_types", 
 		"building_types",
 		"ship_types",
 	}
 	
-	for _, collName := range collections {
+	for _, collName := range deleteOrder {
 		if records, err := app.Dao().FindRecordsByExpr(collName, nil, nil); err == nil {
 			count := len(records)
 			for _, record := range records {
