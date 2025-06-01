@@ -37,17 +37,17 @@ type WorldType struct {
 	IsSpecial   bool
 }
 
-// World type definitions based on the provided table
+// World type definitions based on the provided table (slightly bumped for more resources)
 var WorldTypes = []WorldType{
-	{"Abundant", 0.0125, 0.25, 0.25, 0.2, 0.1, 0, false},
-	{"Fertile", 0.05, 0.8, 0.2, 0, 0, 0, false},
-	{"Mountain", 0.05, 0, 0.5, 0.2, 0.1, 0, false},
-	{"Desert", 0.025, 0, 0, 0.5, 0.15, 0, false},
-	{"Volcanic", 0.025, 0, 0.5, 0.4, 0, 0, false},
-	{"Highlands", 0.0375, 0.5, 0.5, 0, 0, 0, false},
-	{"Swamp", 0.0375, 0.5, 0, 0.2, 0.1, 0, false},
-	{"Barren", 0.005, 0, 0.1, 0.12, 0.2, 0.025, false},
-	{"Radiant", 0.00625, 0, 0, 0, 0.4, 0, false},
+	{"Abundant", 0.0125, 0.35, 0.35, 0.3, 0.15, 0, false},
+	{"Fertile", 0.05, 0.9, 0.3, 0, 0, 0, false},
+	{"Mountain", 0.05, 0, 0.65, 0.3, 0.15, 0, false},
+	{"Desert", 0.025, 0, 0, 0.65, 0.25, 0, false},
+	{"Volcanic", 0.025, 0, 0.65, 0.5, 0, 0, false},
+	{"Highlands", 0.0375, 0.6, 0.6, 0, 0, 0, false},
+	{"Swamp", 0.0375, 0.6, 0, 0.3, 0.15, 0, false},
+	{"Barren", 0.005, 0, 0.15, 0.18, 0.3, 0.035, false},
+	{"Radiant", 0.00625, 0, 0, 0, 0.5, 0, false},
 	{"Barred", 0.00125, 0, 0, 0, 0, 0, true}, // Special: exactly 2 Xanium deposits
 	{"Null", 0.75, 0, 0, 0, 0, 0, true},      // Special: no resources, won't display
 }

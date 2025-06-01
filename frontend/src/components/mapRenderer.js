@@ -114,12 +114,11 @@ export class MapRenderer {
       if (isPanning) {
         const deltaX = e.offsetX - lastMouseX;
         const deltaY = e.offsetY - lastMouseY;
-        this.targetViewX += deltaX / this.zoom;
-        this.targetViewY += deltaY / this.zoom;
-        this.isDirty = true;
-        // Update target to current position during manual panning
+        this.viewX += deltaX / this.zoom;
+        this.viewY += deltaY / this.zoom;
         this.targetViewX = this.viewX;
         this.targetViewY = this.viewY;
+        this.isDirty = true;
         lastMouseX = e.offsetX;
         lastMouseY = e.offsetY;
       } else {

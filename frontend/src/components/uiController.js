@@ -90,6 +90,45 @@ export class UIController {
     return planetType ? planetType.name : 'Unknown';
   }
 
+  getPlanetAnimatedGif(planetTypeName) {
+    if (!planetTypeName) return null;
+    
+    // Default GIF to use when specific ones aren't available
+    const defaultGifPath = '/planets/default.gif';
+    console.log('getPlanetAnimatedGif called with:', planetTypeName);
+    
+    // Map planet types to their preferred animated GIF files
+    const gifMap = {
+      'highlands': '/planets/highlands.gif',
+      'abundant': '/planets/abundant.gif', 
+      'fertile': '/planets/fertile.gif',
+      'mountain': '/planets/mountain.gif',
+      'desert': '/planets/desert.gif',
+      'volcanic': '/planets/volcanic.gif',
+      'swamp': '/planets/swamp.gif',
+      'barren': '/planets/barren.gif',
+      'radiant': '/planets/radiant.gif',
+      'barred': '/planets/barred.gif',
+      'null': '/planets/null.gif'
+    };
+    
+    // Try lookup by ID first, then by name (lowercase)
+    let planetType = this.planetTypes.get(planetTypeName);
+    if (!planetType) {
+      planetType = this.planetTypes.get(planetTypeName.toLowerCase());
+    }
+    
+    const typeName = planetType ? planetType.name.toLowerCase() : planetTypeName.toLowerCase();
+    
+    // For now, always use the default GIF since we only have one
+    // TODO: When more GIFs are added, implement file existence checking
+    const gifPath = defaultGifPath; // gifMap[typeName] || defaultGifPath;
+    
+    const gifHtml = `<img src="${gifPath}" class="w-12 h-12 rounded-full border-2 border-space-400 shadow-lg" alt="${typeName} planet" title="${typeName} planet" />`;
+    console.log('Returning GIF HTML:', gifHtml);
+    return gifHtml;
+  }
+
   getPlanetTypeGradient(planetTypeId) {
     if (!planetTypeId) return 'from-nebula-900/30 to-plasma-900/30';
     
@@ -610,6 +649,7 @@ export class UIController {
       const planetTypeValue = planet.planet_type || planet.type;
       const planetIcon = this.getPlanetTypeIcon(planetTypeValue);
       const planetTypeName = this.getPlanetTypeName(planetTypeValue);
+      const planetGif = this.getPlanetAnimatedGif(planetTypeValue);
       const isOwned = planet.colonized_by === currentUserId;
       const population = planet.Pop || 0;
       const maxPop = planet.MaxPopulation || 'N/A';
@@ -640,36 +680,32 @@ export class UIController {
       // or use more targeted DOM manipulation if performance becomes an issue here.
       listItem.className = "mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md transition-all duration-200 border border-transparent hover:border-space-500";
 
-      let colonizeButtonHtml = '';
-      
-      // Check if player has any fleets with settler ships at this system
-      const availableSettlerFleets = this.getAvailableSettlerFleets(planet.system_id);
-      const canPlayerColonize = !planet.colonized_by &&
-                                this.currentUser &&
-                                availableSettlerFleets.length > 0;
-
-      if (canPlayerColonize) {
-        colonizeButtonHtml = `
-          <button class="btn btn-success btn-sm py-1 px-2 text-xs mt-2"
-                  onclick="event.stopPropagation(); console.log('Colonize button clicked for planet: ${planet.id}'); window.uiController.colonizePlanetWrapper('${planet.id}');">
-            Colonize (Settler Ship)
-          </button>
+      // Show hint to click for resources and colonization
+      let actionHintHtml = '';
+      if (!planet.colonized_by) {
+        actionHintHtml = `
+          <div class="text-xs text-blue-400 mt-2 flex gap-1 items-center">
+            <span class="material-icons text-xs">touch_app</span>
+            <span>Click for resources & colonization</span>
+          </div>
         `;
-      } else if (!planet.colonized_by) {
-        // Show disabled button if no settler ships available
-        colonizeButtonHtml = `
-          <button class="btn btn-disabled btn-sm py-1 px-2 text-xs mt-2" disabled>
-            Colonize (Need Settler Ship)
-          </button>
+      } else {
+        actionHintHtml = `
+          <div class="text-xs text-green-400 mt-2 flex gap-1 items-center">
+            <span class="material-icons text-xs">touch_app</span>
+            <span>Click for details</span>
+          </div>
         `;
       }
 
       listItem.innerHTML = `
         <div class="flex items-start justify-between">
-          <div class="flex-1 ${isOwned || planet.colonized_by || !canPlayerColonize ? 'cursor-pointer' : ''}"
-               onclick="${isOwned || planet.colonized_by || !canPlayerColonize ? `window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))` : ''}">
-            <div class="flex items-center gap-2">
-              <div class="flex items-center justify-center w-8 h-8">${planetIcon}</div>
+          <div class="flex-1 cursor-pointer"
+               onclick="window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
+            <div class="flex items-center gap-3">
+              <div class="flex items-center justify-center">
+                ${planetGif}
+              </div>
               <div>
                 <div class="font-semibold">${planetName}</div>
                 <div class="text-xs text-space-300">${planetTypeName} • Size ${planet.size || 'N/A'}</div>
@@ -679,27 +715,17 @@ export class UIController {
           </div>
           <div class="text-right flex flex-col items-end">
             ${statusHtml}
-            ${colonizeButtonHtml}
+            ${actionHintHtml}
           </div>
         </div>
       `;
 
-      // If the planet is not colonized AND the player can colonize it,
-      // the main list item can also be made clickable for colonization for a larger target area.
-      if (!planet.colonized_by && canPlayerColonize) {
-        listItem.classList.add('cursor-pointer');
-        listItem.onclick = (e) => {
-            // Prevent click from bubbling if the click was on the button itself
-            if (e.target.closest('button')) return;
-            console.log('Colonize (list item) clicked for planet: ${planet.id}');
-            window.uiController.colonizePlanetWrapper(planet.id);
-        };
-      } else {
-        // If already colonized, or cannot be colonized by player, remove general click handler
-        // or ensure it only navigates (handled by the inner div's onclick now).
-        listItem.onclick = null;
-        // The inner div with class 'flex-1' handles the click to displayPlanetView for non-colonizable/owned planets.
-      }
+      // Make all planets clickable to show detailed view
+      listItem.classList.add('cursor-pointer');
+      listItem.onclick = (e) => {
+          // Navigate to planet detail view for all planets
+          window.uiController.displayPlanetView(planet);
+      };
 
       if (!existingPlanetElements.has(planetId)) {
         ulElement.appendChild(listItem);
@@ -911,7 +937,7 @@ export class UIController {
     const planetHeader = container.querySelector("#planet-header");
     planetHeader.className = `panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r ${planetTypeGradient}`;
     
-    container.querySelector("#planet-icon").innerHTML = planetIcon;
+    container.querySelector("#planet-icon").innerHTML = this.getPlanetAnimatedGif(planetTypeValue) || planetIcon;
     container.querySelector("#planet-name").textContent = planetName;
     container.querySelector("#planet-seed").textContent = `Seed: ${planet.id.slice(-8)}`;
     container.querySelector("#planet-system").textContent = systemName;
