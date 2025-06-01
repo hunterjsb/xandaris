@@ -54,15 +54,28 @@ func GenerateMap(app *pocketbase.PocketBase, systemCount int) error {
 			planet := models.NewRecord(planetCollection)
 			planet.Set("name", fmt.Sprintf("Planet-%d", i+1))
 			planet.Set("system_id", systemRecord.Id)
-			planet.Set("type_id", "") // default type will be assigned later
-			if err := app.Dao().SaveRecord(planet); err != nil {
-				return fmt.Errorf("failed to save planet: %w", err)
+			// planet.Set("type_id", "") // Will be set below
+
+			// Assign planet type
+			var allPlanetTypes []*models.Record
+			allPlanetTypes, errPT := app.Dao().FindRecordsByExpr("planet_types", nil, nil)
+			if errPT != nil || len(allPlanetTypes) == 0 {
+				fmt.Printf("Warning: No planet types found in database for map generation for system %s. Planet will have no type_id.\n", systemRecord.Id)
+				planet.Set("type_id", "") // Explicitly set to empty or a default placeholder ID
+			} else {
+				randomType := allPlanetTypes[rand.Intn(len(allPlanetTypes))]
+				planet.Set("type_id", randomType.Id)
+				// fmt.Printf("Assigned planet type ID %s (%s) to new planet in system %s\n", randomType.Id, randomType.GetString("name"), systemRecord.Id)
 			}
-			fmt.Printf("Saved planet for system %d\n", i+1)
+
+			if err := app.Dao().SaveRecord(planet); err != nil {
+				return fmt.Errorf("failed to save planet for system %s: %w", systemRecord.Id, err)
+			}
+			fmt.Printf("Saved planet for system %d with ID %s\n", i+1, planet.Id)
 		}
 	}
 
-	fmt.Printf("Successfully saved all %d systems to database\n", len(systems))
+	fmt.Printf("Successfully saved all %d systems and their initial planets to database\n", len(systems))
 	return nil
 }
 

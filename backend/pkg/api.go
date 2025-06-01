@@ -63,17 +63,6 @@ type SystemData struct {
 	Y        int    `json:"y"`
 	OwnerID  string `json:"owner_id"`
 	Richness int    `json:"richness"`
-
-	// Aggregated data from planets/buildings
-	Pop       int                    `json:"pop"`
-	Morale    int                    `json:"morale"`
-	Food      int                    `json:"food"`
-	Ore       int                    `json:"ore"`
-	Goods     int                    `json:"goods"`
-	Fuel      int                    `json:"fuel"`
-	Credits   int                    `json:"credits"`
-	Buildings map[string]int         `json:"buildings"`
-	Resources map[string]interface{} `json:"resources"`
 }
 
 type PlanetData struct {
@@ -86,6 +75,15 @@ type PlanetData struct {
 	MaxPopulation int    `json:"max_population"`
 	ColonizedBy   string `json:"colonized_by"`
 	ColonizedAt   string `json:"colonized_at"`
+	Pop           int                    `json:"pop"`
+	Morale        int                    `json:"morale"`
+	Food          int                    `json:"food"`
+	Ore           int                    `json:"ore"`
+	Goods         int                    `json:"goods"`
+	Fuel          int                    `json:"fuel"`
+	Credits       int                    `json:"credits"`
+	Buildings     map[string]int         `json:"buildings"`
+	Resources     map[string]interface{} `json:"resources"`
 }
 
 type BuildingData struct {
@@ -179,43 +177,6 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 		// Transform systems data
 		systemsData := make([]SystemData, len(systems))
 		for i, system := range systems {
-			// Get planets for this system
-			systemPlanets, _ := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", system.Id), "", 0, 0)
-
-			// Calculate aggregated data
-			totalPop := 0
-			totalFood := 0
-			totalOre := 0
-			totalGoods := 0
-			totalFuel := 0
-			totalCredits := 0
-			buildingCounts := make(map[string]int)
-
-			for _, planet := range systemPlanets {
-				totalPop += planet.GetInt("population")
-
-				// Get buildings for this planet
-				buildings, _ := app.Dao().FindRecordsByFilter("buildings", fmt.Sprintf("planet_id='%s'", planet.Id), "", 0, 0)
-				for _, building := range buildings {
-					buildingType := building.GetString("building_type")
-					buildingCounts[buildingType]++
-
-					// Calculate building production based on type
-					switch buildingType {
-					case "farm":
-						totalFood += building.GetInt("level") * 10
-					case "mine":
-						totalOre += building.GetInt("level") * 8
-					case "factory":
-						totalGoods += building.GetInt("level") * 6
-					case "refinery":
-						totalFuel += building.GetInt("level") * 5
-					case "bank":
-						totalCredits += building.GetInt("level") * 1
-					}
-				}
-			}
-
 			systemsData[i] = SystemData{
 				ID:        system.Id,
 				Name:      system.GetString("name"),
@@ -223,36 +184,66 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 				Y:         system.GetInt("y"),
 				OwnerID:   system.GetString("owner_id"),
 				Richness:  system.GetInt("richness"),
-				Pop:       totalPop,
-				Morale:    75, // Default morale
-				Food:      totalFood,
-				Ore:       totalOre,
-				Goods:     totalGoods,
-				Fuel:      totalFuel,
-				Credits:   totalCredits,
-				Buildings: buildingCounts,
-				Resources: map[string]interface{}{
-					"food":  totalFood,
-					"ore":   totalOre,
-					"goods": totalGoods,
-					"fuel":  totalFuel,
-				},
 			}
 		}
 
 		// Transform planets data
 		planetsData := make([]PlanetData, len(planets))
 		for i, planet := range planets {
+			// Calculate aggregated data for each planet
+			totalPop := planet.GetInt("population") // Start with the planet's own population
+			totalFood := 0
+			totalOre := 0
+			totalGoods := 0
+			totalFuel := 0
+			totalCredits := 0
+			buildingCounts := make(map[string]int)
+
+			// Get buildings for this planet
+			buildings, _ := app.Dao().FindRecordsByFilter("buildings", fmt.Sprintf("planet_id='%s'", planet.Id), "", 0, 0)
+			for _, building := range buildings {
+				buildingType := building.GetString("building_type")
+				buildingCounts[buildingType]++
+
+				// Calculate building production based on type
+				switch buildingType {
+				case "farm":
+					totalFood += building.GetInt("level") * 10
+				case "mine":
+					totalOre += building.GetInt("level") * 8
+				case "factory":
+					totalGoods += building.GetInt("level") * 6
+				case "refinery":
+					totalFuel += building.GetInt("level") * 5
+				case "bank":
+					totalCredits += building.GetInt("level") * 1
+				}
+			}
+
 			planetsData[i] = PlanetData{
 				ID:            planet.Id,
 				Name:          planet.GetString("name"),
 				SystemID:      planet.GetString("system_id"),
 				PlanetType:    planet.GetString("planet_type"),
 				Size:          planet.GetInt("size"),
-				Population:    planet.GetInt("population"),
+				Population:    planet.GetInt("population"), // This is base population, totalPop includes this.
 				MaxPopulation: planet.GetInt("max_population"),
 				ColonizedBy:   planet.GetString("colonized_by"),
 				ColonizedAt:   planet.GetString("colonized_at"),
+				Pop:           totalPop, // This is the aggregated population for the planet
+				Morale:        75,       // Default morale for planet
+				Food:          totalFood,
+				Ore:           totalOre,
+				Goods:         totalGoods,
+				Fuel:          totalFuel,
+				Credits:       totalCredits,
+				Buildings:     buildingCounts,
+				Resources: map[string]interface{}{
+					"food":  totalFood,
+					"ore":   totalOre,
+					"goods": totalGoods,
+					"fuel":  totalFuel,
+				},
 			}
 		}
 

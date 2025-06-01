@@ -51,45 +51,6 @@
 
       <!-- Main Content -->
       <div class="flex h-screen">
-        <!-- Left Sidebar -->
-        <div class="w-80 aerogel-panel border-r border-space-700/20 p-4 overflow-y-auto">
-          <div id="system-info" class="space-y-4">
-            <div class="void-surface p-3 rounded-lg">
-              <h3 class="font-semibold mb-2 text-nebula-200">Selected System</h3>
-              <div id="selected-system" class="text-sm text-space-300">
-                Click a system to view details
-              </div>
-            </div>
-            
-            <div class="void-surface p-3 rounded-lg">
-              <h3 class="font-semibold mb-2 text-nebula-200">Quick Actions</h3>
-              <div class="space-y-2">
-                <button id="build-btn" class="w-full px-3 py-2 bg-gradient-to-r from-nebula-700 to-nebula-600 hover:from-nebula-600 hover:to-nebula-500 rounded text-sm transition-all duration-200">
-                  Build
-                </button>
-                <button id="send-fleet-btn" class="w-full px-3 py-2 bg-gradient-to-r from-plasma-700 to-plasma-600 hover:from-plasma-600 hover:to-plasma-500 rounded text-sm transition-all duration-200">
-                  Send Fleet
-                </button>
-                <button id="trade-route-btn" class="w-full px-3 py-2 bg-gradient-to-r from-void-700 to-void-600 hover:from-void-600 hover:to-void-500 rounded text-sm transition-all duration-200">
-                  Trade Route
-                </button>
-                <button id="colonize-btn" class="w-full px-3 py-2 bg-gradient-to-r from-emerald-700 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 rounded text-sm transition-all duration-200">
-                  Colonize
-                </button>
-              </div>
-            </div>
-
-            <div class="void-surface p-3 rounded-lg">
-              <h3 class="font-semibold mb-2 text-nebula-200">Game Status</h3>
-              <div class="text-sm text-space-300">
-                <div>Tick Rate: <span id="next-tick" class="text-plasma-300">6/min (10s)</span></div>
-                <div>Current: <span id="current-turn" class="text-nebula-300">Tick 1</span></div>
-                <div>Players: <span id="player-count" class="text-void-300">0</span> <span id="ws-status" class="text-xs" title="WebSocket: connecting">🟡</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Main Game Canvas -->
         <div class="flex-1 relative">
           <canvas id="game-canvas" class="w-full h-full cursor-crosshair" style="background: radial-gradient(ellipse at center, #001433 0%, #000508 70%, #000000 100%);"></canvas>
@@ -119,6 +80,10 @@
             </div>
           </div>
         </div>
+      </div>
+      <!-- Expanded View Container -->
+      <div id="expanded-view-container" class="absolute top-16 left-0 p-4 bg-gray-800/90 text-white w-96 max-w-md h-[calc(100vh-4rem)] overflow-y-auto hidden z-10 backdrop-blur-sm rounded-r-lg shadow-xl">
+          <!-- Content will be dynamically inserted here by uiController.js -->
       </div>
     </div>
 

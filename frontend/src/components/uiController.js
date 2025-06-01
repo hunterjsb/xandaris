@@ -4,7 +4,264 @@ export class UIController {
     this.currentUser = null;
     this.gameState = null;
     this.tickTimer = null;
+    // Make instance available globally, for event handlers in dynamically created HTML
+    window.uiController = this;
+
+    // Listen for system selection events
+    document.addEventListener("systemSelected", (event) => {
+      if (event.detail && event.detail.system) {
+        // Attempt to get planets directly from event if provided by mapRenderer
+        let planetsInSystem = event.detail.planets;
+        if (!planetsInSystem && this.gameState && this.gameState.mapData && this.gameState.mapData.planets) {
+          // Fallback: Filter planets from global game state if not provided in event
+          // This assumes system_id in PlanetData matches the full system ID.
+          // Pocketbase relation fields often store just the ID.
+          // If planet.system_id is an array of IDs, adjust accordingly.
+          planetsInSystem = this.gameState.mapData.planets.filter(p => {
+            if (Array.isArray(p.system_id)) {
+              return p.system_id.includes(event.detail.system.id);
+            }
+            return p.system_id === event.detail.system.id;
+          });
+        } else if (!planetsInSystem) {
+          planetsInSystem = []; // Ensure it's an array
+        }
+        this.displaySystemView(event.detail.system, planetsInSystem);
+      } else {
+        console.warn("systemSelected event triggered without system data", event.detail);
+        this.clearExpandedView();
+      }
+    });
   }
+
+  getPlanetTypeIcon(planetTypeName) {
+    if (!planetTypeName) return '❓'; // Default for undefined/empty type name
+    const typeMap = {
+        'terrestrial': '🌍',
+        'gas giant': '💨',   // Key updated to match "Gas Giant"
+        'ice giant': '❄️',   // Key updated to match "Ice Giant"
+        'volcanic': '🌋',
+        'ocean world': '🌊', // Key updated to match "Ocean World"
+        'arid': '🏜️',
+        'barren': '🏜️',
+        'tundra': '🏔️',
+        'gaia': '🌸',
+        'unknown': '❓'     // Explicit fallback type
+        // Ensure these keys (converted to lowercase) match the names
+        // from your 'planet_types' collection in the backend.
+    };
+    return typeMap[planetTypeName.toLowerCase()] || typeMap['unknown'];
+  }
+
+  clearExpandedView() {
+    const container = document.getElementById("expanded-view-container");
+    if (container) {
+      container.innerHTML = "";
+      container.classList.add("hidden");
+    }
+  }
+
+  displaySystemView(system, planets) {
+    const container = document.getElementById("expanded-view-container");
+    if (!container) {
+      console.error("Expanded view container not found!");
+      return;
+    }
+
+    let planetsHtml = '<div class="text-sm text-space-400">No planets listed for this system.</div>';
+    if (planets && planets.length > 0) {
+      planetsHtml = planets.map(planet => {
+        const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
+        const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type); // Support both 'planet_type' and 'type'
+        // Note: Ensure planet object is serializable or pass only ID if issues arise with complex objects in onclick
+        return `
+          <li class="mb-2 p-3 bg-space-700 hover:bg-space-600 rounded-md cursor-pointer transition-colors"
+              onclick="window.uiController.displayPlanetView(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(planet))}')))">
+            <span class="text-xl mr-2">${planetIcon}</span>
+            <span class="font-semibold">${planetName}</span>
+            <div class="text-xs text-space-300">${planet.planet_type || planet.type || 'Unknown Type'} - Size: ${planet.size || 'N/A'}</div>
+          </li>
+        `;
+      }).join("");
+    }
+
+    container.innerHTML = `
+      <div class="p-2">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-2xl font-bold text-orange-300">${system.name || `System ${system.id.slice(-4)}`}</h2>
+          <button onclick="window.uiController.clearExpandedView()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div class="mb-4 text-sm">
+          <div>Coordinates: (${system.x}, ${system.y})</div>
+          <div>Owner: ${system.owner_name || "Uncolonized"}</div>
+          <div>Richness: ${system.richness || 'N/A'}</div>
+        </div>
+        <h3 class="text-lg font-semibold mb-2 text-nebula-200">Planets:</h3>
+        <ul class="space-y-1 overflow-y-auto max-h-96">
+          ${planetsHtml}
+        </ul>
+      </div>
+    `;
+    container.classList.remove("hidden");
+  }
+
+  displayPlanetView(planet) {
+    const container = document.getElementById("expanded-view-container");
+    if (!container) {
+      console.error("Expanded view container not found!");
+      return;
+    }
+
+    const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
+    const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type);
+    const systemName = planet.system_name || (this.gameState && this.gameState.mapData.systems.find(s => s.id === planet.system_id)?.name) || planet.system_id;
+
+
+    let resourcesHtml = '<div class="text-sm text-space-400">No resource data.</div>';
+    if (planet.Credits !== undefined) { // Check one of the new fields
+      resourcesHtml = `
+        <div class="grid grid-cols-2 gap-2 text-sm">
+          <div>💰 Credits: <span class="font-semibold text-yellow-300">${planet.Credits?.toLocaleString() || 0}</span></div>
+          <div>🧑‍🚀 Population: <span class="font-semibold text-blue-300">${planet.Pop?.toLocaleString() || 0} / ${planet.MaxPopulation?.toLocaleString() || 'N/A'}</span></div>
+          <div>😊 Morale: <span class="font-semibold text-green-300">${planet.Morale || 0}%</span></div>
+          <div>🍞 Food: <span class="font-semibold text-lime-300">${planet.Food?.toLocaleString() || 0}</span></div>
+          <div>⛏️ Ore: <span class="font-semibold text-gray-300">${planet.Ore?.toLocaleString() || 0}</span></div>
+          <div>📦 Goods: <span class="font-semibold text-orange-300">${planet.Goods?.toLocaleString() || 0}</span></div>
+          <div>⛽ Fuel: <span class="font-semibold text-purple-300">${planet.Fuel?.toLocaleString() || 0}</span></div>
+        </div>
+      `;
+    }
+
+    let buildingsHtml = '<div class="text-sm text-space-400">No buildings on this planet.</div>';
+    if (planet.Buildings && Object.keys(planet.Buildings).length > 0) {
+      buildingsHtml = Object.entries(planet.Buildings).map(([buildingName, level]) => {
+        // Attempt to get a nicer name from buildingTypes if available
+        let displayName = buildingName;
+        if (this.gameState && this.gameState.buildingTypes) {
+            const buildingType = this.gameState.buildingTypes.find(bt => bt.id === buildingName || bt.name.toLowerCase() === buildingName.toLowerCase());
+            if (buildingType) displayName = buildingType.name;
+        }
+        return `
+          <li class="p-2 bg-space-700 rounded-md">
+            <span class="font-semibold">${displayName}</span>: Level ${level}
+          </li>
+        `;
+      }).join("");
+      buildingsHtml = `<ul class="space-y-1 text-sm">${buildingsHtml}</ul>`;
+    }
+
+    const isColonized = planet.colonized_by && planet.colonized_by !== "";
+    const canColonize = !isColonized && this.currentUser; // Add other conditions like proximity or resources if needed
+
+    container.innerHTML = `
+      <div class="p-2">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-2xl font-bold text-orange-300">
+            <span class="text-3xl mr-2">${planetIcon}</span>${planetName}
+          </h2>
+          <button onclick="window.uiController.clearExpandedView()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div class="mb-3 text-sm">
+          <div>Type: <span class="font-semibold">${planet.planet_type || planet.type || 'Unknown Type'}</span></div>
+          <div>Size: <span class="font-semibold">${planet.size || 'N/A'}</span></div>
+          <div>System: <span class="font-semibold">${systemName}</span></div>
+           <div>Colonized by: <span class="font-semibold">${planet.colonized_by_name || (planet.colonized_by ? 'Another Player' : 'Uncolonized')}</span></div>
+        </div>
+
+        <div class="mb-3">
+          <h3 class="text-md font-semibold mb-1 text-nebula-200">Resources & Stats:</h3>
+          ${resourcesHtml}
+        </div>
+
+        <div class="mb-3">
+          <h3 class="text-md font-semibold mb-1 text-nebula-200">Buildings:</h3>
+          ${buildingsHtml}
+        </div>
+
+        ${canColonize ? `
+        <button class="w-full mt-4 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-white font-semibold"
+                onclick="window.uiController.colonizePlanetWrapper('${planet.id}')">
+          Colonize Planet (Cost: 500 Credits)
+        </button>
+        ` : ''}
+
+        ${isColonized && planet.colonized_by === this.currentUser?.id ? `
+        <button class="w-full mt-4 px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded text-white font-semibold"
+                onclick="window.uiController.manageColony('${planet.id}')">
+          Manage Colony
+        </button>
+        ` : ''}
+
+        <button class="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white"
+                onclick="window.uiController.goBackToSystemView('${planet.system_id}')">
+          Back to System View
+        </button>
+      </div>
+    `;
+    container.classList.remove("hidden");
+  }
+
+  // Wrapper for colonizePlanet to fit new UI structure if needed
+  colonizePlanetWrapper(planetId) {
+    // Find planet data again, or ensure it's correctly passed
+    // For simplicity, assuming colonizePlanet can fetch necessary data or is adapted
+    if (!this.gameState || !this.gameState.mapData || !this.gameState.mapData.planets) {
+        this.showError("Game data not loaded. Cannot colonize.");
+        return;
+    }
+    const planet = this.gameState.mapData.planets.find(p => p.id === planetId);
+    if (!planet) {
+        this.showError("Planet data not found. Cannot colonize.");
+        return;
+    }
+    // Check if already showing colonize modal or similar logic
+    // This replaces the old showPlanetColonizeModal call path
+    this.colonizePlanet(planet.id); // Calls the existing colonizePlanet method
+  }
+
+  goBackToSystemView(systemId) {
+    if (!this.gameState || !this.gameState.mapData || !this.gameState.mapData.systems) {
+      this.showError("Game data not fully loaded.");
+      this.clearExpandedView();
+      return;
+    }
+    const system = this.gameState.mapData.systems.find(s => s.id === systemId);
+    if (system) {
+      let planetsInSystem = [];
+      if (this.gameState.mapData.planets) {
+        planetsInSystem = this.gameState.mapData.planets.filter(p => {
+            if (Array.isArray(p.system_id)) return p.system_id.includes(system.id);
+            return p.system_id === system.id;
+        });
+      }
+      this.displaySystemView(system, planetsInSystem);
+    } else {
+      this.showError("System data not found. Cannot go back.");
+      this.clearExpandedView();
+    }
+  }
+
+  manageColony(planetId) {
+    // Placeholder for managing colony - could open build modal for this planet
+    // For now, let's try to open the general build modal, but ideally it would be context-aware
+    // This will require finding the system for this planet first
+     if (!this.gameState || !this.gameState.mapData || !this.gameState.mapData.planets) {
+        this.showError("Game data not loaded. Cannot manage colony.");
+        return;
+    }
+    const planet = this.gameState.mapData.planets.find(p => p.id === planetId);
+    if (!planet) {
+        this.showError("Planet data not found.");
+        return;
+    }
+    const system = this.gameState.mapData.systems.find(s => s.id === planet.system_id);
+    if (system) {
+        this.showBuildModal(system); // This is an existing modal, might need adaptation for planet-specific context
+    } else {
+        this.showError("System for this planet not found.");
+    }
+  }
+
 
   updateAuthUI(user) {
     this.currentUser = user;
@@ -26,7 +283,7 @@ export class UIController {
   updateGameUI(state) {
     this.gameState = state;
     this.updateResourcesUI(state.playerResources);
-    this.updateSystemInfoUI(state.selectedSystem);
+    // this.updateSystemInfoUI(state.selectedSystem); // Removed: Replaced by expanded-view-container logic
     this.updateGameStatusUI(state);
   }
 
@@ -51,219 +308,13 @@ export class UIController {
     }
   }
 
-  updateSystemInfoUI(selectedSystem) {
-    const systemInfo = document.getElementById("selected-system");
+  // updateSystemInfoUI and loadSystemPlanets are removed as their functionality
+  // is being replaced by displaySystemView and displayPlanetView,
+  // which manage the #expanded-view-container.
+  // selectPlanet, showPlanetColonizeModal, and showPlanetInfo are also removed
+  // as their roles are absorbed into displayPlanetView or handled by new interaction flows.
+  // The actual colonizePlanet action method is kept.
 
-    if (selectedSystem) {
-      const isOwned =
-        this.currentUser && selectedSystem.owner_id === this.currentUser.id;
-
-      // Initially show basic system info
-      systemInfo.innerHTML = `
-        <div class="space-y-2">
-          <div class="font-semibold text-orange-300">${selectedSystem.name || `System ${selectedSystem.id.slice(-3)}`}</div>
-          <div class="text-xs space-y-1">
-            <div>Position: ${selectedSystem.x}, ${selectedSystem.y}</div>
-            <div>Population: ${selectedSystem.pop || 0}</div>
-            <div>Morale: ${selectedSystem.morale || 0}%</div>
-            <div>Owner: ${selectedSystem.owner_name || "Uncolonized"}</div>
-          </div>
-
-          <div class="text-xs space-y-1 pt-2 border-t border-space-600">
-            <div class="font-medium">Planets:</div>
-            <div id="planets-loading" class="text-space-400">Loading planets...</div>
-          </div>
-
-          ${
-            isOwned
-              ? `
-            <div class="text-xs space-y-1 pt-2 border-t border-space-600">
-              <div class="font-medium">Resources:</div>
-            </div>
-            <div class="text-xs space-y-1 pt-2 border-t border-space-600">
-              <div class="font-medium">Buildings:</div>
-            </div>
-          `
-              : ""
-          }
-        </div>
-      `;
-
-      // Load planets asynchronously
-      this.loadSystemPlanets(selectedSystem.id);
-    } else {
-      systemInfo.innerHTML = "Click a system to view details";
-    }
-  }
-
-  async loadSystemPlanets(systemId) {
-    try {
-      // Use custom API endpoint instead of PocketBase collections
-      const response = await fetch(
-        `http://localhost:8090/api/planets?system_id=${systemId}`,
-      );
-      const data = await response.json();
-      const planets = data.items || [];
-
-      const planetsContainer = document.getElementById("planets-loading");
-      if (!planetsContainer) return; // System changed while loading
-
-      if (planets.length === 0) {
-        planetsContainer.innerHTML =
-          '<div class="text-space-400">No planets in this system</div>';
-        return;
-      }
-
-      const planetsHtml = planets
-        .map((planet) => {
-          const isColonized =
-            planet.colonized_by != null && planet.colonized_by !== "";
-          const planetTypeName = planet.type || "Unknown";
-          const colonizedByMe =
-            isColonized &&
-            this.currentUser &&
-            planet.colonized_by === this.currentUser.id;
-
-          return `
-          <div class="p-2 bg-space-800 rounded mb-1 cursor-pointer hover:bg-space-700"
-               onclick="window.uiController.selectPlanet('${planet.id}')">
-            <div class="font-medium text-space-200">${planet.name}</div>
-            <div class="text-xs text-space-400">${planetTypeName} • Size ${planet.size}</div>
-            <div class="text-xs ${isColonized ? (colonizedByMe ? "text-emerald-400" : "text-red-400") : "text-space-300"}">
-              ${isColonized ? (colonizedByMe ? "Your Colony" : "Colonized") : "Uncolonized"}
-            </div>
-          </div>
-        `;
-        })
-        .join("");
-
-      planetsContainer.innerHTML = planetsHtml;
-
-      // Store reference for planet selection
-      window.uiController = this;
-    } catch (error) {
-      console.error("Error loading planets:", error);
-      const planetsContainer = document.getElementById("planets-loading");
-      if (planetsContainer) {
-        planetsContainer.innerHTML =
-          '<div class="text-red-400">Failed to load planets</div>';
-      }
-    }
-  }
-
-  selectPlanet(planetId) {
-    // For now, just show colonize modal if planet is not colonized
-    fetch(`http://localhost:8090/api/planets`)
-      .then((response) => response.json())
-      .then((data) => {
-        const planet = data.items.find((p) => p.id === planetId);
-        if (!planet) {
-          this.showError("Planet not found");
-          return;
-        }
-
-        if (!planet.colonized_by || planet.colonized_by === "") {
-          // Planet is available for colonization
-          this.showPlanetColonizeModal(planet);
-        } else {
-          // Planet is already colonized, show info
-          this.showPlanetInfo(planet);
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching planet:", err);
-        this.showError("Failed to load planet information");
-      });
-  }
-
-  showPlanetColonizeModal(planet) {
-    if (!this.currentUser) {
-      this.showError("Please log in to colonize planets");
-      return;
-    }
-
-    const planetTypeName = planet.type || "Unknown";
-
-    this.showModal(
-      `Colonize ${planet.name}`,
-      `
-      <div class="space-y-4">
-        <div class="p-3 bg-space-800 rounded">
-          <div class="font-semibold text-emerald-300">${planet.name}</div>
-          <div class="text-sm text-space-300">Type: ${planetTypeName}</div>
-          <div class="text-sm text-space-300">Size: ${planet.size}</div>
-          <div class="text-sm text-emerald-400">Available for colonization</div>
-        </div>
-
-        <div class="text-sm text-space-300">
-          Establishing a colony will:
-          <ul class="list-disc list-inside mt-2 space-y-1">
-            <li>Create an initial population of 100</li>
-            <li>Build a basic command center</li>
-            <li>Start resource production</li>
-          </ul>
-        </div>
-
-        <div class="p-3 bg-space-700 border border-yellow-600 rounded">
-          <div class="text-yellow-300 font-semibold">Cost: 500 Credits</div>
-          <div class="text-xs text-space-400">You currently have ${this.gameState.playerResources.credits}> credits</div>
-        </div>
-
-        <div class="flex space-x-2">
-          <button class="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 rounded"
-                  onclick="window.uiController.colonizePlanet('${planet.id}')">
-            Colonize Planet
-          </button>
-          <button class="flex-1 px-4 py-2 bg-space-700 hover:bg-space-600 rounded"
-                  onclick="window.uiController.hideModal()">
-            Cancel
-          </button>
-        </div>
-      </div>
-    `,
-    );
-  }
-
-  showPlanetInfo(planet) {
-    const planetTypeName = planet.type || "Unknown";
-    const isMyColony =
-      this.currentUser && planet.colonized_by === this.currentUser.id;
-
-    this.showModal(
-      `${planet.name} Information`,
-      `
-      <div class="space-y-4">
-        <div class="p-3 bg-space-800 rounded">
-          <div class="font-semibold text-orange-300">${planet.name}</div>
-          <div class="text-sm text-space-300">Type: ${planetTypeName}</div>
-          <div class="text-sm text-space-300">Size: ${planet.size}</div>
-          <div class="text-sm ${isMyColony ? "text-emerald-400" : "text-red-400"}">
-            ${isMyColony ? "Your Colony" : "Colonized by another player"}
-          </div>
-        </div>
-
-        ${
-          isMyColony
-            ? `
-          <div class="text-sm text-space-300">
-            This is one of your colonies. You can manage it through the buildings and resources panels.
-          </div>
-        `
-            : `
-          <div class="text-sm text-space-300">
-            This planet has already been colonized by another player.
-          </div>
-        `
-        }
-
-        <button class="w-full px-4 py-2 bg-space-700 hover:bg-space-600 rounded"
-                onclick="window.uiController.hideModal()">
-          Close
-        </button>
-      </div>
-    `,
-    );
-  }
 
   updateGameStatusUI(state) {
     const tickElement = document.getElementById("current-turn");
