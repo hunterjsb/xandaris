@@ -89,6 +89,25 @@
       <!-- Expanded View Container -->
       <div id="expanded-view-container" class="absolute top-16 left-0 p-4 bg-gray-800/90 text-white w-96 max-w-md h-[calc(100vh-4rem)] overflow-y-auto hidden z-10 backdrop-blur-sm rounded-r-lg shadow-xl">
           <!-- Content will be dynamically inserted here by uiController.js -->
+          <!-- Diplomacy UI Placeholders -->
+          <div id="diplomacy-section" class="hidden"> <!-- Wrapper for all diplomacy content -->
+            <h2 class="text-xl font-semibold mb-3 text-nebula-300">Diplomacy</h2>
+
+            <div id="diplomacy-relations-section" class="mb-4">
+              <h3 class="text-lg font-medium mb-2 text-sky-300">Current Relations</h3>
+              <!-- Relations will be listed here -->
+            </div>
+
+            <div id="diplomacy-proposals-section" class="mb-4">
+              <h3 class="text-lg font-medium mb-2 text-amber-300">Pending Proposals</h3>
+              <!-- Proposals will be listed here -->
+            </div>
+
+            <div id="diplomacy-actions-section">
+              <h3 class="text-lg font-medium mb-2 text-green-300">Diplomatic Actions</h3>
+              <!-- Player selection, proposal form, declare war button -->
+            </div>
+          </div>
       </div>
     </div>
 

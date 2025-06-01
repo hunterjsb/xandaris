@@ -368,24 +368,100 @@ export class GameDataManager {
     }
   }
 
-  async proposeTreaty(playerId, type, terms) {
+  // Diplomacy specific methods
+  async proposeTreaty(receiverId, type, terms, durationTicks) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
-
     try {
-      return await pb.send("/diplomacy", {
-        method: "POST",
-        body: JSON.stringify({
-          player_id: playerId,
-          type: type,
-          terms: terms,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
+      return await pb.send('/api/diplomacy/proposals', {
+        method: 'POST',
+        body: { receiverId, type, terms, durationTicks }, // PocketBase SDK handles JSON stringification for objects
       });
     } catch (error) {
       console.error("Failed to propose treaty:", error);
       throw error;
+    }
+  }
+
+  async acceptProposal(proposalId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    try {
+      return await pb.send(`/api/diplomacy/proposals/${proposalId}/accept`, {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error("Failed to accept proposal:", error);
+      throw error;
+    }
+  }
+
+  async rejectProposal(proposalId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    try {
+      return await pb.send(`/api/diplomacy/proposals/${proposalId}/reject`, {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error("Failed to reject proposal:", error);
+      throw error;
+    }
+  }
+
+  async declareWar(targetId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    try {
+      return await pb.send('/api/diplomacy/declare_war', {
+        method: 'POST',
+        body: { targetId },
+      });
+    } catch (error) {
+      console.error("Failed to declare war:", error);
+      throw error;
+    }
+  }
+
+  async getUserRelations(userId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    try {
+      return await pb.send(`/api/diplomacy/relations/${userId}`, {
+        method: 'GET',
+      });
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error(`Failed to fetch relations for user ${userId}:`, e);
+      }
+      return []; // Return empty array on error
+    }
+  }
+
+  async getPendingProposals(userId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    try {
+      return await pb.send(`/api/diplomacy/proposals/pending/${userId}`, {
+        method: 'GET',
+      });
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error(`Failed to fetch pending proposals for user ${userId}:`, e);
+      }
+      return []; // Return empty array on error
+    }
+  }
+
+  async getAllUsers() {
+    // No auth check here as this might be used for general display,
+    // but endpoints called with this data should be authenticated.
+    try {
+      return await pb.collection('users').getFullList({
+        sort: 'username',
+        fields: 'id,username,avatar_url', // Fetch only necessary fields
+      });
+    } catch (error) {
+      console.error("Failed to fetch all users:", error);
+      return [];
     }
   }
 

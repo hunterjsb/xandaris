@@ -9,6 +9,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/models"
 
+	"github.com/hunterjsb/xandaris/internal/diplomacy"
 	"github.com/hunterjsb/xandaris/internal/economy"
 	"github.com/hunterjsb/xandaris/internal/websocket"
 )
@@ -238,40 +239,104 @@ func resolveFleetArrival(app *pocketbase.PocketBase, fleet *models.Record) error
 	return app.Dao().SaveRecord(fleet)
 }
 
-// EvaluateTreaties checks for expired treaties and updates statuses
+// EvaluateTreaties checks for expired diplomatic proposals and relations.
 func EvaluateTreaties(app *pocketbase.PocketBase) error {
-	// Check if treaties collection exists
-	_, err := app.Dao().FindCollectionByNameOrId("treaties")
+	now := time.Now().UTC()
+	nowStr := now.Format("2006-01-02 15:04:05.999Z")
+
+	// Handle Proposal Expiration
+	proposalsCollection, err := app.Dao().FindCollectionByNameOrId("diplomatic_proposals")
 	if err != nil {
-		// Treaties collection doesn't exist, skip
-		return nil
-	}
-
-	// Get all active treaties
-	treaties, err := app.Dao().FindRecordsByExpr("treaties", nil, nil)
-	if err != nil {
-		// No treaties found, this is normal
-		log.Printf("No treaties found, skipping evaluation")
-		return nil
-	}
-
-	now := time.Now()
-	expired := 0
-
-	for _, treaty := range treaties {
-		expiresAt := treaty.GetDateTime("expires_at")
-		if !expiresAt.IsZero() && expiresAt.Time().Before(now) {
-			treaty.Set("status", "expired")
-			if err := app.Dao().SaveRecord(treaty); err != nil {
-				log.Printf("Failed to expire treaty %s: %v", treaty.Id, err)
-				continue
+		log.Printf("Diplomatic proposals collection not found, skipping proposal expiration: %v", err)
+	} else {
+		expiredProposals := 0
+		// Find pending proposals where expiration_date is in the past.
+		// Note: PocketBase filter date comparisons require the date to be in its string representation.
+		records, err := app.Dao().FindRecordsByFilter(
+			proposalsCollection.Name,
+			"status = 'pending' && expiration_date < {:now}",
+			"-created", // sort by oldest first, though not strictly necessary here
+			0,          // limit (0 for no limit)
+			0,          // offset
+			map[string]any{"now": nowStr},
+		)
+		if err != nil {
+			log.Printf("Error fetching pending diplomatic proposals: %v", err)
+		} else {
+			for _, proposalRecord := range records {
+				proposalRecord.Set("status", "expired")
+				if err := app.Dao().SaveRecord(proposalRecord); err != nil {
+					log.Printf("Failed to update proposal %s to expired: %v", proposalRecord.Id, err)
+					continue
+				}
+				expiredProposals++
+				log.Printf("Diplomatic proposal %s (type: %s) between %s and %s has expired.",
+					proposalRecord.Id,
+					proposalRecord.GetString("type"),
+					proposalRecord.GetString("proposer_id"),
+					proposalRecord.GetString("receiver_id"))
 			}
-			expired++
+			if expiredProposals > 0 {
+				log.Printf("Total expired diplomatic proposals: %d", expiredProposals)
+			}
 		}
 	}
 
-	if expired > 0 {
-		log.Printf("Expired %d treaties", expired)
+	// Handle Relation Expiration (End of Treaties)
+	relationsCollection, err := app.Dao().FindCollectionByNameOrId("diplomatic_relations")
+	if err != nil {
+		log.Printf("Diplomatic relations collection not found, skipping relation expiration: %v", err)
+	} else {
+		updatedRelations := 0
+		// Find relations with an end_date set and where end_date is in the past.
+		// Exclude wars, as they don't expire by date.
+		records, err := app.Dao().FindRecordsByFilter(
+			relationsCollection.Name,
+			"end_date != null && end_date < {:now} && status != 'war'",
+			"-created",
+			0,
+			0,
+			map[string]any{"now": nowStr},
+		)
+		if err != nil {
+			log.Printf("Error fetching expiring diplomatic relations: %v", err)
+		} else {
+			for _, relationRecord := range records {
+				originalStatus := relationRecord.GetString("status")
+				newStatus := "peace" // Default to peace after expiration
+
+				// Specific handling for different expiring statuses
+				if originalStatus == "alliance" {
+					newStatus = "peace" // Alliance expires into peace
+					log.Printf("Diplomatic relation (Alliance) %s between %s and %s has expired, changing status to Peace.",
+						relationRecord.Id, relationRecord.GetString("player1_id"), relationRecord.GetString("player2_id"))
+				} else if originalStatus == "peace" {
+					// Fixed-term peace expires, becomes indefinite peace (effectively, the treaty obligations end)
+					log.Printf("Diplomatic relation (Fixed-term Peace) %s between %s and %s has ended.",
+						relationRecord.Id, relationRecord.GetString("player1_id"), relationRecord.GetString("player2_id"))
+				} else if originalStatus == "truce" {
+					newStatus = "peace" // Truce expires into peace
+					log.Printf("Diplomatic relation (Truce) %s between %s and %s has expired, changing status to Peace.",
+						relationRecord.Id, relationRecord.GetString("player1_id"), relationRecord.GetString("player2_id"))
+				} else {
+					log.Printf("Diplomatic relation (Status: %s) %s between %s and %s with end_date %s has passed. Setting to 'peace'.",
+						originalStatus, relationRecord.Id, relationRecord.GetString("player1_id"), relationRecord.GetString("player2_id"), relationRecord.GetDateTime("end_date"))
+				}
+
+				relationRecord.Set("status", newStatus)
+				relationRecord.Set("duration_ticks", 0) // Becomes indefinite
+				relationRecord.Set("end_date", nil)     // Clear the end date
+
+				if err := app.Dao().SaveRecord(relationRecord); err != nil {
+					log.Printf("Failed to update relation %s to %s: %v", relationRecord.Id, newStatus, err)
+					continue
+				}
+				updatedRelations++
+			}
+			if updatedRelations > 0 {
+				log.Printf("Total updated diplomatic relations due to expiration: %d", updatedRelations)
+			}
+		}
 	}
 	return nil
 }

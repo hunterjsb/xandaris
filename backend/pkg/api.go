@@ -11,6 +11,8 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
+
+	"github.com/hunterjsb/xandaris/internal/diplomacy"
 )
 
 // RegisterAPIRoutes sets up all game API endpoints
@@ -33,13 +35,24 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 
 		// Game actions
 		e.Router.POST("/api/orders/fleet", sendFleet(app))
-		e.Router.POST("/api/orders/build", queueBuilding(app))
-		e.Router.POST("/api/orders/trade", createTradeRoute(app))
-		e.Router.POST("/api/orders/colonize", colonizePlanet(app))
-		e.Router.POST("/api/diplomacy", proposeTreaty(app))
+		e.Router.POST("/api/orders/build", queueBuilding(app), apis.RequireRecordAuth())
+		e.Router.POST("/api/orders/trade", createTradeRoute(app), apis.RequireRecordAuth())
+		e.Router.POST("/api/orders/colonize", colonizePlanet(app), apis.RequireRecordAuth())
+		// e.Router.POST("/api/diplomacy", proposeTreaty(app)) // Old diplomacy route, remove/replace
 
 		// Status endpoint
 		e.Router.GET("/api/status", getStatus(app))
+
+		// Diplomacy Routes
+		diplomacyGroup := e.Router.Group("/api/diplomacy", apis.RequireRecordAuth())
+		{
+			diplomacyGroup.POST("/proposals", handleProposeTreaty(app))
+			diplomacyGroup.POST("/proposals/:proposalId/accept", handleAcceptProposal(app))
+			diplomacyGroup.POST("/proposals/:proposalId/reject", handleRejectProposal(app))
+			diplomacyGroup.POST("/declare_war", handleDeclareWar(app))
+			diplomacyGroup.GET("/relations/:userId", handleGetUserRelations(app))
+			diplomacyGroup.GET("/proposals/pending/:userId", handleGetPendingProposals(app))
+		}
 
 		// Building and Resource Types
 		e.Router.GET("/api/building_types", getBuildingTypes(app))
@@ -810,45 +823,174 @@ func createTradeRoute(app *pocketbase.PocketBase) echo.HandlerFunc {
 	}
 }
 
-func proposeTreaty(app *pocketbase.PocketBase) echo.HandlerFunc {
+// handleProposeTreaty handles the creation of a new diplomatic proposal.
+func handleProposeTreaty(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		data := struct {
-			PlayerID string `json:"player_id"`
-			Type     string `json:"type"`
-			Terms    string `json:"terms"`
+		authRecord, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if authRecord == nil {
+			return apis.NewUnauthorizedError("Authentication required.", nil)
+		}
+		proposerID := authRecord.Id
+
+		payload := struct {
+			ReceiverID    string `json:"receiver_id"`
+			Type          string `json:"type"`
+			Terms         string `json:"terms"`
+			DurationTicks int    `json:"duration_ticks"`
 		}{}
 
-		if err := c.Bind(&data); err != nil {
-			return apis.NewBadRequestError("Invalid request data", err)
+		if err := c.Bind(&payload); err != nil {
+			return apis.NewBadRequestError("Invalid request payload.", err)
 		}
 
-		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
-		if user == nil {
-			return apis.NewUnauthorizedError("Authentication required", nil)
+		if payload.ReceiverID == "" || payload.Type == "" {
+			return apis.NewBadRequestError("ReceiverID and Type are required.", nil)
 		}
 
-		// Create treaty record
-		collection, err := app.Dao().FindCollectionByNameOrId("treaties")
+		proposalRecord, err := diplomacy.ProposeTreaty(app, proposerID, payload.ReceiverID, payload.Type, payload.Terms, payload.DurationTicks)
 		if err != nil {
-			return apis.NewBadRequestError("Treaties collection not found", err)
+			return apis.NewApiError(http.StatusInternalServerError, fmt.Sprintf("Failed to create proposal: %v", err), err)
 		}
 
-		treaty := models.NewRecord(collection)
-		treaty.Set("type", data.Type)
-		treaty.Set("a_id", user.Id)
-		treaty.Set("b_id", data.PlayerID)
-		treaty.Set("status", "proposed")
-
-		if err := app.Dao().SaveRecord(treaty); err != nil {
-			return apis.NewBadRequestError("Failed to create treaty", err)
-		}
-
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success":   true,
-			"treaty_id": treaty.Id,
-		})
+		return c.JSON(http.StatusCreated, proposalRecord)
 	}
 }
+
+// handleAcceptProposal handles accepting a diplomatic proposal.
+func handleAcceptProposal(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		authRecord, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if authRecord == nil {
+			return apis.NewUnauthorizedError("Authentication required.", nil)
+		}
+		acceptorID := authRecord.Id
+		proposalID := c.PathParam("proposalId")
+
+		if proposalID == "" {
+			return apis.NewBadRequestError("Proposal ID is required.", nil)
+		}
+
+		err := diplomacy.AcceptProposal(app, proposalID, acceptorID)
+		if err != nil {
+			return apis.NewApiError(http.StatusInternalServerError, fmt.Sprintf("Failed to accept proposal: %v", err), err)
+		}
+
+		return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	}
+}
+
+// handleRejectProposal handles rejecting a diplomatic proposal.
+func handleRejectProposal(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		authRecord, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if authRecord == nil {
+			return apis.NewUnauthorizedError("Authentication required.", nil)
+		}
+		rejectorID := authRecord.Id
+		proposalID := c.PathParam("proposalId")
+
+		if proposalID == "" {
+			return apis.NewBadRequestError("Proposal ID is required.", nil)
+		}
+
+		err := diplomacy.RejectProposal(app, proposalID, rejectorID)
+		if err != nil {
+			return apis.NewApiError(http.StatusInternalServerError, fmt.Sprintf("Failed to reject proposal: %v", err), err)
+		}
+
+		return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	}
+}
+
+// handleDeclareWar handles a player declaring war on another.
+func handleDeclareWar(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		authRecord, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if authRecord == nil {
+			return apis.NewUnauthorizedError("Authentication required.", nil)
+		}
+		declarerID := authRecord.Id
+
+		payload := struct {
+			TargetID string `json:"target_id"`
+		}{}
+
+		if err := c.Bind(&payload); err != nil {
+			return apis.NewBadRequestError("Invalid request payload.", err)
+		}
+
+		if payload.TargetID == "" {
+			return apis.NewBadRequestError("TargetID is required.", nil)
+		}
+
+		err := diplomacy.DeclareWar(app, declarerID, payload.TargetID)
+		if err != nil {
+			return apis.NewApiError(http.StatusInternalServerError, fmt.Sprintf("Failed to declare war: %v", err), err)
+		}
+
+		return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	}
+}
+
+// handleGetUserRelations fetches all diplomatic relations for a user.
+func handleGetUserRelations(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Auth check to ensure only logged-in users can generally access,
+		// but the actual target userID comes from the path.
+		// Further authorization (e.g., can user X see user Y's relations?) could be added.
+		_, authErr := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if authErr == nil || c.Get(apis.ContextAdminKey) != nil { // Allow admin or authenticated user
+			// proceed
+		} else {
+			return apis.NewUnauthorizedError("Authentication required to view relations.", nil)
+		}
+
+		userID := c.PathParam("userId")
+		if userID == "" {
+			return apis.NewBadRequestError("User ID is required in path.", nil)
+		}
+
+		relations, err := diplomacy.GetRelationsForUser(app, userID)
+		if err != nil {
+			return apis.NewApiError(http.StatusInternalServerError, fmt.Sprintf("Failed to get relations: %v", err), err)
+		}
+		if relations == nil {
+			return c.JSON(http.StatusOK, []*models.Record{}) // Return empty array instead of null
+		}
+		return c.JSON(http.StatusOK, relations)
+	}
+}
+
+// handleGetPendingProposals fetches pending proposals for a user.
+func handleGetPendingProposals(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		authRecord, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		targetUserID := c.PathParam("userId")
+
+		if authRecord == nil && c.Get(apis.ContextAdminKey) == nil { // Must be authenticated or admin
+			return apis.NewUnauthorizedError("Authentication required.", nil)
+		}
+		// If authenticated as a user, they can only see their own pending proposals.
+		if authRecord != nil && authRecord.Id != targetUserID && c.Get(apis.ContextAdminKey) == nil {
+			return apis.NewForbiddenError("You can only view your own pending proposals.", nil)
+		}
+
+
+		if targetUserID == "" {
+			return apis.NewBadRequestError("User ID is required in path.", nil)
+		}
+
+		proposals, err := diplomacy.GetPendingProposalsForUser(app, targetUserID)
+		if err != nil {
+			return apis.NewApiError(http.StatusInternalServerError, fmt.Sprintf("Failed to get pending proposals: %v", err), err)
+		}
+		if proposals == nil {
+			return c.JSON(http.StatusOK, []*models.Record{}) // Return empty array instead of null
+		}
+		return c.JSON(http.StatusOK, proposals)
+	}
+}
+
 
 func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {

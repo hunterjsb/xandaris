@@ -4,6 +4,13 @@ export class UIController {
     this.currentUser = null;
     this.gameState = null;
     this.tickTimer = null;
+    // Diplomacy related state
+    this.allPlayers = [];
+    this.currentUserRelations = [];
+    this.pendingProposals = [];
+    this.selectedPlayerIdForDiplomacy = null; // To avoid conflict with other potential selections
+    this.diplomacyPanelVisible = false;
+
     // Make instance available globally, for event handlers in dynamically created HTML
     window.uiController = this;
 
@@ -963,4 +970,302 @@ export class UIController {
     `,
     );
   }
+
+  // --- DIPLOMACY UI METHODS ---
+
+  async initializeDiplomacy() {
+    const diploBtn = document.getElementById("diplo-btn");
+    if (diploBtn) {
+      diploBtn.addEventListener("click", () => this.toggleDiplomacyPanel());
+    }
+    // Ensure gameData is available, might need to import it if not part of gameState
+    if (!window.gameState || !window.gameState.gameData) {
+        try {
+            const { gameData } = await import("../lib/pocketbase.js");
+            window.gameData = gameData; // Make it globally accessible if not already
+        } catch (e) {
+            console.error("Failed to load gameData for diplomacy:", e);
+            this.showError("Failed to initialize diplomacy module. Game data handler missing.");
+            return;
+        }
+    }
+     // Initial fetch of users for player selection dropdowns, if needed globally for diplomacy
+    if (window.gameData) {
+        this.allPlayers = await window.gameData.getAllUsers();
+    }
+  }
+
+  toggleDiplomacyPanel() {
+    this.diplomacyPanelVisible = !this.diplomacyPanelVisible;
+    const diplomacySection = document.getElementById("diplomacy-section");
+    const expandedViewContainer = document.getElementById("expanded-view-container");
+
+    if (this.diplomacyPanelVisible) {
+      if (expandedViewContainer) expandedViewContainer.classList.remove("hidden");
+      if (diplomacySection) diplomacySection.classList.remove("hidden");
+      this.loadAndDisplayDiplomacyData();
+    } else {
+      if (diplomacySection) diplomacySection.classList.add("hidden");
+      // If nothing else is in expanded view, hide it. This needs more robust logic if other views use it.
+      if (expandedViewContainer && diplomacySection && expandedViewContainer.contains(diplomacySection) && expandedViewContainer.querySelectorAll(':scope > div:not(.hidden):not(#diplomacy-section)').length === 0) {
+          // expandedViewContainer.classList.add("hidden"); // Only hide if diplomacy was the only thing
+      }
+      this.clearDiplomacyView(); // Clear content when hiding
+    }
+  }
+
+  clearDiplomacyView() {
+    const relationsSection = document.getElementById("diplomacy-relations-section");
+    if (relationsSection) relationsSection.innerHTML = '<h3 class="text-lg font-medium mb-2 text-sky-300">Current Relations</h3><p class="text-sm text-space-400">Loading...</p>';
+    const proposalsSection = document.getElementById("diplomacy-proposals-section");
+    if (proposalsSection) proposalsSection.innerHTML = '<h3 class="text-lg font-medium mb-2 text-amber-300">Pending Proposals</h3><p class="text-sm text-space-400">Loading...</p>';
+    const actionsSection = document.getElementById("diplomacy-actions-section");
+    if (actionsSection) actionsSection.innerHTML = '<h3 class="text-lg font-medium mb-2 text-green-300">Diplomatic Actions</h3><p class="text-sm text-space-400">Loading...</p>';
+  }
+
+
+  async loadAndDisplayDiplomacyData() {
+    if (!this.currentUser) {
+      this.showError("Please log in to manage diplomacy.");
+      if (document.getElementById("diplomacy-section")) document.getElementById("diplomacy-section").classList.add("hidden");
+      this.diplomacyPanelVisible = false;
+      return;
+    }
+
+    // Ensure gameData is available (it should be if initializeDiplomacy was called)
+    const gameData = window.gameData;
+    if (!gameData) {
+        this.showError("Diplomacy module not ready (no game data access).");
+        return;
+    }
+
+    this.clearDiplomacyView(); // Show loading messages
+
+    try {
+      // Fetch all players if not already fetched or if a refresh is needed
+      if (!this.allPlayers || this.allPlayers.length === 0) {
+        this.allPlayers = await gameData.getAllUsers();
+      }
+
+      this.currentUserRelations = await gameData.getUserRelations(this.currentUser.id);
+      this.pendingProposals = await gameData.getPendingProposals(this.currentUser.id);
+
+      this.renderRelations();
+      this.renderProposals();
+      this.renderPlayerSelectionForActions(); // This will then call renderActionForms
+    } catch (error) {
+      console.error("Error loading diplomacy data:", error);
+      this.showError(`Failed to load diplomacy data: ${error.message}`);
+      const actionsSection = document.getElementById("diplomacy-actions-section");
+      if(actionsSection) actionsSection.innerHTML = `<h3 class="text-lg font-medium mb-2 text-green-300">Diplomatic Actions</h3><p class="text-red-400">Error loading data.</p>`;
+    }
+  }
+
+  renderRelations() {
+    const relationsSection = document.getElementById("diplomacy-relations-section");
+    if (!relationsSection) return;
+
+    let content = '<h3 class="text-lg font-medium mb-2 text-sky-300">Current Relations</h3>';
+    if (this.currentUserRelations && this.currentUserRelations.length > 0) {
+      content += '<ul class="list-disc list-inside space-y-1 text-sm">';
+      this.currentUserRelations.forEach(rel => {
+        const otherPlayerID = rel.player1_id === this.currentUser.id ? rel.player2_id : rel.player1_id;
+        const otherPlayer = this.allPlayers.find(p => p.id === otherPlayerID);
+        const otherPlayerName = otherPlayer ? otherPlayer.username : `Player ${otherPlayerID.slice(0, 5)}`;
+        content += `<li class="text-space-300"><span class="font-semibold text-white">${rel.status.toUpperCase()}</span> with ${otherPlayerName} (Since: ${new Date(rel.start_date).toLocaleDateString()})</li>`;
+      });
+      content += '</ul>';
+    } else {
+      content += '<p class="text-sm text-space-400">No active diplomatic relations.</p>';
+    }
+    relationsSection.innerHTML = content;
+  }
+
+  renderProposals() {
+    const proposalsSection = document.getElementById("diplomacy-proposals-section");
+    if (!proposalsSection) return;
+
+    let content = '<h3 class="text-lg font-medium mb-2 text-amber-300">Pending Proposals (Received)</h3>';
+    if (this.pendingProposals && this.pendingProposals.length > 0) {
+      content += '<ul class="space-y-2 text-sm">';
+      this.pendingProposals.forEach(prop => {
+        const proposer = this.allPlayers.find(p => p.id === prop.proposer_id);
+        const proposerName = proposer ? proposer.username : `Player ${prop.proposer_id.slice(0,5)}`;
+        content += `
+          <li class="p-2 bg-space-700 rounded">
+            <div>From: <span class="font-semibold">${proposerName}</span></div>
+            <div>Type: <span class="font-semibold">${prop.type}</span></div>
+            <div>Terms: <pre class="text-xs bg-space-800 p-1 rounded whitespace-pre-wrap">${prop.terms || 'N/A'}</pre></div>
+            <div>Proposed: ${new Date(prop.proposed_date).toLocaleDateString()} (Expires: ${new Date(prop.expiration_date).toLocaleDateString()})</div>
+            <div class="mt-1">
+              <button class="px-2 py-1 text-xs bg-green-600 hover:bg-green-500 rounded mr-1" onclick="window.uiController.handleAcceptProposalWrapper('${prop.id}')">Accept</button>
+              <button class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 rounded" onclick="window.uiController.handleRejectProposalWrapper('${prop.id}')">Reject</button>
+            </div>
+          </li>
+        `;
+      });
+      content += '</ul>';
+    } else {
+      content += '<p class="text-sm text-space-400">No pending proposals.</p>';
+    }
+    proposalsSection.innerHTML = content;
+  }
+
+  renderPlayerSelectionForActions() {
+    const actionsSection = document.getElementById("diplomacy-actions-section");
+    if (!actionsSection) return;
+
+    let playerOptions = '<option value="">Select Player</option>';
+    if (this.allPlayers && this.currentUser) {
+      this.allPlayers.forEach(player => {
+        if (player.id !== this.currentUser.id) { // Exclude current user
+          playerOptions += `<option value="${player.id}">${player.username}</option>`;
+        }
+      });
+    }
+
+    actionsSection.innerHTML = `
+      <h3 class="text-lg font-medium mb-2 text-green-300">Diplomatic Actions</h3>
+      <div class="mb-3">
+        <label for="diplomacy-player-select" class="block text-sm font-medium text-space-300">Target Player:</label>
+        <select id="diplomacy-player-select" class="w-full p-2 bg-space-700 border border-space-600 rounded text-white">
+          ${playerOptions}
+        </select>
+      </div>
+      <div id="diplomacy-selected-player-actions">
+        <!-- Action forms will be rendered here once a player is selected -->
+         <p class="text-sm text-space-400">Select a player to see available actions.</p>
+      </div>
+    `;
+
+    const playerSelect = document.getElementById("diplomacy-player-select");
+    if (playerSelect) {
+      playerSelect.addEventListener("change", (e) => {
+        this.selectedPlayerIdForDiplomacy = e.target.value;
+        this.renderActionFormsForSelectedPlayer();
+      });
+      // If a player was previously selected, re-select them and render forms
+      if(this.selectedPlayerIdForDiplomacy) {
+        playerSelect.value = this.selectedPlayerIdForDiplomacy;
+        this.renderActionFormsForSelectedPlayer();
+      }
+    }
+  }
+
+  renderActionFormsForSelectedPlayer() {
+    const selectedPlayerActionsDiv = document.getElementById("diplomacy-selected-player-actions");
+    if (!selectedPlayerActionsDiv) return;
+
+    if (!this.selectedPlayerIdForDiplomacy) {
+      selectedPlayerActionsDiv.innerHTML = '<p class="text-sm text-space-400">Select a player to see available actions.</p>';
+      return;
+    }
+
+    const targetPlayer = this.allPlayers.find(p => p.id === this.selectedPlayerIdForDiplomacy);
+    if (!targetPlayer) {
+         selectedPlayerActionsDiv.innerHTML = '<p class="text-sm text-red-400">Could not find selected player data.</p>';
+        return;
+    }
+
+    // Propose Treaty Form
+    selectedPlayerActionsDiv.innerHTML = `
+      <div class="border-t border-space-600 pt-3 mt-3">
+        <h4 class="text-md font-semibold mb-2 text-sky-200">Propose Treaty to ${targetPlayer.username}</h4>
+        <div class="space-y-2 text-sm">
+          <div>
+            <label for="proposal-type" class="block text-xs font-medium text-space-300">Type:</label>
+            <select id="proposal-type" class="w-full p-1.5 bg-space-800 border border-space-700 rounded text-white text-xs">
+              <option value="peace_treaty">Peace Treaty</option>
+              <option value="alliance_offer">Alliance Offer</option>
+              <option value="trade_agreement">Trade Agreement</option>
+              <option value="non_aggression_pact">Non-Aggression Pact</option>
+            </select>
+          </div>
+          <div>
+            <label for="proposal-terms" class="block text-xs font-medium text-space-300">Terms (optional):</label>
+            <textarea id="proposal-terms" rows="2" class="w-full p-1.5 bg-space-800 border border-space-700 rounded text-white text-xs"></textarea>
+          </div>
+          <div>
+            <label for="proposal-duration" class="block text-xs font-medium text-space-300">Duration (game ticks, 0 for indefinite):</label>
+            <input type="number" id="proposal-duration" value="0" min="0" class="w-full p-1.5 bg-space-800 border border-space-700 rounded text-white text-xs">
+          </div>
+          <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded w-full" onclick="window.uiController.handleProposeTreatyWrapper()">Propose Treaty</button>
+        </div>
+      </div>
+
+      <div class="border-t border-space-600 pt-3 mt-3">
+        <h4 class="text-md font-semibold mb-2 text-red-400">Declare War on ${targetPlayer.username}</h4>
+        <button class="px-3 py-1.5 text-xs bg-red-700 hover:bg-red-600 rounded w-full" onclick="window.uiController.handleDeclareWarWrapper()">Declare War</button>
+      </div>
+    `;
+  }
+
+  async handleProposeTreatyWrapper() {
+    if (!this.currentUser || !this.selectedPlayerIdForDiplomacy) {
+      this.showError("Proposer or receiver not selected.");
+      return;
+    }
+    const type = document.getElementById("proposal-type").value;
+    const terms = document.getElementById("proposal-terms").value;
+    const durationTicks = parseInt(document.getElementById("proposal-duration").value, 10);
+
+    if (!type) {
+        this.showError("Proposal type is required.");
+        return;
+    }
+    if (isNaN(durationTicks) || durationTicks < 0) {
+        this.showError("Invalid duration ticks.");
+        return;
+    }
+
+    try {
+      await window.gameData.proposeTreaty(this.selectedPlayerIdForDiplomacy, type, terms, durationTicks);
+      this.showSuccessMessage(`Proposal sent to player ${this.allPlayers.find(p=>p.id === this.selectedPlayerIdForDiplomacy)?.username || this.selectedPlayerIdForDiplomacy}.`);
+      // No need to refresh proposals here as this is for sent proposals, current view is for received.
+      // Could refresh relations if a proposal immediately changes a relation, but that's not typical.
+    } catch (error) {
+      this.showError(`Failed to send proposal: ${error.message}`);
+    }
+  }
+
+  async handleAcceptProposalWrapper(proposalId) {
+    try {
+      await window.gameData.acceptProposal(proposalId);
+      this.showSuccessMessage("Proposal accepted!");
+      this.loadAndDisplayDiplomacyData(); // Refresh data
+    } catch (error) {
+      this.showError(`Failed to accept proposal: ${error.message}`);
+    }
+  }
+
+  async handleRejectProposalWrapper(proposalId) {
+    try {
+      await window.gameData.rejectProposal(proposalId);
+      this.showSuccessMessage("Proposal rejected.");
+      this.loadAndDisplayDiplomacyData(); // Refresh data
+    } catch (error) {
+      this.showError(`Failed to reject proposal: ${error.message}`);
+    }
+  }
+
+  async handleDeclareWarWrapper() {
+    if (!this.currentUser || !this.selectedPlayerIdForDiplomacy) {
+      this.showError("Target player not selected for declaration of war.");
+      return;
+    }
+    // Confirmation dialog
+    if (!confirm(`Are you sure you want to declare war on ${this.allPlayers.find(p=>p.id === this.selectedPlayerIdForDiplomacy)?.username || this.selectedPlayerIdForDiplomacy}? This action cannot be undone easily.`)) {
+        return;
+    }
+
+    try {
+      await window.gameData.declareWar(this.selectedPlayerIdForDiplomacy);
+      this.showSuccessMessage(`War declared on ${this.allPlayers.find(p=>p.id === this.selectedPlayerIdForDiplomacy)?.username || this.selectedPlayerIdForDiplomacy}.`);
+      this.loadAndDisplayDiplomacyData(); // Refresh data
+    } catch (error) {
+      this.showError(`Failed to declare war: ${error.message}`);
+    }
+  }
+
+  // --- END DIPLOMACY UI METHODS ---
 }
