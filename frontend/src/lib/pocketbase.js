@@ -262,11 +262,19 @@ export class GameDataManager {
 
   async getFleets(userId = null) {
     try {
-      const filter = userId ? `owner_id = "${userId}"` : "";
-      return await pb.collection("fleets").getFullList({
-        filter,
-        sort: "eta",
+      const url = userId ? `/api/fleets?owner_id=${userId}` : "/api/fleets";
+      const response = await fetch(`${pb.baseUrl}${url}`, {
+        headers: {
+          Authorization: pb.authStore.token || "",
+        },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.items || [];
     } catch (error) {
       try {
         suppressAutoCancelError(error);

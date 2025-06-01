@@ -142,6 +142,10 @@ export class UIController {
       planetsHtml = planets.map(planet => {
         const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
         const planetIcon = this.getPlanetTypeIcon(planet.planet_type || planet.type);
+        
+        // Debug colonization status
+        console.log(`Planet ${planet.id}:`, planet, `currentUserId="${currentUserId}"`);
+        
         const isOwned = planet.colonized_by === currentUserId;
         const population = planet.Pop || 0;
         const maxPop = planet.MaxPopulation || 'N/A';
@@ -747,8 +751,6 @@ export class UIController {
       }
 
       // Check if fleet has settler ships
-      // Note: This is a simplified check. In practice, you might need to
-      // fetch ship details or have ship data included in fleet data
       return fleet.ships && fleet.ships.some(ship => 
         ship.ship_type_name === 'settler' && ship.count > 0
       );
@@ -770,7 +772,81 @@ export class UIController {
     }
     // Check if already showing colonize modal or similar logic
     // This replaces the old showPlanetColonizeModal call path
-    this.colonizePlanet(planet.id); // Calls the existing colonizePlanet method
+    this.colonizePlanet(planet.id, planet.system_id); // Pass both planet ID and system ID
+  }
+
+  async colonizePlanet(planetId, systemId = null) {
+    try {
+      const { pb } = await import("../lib/pocketbase.js");
+
+
+
+      if (!pb.authStore.isValid) {
+        this.showError("Please log in first to colonize planets");
+        return;
+      }
+
+      // Get system ID - either passed directly or from planet data
+      let targetSystemId = systemId;
+      if (!targetSystemId) {
+        // Fallback: find system ID from game state data
+        const planet = this.gameState?.mapData?.planets?.find(p => p.id === planetId);
+        if (!planet) {
+          this.showError("Planet not found in game data");
+          return;
+        }
+        targetSystemId = planet.system_id;
+      }
+      
+      const availableSettlerFleets = this.getAvailableSettlerFleets(targetSystemId);
+      
+      if (availableSettlerFleets.length === 0) {
+        this.showError("No settler ships available at this system");
+        return;
+      }
+
+      // Use the first available fleet with settler ships
+      const fleetToUse = availableSettlerFleets[0];
+
+      const response = await fetch(`${pb.baseUrl}/api/orders/colonize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: pb.authStore.token,
+        },
+        body: JSON.stringify({
+          planet_id: planetId,
+          fleet_id: fleetToUse.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        this.hideModal();
+        
+        // Immediately refresh game state to show the new colony
+        const { gameState } = await import("../stores/gameState.js");
+        await gameState.refreshGameData();
+        
+        // Force update the current system view if we're looking at the colonized system
+        if (this.gameState && this.gameState.selectedSystem && this.gameState.selectedSystem.id === targetSystemId) {
+          // Re-display the system view with updated data
+          setTimeout(() => {
+            this.displaySystemView(this.gameState.selectedSystem);
+          }, 100);
+        }
+        
+        this.showSuccessMessage(
+          "Planet colonized successfully! Your settler ship has established a new colony.",
+        );
+      } else {
+        throw new Error(result.message || "Colonization failed");
+      }
+    } catch (error) {
+      console.error("Colonization error:", error);
+      this.showError(`Failed to colonize planet: ${error.message}`);
+    }
   }
 
   goBackToSystemView(systemId) {
@@ -1364,66 +1440,6 @@ export class UIController {
       });
   }
 
-  async colonizePlanet(planetId) {
-    try {
-      const { pb } = await import("../lib/pocketbase.js");
-
-      // Debug auth status
-      console.log("Auth token:", pb.authStore.token ? "Present" : "Missing");
-      console.log("User logged in:", pb.authStore.isValid);
-      console.log("Current user:", pb.authStore.model);
-
-      if (!pb.authStore.isValid) {
-        this.showError("Please log in first to colonize planets");
-        return;
-      }
-
-      // Get the planet to find its system
-      const planet = await pb.collection("planets").getOne(planetId);
-      const availableSettlerFleets = this.getAvailableSettlerFleets(planet.system_id);
-      
-      if (availableSettlerFleets.length === 0) {
-        this.showError("No settler ships available at this system");
-        return;
-      }
-
-      // Use the first available fleet with settler ships
-      const fleetToUse = availableSettlerFleets[0];
-
-      const response = await fetch(`${pb.baseUrl}/api/orders/colonize`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: pb.authStore.token,
-        },
-        body: JSON.stringify({
-          planet_id: planetId,
-          fleet_id: fleetToUse.id,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        this.hideModal();
-        this.showSuccessMessage(
-          "Planet colonized successfully! Your settler ship has established a new colony.",
-        );
-
-        // Refresh game state to show the new colony
-        const { gameState } = await import("../stores/gameState.js");
-        gameState.refreshGameData();
-      } else {
-        throw new Error(
-          result.error || result.message || "Failed to colonize planet",
-        );
-      }
-    } catch (error) {
-      console.error("Colonization error:", error);
-      this.showError(`Failed to colonize planet: ${error.message}`);
-    }
-  }
-
   showSuccessMessage(message) {
     this.showModal(
       "Success",
@@ -1434,6 +1450,14 @@ export class UIController {
       </button>
     `,
     );
+    
+    // Auto-close success message after 3 seconds
+    setTimeout(() => {
+      const modal = document.getElementById('modal-overlay');
+      if (modal && !modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+      }
+    }, 3000);
   }
 
   showCreditsBreakdown() {

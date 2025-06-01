@@ -3,6 +3,7 @@ package pkg
 import (
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 
 	"github.com/hunterjsb/xandaris/internal/credits"
-	mapgen "github.com/hunterjsb/xandaris/internal/map"
 	"github.com/hunterjsb/xandaris/internal/tick"
 )
 
@@ -26,15 +26,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		})
 
 		// Game data endpoints
-		e.Router.GET("/api/map", func(c echo.Context) error {
-			mapData, err := mapgen.GetMapData(app)
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{
-					"error": "Failed to fetch map data",
-				})
-			}
-			return c.JSON(http.StatusOK, mapData)
-		})
+		e.Router.GET("/api/map", getMapData(app))
 		e.Router.GET("/api/systems", getSystems(app))
 		e.Router.GET("/api/systems/:id", getSystem(app))
 		e.Router.GET("/api/planets", getPlanets(app))
@@ -44,12 +36,11 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/treaties", getTreaties(app))
 
 		// Game actions
-		e.Router.POST("/api/orders/fleet", sendFleet(app))
-		e.Router.POST("/api/orders/build", queueBuilding(app))
-		e.Router.POST("/api/orders/trade", createTradeRoute(app))
-		e.Router.POST("/api/orders/colonize", colonizePlanet(app))
-		e.Router.POST("/api/orders/colonize_with_ship", colonizeWithShip(app))
-		e.Router.POST("/api/diplomacy", proposeTreaty(app))
+		e.Router.POST("/api/orders/fleet", sendFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/orders/build", queueBuilding(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/orders/trade", createTradeRoute(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/orders/colonize", colonizePlanet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/diplomacy", proposeTreaty(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 
 		// Status endpoint
 		e.Router.GET("/api/status", getStatus(app))
@@ -830,16 +821,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		building.Set("level", 1)
 		building.Set("active", true)
 
-		// Initialize crypto_server buildings with starting credits
-		if buildingTypeRecord.GetString("name") == "crypto_server" {
-			// Get credits resource type ID
-			creditsResource, err := app.Dao().FindFirstRecordByFilter("resource_types", "name = 'credits'")
-			if err == nil && buildingTypeRecord.GetString("res1_type") == creditsResource.Id {
-				// Start with full capacity of credits
-				capacity := buildingTypeRecord.GetInt("res1_capacity")
-				building.Set("res1_stored", capacity)
-			}
-		}
+		// Crypto servers start empty - they generate credits over time
 
 		if err := app.Dao().SaveRecord(building); err != nil {
 			return apis.NewBadRequestError("Failed to create building", err)
@@ -1016,6 +998,17 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			}
 		}
 
+		// Check if fleet has any remaining ships, delete if empty
+		remainingShips, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", fleet.Id), "", 0, 0)
+		if err == nil && len(remainingShips) == 0 {
+			// Fleet is now empty, delete it
+			if err := app.Dao().DeleteRecord(fleet); err != nil {
+				log.Printf("Warning: Failed to delete empty fleet %s: %v", fleet.Id, err)
+			} else {
+				log.Printf("Deleted empty fleet %s after consuming last ship", fleet.Id)
+			}
+		}
+
 		// Set colonization data
 		planet.Set("colonized_by", user.Id)
 		planet.Set("colonized_at", time.Now())
@@ -1107,13 +1100,7 @@ func createInitialBuildings(app *pocketbase.PocketBase, planet *models.Record) e
 		building.Set("level", 1)
 		building.Set("active", true)
 
-		// Initialize with starter credits
-		creditsResource, err := app.Dao().FindFirstRecordByFilter("resource_types", "name = 'credits'")
-		if err == nil && cryptoServerType.GetString("res1_type") == creditsResource.Id {
-			// Start with half capacity of credits for bootstrapping
-			capacity := cryptoServerType.GetInt("res1_capacity")
-			building.Set("res1_stored", capacity/2)
-		}
+		// Crypto servers start empty - they generate credits over time
 
 		return app.Dao().SaveRecord(building)
 	} else {
@@ -1179,28 +1166,315 @@ func getUserResources(app *pocketbase.PocketBase) echo.HandlerFunc {
 // Helper functions
 func generateLanes(systems []SystemData) []LaneData {
 	lanes := make([]LaneData, 0)
-	maxDistance := 300.0
+	minDistance := 200.0 // Minimum distance to avoid too many close connections
+	maxDistance := 650.0 // Maximum distance for lane connections (scaled for larger galaxy)
 
-	for i, sys1 := range systems {
-		for j, sys2 := range systems {
-			if i >= j {
+	systemConnections := make(map[string]int) // Track connections per system
+	connected := make(map[string]bool)        // Track which systems are in main component
+	
+	// Initialize connection tracking
+	for _, sys := range systems {
+		systemConnections[sys.ID] = 0
+		connected[sys.ID] = false
+	}
+
+	// Phase 1: Build minimum spanning tree to ensure connectivity
+	// Start with the center-most system
+	centerX := 0.0
+	centerY := 0.0
+	for _, sys := range systems {
+		centerX += float64(sys.X)
+		centerY += float64(sys.Y)
+	}
+	centerX /= float64(len(systems))
+	centerY /= float64(len(systems))
+	
+	// Find system closest to center as starting point
+	var startSystem SystemData
+	minDistFromCenter := math.Inf(1)
+	for _, sys := range systems {
+		x := float64(sys.X)
+		y := float64(sys.Y)
+		dist := math.Sqrt((x-centerX)*(x-centerX) + (y-centerY)*(y-centerY))
+		if dist < minDistFromCenter {
+			minDistFromCenter = dist
+			startSystem = sys
+		}
+	}
+	
+	connected[startSystem.ID] = true
+	connectedSystems := []SystemData{startSystem}
+	
+	// Prim's algorithm for MST
+	for len(connectedSystems) < len(systems) {
+		var bestConnection struct {
+			from SystemData
+			to   SystemData
+			dist float64
+		}
+		bestConnection.dist = math.Inf(1)
+		
+		// Find shortest edge from connected to unconnected
+		for _, connectedSys := range connectedSystems {
+			for _, sys := range systems {
+				if connected[sys.ID] {
+					continue
+				}
+				
+				dx := float64(sys.X - connectedSys.X)
+				dy := float64(sys.Y - connectedSys.Y)
+				dist := math.Sqrt(dx*dx + dy*dy)
+				
+				if dist < bestConnection.dist && dist <= maxDistance {
+					bestConnection.from = connectedSys
+					bestConnection.to = sys
+					bestConnection.dist = dist
+				}
+			}
+		}
+		
+		// Add best connection if found
+		if bestConnection.dist < math.Inf(1) {
+			lanes = append(lanes, LaneData{
+				From:     bestConnection.from.ID,
+				To:       bestConnection.to.ID,
+				FromX:    bestConnection.from.X,
+				FromY:    bestConnection.from.Y,
+				ToX:      bestConnection.to.X,
+				ToY:      bestConnection.to.Y,
+				Distance: int(bestConnection.dist),
+			})
+			
+			connected[bestConnection.to.ID] = true
+			connectedSystems = append(connectedSystems, bestConnection.to)
+			systemConnections[bestConnection.from.ID]++
+			systemConnections[bestConnection.to.ID]++
+		} else {
+			break // No more reachable systems
+		}
+	}
+	
+	// Phase 2: Add inter-branch connections to link different spiral arms
+	// Find systems that could be on different branches by analyzing their angular position
+	centerX = 0.0
+	centerY = 0.0
+	for _, sys := range systems {
+		centerX += float64(sys.X)
+		centerY += float64(sys.Y)
+	}
+	centerX /= float64(len(systems))
+	centerY /= float64(len(systems))
+	
+	// Group systems by angular sectors around the galaxy center
+	type SystemWithAngle struct {
+		system SystemData
+		angle  float64
+		radius float64
+	}
+	
+	systemAngles := make([]SystemWithAngle, len(systems))
+	for i, sys := range systems {
+		dx := float64(sys.X) - centerX
+		dy := float64(sys.Y) - centerY
+		angle := math.Atan2(dy, dx)
+		radius := math.Sqrt(dx*dx + dy*dy)
+		systemAngles[i] = SystemWithAngle{sys, angle, radius}
+	}
+	
+	// Create inter-branch connections between systems in different angular sectors
+	interBranchConnections := 0
+	maxInterBranch := len(systems) / 6 // Conservative number of cross-connections
+	
+	for i, sys1 := range systemAngles {
+		if interBranchConnections >= maxInterBranch || systemConnections[sys1.system.ID] >= 3 {
+			continue
+		}
+		
+		// Look for systems in different angular sectors at similar radius
+		for j, sys2 := range systemAngles {
+			if i == j || systemConnections[sys2.system.ID] >= 3 {
 				continue
 			}
-
+			
+			// Check if systems are in different branches (angular separation)
+			angleDiff := math.Abs(sys1.angle - sys2.angle)
+			if angleDiff > math.Pi {
+				angleDiff = 2*math.Pi - angleDiff
+			}
+			
+			// Systems should be on different branches (60+ degrees apart) but similar radius
+			radiusDiff := math.Abs(sys1.radius - sys2.radius)
+			distance := math.Sqrt(math.Pow(float64(sys2.system.X-sys1.system.X), 2) + 
+								  math.Pow(float64(sys2.system.Y-sys1.system.Y), 2))
+			
+			if angleDiff > math.Pi/3 && radiusDiff < sys1.radius*0.3 && 
+			   distance >= minDistance && distance <= maxDistance*0.7 {
+				
+				// Check if lane already exists
+				laneExists := false
+				for _, lane := range lanes {
+					if (lane.From == sys1.system.ID && lane.To == sys2.system.ID) ||
+					   (lane.From == sys2.system.ID && lane.To == sys1.system.ID) {
+						laneExists = true
+						break
+					}
+				}
+				
+				if !laneExists {
+					lanes = append(lanes, LaneData{
+						From:     sys1.system.ID,
+						To:       sys2.system.ID,
+						FromX:    sys1.system.X,
+						FromY:    sys1.system.Y,
+						ToX:      sys2.system.X,
+						ToY:      sys2.system.Y,
+						Distance: int(distance),
+					})
+					
+					systemConnections[sys1.system.ID]++
+					systemConnections[sys2.system.ID]++
+					interBranchConnections++
+					break // Only one inter-branch connection per system
+				}
+			}
+		}
+	}
+	
+	// Phase 3: Add galactic highways - long-range connections between distant regions
+	highwayConnections := 0
+	maxHighways := len(systems) / 10 // Long-range highways between regions
+	
+	// Find systems at different quadrants for highway connections
+	quadrantSystems := make([][]SystemData, 4)
+	for _, sys := range systems {
+		// Determine quadrant based on position relative to center
+		dx := float64(sys.X) - centerX
+		dy := float64(sys.Y) - centerY
+		
+		var quadrant int
+		if dx >= 0 && dy >= 0 {
+			quadrant = 0 // Northeast
+		} else if dx < 0 && dy >= 0 {
+			quadrant = 1 // Northwest
+		} else if dx < 0 && dy < 0 {
+			quadrant = 2 // Southwest
+		} else {
+			quadrant = 3 // Southeast
+		}
+		
+		quadrantSystems[quadrant] = append(quadrantSystems[quadrant], sys)
+	}
+	
+	// Create highways between quadrants
+	for q1 := 0; q1 < 4 && highwayConnections < maxHighways; q1++ {
+		for q2 := q1 + 1; q2 < 4 && highwayConnections < maxHighways; q2++ {
+			if len(quadrantSystems[q1]) == 0 || len(quadrantSystems[q2]) == 0 {
+				continue
+			}
+			
+			// Find closest systems between these quadrants
+			var bestSys1, bestSys2 SystemData
+			bestDistance := math.Inf(1)
+			
+			for _, sys1 := range quadrantSystems[q1] {
+				if systemConnections[sys1.ID] >= 4 {
+					continue
+				}
+				for _, sys2 := range quadrantSystems[q2] {
+					if systemConnections[sys2.ID] >= 4 {
+						continue
+					}
+					
+					dx := float64(sys2.X - sys1.X)
+					dy := float64(sys2.Y - sys1.Y)
+					distance := math.Sqrt(dx*dx + dy*dy)
+					
+					if distance < bestDistance && distance <= maxDistance*1.2 {
+						bestSys1 = sys1
+						bestSys2 = sys2
+						bestDistance = distance
+					}
+				}
+			}
+			
+			// Add highway if found
+			if bestDistance < math.Inf(1) {
+				// Check if lane already exists
+				laneExists := false
+				for _, lane := range lanes {
+					if (lane.From == bestSys1.ID && lane.To == bestSys2.ID) ||
+					   (lane.From == bestSys2.ID && lane.To == bestSys1.ID) {
+						laneExists = true
+						break
+					}
+				}
+				
+				if !laneExists {
+					lanes = append(lanes, LaneData{
+						From:     bestSys1.ID,
+						To:       bestSys2.ID,
+						FromX:    bestSys1.X,
+						FromY:    bestSys1.Y,
+						ToX:      bestSys2.X,
+						ToY:      bestSys2.Y,
+						Distance: int(bestDistance),
+					})
+					
+					systemConnections[bestSys1.ID]++
+					systemConnections[bestSys2.ID]++
+					highwayConnections++
+				}
+			}
+		}
+	}
+	
+	// Phase 4: Add a few strategic inner connections
+	additionalConnections := 0
+	maxAdditional := len(systems) / 12 // Even fewer additional connections now
+	
+	for i, sys1 := range systems {
+		if additionalConnections >= maxAdditional {
+			break
+		}
+		
+		for j, sys2 := range systems {
+			if i >= j || additionalConnections >= maxAdditional {
+				continue
+			}
+			
 			dx := float64(sys2.X - sys1.X)
 			dy := float64(sys2.Y - sys1.Y)
-			distance := int(dx*dx + dy*dy)
-
-			if float64(distance) <= maxDistance*maxDistance {
-				lanes = append(lanes, LaneData{
-					From:     sys1.ID,
-					To:       sys2.ID,
-					FromX:    sys1.X,
-					FromY:    sys1.Y,
-					ToX:      sys2.X,
-					ToY:      sys2.Y,
-					Distance: int(maxDistance),
-				})
+			distance := math.Sqrt(dx*dx + dy*dy)
+			
+			// Conservative inner connections
+			if distance >= minDistance && distance <= maxDistance*0.4 && 
+			   systemConnections[sys1.ID] <= 2 && systemConnections[sys2.ID] <= 2 {
+				
+				// Check if lane already exists
+				laneExists := false
+				for _, lane := range lanes {
+					if (lane.From == sys1.ID && lane.To == sys2.ID) ||
+					   (lane.From == sys2.ID && lane.To == sys1.ID) {
+						laneExists = true
+						break
+					}
+				}
+				
+				if !laneExists && distance <= maxDistance*0.3 {
+					lanes = append(lanes, LaneData{
+						From:     sys1.ID,
+						To:       sys2.ID,
+						FromX:    sys1.X,
+						FromY:    sys1.Y,
+						ToX:      sys2.X,
+						ToY:      sys2.Y,
+						Distance: int(distance),
+					})
+					
+					systemConnections[sys1.ID]++
+					systemConnections[sys2.ID]++
+					additionalConnections++
+				}
 			}
 		}
 	}

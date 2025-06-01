@@ -207,9 +207,7 @@ class XanNationApp {
       case "trade":
         this.uiController.showTradeRouteModal(system);
         break;
-      case "colonize":
-        this.uiController.showColonizeModal(system);
-        break;
+
     }
   }
 
