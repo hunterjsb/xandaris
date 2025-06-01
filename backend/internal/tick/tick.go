@@ -168,26 +168,46 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, resourceType string
 
 // ResolveFleetArrivals handles fleet arrivals and combat
 func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
-	// Get all fleets that have an ETA in the past (should have arrived)
-	currentTime := time.Now().Format("2006-01-02 15:04:05.000Z")
+	// Get all fleets that have an ETA (including past due)
+	currentTime := time.Now()
+	log.Printf("DEBUG: Current time for fleet arrivals: %s", currentTime.Format("2006-01-02 15:04:05.000Z"))
 	
-	fleets, err := app.Dao().FindRecordsByFilter("fleets", "eta != '' && eta <= '"+currentTime+"'", "", 0, 0)
+	// Find all fleets with destination_system set (in transit)
+	fleets, err := app.Dao().FindRecordsByFilter("fleets", "destination_system != '' && eta != ''", "", 0, 0)
 	if err != nil {
-		return fmt.Errorf("failed to fetch arriving fleets: %w", err)
+		return fmt.Errorf("failed to fetch fleets in transit: %w", err)
 	}
 
+	arrivedCount := 0
 	for _, fleet := range fleets {
-		// Move fleet to destination (set current_system, clear destination and eta)
-		fleet.Set("current_system", fleet.GetString("destination_system"))
-		fleet.Set("destination_system", "")
-		fleet.Set("eta", "")
+		etaTime := fleet.GetDateTime("eta")
+		if etaTime.IsZero() {
+			continue
+		}
 
-		if err := app.Dao().SaveRecord(fleet); err != nil {
-			log.Printf("Failed to save arrived fleet %s: %v", fleet.Id, err)
+		// Convert PocketBase DateTime to Go time.Time for comparison
+		etaGoTime := etaTime.Time()
+		
+		// Check if fleet should have arrived (ETA is in the past or now)
+		if etaGoTime.Before(currentTime) || etaGoTime.Equal(currentTime) {
+			log.Printf("DEBUG: Processing arrival for fleet %s, eta: %s, current: %s, dest: %s", 
+				fleet.Id, etaGoTime.Format("2006-01-02 15:04:05.000Z"), fleet.GetString("current_system"), fleet.GetString("destination_system"))
+			
+			// Move fleet to destination (set current_system, clear destination and eta)
+			fleet.Set("current_system", fleet.GetString("destination_system"))
+			fleet.Set("destination_system", "")
+			fleet.Set("eta", "")
+
+			if err := app.Dao().SaveRecord(fleet); err != nil {
+				log.Printf("Failed to save arrived fleet %s: %v", fleet.Id, err)
+			} else {
+				log.Printf("DEBUG: Successfully moved fleet %s to destination", fleet.Id)
+				arrivedCount++
+			}
 		}
 	}
 
-	log.Printf("Resolved %d fleet arrivals", len(fleets))
+	log.Printf("Resolved %d fleet arrivals", arrivedCount)
 	return nil
 }
 
