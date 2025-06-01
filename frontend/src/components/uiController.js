@@ -753,9 +753,10 @@ export class UIController {
 
   showBuildingsPanel() {
     const buildings = this.gameState?.getPlayerBuildings() || [];
-    const banks = buildings.filter((b) => b.type === "bank");
-    const totalIncome = banks.reduce(
-      (sum, bank) => sum + (bank.credits_per_tick || 1),
+    // Updated to filter by credits_per_tick > 0 for income calculation
+    const incomeGeneratingBuildings = buildings.filter((b) => b.credits_per_tick > 0);
+    const totalIncome = incomeGeneratingBuildings.reduce(
+      (sum, building) => sum + building.credits_per_tick, // Removed '|| 1'
       0,
     );
 
@@ -788,7 +789,7 @@ export class UIController {
               <div class="font-semibold text-nebula-300">${building.name || `${buildingTypeNames[building.type] || building.type} ${building.id.slice(-3)}`}</div>
               <div class="text-sm text-space-300">
                 <div>System: ${building.system_name || building.system_id}</div>
-                ${building.type === "bank" ? `<div class="text-nebula-300">Income: ${building.credits_per_tick || 1} credits/tick</div>` : ""}
+                ${building.credits_per_tick > 0 ? `<div class="text-nebula-300">Income: ${building.credits_per_tick} credits/tick</div>` : ""}
                 <div class="text-xs ${building.active !== false ? "text-green-400" : "text-red-400"}">
                   ${building.active !== false ? "Active" : "Inactive"}
                 </div>
@@ -807,7 +808,7 @@ export class UIController {
       "Buildings Overview",
       `
       ${
-        banks.length > 0
+        totalIncome > 0 // Changed condition to totalIncome > 0
           ? `
         <div class="mb-4 p-3 bg-space-800 rounded">
           <div class="text-lg font-semibold text-plasma-300">Credit Income: ${totalIncome} credits/tick</div>

@@ -424,40 +424,63 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 		// Filter by user if needed
 		if userID != "" {
 			var filteredBuildings []*models.Record
-			for _, building := range buildings {
-				// Get planet and system to check ownership
-				planet, err := app.Dao().FindRecordById("planets", building.GetString("planet_id"))
+			for _, buildingRecord := range buildings { // Renamed 'building' to 'buildingRecord'
+				planet, err := app.Dao().FindRecordById("planets", buildingRecord.GetString("planet_id"))
 				if err != nil {
+					log.Printf("Warning: Planet %s for building %s not found during filtering: %v", buildingRecord.GetString("planet_id"), buildingRecord.Id, err)
 					continue
 				}
-				system, err := app.Dao().FindRecordById("systems", planet.GetString("system_id"))
-				if err != nil {
-					continue
-				}
-				if system.GetString("owner_id") == userID {
-					filteredBuildings = append(filteredBuildings, building)
+				// Only consider buildings on planets directly colonized by the userID
+				if planet.GetString("colonized_by") == userID {
+					filteredBuildings = append(filteredBuildings, buildingRecord)
 				}
 			}
-			buildings = filteredBuildings
+			buildings = filteredBuildings // Update the main buildings slice
 		}
 
 		// Transform to frontend format
 		buildingsData := make([]BuildingData, len(buildings))
-		for i, building := range buildings {
+		for i, building := range buildings { // This is the building record from the (potentially filtered) list
 			// Get planet and system data
-			planet, _ := app.Dao().FindRecordById("planets", building.GetString("planet_id"))
+			planet, errPlanet := app.Dao().FindRecordById("planets", building.GetString("planet_id"))
 			var systemID, ownerID, systemName string
-			if planet != nil {
+			if errPlanet == nil && planet != nil {
 				systemID = planet.GetString("system_id")
-				if systemRecord, err := app.Dao().FindRecordById("systems", systemID); err == nil {
-					ownerID = systemRecord.GetString("owner_id")
+				// For OwnerID of the building, prioritize the planet's colonizer
+				if planet.GetString("colonized_by") != "" {
+					ownerID = planet.GetString("colonized_by")
+				} else {
+					// If planet is not colonized, owner might be derived from system (though less likely for owned buildings)
+					if systemRecord, errSystem := app.Dao().FindRecordById("systems", systemID); errSystem == nil && systemRecord != nil {
+						ownerID = systemRecord.GetString("owner_id")
+					}
+				}
+				// Get system name
+				if systemRecord, errSystem := app.Dao().FindRecordById("systems", systemID); errSystem == nil && systemRecord != nil {
 					systemName = systemRecord.GetString("name")
 				}
+			} else if errPlanet != nil {
+				log.Printf("Warning: Planet %s for building %s not found when creating BuildingData: %v", building.GetString("planet_id"), building.Id, errPlanet)
+			}
+
+			buildingTypeID := building.GetString("building_type")
+			buildingTypeName := buildingTypeID // Fallback to ID if name not found
+			isBank := false
+
+			bt, errBT := app.Dao().FindRecordById("building_types", buildingTypeID)
+			if errBT == nil && bt != nil {
+				buildingTypeName = bt.GetString("name")
+				// Assuming "Bank" is the exact name in the 'building_types' collection for bank buildings
+				if buildingTypeName == "Bank" {
+					isBank = true
+				}
+			} else if errBT != nil {
+				log.Printf("Warning: Building type %s (ID: %s) for building %s not found when creating BuildingData: %v", buildingTypeName, buildingTypeID, building.Id, errBT)
 			}
 
 			creditsPerTick := 0
-			if building.GetString("building_type") == "bank" {
-				creditsPerTick = building.GetInt("level")
+			if isBank {
+				creditsPerTick = building.GetInt("level") // Or some other formula based on bt properties if available
 			}
 
 			buildingsData[i] = BuildingData{
@@ -466,8 +489,8 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 				SystemID:       systemID,
 				OwnerID:        ownerID,
 				SystemName:     systemName,
-				Type:           building.GetString("building_type"),
-				Name:           fmt.Sprintf("%s Level %d", building.GetString("building_type"), building.GetInt("level")),
+				Type:           buildingTypeID,    // Store the ID of the building type
+				Name:           fmt.Sprintf("%s Level %d", buildingTypeName, building.GetInt("level")), // Use fetched name
 				Level:          building.GetInt("level"),
 				Active:         building.GetBool("active"),
 				CreditsPerTick: creditsPerTick,
@@ -662,75 +685,22 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewUnauthorizedError("Authentication required", nil)
 		}
 
-		// Get building type to check cost
-		buildingType, err := app.Dao().FindRecordById("building_types", data.BuildingType)
-		if err != nil {
-			return apis.NewBadRequestError(fmt.Sprintf("Building %s type not found", data.BuildingType), err)
-		}
-
-		// Check building cost and deduct resources
-		costRaw := buildingType.Get("cost")
-		originalCostPayload := buildingType.Get("cost") // For the response
-
-		switch costValue := costRaw.(type) {
-		case int64: // Likely from direct model set or simple integer in JSON
-			cost := int(costValue)
-			userCredits := user.GetInt("credits")
-			if userCredits < cost {
-				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
-			}
-			user.Set("credits", userCredits-cost)
-		case float64: // Likely from JSON unmarshal if it's a plain number
-			cost := int(costValue)
-			userCredits := user.GetInt("credits")
-			if userCredits < cost {
-				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
-			}
-			user.Set("credits", userCredits-cost)
-		case map[string]interface{}: // JSON map for multi-resource cost
-			costMap := costValue
-			for resourceId, amountInterface := range costMap {
-				amount, ok := amountInterface.(float64) // All numbers from JSON map are float64 initially
-				if !ok {
-					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
-				}
-				amountInt := int(amount)
-
-				currentResourceValue := user.GetInt(resourceId)
-				if currentResourceValue < amountInt {
-					return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceId, amountInt, currentResourceValue), nil)
-				}
-				user.Set(resourceId, currentResourceValue-amountInt)
-			}
-		default:
-			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
-		}
-
-		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
-		if user == nil {
-			return apis.NewUnauthorizedError("Authentication required", nil)
-		}
-
 		// Verify Planet Ownership/Validity
 		targetPlanet, err := app.Dao().FindRecordById("planets", data.PlanetID)
 		if err != nil {
 			return apis.NewNotFoundError("Planet not found.", err)
 		}
 		if targetPlanet.GetString("colonized_by") != user.Id {
-			// Additionally, check if the system containing the planet is owned by the user,
-			// if direct planet ownership isn't the only criteria.
-			// For now, strict planet ownership (colonization) is checked.
 			return apis.NewForbiddenError("You do not own this planet and cannot build on it.", nil)
 		}
 
-
-		// Get building type to check cost (this part remains similar)
+		// Get building type to check cost
 		buildingTypeRecord, err := app.Dao().FindRecordById("building_types", data.BuildingType)
 		if err != nil {
 			return apis.NewBadRequestError(fmt.Sprintf("Building type %s not found", data.BuildingType), err)
 		}
 
-		// Check building cost and deduct resources (this part remains similar)
+		// Check building cost and deduct resources
 		costRaw := buildingTypeRecord.Get("cost")
 		originalCostPayload := buildingTypeRecord.Get("cost")
 
