@@ -716,7 +716,12 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		// Find a planet in the system to build on
-		planets, err := app.Dao().FindRecordsByFilter("planets", fmt.Sprintf("system_id='%s'", data.SystemID), "", 1, 0)
+		planets := []*PlanetData{}
+		err = app.Dao().RecordQuery("planets").
+			// AndWhere(dbx.HashExp{"system_id": data.SystemID}).
+			Limit(10).
+			All(&planets)
+		fmt.Printf("Found planets in system %s, %d planets found", data.SystemID, len(planets))
 		if err != nil || len(planets) == 0 {
 			return apis.NewBadRequestError("No planets found in system", err)
 		}
@@ -733,7 +738,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		building := models.NewRecord(collection)
-		building.Set("planet_id", planets[0].Id)
+		building.Set("planet_id", planets[0].ID)
 		building.Set("building_type", data.BuildingType)
 		building.Set("level", 1)
 		building.Set("active", true)
@@ -745,7 +750,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":           true,
 			"building_id":       building.Id,
-			"cost":              originalCostPayload, // Return the original cost structure
+			"cost":              originalCostPayload,    // Return the original cost structure
 			"credits_remaining": user.GetInt("credits"), // Return current credits
 		})
 	}
