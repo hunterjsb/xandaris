@@ -19,6 +19,11 @@ export class MapRenderer {
     this.maxZoom = 2.0; // Reduced max zoom for better performance
     this.minZoom = 0.05; // Much lower min zoom to see entire large galaxy
     
+    // Smooth camera movement
+    this.targetViewX = 0;
+    this.targetViewY = 0;
+    this.cameraSpeed = 0.15; // How fast camera moves (0-1)
+    
     // Deep Space Colors
     this.colors = {
       background: '#000508',
@@ -46,6 +51,9 @@ export class MapRenderer {
     
     // Center the galaxy view on initial load
     this.initialViewSet = false;
+    
+    // Planet count cache for system scaling
+    this.systemPlanetCounts = new Map();
   }
 
   setupCanvas() {
@@ -96,6 +104,9 @@ export class MapRenderer {
         const deltaY = e.offsetY - lastMouseY;
         this.viewX += deltaX / this.zoom;
         this.viewY += deltaY / this.zoom;
+        // Update target to current position during manual panning
+        this.targetViewX = this.viewX;
+        this.targetViewY = this.viewY;
         lastMouseX = e.offsetX;
         lastMouseY = e.offsetY;
       } else {
@@ -149,6 +160,9 @@ export class MapRenderer {
         
         this.viewX += worldBefore.x - worldAfter.x;
         this.viewY += worldBefore.y - worldAfter.y;
+        // Update target to current position during zoom
+        this.targetViewX = this.viewX;
+        this.targetViewY = this.viewY;
       }
     });
   }
@@ -239,6 +253,9 @@ export class MapRenderer {
       const deltaTime = currentTime - this.lastTime;
       this.lastTime = currentTime;
       
+      // Smooth camera movement
+      this.updateCamera(deltaTime);
+      
       this.clear();
       this.drawBackground();
       this.drawLanes();
@@ -250,6 +267,23 @@ export class MapRenderer {
     };
     
     this.animationFrame = requestAnimationFrame(render);
+  }
+
+  updateCamera(deltaTime) {
+    // Smooth camera interpolation
+    const speed = this.cameraSpeed * (deltaTime / 16); // Normalize for 60fps
+    const dx = this.targetViewX - this.viewX;
+    const dy = this.targetViewY - this.viewY;
+    
+    // Only move if we're not close enough
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      this.viewX += dx * speed;
+      this.viewY += dy * speed;
+    } else {
+      // Snap to target when close enough
+      this.viewX = this.targetViewX;
+      this.viewY = this.targetViewY;
+    }
   }
 
   clear() {
@@ -390,9 +424,13 @@ drawSystems() {
               color = this.colors.starOtherOwned;
             }
 
-            const baseSystemDrawRadius = 6 * this.zoom;
+            // Scale system size based on planet count
+            const planetCount = this.systemPlanetCounts.get(system.id) || 1;
+            const planetScale = Math.min(1 + (planetCount - 1) * 0.2, 2.0); // 1x to 2x scale based on planets
+            
+            const baseSystemDrawRadius = 6 * this.zoom * planetScale;
             const systemDrawRadius = baseSystemDrawRadius * scaleFactor;
-            const glowDrawRadius = (20 * this.zoom) * scaleFactor;
+            const glowDrawRadius = (20 * this.zoom) * scaleFactor * planetScale;
 
             const gradient = this.ctx.createRadialGradient(
               screenPos.x, screenPos.y, 0,
@@ -575,6 +613,9 @@ drawSystems() {
     console.log('MapRenderer: Setting systems', systems.length, 'systems');
     this.systems = systems;
     
+    // Update planet count cache for system scaling
+    this.updateSystemPlanetCounts();
+    
     // Auto-center view on first load of systems
     if (!this.initialViewSet && systems.length > 0) {
       this.fitToSystems();
@@ -586,8 +627,23 @@ drawSystems() {
     this.trades = trades || []; // Ensure trades is an array
   }
 
+  // Update planet count cache for system scaling
+  updateSystemPlanetCounts() {
+    this.systemPlanetCounts.clear();
+    if (window.gameState && window.gameState.planets) {
+      // Count planets per system
+      for (const planet of window.gameState.planets) {
+        const systemId = planet.system_id;
+        const currentCount = this.systemPlanetCounts.get(systemId) || 0;
+        this.systemPlanetCounts.set(systemId, currentCount + 1);
+      }
+    }
+  }
+
   setLanes(lanes) {
     this.lanes = lanes;
+    // Update planet counts when data is refreshed
+    this.updateSystemPlanetCounts();
   }
 
   setFleets(fleets) {
@@ -602,13 +658,13 @@ drawSystems() {
     this.selectedSystem = system;
   }
 
-  // Center view on a specific system
+  // Center view on a specific system with smooth movement
   centerOnSystem(systemId) {
     const system = this.systems.find(s => s.id === systemId);
     if (system) {
-      // Center the system in the viewport
-      this.viewX = -system.x;
-      this.viewY = -system.y;
+      // Set target for smooth camera movement
+      this.targetViewX = -system.x;
+      this.targetViewY = -system.y;
     }
   }
 
@@ -639,6 +695,8 @@ drawSystems() {
     // Center the galaxy in the viewport (calculate after zoom is set)
     this.viewX = -centerX;
     this.viewY = -centerY;
+    this.targetViewX = this.viewX;
+    this.targetViewY = this.viewY;
   }
 
   destroy() {
