@@ -165,7 +165,7 @@ export class MapRenderer {
   selectSystem(system) {
     this.selectedSystem = system;
     // Emit custom event for UI to handle, now including planets in that system
-    const planetsInSystem = window.gameState.getSystemPlanets(system.id);
+    const planetsInSystem = window.gameState.getSystemPlanets(system.id); // Ensure window.gameState is available or passed
     this.canvas.dispatchEvent(new CustomEvent('systemSelected', {
       detail: { system, planets: planetsInSystem }
     }));
