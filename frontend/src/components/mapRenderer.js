@@ -12,12 +12,12 @@ export class MapRenderer {
     this.trades = [];
     this.currentUserId = null; // Added to store current player's ID
     
-    // View settings
+    // View settings - adjusted for larger galaxy (6000x4500)
     this.viewX = 0;
     this.viewY = 0;
-    this.zoom = 1;
-    this.maxZoom = 3;
-    this.minZoom = 0.3;
+    this.zoom = 0.15;  // Start zoomed out to see full galaxy
+    this.maxZoom = 2.0; // Reduced max zoom for better performance
+    this.minZoom = 0.05; // Much lower min zoom to see entire large galaxy
     
     // Deep Space Colors
     this.colors = {
@@ -43,6 +43,9 @@ export class MapRenderer {
     this.setupCanvas();
     this.setupEventListeners();
     this.startRenderLoop();
+    
+    // Center the galaxy view on initial load
+    this.initialViewSet = false;
   }
 
   setupCanvas() {
@@ -571,6 +574,12 @@ drawSystems() {
   setSystems(systems) {
     console.log('MapRenderer: Setting systems', systems.length, 'systems');
     this.systems = systems;
+    
+    // Auto-center view on first load of systems
+    if (!this.initialViewSet && systems.length > 0) {
+      this.fitToSystems();
+      this.initialViewSet = true;
+    }
   }
 
   setTrades(trades) {
@@ -597,6 +606,7 @@ drawSystems() {
   centerOnSystem(systemId) {
     const system = this.systems.find(s => s.id === systemId);
     if (system) {
+      // Center the system in the viewport
       this.viewX = -system.x;
       this.viewY = -system.y;
     }
@@ -614,15 +624,21 @@ drawSystems() {
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
 
-    this.viewX = -centerX;
-    this.viewY = -centerY;
-
-    // Adjust zoom to fit
-    const width = maxX - minX + 100; // Add padding
-    const height = maxY - minY + 100;
+    // Adjust zoom to fit with generous padding for larger galaxy
+    const width = maxX - minX + 500; // More padding for larger galaxy
+    const height = maxY - minY + 500;
     const zoomX = this.canvas.width / width;
     const zoomY = this.canvas.height / height;
     this.zoom = Math.min(zoomX, zoomY, this.maxZoom);
+    
+    // Ensure we don't zoom in too much on initial load
+    if (this.zoom > 0.25) {
+      this.zoom = 0.25;
+    }
+
+    // Center the galaxy in the viewport (calculate after zoom is set)
+    this.viewX = -centerX;
+    this.viewY = -centerY;
   }
 
   destroy() {

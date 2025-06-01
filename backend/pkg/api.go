@@ -11,7 +11,9 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
+
 	"github.com/hunterjsb/xandaris/internal/credits"
+	mapgen "github.com/hunterjsb/xandaris/internal/map"
 	"github.com/hunterjsb/xandaris/internal/tick"
 )
 
@@ -24,7 +26,15 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		})
 
 		// Game data endpoints
-		e.Router.GET("/api/map", getMapData(app))
+		e.Router.GET("/api/map", func(c echo.Context) error {
+			mapData, err := mapgen.GetMapData(app)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "Failed to fetch map data",
+				})
+			}
+			return c.JSON(http.StatusOK, mapData)
+		})
 		e.Router.GET("/api/systems", getSystems(app))
 		e.Router.GET("/api/systems/:id", getSystem(app))
 		e.Router.GET("/api/planets", getPlanets(app))

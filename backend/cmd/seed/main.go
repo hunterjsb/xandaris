@@ -6,9 +6,10 @@ import (
 	"math/rand"
 	"time"
 
-	_ "github.com/hunterjsb/xandaris/migrations"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/models"
+	mapgen "github.com/hunterjsb/xandaris/internal/map"
+	_ "github.com/hunterjsb/xandaris/migrations"
 )
 
 func main() {
@@ -48,14 +49,9 @@ func seedNewSchema(app *pocketbase.PocketBase) error {
 		return fmt.Errorf("failed to seed ship types: %w", err)
 	}
 
-	// 5. Generate systems
-	if err := seedSystems(app, 50); err != nil {
-		return fmt.Errorf("failed to seed systems: %w", err)
-	}
-
-	// 6. Generate planets for each system
-	if err := seedPlanets(app); err != nil {
-		return fmt.Errorf("failed to seed planets: %w", err)
+	// 5. Generate spiral galaxy with systems and planets
+	if err := mapgen.GenerateMap(app, 200); err != nil {
+		return fmt.Errorf("failed to generate galaxy map: %w", err)
 	}
 
 	// 7. Generate resource nodes for planets
