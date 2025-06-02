@@ -449,14 +449,20 @@ class XanNationApp {
       return;
     }
 
-    // Check if fleet is owned by current user and not moving
+    // Check if fleet is owned by current user
     if (selectedFleet.owner_id !== authManager.getUser()?.id) {
       this.uiController.showToast("You don't own this fleet", "error");
       return;
     }
 
-    if (selectedFleet.destination_system) {
-      this.uiController.showToast("Fleet is already moving", "error");
+    // Check if fleet already has pending orders
+    const existingOrder = gameState.fleetOrders?.find(order => 
+      order.fleet_id === selectedFleet.id && 
+      (order.status === "pending" || order.status === "processing")
+    );
+    
+    if (existingOrder) {
+      this.uiController.showToast("Fleet already has pending orders", "error");
       return;
     }
 
@@ -467,26 +473,43 @@ class XanNationApp {
       return;
     }
 
-    // Find path from source to destination
+    // For now, use new fleet orders system for direct moves only
+    // TODO: Implement multi-hop routing with fleet orders later
     const path = this.findFleetPath(fromSystem, toSystem);
-
+    
     if (!path || path.length < 2) {
-      this.uiController.showToast(
-        "No valid route found to target system",
-        "error",
-      );
+      this.uiController.showToast("No valid route found to target system", "error");
       return;
     }
 
-    // Store the full route for this fleet
-    this.fleetRoutes.set(selectedFleet.id, {
-      fullPath: path,
-      currentHop: 0,
-      targetSystem: toSystem
-    });
-
-    // Send first hop
-    await this.sendNextFleetHop(selectedFleet.id, path);
+    if (path.length === 2) {
+      // Direct hop - use new fleet orders system
+      try {
+        console.log(`🚀 Creating fleet order: ${fromSystem.name || fromSystem.id.slice(-4)} → ${toSystem.name || toSystem.id.slice(-4)}`);
+        
+        const result = await gameData.sendFleet(selectedFleet.current_system, toSystem.id);
+        
+        this.uiController.showToast(
+          `Fleet order created: ${toSystem.name || `System ${toSystem.id.slice(-4)}`} (arrives in ~20s)`,
+          "success"
+        );
+        
+        console.log("Fleet order created:", result);
+        
+      } catch (error) {
+        console.error("Failed to create fleet order:", error);
+        this.uiController.showToast(
+          error.message || "Failed to create fleet order",
+          "error"
+        );
+      }
+    } else {
+      // Multi-hop - fall back to legacy system for now
+      this.uiController.showToast(
+        `Multi-hop routing not yet implemented with new system (${path.length - 1} hops)`,
+        "error"
+      );
+    }
   }
 
   async sendNextFleetHop(fleetId, path) {
