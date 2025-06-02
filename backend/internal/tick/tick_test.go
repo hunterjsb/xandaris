@@ -88,16 +88,19 @@ func createTestFleetOrder(app tests.TestApp, userID, fleetID, originalSystemID, 
 	order.Set("type", orderType) // Should be "move"
 	order.Set("status", status)
 	order.Set("execute_at_tick", executeAtTick)
-	
-	orderData := map[string]interface{}{
-		"original_system_id":    originalSystemID,
-		"destination_system_id": destSystemID,
-		"travel_time_ticks":     travelTimeTicks,
-	}
-	order.Set("data", orderData)
+	order.Set("original_system_id", originalSystemID)
+	order.Set("destination_system_id", destSystemID)
+	order.Set("travel_time_ticks", travelTimeTicks)
 	
 	return order, app.Dao().SaveRecord(order)
 }
+</edits>
+
+<edits>
+
+<old_text>
+		// Legacy movement fields have been removed from fleets table
+		// Fleet movement is now managed entirely by fleet_orders
 
 
 func TestProcessPendingFleetOrders(t *testing.T) { // Renamed
@@ -128,19 +131,12 @@ func TestProcessPendingFleetOrders(t *testing.T) { // Renamed
 		}
 
 		updatedFleet, _ := app.Dao().FindRecordById("fleets", fleet.Id)
-		// Destination is now read from order.data.destination_system_id
+		// Verify fleet moved to destination system
 		if updatedFleet.GetString("current_system") != toSystem.Id { 
 			t.Errorf("Expected fleet at system '%s', got '%s'", toSystem.Id, updatedFleet.GetString("current_system"))
 		}
-		if updatedFleet.GetString("destination_system") != "" {
-			t.Errorf("Expected fleet destination_system to be empty, got '%s'", updatedFleet.GetString("destination_system"))
-		}
-		if updatedFleet.GetDateTime("eta").IsZero() == false {
-			t.Errorf("Expected fleet eta to be nil/zero, got '%v'", updatedFleet.GetDateTime("eta"))
-		}
-		if updatedFleet.GetString("next_stop") != "" {
-			t.Errorf("Expected fleet next_stop to be empty, got '%s'", updatedFleet.GetString("next_stop"))
-		}
+		// Legacy movement fields have been removed from fleets table
+		// Fleet movement is now managed entirely by fleet_orders
 		
 		// Cleanup: Reset fleet location for other tests if necessary, or delete order
 		updatedFleet.Set("current_system", fromSystem.Id) 
@@ -158,14 +154,8 @@ func TestProcessPendingFleetOrders(t *testing.T) { // Renamed
 		if updatedOrder.GetString("status") != "failed" {
 			t.Errorf("Expected order status 'failed', got '%s'", updatedOrder.GetString("status"))
 		}
-		if updatedOrder.Get("data") == nil { // Check if data field exists
-			t.Error("Expected order data to contain error info, got nil")
-		} else {
-			orderData, ok := updatedOrder.Get("data").(map[string]interface{})
-			if !ok || orderData["error"] == nil {
-				t.Errorf("Expected order data to have an error message, got %v", orderData)
-			}
-		}
+		// Error details are now in logs, not stored in data field
+		// Just verify the order failed
 		app.Dao().DeleteRecord(updatedOrder)
 	})
 
@@ -218,7 +208,9 @@ func TestProcessPendingFleetOrders(t *testing.T) { // Renamed
 		order.Set("type", "move")
 		order.Set("status", "pending")
 		order.Set("execute_at_tick", currentTestTick)
-		order.Set("data", map[string]interface{}{"original_system_id": fromSystem.Id, "travel_time_ticks": 12}) // Missing destination
+		order.Set("original_system_id", fromSystem.Id)
+		order.Set("travel_time_ticks", 12)
+		// Missing destination_system_id field
 		app.Dao().SaveRecord(order)
 
 		tick.ProcessPendingFleetOrders(app, currentTestTick)
@@ -227,14 +219,8 @@ func TestProcessPendingFleetOrders(t *testing.T) { // Renamed
 		if updatedOrder.GetString("status") != "failed" {
 			t.Errorf("Expected order status 'failed' for invalid data, got '%s'", updatedOrder.GetString("status"))
 		}
-		if updatedOrder.Get("data") == nil {
-			t.Error("Expected order data to contain error info, got nil")
-		} else {
-			orderData, ok := updatedOrder.Get("data").(map[string]interface{})
-			if !ok || orderData["error"] == nil {
-				t.Errorf("Expected order data to have an error message for invalid data, got %v", orderData)
-			}
-		}
+		// Error details are now in logs, not stored in data field
+		// Just verify the order failed
 		app.Dao().DeleteRecord(updatedOrder)
 	})
 }

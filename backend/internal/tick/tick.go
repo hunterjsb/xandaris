@@ -247,33 +247,24 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 				processingError = fmt.Errorf("missing fleet_id in fleet order %s", order.Id)
 				finalStatus = "failed"
 			} else {
-				orderData, ok := order.Get("data").(map[string]interface{})
-				if !ok {
-					processingError = fmt.Errorf("missing or invalid 'data' field in fleet order %s", order.Id)
+				destinationSystemID := order.GetString("destination_system_id")
+				if destinationSystemID == "" {
+					processingError = fmt.Errorf("missing destination_system_id in fleet order %s", order.Id)
 					finalStatus = "failed"
 				} else {
-					destinationSystemID, idOk := orderData["destination_system_id"].(string)
-					if !idOk || destinationSystemID == "" {
-						processingError = fmt.Errorf("missing or invalid 'destination_system_id' in data for fleet order %s", order.Id)
+					fleet, err := app.Dao().FindRecordById("fleets", fleetID)
+					if err != nil {
+						processingError = fmt.Errorf("fleet %s not found for order %s: %w", fleetID, order.Id, err)
 						finalStatus = "failed"
 					} else {
-						fleet, err := app.Dao().FindRecordById("fleets", fleetID)
-						if err != nil {
-							processingError = fmt.Errorf("fleet %s not found for order %s: %w", fleetID, order.Id, err)
+						// Successfully fetched fleet and destination
+						fleet.Set("current_system", destinationSystemID)
+
+						if err := app.Dao().SaveRecord(fleet); err != nil {
+							processingError = fmt.Errorf("failed to save fleet %s for order %s: %w", fleetID, order.Id, err)
 							finalStatus = "failed"
 						} else {
-							// Successfully fetched fleet and destination
-							fleet.Set("current_system", destinationSystemID)
-							fleet.Set("destination_system", "") // Clear legacy field
-							fleet.Set("eta", nil)               // Clear legacy field
-							fleet.Set("next_stop", "")          // Clear legacy field
-
-							if err := app.Dao().SaveRecord(fleet); err != nil {
-								processingError = fmt.Errorf("failed to save fleet %s for order %s: %w", fleetID, order.Id, err)
-								finalStatus = "failed"
-							} else {
-								log.Printf("Fleet %s moved to system %s successfully for order %s.", fleetID, destinationSystemID, order.Id)
-							}
+							log.Printf("Fleet %s moved to system %s successfully for order %s.", fleetID, destinationSystemID, order.Id)
 						}
 					}
 				}
@@ -288,17 +279,7 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 		order.Set("status", finalStatus)
 		if processingError != nil {
 			log.Printf("Fleet order %s failed: %v", order.Id, processingError)
-			
-			// Preserve existing data if possible, and add/overwrite error
-			updatedOrderData := map[string]interface{}{"error": processingError.Error()}
-			if existingData, ok := order.Get("data").(map[string]interface{}); ok && existingData != nil {
-				for k, v := range existingData {
-					if _, dataErrorExists := updatedOrderData[k]; !dataErrorExists { // don't overwrite the new error key
-						updatedOrderData[k] = v
-					}
-				}
-			}
-			order.Set("data", updatedOrderData)
+			// Error details are logged, status is set to "failed" - that's sufficient
 		}
 
 		if err := app.Dao().SaveRecord(order); err != nil {

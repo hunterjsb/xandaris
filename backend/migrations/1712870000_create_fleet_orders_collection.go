@@ -83,11 +83,40 @@ func init() {
 			Options:  &schema.NumberOptions{Min: types.Pointer(0.0)},
 		})
 		
-		// data - for storing destination_system_id, original_system_id, travel_time_ticks
+		// destination_system_id - where the fleet is going
 		collection.Schema.AddField(&schema.SchemaField{
-			Name:    "data",
-			Type:    schema.FieldTypeJson,
-			Options: &schema.JsonOptions{MaxSize: 1 * 1024 * 1024}, // 1MB, adjust if needed
+			Name:     "destination_system_id",
+			Type:     schema.FieldTypeRelation,
+			Required: true,
+			Options: &schema.RelationOptions{
+				CollectionId:  "systems",
+				CascadeDelete: false,
+				MinSelect:     &maxSelectOne,
+				MaxSelect:     &maxSelectOne,
+				DisplayFields: nil,
+			},
+		})
+
+		// original_system_id - where the fleet started from
+		collection.Schema.AddField(&schema.SchemaField{
+			Name:     "original_system_id",
+			Type:     schema.FieldTypeRelation,
+			Required: true,
+			Options: &schema.RelationOptions{
+				CollectionId:  "systems",
+				CascadeDelete: false,
+				MinSelect:     &maxSelectOne,
+				MaxSelect:     &maxSelectOne,
+				DisplayFields: nil,
+			},
+		})
+
+		// travel_time_ticks - how many ticks the journey takes
+		collection.Schema.AddField(&schema.SchemaField{
+			Name:     "travel_time_ticks",
+			Type:     schema.FieldTypeNumber,
+			Required: true,
+			Options:  &schema.NumberOptions{Min: types.Pointer(1.0)},
 		})
 
 		// Indexes

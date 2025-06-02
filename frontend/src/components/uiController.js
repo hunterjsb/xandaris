@@ -1900,11 +1900,7 @@ export class UIController {
       const originName = originSystem ? originSystem.name : "Deep Space";
       
       let destName = "Unknown System";
-      let orderData = order.data;
-      if (typeof orderData === 'string') { 
-          try { orderData = JSON.parse(orderData); } catch(e) { console.error("Failed to parse order data:", order.id, e); orderData = {};}
-      }
-      const destinationSystemId = orderData?.destination_system_id;
+      const destinationSystemId = order.destination_system_id;
       const destinationSystem = destinationSystemId ? allSystems.find(s => s.id === destinationSystemId) : null;
       if (destinationSystem) destName = destinationSystem.name;
       

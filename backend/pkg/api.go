@@ -764,13 +764,9 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		order.Set("type", "move") // Type is "move" for fleet_orders
 		order.Set("status", "pending")
 		order.Set("execute_at_tick", executeAtTick)
-
-		orderData := map[string]interface{}{
-			"destination_system_id": data.ToID,
-			"original_system_id":    data.FromID,
-			"travel_time_ticks":     travelDurationInTicks,
-		}
-		order.Set("data", orderData)
+		order.Set("destination_system_id", data.ToID)
+		order.Set("original_system_id", data.FromID)
+		order.Set("travel_time_ticks", travelDurationInTicks)
 
 		if err := app.Dao().SaveRecord(order); err != nil {
 			log.Printf("Error saving fleet order: %v", err)

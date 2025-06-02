@@ -1413,21 +1413,9 @@ export class MapRenderer {
           (order.status === "pending" || order.status === "processing"),
       );
 
-      if (activeOrder && activeOrder.data) { // Check if activeOrder.data exists
-        // Ensure data is an object if it's a JSON string
-        let orderData = activeOrder.data;
-        if (typeof orderData === 'string') {
-            try {
-                orderData = JSON.parse(orderData);
-            } catch (e) {
-                console.error("Failed to parse order data for fleet:", fleet.id, activeOrder.id, e);
-                orderData = {}; // Fallback to empty object
-            }
-        }
-
-
+      if (activeOrder) {
         const fromSystem = this.systems.find((s) => s.id === fleet.current_system);
-        const toSystem = this.systems.find((s) => s.id === orderData.destination_system_id); // Get from order.data
+        const toSystem = this.systems.find((s) => s.id === activeOrder.destination_system_id);
 
         if (!fromSystem || !toSystem) {
           console.warn(`MapRenderer: Could not find from/to system for moving fleet ${fleet.id}. Order: ${activeOrder.id}`);
@@ -1441,7 +1429,7 @@ export class MapRenderer {
           const current_tick = window.gameState.currentTick || 0;
           const order_execute_at_tick = activeOrder.execute_at_tick || 0;
           
-          let total_duration_in_ticks = orderData.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
+          let total_duration_in_ticks = activeOrder.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
           if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS; // Fallback
 
           const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
@@ -1659,20 +1647,9 @@ export class MapRenderer {
           (order.status === "pending" || order.status === "processing"),
       );
 
-      if (activeOrder && activeOrder.data) { // Check if activeOrder.data exists
-        // Ensure data is an object if it's a JSON string
-        let orderData = activeOrder.data;
-        if (typeof orderData === 'string') {
-            try {
-                orderData = JSON.parse(orderData);
-            } catch (e) {
-                console.error("Failed to parse order data for fleet (getFleetAt):", fleet.id, activeOrder.id, e);
-                orderData = {}; // Fallback to empty object
-            }
-        }
-
+      if (activeOrder) {
         const fromSystem = this.systems.find((s) => s.id === fleet.current_system);
-        const toSystem = this.systems.find((s) => s.id === orderData.destination_system_id); // Get from order.data
+        const toSystem = this.systems.find((s) => s.id === activeOrder.destination_system_id);
 
         if (!fromSystem || !toSystem) {
            const currentSystem = this.systems.find(s => s.id === fleet.current_system);
@@ -1684,7 +1661,7 @@ export class MapRenderer {
           const current_tick = window.gameState.currentTick || 0;
           const order_execute_at_tick = activeOrder.execute_at_tick || 0;
           
-          let total_duration_in_ticks = orderData.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
+          let total_duration_in_ticks = activeOrder.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
           if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS; // Fallback
           
           const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
