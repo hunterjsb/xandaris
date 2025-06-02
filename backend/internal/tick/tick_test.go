@@ -94,13 +94,6 @@ func createTestFleetOrder(app tests.TestApp, userID, fleetID, originalSystemID, 
 	
 	return order, app.Dao().SaveRecord(order)
 }
-</edits>
-
-<edits>
-
-<old_text>
-		// Legacy movement fields have been removed from fleets table
-		// Fleet movement is now managed entirely by fleet_orders
 
 
 func TestProcessPendingFleetOrders(t *testing.T) { // Renamed
