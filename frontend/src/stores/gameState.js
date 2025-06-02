@@ -8,6 +8,7 @@ export class GameState {
     this.trades = [];
     this.treaties = [];
     this.buildings = [];
+    this.fleetOrders = []; // Renamed from orders
     this.hyperlanes = [];
     this.mapData = null;
     this.selectedSystem = null;
@@ -52,6 +53,7 @@ export class GameState {
     gameData.subscribe("fleets", (data) => this.updateFleets(data));
     gameData.subscribe("trades", (data) => this.updateTrades(data));
     gameData.subscribe("tick", (data) => this.handleTick(data));
+    gameData.subscribe("fleet_orders", (data) => this.updateFleetOrders(data)); // Renamed subscription
   }
 
   async initialize() {
@@ -97,6 +99,9 @@ export class GameState {
 
         this.buildings = await gameData.getBuildings(userId);
         await new Promise((resolve) => setTimeout(resolve, 50));
+
+        this.fleetOrders = await gameData.getFleetOrders(userId); // Use getFleetOrders
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         // Player resources will be loaded via updatePlayerResources()
       }
@@ -162,6 +167,7 @@ export class GameState {
     this.trades = [];
     this.treaties = [];
     this.buildings = [];
+    this.fleetOrders = []; // Reset fleetOrders
     this.hyperlanes = [];
     this.mapData = null;
     this.selectedSystem = null;
@@ -312,6 +318,23 @@ export class GameState {
         this.trades[index] = tradesData;
       } else {
         this.trades.push(tradesData);
+      }
+    }
+    this.notifyCallbacks();
+  }
+
+  updateFleetOrders(fleetOrdersData) { // Renamed from updateOrders
+    if (Array.isArray(fleetOrdersData)) {
+      this.fleetOrders = fleetOrdersData;
+    } else {
+      // Single order update
+      const index = this.fleetOrders.findIndex((o) => o.id === fleetOrdersData.id);
+      if (index >= 0) {
+        this.fleetOrders[index] = fleetOrdersData;
+      } else {
+        this.fleetOrders.push(fleetOrdersData);
+        // Keep orders sorted by execute_at_tick
+        this.fleetOrders.sort((a, b) => a.execute_at_tick - b.execute_at_tick);
       }
     }
     this.notifyCallbacks();

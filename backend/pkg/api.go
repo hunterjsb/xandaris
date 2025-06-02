@@ -744,20 +744,42 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError("Target system too far - outside hyperlane range", nil)
 		}
 
-		// Calculate ETA (2 minutes from now)
-		etaTime := time.Now().Add(2 * time.Minute)
+		// Get Fleet Orders collection
+		fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+		if err != nil {
+			log.Printf("Error finding fleet_orders collection: %v", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Fleet Orders collection not found", err)
+		}
 
-		// Move the existing fleet by setting destination and ETA, keeping current_system for hyperlane tracking
-		fleet.Set("destination_system", data.ToID)
-		fleet.Set("eta", etaTime)
+		// Calculate execute_at_tick
+		currentTick := tick.GetCurrentTick(app)
+		// Travel duration is assumed to be 12 ticks (2 minutes at 6 ticks/minute or 10 seconds/tick)
+		travelDurationInTicks := int64(12)
+		executeAtTick := currentTick + travelDurationInTicks
 
-		if err := app.Dao().SaveRecord(fleet); err != nil {
-			return apis.NewBadRequestError("Failed to move fleet", err)
+		// Create a new fleet_order record
+		order := models.NewRecord(fleetOrdersCollection)
+		order.Set("user_id", user.Id)
+		order.Set("fleet_id", fleet.Id)
+		order.Set("type", "move") // Type is "move" for fleet_orders
+		order.Set("status", "pending")
+		order.Set("execute_at_tick", executeAtTick)
+
+		orderData := map[string]interface{}{
+			"destination_system_id": data.ToID,
+			"original_system_id":    data.FromID,
+			"travel_time_ticks":     travelDurationInTicks,
+		}
+		order.Set("data", orderData)
+
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("Error saving fleet order: %v", err)
+			return apis.NewBadRequestError("Failed to create fleet move order", err)
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":  true,
-			"fleet_id": fleet.Id,
+			"order_id": order.Id,
 		})
 	}
 }
@@ -953,21 +975,23 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
 		}
 
-		// Create building record
-		collection, err := app.Dao().FindCollectionByNameOrId("buildings")
+		// Create building record directly
+		buildingsCollection, err := app.Dao().FindCollectionByNameOrId("buildings")
 		if err != nil {
-			return apis.NewBadRequestError("Buildings collection not found", err)
+			log.Printf("Error finding buildings collection: %v", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Buildings collection not found", err)
 		}
 
-		building := models.NewRecord(collection)
-		building.Set("planet_id", data.PlanetID) // Use PlanetID from request
-		building.Set("building_type", data.BuildingType)
+		building := models.NewRecord(buildingsCollection)
+		building.Set("planet_id", data.PlanetID)
+		building.Set("building_type", data.BuildingType) // This is the ID of the building type
 		building.Set("level", 1)
 		building.Set("active", true)
-
-		// Crypto servers start empty - they generate credits over time
+		// TODO: Set owner_id if your buildings schema requires it and it's not automatically handled
+		// Example: building.Set("owner_id", user.Id) if buildings are directly owned by users
 
 		if err := app.Dao().SaveRecord(building); err != nil {
+			log.Printf("Error saving new building: %v", err)
 			return apis.NewBadRequestError("Failed to create building", err)
 		}
 
@@ -976,9 +1000,9 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":           true,
-			"building_id":       building.Id,
-			"cost":              originalCostPayload, // Return the original cost structure
-			"credits_remaining": currentCredits,      // Return current credits
+			"building_id":       building.Id, // Return building_id instead of order_id
+			"cost":              originalCostPayload,
+			"credits_remaining": currentCredits,
 		})
 	}
 }

@@ -1097,6 +1097,11 @@ export class UIController {
       container.querySelector("#planet-buildings-html").innerHTML =
         buildingsHtml;
       buildingsContainer.style.display = "block";
+
+      // --- CONSTRUCTION QUEUE SECTION REMOVED ---
+      // Building construction queue display is deferred as per recent changes.
+      // The logic previously here for `buildQueueContainer` that used `window.gameState.orders`
+      // and filtered for `building_construct` has been removed.
     } else {
       buildingsContainer.style.display = "none";
     }
@@ -1861,28 +1866,105 @@ export class UIController {
   }
 
   showFleetPanel() {
-    const fleets = this.gameState?.getPlayerFleets() || [];
+    if (!this.gameState || !this.currentUser) {
+      this.showModal("Your Fleets", '<div class="text-space-400">Game data not loaded or user not available.</div>');
+      return;
+    }
 
-    const fleetList =
-      fleets.length > 0
-        ? fleets
-            .map(
-              (fleet) => `
-      <div class="bg-space-700 p-3 rounded mb-2">
-        <div class="font-semibold">Fleet ${fleet.id.slice(-3)}</div>
-        <div class="text-sm text-space-300">
-          <div>From: ${fleet.from_name || fleet.from_id}</div>
-          <div>To: ${fleet.to_name || fleet.to_id}</div>
-          <div>Strength: ${fleet.strength}</div>
-          <div>ETA: ${fleet.eta_tick ? `Tick ${fleet.eta_tick}` : "Unknown"}</div>
+    const currentUserId = this.currentUser.id;
+    const allFleetOrders = window.gameState.fleetOrders || []; // Changed to fleetOrders
+    const allFleets = window.gameState.fleets || [];
+    const allSystems = window.gameState.systems || [];
+    const currentTick = window.gameState.currentTick || 0;
+    const TICKS_PER_MINUTE = window.gameState.ticksPerMinute || 6;
+    const SECONDS_PER_TICK = 60 / TICKS_PER_MINUTE;
+
+    let movingFleetsHtml = "";
+    const movingFleetIds = new Set();
+
+    const fleetMoveOrders = allFleetOrders // Changed to allFleetOrders
+      .filter(order => 
+        order.user_id === currentUserId && // Ensure orders are for the current user
+        // order.type === "move" && // Type is implicit for fleet_orders, but can be kept for safety if schema allows other types
+        (order.status === "pending" || order.status === "processing")
+      )
+      .sort((a, b) => a.execute_at_tick - b.execute_at_tick);
+
+    fleetMoveOrders.forEach(order => {
+      const fleet = allFleets.find(f => f.id === order.fleet_id);
+      if (!fleet) return;
+
+      movingFleetIds.add(fleet.id);
+      const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
+      const originSystem = allSystems.find(s => s.id === fleet.current_system);
+      
+      let destName = "Unknown System";
+      let orderData = order.data;
+      if (typeof orderData === 'string') { 
+          try { orderData = JSON.parse(orderData); } catch(e) { console.error("Failed to parse order data:", order.id, e); orderData = {};}
+      }
+      const destinationSystemId = orderData?.destination_system_id;
+      const destinationSystem = destinationSystemId ? allSystems.find(s => s.id === destinationSystemId) : null;
+      if (destinationSystem) destName = destinationSystem.name;
+      
+      const ticksRemaining = Math.max(0, order.execute_at_tick - currentTick);
+      const secondsRemaining = (ticksRemaining * SECONDS_PER_TICK).toFixed(0);
+      let etaDisplay = `${ticksRemaining} ticks (~${secondsRemaining}s)`;
+      if (ticksRemaining === 0 && order.status === "processing") {
+          etaDisplay = "Finalizing Jump";
+      } else if (ticksRemaining === 0 && order.status === "pending"){
+          etaDisplay = "Initiating Jump";
+      }
+      
+      const statusDisplay = order.status.charAt(0).toUpperCase() + order.status.slice(1);
+
+      movingFleetsHtml += `
+        <div class="bg-space-700 p-3 rounded mb-2 border border-space-600 shadow-md">
+          <div class="font-semibold text-nebula-300">${fleetName}</div>
+          <div class="text-sm text-space-300">
+            <div><span class="text-space-400">From:</span> ${originName}</div>
+            <div><span class="text-space-400">To:</span> ${destName}</div>
+            <div><span class="text-space-400">ETA:</span> <span class="text-yellow-400">${etaDisplay}</span></div>
+            <div><span class="text-space-400">Status:</span> <span class="text-cyan-400">${statusDisplay}</span></div>
+          </div>
         </div>
-      </div>
-    `,
-            )
-            .join("")
-        : '<div class="text-space-400">No fleets in transit</div>';
+      `;
+    });
 
-    this.showModal("Your Fleets", fleetList);
+    let stationaryFleetsHtml = "";
+    const playerFleets = this.gameState.getPlayerFleets(); // Already filters by owner
+
+    playerFleets.forEach(fleet => {
+      if (movingFleetIds.has(fleet.id)) return; // Already displayed as moving
+
+      const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
+      const currentSystem = allSystems.find(s => s.id === fleet.current_system);
+      const systemName = currentSystem ? currentSystem.name : "Deep Space";
+      
+      stationaryFleetsHtml += `
+        <div class="bg-space-650 p-3 rounded mb-2 border border-space-700 shadow-sm">
+          <div class="font-semibold text-gray-300">${fleetName}</div>
+          <div class="text-sm text-space-400">
+            <div><span class="text-space-500">Location:</span> ${systemName}</div>
+            <div><span class="text-space-500">Status:</span> <span class="text-gray-400">Stationary</span></div>
+          </div>
+        </div>
+      `;
+    });
+    
+    let finalHtml = "";
+    if (movingFleetsHtml) {
+      finalHtml += `<h3 class="text-lg font-semibold text-plasma-300 mb-2 mt-3">Moving Fleets</h3>${movingFleetsHtml}`;
+    }
+    if (stationaryFleetsHtml) {
+      finalHtml += `<h3 class="text-lg font-semibold text-gray-400 mb-2 mt-3">Stationary Fleets</h3>${stationaryFleetsHtml}`;
+    }
+
+    if (finalHtml === "") {
+      finalHtml = '<div class="text-space-400 text-center py-4">No fleets deployed.</div>';
+    }
+
+    this.showModal("Your Fleets", `<div class="max-h-96 overflow-y-auto custom-scrollbar pr-1">${finalHtml}</div>`);
   }
 
   showTradePanel() {

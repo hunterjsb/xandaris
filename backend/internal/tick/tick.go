@@ -70,16 +70,17 @@ func ProcessTick(app *pocketbase.PocketBase) error {
 	log.Printf("Processing game tick #%d...", tick)
 	startTime := time.Now()
 
-	// 1. Update markets and economy
+	// 1. Process Pending Fleet Orders
+	if err := ProcessPendingFleetOrders(app, tick); err != nil {
+		log.Printf("Error processing pending fleet orders: %v", err)
+		// Decide if this error is critical enough to stop the entire tick.
+		// For now, we'll log and continue, but this could be returned.
+	}
+
+	// 2. Update markets and economy
 	if err := economy.UpdateMarkets(app); err != nil {
 		log.Printf("Error updating markets: %v", err)
 		return fmt.Errorf("market update failed: %w", err)
-	}
-
-	// 2. Apply building completions
-	if err := ApplyBuildingCompletions(app); err != nil {
-		log.Printf("Error applying building completions: %v", err)
-		return fmt.Errorf("building completion failed: %w", err)
 	}
 
 	// 3. Move cargo on trade routes
@@ -88,31 +89,17 @@ func ProcessTick(app *pocketbase.PocketBase) error {
 		return fmt.Errorf("cargo movement failed: %w", err)
 	}
 
-	// 4. Resolve fleet arrivals
-	if err := ResolveFleetArrivals(app); err != nil {
-		log.Printf("Error resolving fleet arrivals: %v", err)
-		return fmt.Errorf("fleet resolution failed: %w", err)
-	}
-
-	// 5. Evaluate treaties
+	// 4. Evaluate treaties
 	if err := EvaluateTreaties(app); err != nil {
 		log.Printf("Error evaluating treaties: %v", err)
 		return fmt.Errorf("treaty evaluation failed: %w", err)
 	}
 
-	// 6. Broadcast tick completion via WebSocket
+	// 5. Broadcast tick completion via WebSocket
 	websocket.BroadcastTickUpdate(int(tick), "")
 
 	duration := time.Since(startTime)
 	log.Printf("Game tick #%d completed in %v", tick, duration)
-	return nil
-}
-
-// ApplyBuildingCompletions checks for completed buildings and applies them
-func ApplyBuildingCompletions(app *pocketbase.PocketBase) error {
-	// TODO: Implement building queue system
-	// For now, buildings complete instantly when queued
-	log.Println("Applied building completions")
 	return nil
 }
 
@@ -166,113 +153,6 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, resourceType string
 }
 
 
-// ResolveFleetArrivals handles fleet arrivals and combat
-func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
-	// Get all fleets that have an ETA (including past due)
-	currentTime := time.Now()
-	log.Printf("DEBUG: Current time for fleet arrivals: %s", currentTime.Format("2006-01-02 15:04:05.000Z"))
-	
-	// Find all fleets with destination_system set (in transit)
-	fleets, err := app.Dao().FindRecordsByFilter("fleets", "destination_system != '' && eta != ''", "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to fetch fleets in transit: %w", err)
-	}
-
-	arrivedCount := 0
-	for _, fleet := range fleets {
-		etaTime := fleet.GetDateTime("eta")
-		if etaTime.IsZero() {
-			continue
-		}
-
-		// Convert PocketBase DateTime to Go time.Time for comparison
-		etaGoTime := etaTime.Time()
-		
-		// Check if fleet should have arrived (ETA is in the past or now)
-		if etaGoTime.Before(currentTime) || etaGoTime.Equal(currentTime) {
-			log.Printf("DEBUG: Processing arrival for fleet %s, eta: %s, current: %s, dest: %s", 
-				fleet.Id, etaGoTime.Format("2006-01-02 15:04:05.000Z"), fleet.GetString("current_system"), fleet.GetString("destination_system"))
-			
-			// Check if this is a multi-hop journey with next_stop set
-			nextStop := fleet.GetString("next_stop")
-			
-			if nextStop != "" {
-				// This is a multi-hop journey - move to next_stop
-				fleet.Set("current_system", nextStop)
-				fleet.Set("next_stop", "")
-				
-				// Clear destination and eta - frontend will send next hop if needed
-				fleet.Set("destination_system", "")
-				fleet.Set("eta", "")
-				log.Printf("DEBUG: Fleet %s reached waypoint %s in multi-hop journey", fleet.Id, nextStop)
-			} else {
-				// Single-hop journey - move to destination and clear
-				fleet.Set("current_system", fleet.GetString("destination_system"))
-				fleet.Set("destination_system", "")
-				fleet.Set("eta", "")
-				log.Printf("DEBUG: Fleet %s completed single-hop journey", fleet.Id)
-			}
-
-			if err := app.Dao().SaveRecord(fleet); err != nil {
-				log.Printf("Failed to save arrived fleet %s: %v", fleet.Id, err)
-			} else {
-				log.Printf("DEBUG: Successfully moved fleet %s to destination", fleet.Id)
-				arrivedCount++
-			}
-		}
-	}
-
-	log.Printf("Resolved %d fleet arrivals", arrivedCount)
-	return nil
-}
-
-// resolveFleetArrival handles a single fleet arrival
-func resolveFleetArrival(app *pocketbase.PocketBase, fleet *models.Record) error {
-	destinationSystemId := fleet.GetString("destination_system")
-	ownerId := fleet.GetString("owner_id")
-	
-	// Get ships in this fleet to calculate total strength
-	ships, err := app.Dao().FindRecordsByFilter("ships", "fleet_id = '"+fleet.Id+"'", "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get ships for fleet: %w", err)
-	}
-	
-	totalStrength := 0
-	for _, ship := range ships {
-		shipTypeId := ship.GetString("ship_type")
-		shipType, err := app.Dao().FindRecordById("ship_types", shipTypeId)
-		if err != nil {
-			continue
-		}
-		strength := shipType.GetInt("strength")
-		count := ship.GetInt("count")
-		totalStrength += strength * count
-	}
-
-	// Update fleet location
-	fleet.Set("current_system", destinationSystemId)
-	fleet.Set("destination_system", "")
-	fleet.Set("eta", "")
-	
-	// Get planets in target system
-	planets, err := app.Dao().FindRecordsByFilter("planets", "system_id = '"+destinationSystemId+"'", "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get planets in system: %w", err)
-	}
-
-	if len(planets) == 0 {
-		log.Printf("Fleet %s (owner %s) arrived at empty system %s", fleet.Id, ownerId, destinationSystemId)
-		return app.Dao().SaveRecord(fleet)
-	}
-
-	// For now, just move fleet to the system and log arrival
-	// TODO: Implement proper colonization, combat, and planet management
-	log.Printf("Fleet %s (owner %s, strength %d) arrived at system %s with %d planets", 
-		fleet.Id, ownerId, totalStrength, destinationSystemId, len(planets))
-
-	return app.Dao().SaveRecord(fleet)
-}
-
 // EvaluateTreaties checks for expired treaties and updates statuses
 func EvaluateTreaties(app *pocketbase.PocketBase) error {
 	// Check if treaties collection exists
@@ -308,5 +188,127 @@ func EvaluateTreaties(app *pocketbase.PocketBase) error {
 	if expired > 0 {
 		log.Printf("Expired %d treaties", expired)
 	}
+	return nil
+}
+
+// ProcessPendingFleetOrders fetches and processes fleet_orders that are due.
+func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) error {
+	log.Printf("Starting ProcessPendingFleetOrders for tick #%d", currentTick)
+
+	fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+	if err != nil {
+		return fmt.Errorf("failed to find 'fleet_orders' collection: %w", err)
+	}
+
+	sort := "execute_at_tick ASC, created ASC"
+	
+	records, err := app.Dao().FindRecordsByFilter(
+		"fleet_orders",
+		fmt.Sprintf("status = 'pending' && execute_at_tick <= %d", currentTick),
+		sort, 
+		0,    
+		0,    
+	)
+	if err != nil {
+		return fmt.Errorf("failed to fetch pending fleet orders: %w", err)
+	}
+
+	if len(records) == 0 {
+		log.Printf("No pending fleet orders to process for tick #%d", currentTick)
+		return nil
+	}
+
+	log.Printf("Found %d pending fleet orders to process for tick #%d", len(records), currentTick)
+
+	fleetsCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
+	if err != nil {
+		// If fleets collection isn't found, we can't process any fleet orders.
+		return fmt.Errorf("failed to find 'fleets' collection: %w", err)
+	}
+
+	for _, order := range records {
+		orderType := order.GetString("type") // Should always be "move" for fleet_orders
+		log.Printf("Processing fleet order %s of type %s", order.Id, orderType)
+
+		// Atomically mark as "processing"
+		originalStatus := order.GetString("status")
+		order.Set("status", "processing")
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("Error marking fleet order %s as processing: %v. Original status: %s. Skipping.", order.Id, err, originalStatus)
+			order.Set("status", originalStatus) 
+			continue 
+		}
+
+		var processingError error
+		finalStatus := "completed" // Assume success
+
+		if orderType == "move" {
+			fleetID := order.GetString("fleet_id")
+			if fleetID == "" {
+				processingError = fmt.Errorf("missing fleet_id in fleet order %s", order.Id)
+				finalStatus = "failed"
+			} else {
+				orderData, ok := order.Get("data").(map[string]interface{})
+				if !ok {
+					processingError = fmt.Errorf("missing or invalid 'data' field in fleet order %s", order.Id)
+					finalStatus = "failed"
+				} else {
+					destinationSystemID, idOk := orderData["destination_system_id"].(string)
+					if !idOk || destinationSystemID == "" {
+						processingError = fmt.Errorf("missing or invalid 'destination_system_id' in data for fleet order %s", order.Id)
+						finalStatus = "failed"
+					} else {
+						fleet, err := app.Dao().FindRecordById(fleetsCollection.Id, fleetID)
+						if err != nil {
+							processingError = fmt.Errorf("fleet %s not found for order %s: %w", fleetID, order.Id, err)
+							finalStatus = "failed"
+						} else {
+							// Successfully fetched fleet and destination
+							fleet.Set("current_system", destinationSystemID)
+							fleet.Set("destination_system", "") // Clear legacy field
+							fleet.Set("eta", nil)               // Clear legacy field
+							fleet.Set("next_stop", "")          // Clear legacy field
+
+							if err := app.Dao().SaveRecord(fleet); err != nil {
+								processingError = fmt.Errorf("failed to save fleet %s for order %s: %w", fleetID, order.Id, err)
+								finalStatus = "failed"
+							} else {
+								log.Printf("Fleet %s moved to system %s successfully for order %s.", fleetID, destinationSystemID, order.Id)
+							}
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("Unknown order type '%s' in fleet_orders collection for order ID %s. Marking as failed.", orderType, order.Id)
+			processingError = fmt.Errorf("unknown order type in fleet_orders: %s", orderType)
+			finalStatus = "failed"
+		}
+
+		// Update order status and save
+		order.Set("status", finalStatus)
+		if processingError != nil {
+			log.Printf("Fleet order %s failed: %v", order.Id, processingError)
+			
+			// Preserve existing data if possible, and add/overwrite error
+			updatedOrderData := map[string]interface{}{"error": processingError.Error()}
+			if existingData, ok := order.Get("data").(map[string]interface{}); ok && existingData != nil {
+				for k, v := range existingData {
+					if _, dataErrorExists := updatedOrderData[k]; !dataErrorExists { // don't overwrite the new error key
+						updatedOrderData[k] = v
+					}
+				}
+			}
+			order.Set("data", updatedOrderData)
+		}
+
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("CRITICAL: Failed to save final status for fleet order %s (%s): %v. Data may be inconsistent.", order.Id, finalStatus, err)
+		} else {
+			log.Printf("Fleet order %s successfully updated to status '%s'.", order.Id, finalStatus)
+		}
+	}
+
+	log.Printf("Finished ProcessPendingFleetOrders for tick #%d. Processed %d fleet orders.", currentTick, len(records))
 	return nil
 }

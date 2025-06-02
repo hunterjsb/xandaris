@@ -1395,74 +1395,75 @@ export class MapRenderer {
   }
 
   drawFleets(deltaTime) {
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 12; // Fixed assumption
+
+    if (!window.gameState || !this.fleets) {
+      return;
+    }
+
     this.fleets.forEach((fleet) => {
       let worldX, worldY;
       let isMoving = false;
       let movementAngle = 0;
 
-      // Check if fleet is in transit (has both current_system and destination_system)
-      if (
-        fleet.destination_system &&
-        fleet.destination_system !== "" &&
-        fleet.current_system &&
-        fleet.current_system !== "" &&
-        fleet.destination_system !== fleet.current_system
-      ) {
-        // Fleet is moving between systems
-        const fromSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        const toSystem = this.systems.find(
-          (s) => s.id === fleet.destination_system,
-        );
+      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find( // Changed to fleetOrders
+        (order) =>
+          order.fleet_id === fleet.id &&
+          // order.type === "move" && // Type is implicit for fleet_orders
+          (order.status === "pending" || order.status === "processing"),
+      );
 
-        if (!fromSystem || !toSystem) return;
-
-        // Validate hyperlane range (same as navigation system)
-        const deltaX = toSystem.x - fromSystem.x;
-        const deltaY = toSystem.y - fromSystem.y;
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-        // Only allow movement within hyperlane range
-        if (distance > 800) return;
-
-        isMoving = true;
-
-        // Calculate progress based on ETA and distance-based travel time
-        let progress = 0.5; // Default fallback
-        if (fleet.eta) {
-          const now = new Date();
-          const eta = new Date(fleet.eta);
-          
-          // Calculate actual travel time based on distance (same as backend logic)
-          const travelTimeSec = Math.max(10, Math.min(120, Math.round(distance / 800 * 120)));
-          const departureTime = new Date(eta.getTime() - travelTimeSec * 1000);
-          const totalTime = eta.getTime() - departureTime.getTime();
-          const elapsed = now.getTime() - departureTime.getTime();
-          progress = Math.max(0, Math.min(1, elapsed / totalTime));
+      if (activeOrder && activeOrder.data) { // Check if activeOrder.data exists
+        // Ensure data is an object if it's a JSON string
+        let orderData = activeOrder.data;
+        if (typeof orderData === 'string') {
+            try {
+                orderData = JSON.parse(orderData);
+            } catch (e) {
+                console.error("Failed to parse order data for fleet:", fleet.id, activeOrder.id, e);
+                orderData = {}; // Fallback to empty object
+            }
         }
 
-        // Interpolate position along the hyperlane
-        worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
-        worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
 
-        // Calculate movement angle for directional arrow
-        movementAngle = Math.atan2(
-          toSystem.y - fromSystem.y,
-          toSystem.x - fromSystem.x,
-        );
+        const fromSystem = this.systems.find((s) => s.id === fleet.current_system);
+        const toSystem = this.systems.find((s) => s.id === orderData.destination_system_id); // Get from order.data
+
+        if (!fromSystem || !toSystem) {
+          console.warn(`MapRenderer: Could not find from/to system for moving fleet ${fleet.id}. Order: ${activeOrder.id}`);
+          const currentSystem = this.systems.find(s => s.id === fleet.current_system);
+          if (currentSystem) {
+            worldX = currentSystem.x + 15;
+            worldY = currentSystem.y + 15;
+          } else { return; }
+        } else {
+          isMoving = true;
+          const current_tick = window.gameState.currentTick || 0;
+          const order_execute_at_tick = activeOrder.execute_at_tick || 0;
+          
+          let total_duration_in_ticks = orderData.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
+          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS; // Fallback
+
+          const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
+          const elapsed_ticks = current_tick - start_tick_of_movement;
+          const progress = Math.max(0, Math.min(1, elapsed_ticks / total_duration_in_ticks));
+
+          worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
+          worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
+          movementAngle = Math.atan2(toSystem.y - fromSystem.y, toSystem.x - fromSystem.x);
+        }
       } else if (fleet.current_system && fleet.current_system !== "") {
-        // Fleet is stationary at current system
-        const currentSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        if (!currentSystem) return;
-
-        // Offset fleet position slightly from system center to make it visible
-        worldX = currentSystem.x + 15;
+        // Stationary Fleet
+        const currentSystem = this.systems.find((s) => s.id === fleet.current_system);
+        if (!currentSystem) {
+            console.warn(`MapRenderer: Could not find current system for stationary fleet ${fleet.id}`);
+            return; // Cannot determine position
+        }
+        worldX = currentSystem.x + 15; // Offset slightly
         worldY = currentSystem.y + 15;
       } else {
-        // Fleet has no valid position, skip rendering
+        // Fleet has no valid position
+        console.warn(`MapRenderer: Fleet ${fleet.id} has no valid position.`);
         return;
       }
 
@@ -1642,58 +1643,65 @@ export class MapRenderer {
 
   getFleetAt(worldX, worldY) {
     const clickRadius = 20; // Pixels
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 12; // Fixed assumption
+
+    if (!window.gameState || !this.fleets) {
+      return null;
+    }
 
     for (const fleet of this.fleets) {
       let fleetWorldX, fleetWorldY;
 
-      // Calculate fleet position (same logic as drawFleets)
-      if (
-        fleet.destination_system &&
-        fleet.destination_system !== "" &&
-        fleet.current_system &&
-        fleet.current_system !== "" &&
-        fleet.destination_system !== fleet.current_system
-      ) {
-        // Fleet is moving between systems
-        const fromSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        const toSystem = this.systems.find(
-          (s) => s.id === fleet.destination_system,
-        );
+      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find( // Changed to fleetOrders
+        (order) =>
+          order.fleet_id === fleet.id &&
+          // order.type === "move" && // Type is implicit
+          (order.status === "pending" || order.status === "processing"),
+      );
 
-        if (!fromSystem || !toSystem) continue;
-
-        // Calculate progress and interpolated position
-        let progress = 0.5;
-        if (fleet.eta) {
-          const now = new Date();
-          const eta = new Date(fleet.eta);
-          
-          // Calculate actual travel time based on distance (same as backend logic)
-          const deltaX = toSystem.x - fromSystem.x;
-          const deltaY = toSystem.y - fromSystem.y;
-          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-          const travelTimeSec = Math.max(10, Math.min(120, Math.round(distance / 800 * 120)));
-          const departureTime = new Date(eta.getTime() - travelTimeSec * 1000);
-          const totalTime = eta.getTime() - departureTime.getTime();
-          const elapsed = now.getTime() - departureTime.getTime();
-          progress = Math.max(0, Math.min(1, elapsed / totalTime));
+      if (activeOrder && activeOrder.data) { // Check if activeOrder.data exists
+        // Ensure data is an object if it's a JSON string
+        let orderData = activeOrder.data;
+        if (typeof orderData === 'string') {
+            try {
+                orderData = JSON.parse(orderData);
+            } catch (e) {
+                console.error("Failed to parse order data for fleet (getFleetAt):", fleet.id, activeOrder.id, e);
+                orderData = {}; // Fallback to empty object
+            }
         }
 
-        fleetWorldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
-        fleetWorldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
-      } else if (fleet.current_system && fleet.current_system !== "") {
-        // Fleet is stationary
-        const currentSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        if (!currentSystem) continue;
+        const fromSystem = this.systems.find((s) => s.id === fleet.current_system);
+        const toSystem = this.systems.find((s) => s.id === orderData.destination_system_id); // Get from order.data
 
+        if (!fromSystem || !toSystem) {
+           const currentSystem = this.systems.find(s => s.id === fleet.current_system);
+           if (currentSystem) {
+            fleetWorldX = currentSystem.x + 15;
+            fleetWorldY = currentSystem.y + 15;
+           } else { continue; }
+        } else {
+          const current_tick = window.gameState.currentTick || 0;
+          const order_execute_at_tick = activeOrder.execute_at_tick || 0;
+          
+          let total_duration_in_ticks = orderData.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
+          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS; // Fallback
+          
+          const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
+          const elapsed_ticks = current_tick - start_tick_of_movement;
+          const progress = Math.max(0, Math.min(1, elapsed_ticks / total_duration_in_ticks));
+          
+          fleetWorldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
+          fleetWorldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
+        }
+      } else if (fleet.current_system && fleet.current_system !== "") {
+        // Stationary Fleet
+        const currentSystem = this.systems.find((s) => s.id === fleet.current_system);
+        if (!currentSystem) continue;
         fleetWorldX = currentSystem.x + 15;
         fleetWorldY = currentSystem.y + 15;
       } else {
-        continue;
+        continue; // No valid position
       }
 
       // Check if click is within fleet bounds

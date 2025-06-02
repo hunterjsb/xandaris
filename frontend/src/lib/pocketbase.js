@@ -85,6 +85,7 @@ export class GameDataManager {
       fleets: [],
       trades: [],
       tick: [],
+      fleet_orders: [], // Renamed from orders
     };
   }
 
@@ -197,8 +198,46 @@ export class GameDataManager {
       case "trade_update":
         this.notifyCallbacks("trades", data.payload);
         break;
+      case "fleet_order_update": // Renamed from order_update
+        this.notifyCallbacks("fleet_orders", data.payload);
+        break;
       default:
         console.log("Unknown WebSocket message type:", data.type);
+    }
+  }
+
+  async getFleetOrders(userId = null) { // Renamed from getOrders
+    if (!pb.authStore.isValid && !userId) {
+        // For player view, userId will always be present.
+    }
+    if (!userId && pb.authStore.isValid) { // If called without userId but user is logged in.
+        userId = pb.authStore.model.id;
+    }
+
+    if (!userId) { // If still no userId, cannot fetch user-specific orders
+        console.warn("getFleetOrders called without userId and no authenticated user.");
+        return [];
+    }
+
+    try {
+        const filterParts = [
+            `(status != "completed" && status != "failed" && status != "cancelled")`,
+            `user_id = "${userId}"`
+        ];
+        const filter = filterParts.join(" && ");
+        
+        return await pb.collection("fleet_orders").getFullList({ // Changed to fleet_orders
+            filter: filter,
+            sort: "execute_at_tick", // Ascending is default
+            requestKey: `getFleetOrders-${userId}-${Date.now()}`, 
+        });
+    } catch (error) {
+        try {
+            suppressAutoCancelError(error);
+        } catch (e) {
+            console.error("Failed to fetch fleet orders:", e);
+        }
+        return [];
     }
   }
 
