@@ -199,7 +199,7 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 		return fmt.Errorf("failed to find 'fleet_orders' collection: %w", err)
 	}
 
-	sort := "execute_at_tick ASC, created ASC"
+	sort := "execute_at_tick,created"
 	
 	records, err := app.Dao().FindRecordsByFilter(
 		"fleet_orders",
