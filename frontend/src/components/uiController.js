@@ -1878,6 +1878,7 @@ export class UIController {
     const currentTick = window.gameState.currentTick || 0;
     const TICKS_PER_MINUTE = window.gameState.ticksPerMinute || 6;
     const SECONDS_PER_TICK = 60 / TICKS_PER_MINUTE;
+    const FLEET_MOVEMENT_DURATION_TICKS = 2; // Updated for faster testing
 
     let movingFleetsHtml = "";
     const movingFleetIds = new Set();
@@ -1913,6 +1914,11 @@ export class UIController {
           etaDisplay = "Initiating Jump";
       }
       
+      // Show progress for fast testing (movement is only 2 ticks total)
+      const totalMovementTicks = order.travel_time_ticks || FLEET_MOVEMENT_DURATION_TICKS;
+      const progressTicks = totalMovementTicks - ticksRemaining;
+      const progressPercent = Math.round((progressTicks / totalMovementTicks) * 100);
+      
       const statusDisplay = order.status.charAt(0).toUpperCase() + order.status.slice(1);
 
       movingFleetsHtml += `
@@ -1922,6 +1928,7 @@ export class UIController {
             <div><span class="text-space-400">From:</span> ${originName}</div>
             <div><span class="text-space-400">To:</span> ${destName}</div>
             <div><span class="text-space-400">ETA:</span> <span class="text-yellow-400">${etaDisplay}</span></div>
+            <div><span class="text-space-400">Progress:</span> <span class="text-green-400">${progressPercent}%</span></div>
             <div><span class="text-space-400">Status:</span> <span class="text-cyan-400">${statusDisplay}</span></div>
           </div>
         </div>

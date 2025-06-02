@@ -753,8 +753,8 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		// Calculate execute_at_tick
 		currentTick := tick.GetCurrentTick(app)
-		// Travel duration is assumed to be 12 ticks (2 minutes at 6 ticks/minute or 10 seconds/tick)
-		travelDurationInTicks := int64(12)
+		// Travel duration is 2 ticks (20 seconds at 10 seconds/tick) for faster testing
+		travelDurationInTicks := int64(2)
 		executeAtTick := currentTick + travelDurationInTicks
 
 		// Create a new fleet_order record

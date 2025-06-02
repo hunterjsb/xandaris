@@ -1395,7 +1395,7 @@ export class MapRenderer {
   }
 
   drawFleets(deltaTime) {
-    const TOTAL_FLEET_MOVE_DURATION_TICKS = 12; // Fixed assumption
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 2; // Fixed assumption - updated for faster testing
 
     if (!window.gameState || !this.fleets) {
       return;
@@ -1435,6 +1435,19 @@ export class MapRenderer {
           const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
           const elapsed_ticks = current_tick - start_tick_of_movement;
           const progress = Math.max(0, Math.min(1, elapsed_ticks / total_duration_in_ticks));
+
+          // Debug logging for fleet movement
+          if (fleet.id && Math.random() < 0.1) { // Log 10% of the time to avoid spam
+            console.log(`Fleet ${fleet.id.slice(-4)} movement:`, {
+              currentTick: current_tick,
+              executeAtTick: order_execute_at_tick,
+              startTick: start_tick_of_movement,
+              elapsedTicks: elapsed_ticks,
+              totalDuration: total_duration_in_ticks,
+              progress: progress,
+              status: activeOrder.status
+            });
+          }
 
           worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
           worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
@@ -1631,7 +1644,7 @@ export class MapRenderer {
 
   getFleetAt(worldX, worldY) {
     const clickRadius = 20; // Pixels
-    const TOTAL_FLEET_MOVE_DURATION_TICKS = 12; // Fixed assumption
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 2; // Fixed assumption - updated for faster testing
 
     if (!window.gameState || !this.fleets) {
       return null;

@@ -67,6 +67,11 @@ class XanNationApp {
   }
 
   handleGameStateChange(state) {
+    // Debug logging for fleet orders
+    if (state.fleetOrders && state.fleetOrders.length > 0) {
+      console.log(`Fleet orders updated: ${state.fleetOrders.length} orders`, state.fleetOrders);
+    }
+    
     // Update map renderer with new data
     if (this.mapRenderer) {
       this.mapRenderer.setSystems(state.systems);
