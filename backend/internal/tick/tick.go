@@ -193,10 +193,25 @@ func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
 			log.Printf("DEBUG: Processing arrival for fleet %s, eta: %s, current: %s, dest: %s", 
 				fleet.Id, etaGoTime.Format("2006-01-02 15:04:05.000Z"), fleet.GetString("current_system"), fleet.GetString("destination_system"))
 			
-			// Move fleet to destination (set current_system, clear destination and eta)
-			fleet.Set("current_system", fleet.GetString("destination_system"))
-			fleet.Set("destination_system", "")
-			fleet.Set("eta", "")
+			// Check if this is a multi-hop journey with next_stop set
+			nextStop := fleet.GetString("next_stop")
+			
+			if nextStop != "" {
+				// This is a multi-hop journey - move to next_stop
+				fleet.Set("current_system", nextStop)
+				fleet.Set("next_stop", "")
+				
+				// Clear destination and eta - frontend will send next hop if needed
+				fleet.Set("destination_system", "")
+				fleet.Set("eta", "")
+				log.Printf("DEBUG: Fleet %s reached waypoint %s in multi-hop journey", fleet.Id, nextStop)
+			} else {
+				// Single-hop journey - move to destination and clear
+				fleet.Set("current_system", fleet.GetString("destination_system"))
+				fleet.Set("destination_system", "")
+				fleet.Set("eta", "")
+				log.Printf("DEBUG: Fleet %s completed single-hop journey", fleet.Id)
+			}
 
 			if err := app.Dao().SaveRecord(fleet); err != nil {
 				log.Printf("Failed to save arrived fleet %s: %v", fleet.Id, err)

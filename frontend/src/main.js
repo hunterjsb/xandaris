@@ -14,6 +14,7 @@ class XanNationApp {
   constructor() {
     this.mapRenderer = null;
     // this.uiController = null; // Will be set from window global
+    this.fleetRoutes = new Map(); // Store multi-hop fleet routes
 
     this.init();
   }
@@ -27,7 +28,7 @@ class XanNationApp {
 
     // Initialize map renderer
     this.mapRenderer = new MapRenderer("game-canvas");
-    
+
     // Set initial user ID if already logged in
     const currentUser = authManager.getUser();
     if (currentUser) {
@@ -71,7 +72,8 @@ class XanNationApp {
       this.mapRenderer.setSystems(state.systems);
       this.mapRenderer.setFleets(state.fleets);
       this.mapRenderer.setTrades(state.trades); // Added line
-      
+      this.mapRenderer.setHyperlanes(state.hyperlanes); // Add hyperlanes
+
       // Only update selected system if it changed
       if (this.mapRenderer.selectedSystem?.id !== state.selectedSystem?.id) {
         this.mapRenderer.setSelectedSystem(state.selectedSystem);
@@ -109,14 +111,31 @@ class XanNationApp {
       const planets = e.detail.planets;
       const screenX = e.detail.screenX;
       const screenY = e.detail.screenY;
-      
+
       // Only select if it's a different system
-      if (!gameState.selectedSystem || gameState.selectedSystem.id !== system.id) {
+      if (
+        !gameState.selectedSystem ||
+        gameState.selectedSystem.id !== system.id
+      ) {
         gameState.selectSystem(system.id);
       }
-      
+
       // Update UI directly to avoid circular updates
       this.uiController.displaySystemView(system, planets, screenX, screenY);
+    });
+
+    // Fleet movement via shift+click
+    canvas.addEventListener("fleetMoveRequested", (e) => {
+      const fromFleet = e.detail.fromFleet;
+      const toSystem = e.detail.toSystem;
+      
+      this.handleMultiMoveFleet(fromFleet, toSystem);
+    });
+
+    // Fleet selection
+    canvas.addEventListener("fleetSelected", (e) => {
+      const fleet = e.detail.fleet;
+      this.displaySelectedFleetInfo(fleet);
     });
 
     // Context menu actions
@@ -221,7 +240,6 @@ class XanNationApp {
       case "trade":
         this.uiController.showTradeRouteModal(system);
         break;
-
     }
   }
 
@@ -293,7 +311,7 @@ class XanNationApp {
     const currentY = currentSystem.y;
 
     // Find systems by direction relative to current system
-    gameState.systems.forEach(system => {
+    gameState.systems.forEach((system) => {
       if (system.id === currentSystem.id) return;
 
       const deltaX = system.x - currentX;
@@ -304,8 +322,8 @@ class XanNationApp {
       if (distance > 800) return;
 
       // Determine primary direction
-      const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
-      
+      const angle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+
       // Convert angle to direction (with some tolerance)
       if (angle >= -45 && angle <= 45) {
         // Right
@@ -344,10 +362,13 @@ class XanNationApp {
       // Select and center on the new system
       gameState.selectSystem(target.system.id);
       this.mapRenderer.centerOnSystem(target.system.id);
-      
+
       // Get planets for the new system and show the system view
-      const planetsInSystem = gameState.mapData?.planets?.filter(p => p.system_id === target.system.id) || [];
-      
+      const planetsInSystem =
+        gameState.mapData?.planets?.filter(
+          (p) => p.system_id === target.system.id,
+        ) || [];
+
       this.uiController.displaySystemView(target.system, planetsInSystem);
     }
   }
@@ -355,12 +376,12 @@ class XanNationApp {
   async sendFleetToSystem(direction) {
     const currentSystem = gameState.getSelectedSystem();
     if (!currentSystem) {
-      this.uiController.showToast("❌ Select a system first", 'error');
+      this.uiController.showToast("Select a system first", "error");
       return;
     }
 
     if (!authManager.isLoggedIn()) {
-      this.uiController.showToast("❌ Please log in to send fleets", 'error');
+      this.uiController.showToast("Please log in to send fleets", "error");
       return;
     }
 
@@ -368,36 +389,337 @@ class XanNationApp {
     const target = connected[direction];
 
     if (!target || !target.system) {
-      this.uiController.showToast(`❌ No system found to the ${direction}`, 'error');
+      this.uiController.showToast(
+        `No system found to the ${direction}`,
+        "error",
+      );
       return;
     }
 
     // Check if player has fleets at the current system
-    const playerFleets = gameState.fleets?.filter(fleet => 
-      fleet.owner_id === authManager.getUser()?.id && 
-      fleet.current_system === currentSystem.id &&
-      !fleet.destination_system
-    ) || [];
+    const playerFleets =
+      gameState.fleets?.filter(
+        (fleet) =>
+          fleet.owner_id === authManager.getUser()?.id &&
+          fleet.current_system === currentSystem.id &&
+          !fleet.destination_system,
+      ) || [];
 
     if (playerFleets.length === 0) {
-      this.uiController.showToast("❌ No available fleets at this system", 'error');
+      this.uiController.showToast(
+        "No available fleets at this system",
+        "error",
+      );
       return;
     }
 
     try {
       // Send fleet with default strength
-      const response = await gameData.sendFleet(currentSystem.id, target.system.id, 10);
-      
+      const response = await gameData.sendFleet(
+        currentSystem.id,
+        target.system.id,
+        10,
+      );
+
       if (response) {
-        this.uiController.showToast(`🚀 Fleet dispatched to ${target.system.name || `System ${target.system.id.slice(-4)}`}`);
-        
+        this.uiController.showToast(
+          `🚀 Fleet dispatched to ${target.system.name || `System ${target.system.id.slice(-4)}`}`,
+        );
+
         // Visual feedback - draw a temporary line
         this.mapRenderer.showFleetRoute(currentSystem, target.system);
       }
     } catch (error) {
       console.error("Failed to send fleet:", error);
-      this.uiController.showToast(`❌ Failed to send fleet: ${error.message || "Unknown error"}`, 'error');
+      this.uiController.showToast(
+        `Failed to send fleet: ${error.message || "Unknown error"}`,
+        "error",
+      );
     }
+  }
+
+  async handleMultiMoveFleet(selectedFleet, toSystem) {
+    if (!authManager.isLoggedIn()) {
+      this.uiController.showToast("Please log in to send fleets", "error");
+      return;
+    }
+
+    // Check if fleet is owned by current user and not moving
+    if (selectedFleet.owner_id !== authManager.getUser()?.id) {
+      this.uiController.showToast("You don't own this fleet", "error");
+      return;
+    }
+
+    if (selectedFleet.destination_system) {
+      this.uiController.showToast("Fleet is already moving", "error");
+      return;
+    }
+
+    // Get the fleet's current system
+    const fromSystem = this.mapRenderer.systems.find(s => s.id === selectedFleet.current_system);
+    if (!fromSystem) {
+      this.uiController.showToast("Fleet's location not found", "error");
+      return;
+    }
+
+    // Find path from source to destination
+    const path = this.findFleetPath(fromSystem, toSystem);
+
+    if (!path || path.length < 2) {
+      this.uiController.showToast(
+        "No valid route found to target system",
+        "error",
+      );
+      return;
+    }
+
+    // Store the full route for this fleet
+    this.fleetRoutes.set(selectedFleet.id, {
+      fullPath: path,
+      currentHop: 0,
+      targetSystem: toSystem
+    });
+
+    // Send first hop
+    await this.sendNextFleetHop(selectedFleet.id, path);
+  }
+
+  async sendNextFleetHop(fleetId, path) {
+    const routeData = this.fleetRoutes.get(fleetId);
+    console.log(`DEBUG: sendNextFleetHop called for fleet ${fleetId}, route data:`, routeData);
+    if (!routeData || routeData.currentHop >= path.length - 1) {
+      // Route complete or invalid
+      console.log(`DEBUG: Route complete or invalid for fleet ${fleetId}, cleaning up`);
+      this.fleetRoutes.delete(fleetId);
+      return;
+    }
+
+    const nextSystemIndex = routeData.currentHop + 1;
+    const nextSystem = path[nextSystemIndex];
+    const currentSystem = path[routeData.currentHop];
+
+    // Calculate distance and travel time for this hop
+    const deltaX = nextSystem.x - currentSystem.x;
+    const deltaY = nextSystem.y - currentSystem.y;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // Scale travel time with distance: 10-120 seconds (800 units = 2 minutes max)
+    const travelSec = Math.max(10, Math.min(120, Math.round(distance / 800 * 120)));
+
+    try {
+      const response = await gameData.sendMultiMoveFleet(
+        fleetId,
+        nextSystem.id,
+        travelSec
+      );
+
+      if (response) {
+        // Immediately update fleet visually on frontend
+        const fleet = gameState.fleets.find(f => f.id === fleetId);
+        if (fleet) {
+          // Calculate ETA for frontend display
+          const etaTime = new Date();
+          etaTime.setSeconds(etaTime.getSeconds() + travelSec);
+          
+          // Update fleet state immediately for smooth movement
+          fleet.destination_system = nextSystem.id;
+          fleet.eta = etaTime.toISOString();
+          fleet.next_stop = nextSystem.id;
+          
+          // Notify UI to update
+          gameState.notifyCallbacks();
+        }
+
+        // Update route progress - fleet is now moving to nextSystemIndex
+        // but currentHop should only be updated when the fleet actually arrives
+        // We'll update it in onFleetArrival instead
+        
+        const isLastHop = nextSystemIndex === path.length - 1;
+        const systemName = nextSystem.name || `System ${nextSystem.id.slice(-4)}`;
+        
+        if (isLastHop) {
+          const pathNames = path
+            .map((sys) => sys.name || `System ${sys.id.slice(-4)}`)
+            .join(" → ");
+          this.uiController.showToast(
+            `Fleet dispatched via: ${pathNames}`,
+            "info",
+            3000
+          );
+          // Visual feedback - draw the entire route
+          this.mapRenderer.showMultiFleetRoute(path);
+        } else {
+          this.uiController.showToast(
+            `Fleet en route to ${systemName} (hop ${nextSystemIndex}/${path.length - 1})`,
+            "info",
+            2000
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to send fleet hop:", error);
+      this.uiController.showToast(
+        "Failed to dispatch fleet. Try again.",
+        "error",
+      );
+      // Clean up route on error
+      this.fleetRoutes.delete(fleetId);
+    }
+  }
+
+  onFleetArrival(fleetId) {
+    console.log(`DEBUG: onFleetArrival called for fleet ${fleetId}`);
+    // Check if this fleet has a pending multi-hop route
+    const routeData = this.fleetRoutes.get(fleetId);
+    console.log(`DEBUG: Route data for fleet ${fleetId}:`, routeData);
+    if (routeData) {
+      // Fleet has arrived at the next system, so increment currentHop
+      routeData.currentHop++;
+      console.log(`DEBUG: Fleet ${fleetId} arrived at system ${routeData.currentHop}/${routeData.fullPath.length - 1}, checking if journey continues`);
+      
+      // Check if we've reached the final destination
+      if (routeData.currentHop >= routeData.fullPath.length - 1) {
+        console.log(`DEBUG: Fleet ${fleetId} reached final destination, cleaning up route`);
+        this.fleetRoutes.delete(fleetId);
+        return;
+      }
+      
+      // Continue to next hop
+      console.log(`DEBUG: Continuing multi-hop journey for fleet ${fleetId} to next system`);
+      setTimeout(() => {
+        this.sendNextFleetHop(fleetId, routeData.fullPath);
+      }, 500); // Small delay to ensure backend has processed the arrival
+    } else {
+      console.log(`DEBUG: No route data found for fleet ${fleetId}, journey complete or single-hop`);
+    }
+  }
+
+
+
+  findFleetPath(fromSystem, toSystem) {
+    // Breadth-first search pathfinding using hyperlane connectivity
+    const visited = new Set();
+    const queue = [{ system: fromSystem, path: [fromSystem] }];
+    const maxHops = 15; // Maximum number of hops to prevent infinite loops
+
+    console.log(`🗺️ Pathfinding from ${fromSystem.name || fromSystem.id.slice(-4)} to ${toSystem.name || toSystem.id.slice(-4)}`);
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      const currentSystem = current.system;
+
+      if (currentSystem.id === toSystem.id) {
+        console.log(`✅ Path found with ${current.path.length} hops:`, current.path.map(s => s.name || s.id.slice(-4)));
+        return current.path;
+      }
+
+      if (visited.has(currentSystem.id) || current.path.length > maxHops) {
+        continue;
+      }
+
+      visited.add(currentSystem.id);
+
+      // Find all systems connected via hyperlanes (same logic as visual display)
+      const connectedSystems =
+        this.mapRenderer.systems?.filter((system) => {
+          if (system.id === currentSystem.id || visited.has(system.id)) {
+            return false;
+          }
+
+          return this.mapRenderer.areSystemsConnected(currentSystem, system);
+        }) || [];
+
+      console.log(`🔍 From ${currentSystem.name || currentSystem.id.slice(-4)}: found ${connectedSystems.length} connected systems (hop ${current.path.length})`);
+
+      // Add connected systems to queue
+      connectedSystems.forEach((system) => {
+        if (!visited.has(system.id)) {
+          queue.push({
+            system: system,
+            path: [...current.path, system],
+          });
+        }
+      });
+    }
+
+    console.log(`❌ No path found from ${fromSystem.name || fromSystem.id.slice(-4)} to ${toSystem.name || toSystem.id.slice(-4)}`);
+    return null; // No path found
+  }
+
+  calculatePathDistance(path) {
+    let totalDistance = 0;
+
+    for (let i = 0; i < path.length - 1; i++) {
+      const from = path[i];
+      const to = path[i + 1];
+
+      const deltaX = to.x - from.x;
+      const deltaY = to.y - from.y;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      totalDistance += distance;
+    }
+
+    return totalDistance;
+  }
+
+  displaySelectedFleetInfo(fleet) {
+    const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
+    const currentSystem = this.mapRenderer.systems.find(s => s.id === fleet.current_system);
+    const currentName = currentSystem ? (currentSystem.name || `System ${currentSystem.id.slice(-4)}`) : "Unknown";
+    
+    // Check if fleet is moving
+    let ticketContent = "";
+    if (fleet.destination_system) {
+      // Moving fleet - show transit info
+      const destSystem = this.mapRenderer.systems.find(s => s.id === fleet.destination_system);
+      const destName = destSystem ? (destSystem.name || `System ${destSystem.id.slice(-4)}`) : "Unknown";
+      const nextSystem = this.mapRenderer.systems.find(s => s.id === fleet.next_stop);
+      const nextName = nextSystem ? (nextSystem.name || `System ${nextSystem.id.slice(-4)}`) : null;
+      
+      // Format ETA
+      let etaText = "Unknown";
+      if (fleet.eta) {
+        const eta = new Date(fleet.eta);
+        const now = new Date();
+        const diffMs = eta.getTime() - now.getTime();
+        const diffMin = Math.ceil(diffMs / (1000 * 60));
+        etaText = diffMin > 0 ? `${diffMin}m` : "Arriving";
+      }
+      
+      ticketContent = `
+        <div class="font-mono text-xs bg-slate-800 p-2 rounded">
+          <div class="space-y-0.5">
+            <div><span class="text-slate-400">FLEET:</span> ${fleetName}</div>
+            <div><span class="text-slate-400">FROM:</span> ${currentName}</div>
+            ${nextName && nextName !== destName ? `<div><span class="text-slate-400">NEXT:</span> ${nextName}</div>` : ''}
+            <div><span class="text-slate-400">DEST:</span> ${destName}</div>
+            <div><span class="text-slate-400">ETA:</span> ${etaText}</div>
+          </div>
+        </div>
+      `;
+    } else {
+      // Stationary fleet - show selection info
+      let shipInfo = "No ships";
+      if (fleet.ships && fleet.ships.length > 0) {
+        shipInfo = fleet.ships.map(ship => 
+          `${ship.count}x ${ship.ship_type_name || 'Unknown'}`
+        ).join(', ');
+      }
+      
+      ticketContent = `
+        <div class="font-mono text-xs bg-slate-800 p-2 rounded">
+          <div class="space-y-0.5">
+            <div><span class="text-slate-400">FLEET:</span> ${fleetName}</div>
+            <div><span class="text-slate-400">LOCATION:</span> ${currentName}</div>
+            <div><span class="text-slate-400">SHIPS:</span> ${shipInfo}</div>
+            <div><span class="text-slate-400">STATUS:</span> Docked</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    this.uiController.showToast(ticketContent, 'ticket', 0); // 0 duration = manual dismiss only
   }
 
   handleKeyboardInput(e) {
@@ -414,33 +736,33 @@ class XanNationApp {
       case "arrowup":
         e.preventDefault();
         if (e.shiftKey) {
-          this.sendFleetToSystem('up');
+          this.sendFleetToSystem("up");
         } else {
-          this.navigateToSystem('up');
+          this.navigateToSystem("up");
         }
         break;
       case "arrowdown":
         e.preventDefault();
         if (e.shiftKey) {
-          this.sendFleetToSystem('down');
+          this.sendFleetToSystem("down");
         } else {
-          this.navigateToSystem('down');
+          this.navigateToSystem("down");
         }
         break;
       case "arrowleft":
         e.preventDefault();
         if (e.shiftKey) {
-          this.sendFleetToSystem('left');
+          this.sendFleetToSystem("left");
         } else {
-          this.navigateToSystem('left');
+          this.navigateToSystem("left");
         }
         break;
       case "arrowright":
         e.preventDefault();
         if (e.shiftKey) {
-          this.sendFleetToSystem('right');
+          this.sendFleetToSystem("right");
         } else {
-          this.navigateToSystem('right');
+          this.navigateToSystem("right");
         }
         break;
       case "f":
@@ -468,4 +790,5 @@ class XanNationApp {
 }
 
 // Start the application
-new XanNationApp();
+const app = new XanNationApp();
+window.app = app;

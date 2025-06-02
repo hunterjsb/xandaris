@@ -34,9 +34,11 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/fleets", getFleets(app))
 		e.Router.GET("/api/trade_routes", getTradeRoutes(app))
 		e.Router.GET("/api/treaties", getTreaties(app))
+		e.Router.GET("/api/hyperlanes", getHyperlanes(app))
 
 		// Game actions
 		e.Router.POST("/api/orders/fleet", sendFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/orders/multi-fleet", sendMultiFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/build", queueBuilding(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/trade", createTradeRoute(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/colonize", colonizePlanet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
@@ -757,6 +759,90 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			"success":  true,
 			"fleet_id": fleet.Id,
 		})
+	}
+}
+
+func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		data := struct {
+			FleetID   string `json:"fleet_id"`
+			NextStop  string `json:"next_stop"`    // Immediate next system
+			TravelSec int    `json:"travel_sec"`   // Travel time in seconds
+		}{}
+
+		if err := c.Bind(&data); err != nil {
+			return apis.NewBadRequestError("Invalid request data", err)
+		}
+
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Validate fleet ownership and availability
+		fleet, err := app.Dao().FindRecordById("fleets", data.FleetID)
+		if err != nil {
+			return apis.NewBadRequestError("Fleet not found", err)
+		}
+
+		if fleet.GetString("owner_id") != user.Id {
+			return apis.NewForbiddenError("You don't own this fleet", nil)
+		}
+
+		// Check if fleet is already moving
+		if fleet.GetString("destination_system") != "" {
+			return apis.NewBadRequestError("Fleet is already in transit", nil)
+		}
+
+		// Validate next_stop exists
+		if data.NextStop == "" {
+			return apis.NewBadRequestError("Next stop system ID required", nil)
+		}
+
+		// Calculate ETA (use provided time or default to 120 seconds)
+		travelTime := data.TravelSec
+		if travelTime <= 0 {
+			travelTime = 120
+		}
+		etaTime := time.Now().Add(time.Duration(travelTime) * time.Second)
+
+		// Update fleet with next hop
+		fleet.Set("next_stop", data.NextStop)
+		fleet.Set("destination_system", data.NextStop) // For tracking purposes
+		fleet.Set("eta", etaTime)
+
+		if err := app.Dao().SaveRecord(fleet); err != nil {
+			return apis.NewBadRequestError("Failed to start fleet movement", err)
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":   true,
+			"fleet_id":  fleet.Id,
+			"next_stop": data.NextStop,
+			"eta":       etaTime,
+		})
+	}
+}
+
+func getHyperlanes(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		hyperlanes, err := app.Dao().FindRecordsByFilter("hyperlanes", "id != ''", "", 0, 0)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to fetch hyperlanes", err)
+		}
+
+		// Convert to simple format
+		result := make([]map[string]interface{}, len(hyperlanes))
+		for i, hyperlane := range hyperlanes {
+			result[i] = map[string]interface{}{
+				"id":          hyperlane.Id,
+				"from_system": hyperlane.GetString("from_system"),
+				"to_system":   hyperlane.GetString("to_system"),
+				"distance":    hyperlane.GetFloat("distance"),
+			}
+		}
+
+		return c.JSON(http.StatusOK, result)
 	}
 }
 

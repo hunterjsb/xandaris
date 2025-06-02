@@ -167,6 +167,7 @@ func cleanGameData(app *pocketbase.PocketBase) {
 		"ships",            // references fleets
 		"trade_routes",     // references systems
 		"fleets",           // references systems
+		"hyperlanes",       // references systems
 		"treaties",
 		"treaty_proposals", 
 		"battle_logs",

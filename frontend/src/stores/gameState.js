@@ -8,6 +8,7 @@ export class GameState {
     this.trades = [];
     this.treaties = [];
     this.buildings = [];
+    this.hyperlanes = [];
     this.mapData = null;
     this.selectedSystem = null;
     this.selectedSystemPlanets = []; // Added to store planets of the selected system
@@ -70,10 +71,17 @@ export class GameState {
       const userId = authManager.getUser()?.id;
 
       // Load map data first (most important)
+      // Load map data
       const mapData = await gameData.getMap();
       if (mapData && mapData.systems) {
         this.systems = mapData.systems;
         this.mapData = mapData;
+      }
+
+      // Load hyperlanes
+      const hyperlanes = await gameData.getHyperlanes();
+      if (hyperlanes) {
+        this.hyperlanes = hyperlanes;
       }
 
       // Load user-specific data with delays to prevent auto-cancellation
@@ -154,6 +162,7 @@ export class GameState {
     this.trades = [];
     this.treaties = [];
     this.buildings = [];
+    this.hyperlanes = [];
     this.mapData = null;
     this.selectedSystem = null;
     this.selectedSystemPlanets = [];
@@ -179,6 +188,13 @@ export class GameState {
       if (mapData && mapData.systems) {
         this.systems = mapData.systems;
         this.mapData = mapData;
+        
+        // Also load hyperlanes when map data is loaded
+        const hyperlanes = await gameData.getHyperlanes();
+        if (hyperlanes) {
+          this.hyperlanes = hyperlanes;
+        }
+        
         this.notifyCallbacks();
       }
     } catch (error) {
@@ -239,17 +255,52 @@ export class GameState {
   }
 
   updateFleets(fleetsData) {
+    console.log(`DEBUG: updateFleets called with:`, Array.isArray(fleetsData) ? `array of ${fleetsData.length} fleets` : 'single fleet', fleetsData);
+    
     if (Array.isArray(fleetsData)) {
+      // Check for fleet arrivals when updating with array
+      const oldFleets = new Map(this.fleets.map(f => [f.id, f]));
+      console.log(`DEBUG: Checking ${fleetsData.length} fleets for arrivals against ${oldFleets.size} old fleets`);
+      
+      for (const newFleet of fleetsData) {
+        const oldFleet = oldFleets.get(newFleet.id);
+        if (oldFleet) {
+          console.log(`DEBUG: Fleet ${newFleet.id} - old dest: "${oldFleet.destination_system}", new dest: "${newFleet.destination_system}"`);
+          if (oldFleet.destination_system && !newFleet.destination_system) {
+            console.log(`DEBUG: Fleet arrival detected for fleet ${newFleet.id}, old destination: ${oldFleet.destination_system}, new destination: ${newFleet.destination_system}`);
+            this.handleFleetArrival(newFleet.id);
+          }
+        }
+      }
+      
       this.fleets = fleetsData;
     } else {
       const index = this.fleets.findIndex((f) => f.id === fleetsData.id);
       if (index >= 0) {
+        const oldFleet = this.fleets[index];
         this.fleets[index] = fleetsData;
+        
+        // Check for fleet arrival (had destination, now doesn't)
+        if (oldFleet.destination_system && !fleetsData.destination_system) {
+          console.log(`DEBUG: Fleet arrival detected for fleet ${fleetsData.id}, old destination: ${oldFleet.destination_system}, new destination: ${fleetsData.destination_system}`);
+          this.handleFleetArrival(fleetsData.id);
+        }
       } else {
         this.fleets.push(fleetsData);
       }
     }
     this.notifyCallbacks();
+  }
+
+  handleFleetArrival(fleetId) {
+    console.log(`DEBUG: Fleet ${fleetId} arrived, checking for multi-hop continuation`);
+    // Notify main app about fleet arrival for multi-hop continuation
+    if (window.app && typeof window.app.onFleetArrival === 'function') {
+      console.log(`DEBUG: Calling window.app.onFleetArrival for fleet ${fleetId}`);
+      window.app.onFleetArrival(fleetId);
+    } else {
+      console.warn(`DEBUG: window.app.onFleetArrival not available for fleet ${fleetId}`);
+    }
   }
 
   updateTrades(tradesData) {

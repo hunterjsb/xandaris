@@ -509,7 +509,7 @@ export class UIController {
           <div class="flex-1 overflow-hidden flex flex-col">
             <div class="flex justify-end mb-2">
               <div class="text-xs text-space-400">
-                <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">↑↓←→</kbd> Navigate • <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">Shift+↑↓←→</kbd> Send Fleet
+                <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">Click</kbd> Fleet to Select • <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">Shift+Click</kbd> System to Move • <kbd class="px-1 py-0.5 bg-space-700 rounded text-xs">↑↓←→</kbd> Navigate
               </div>
             </div>
             <ul id="system-planets-list" class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -2062,7 +2062,7 @@ export class UIController {
       });
   }
 
-  showToast(message, type = "success") {
+  showToast(message, type = "success", duration = 4000) {
     // Remove any existing toast
     const existingToast = document.getElementById("fleet-toast");
     if (existingToast) {
@@ -2072,37 +2072,55 @@ export class UIController {
     // Create toast element
     const toast = document.createElement("div");
     toast.id = "fleet-toast";
-    toast.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border transition-all duration-300 max-w-sm`;
+    toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 p-2 rounded shadow-md transition-all duration-200 max-w-xs`;
 
     if (type === "success") {
       toast.className +=
         " bg-emerald-900/90 border-emerald-600 text-emerald-200";
     } else if (type === "error") {
       toast.className += " bg-red-900/90 border-red-600 text-red-200";
+    } else if (type === "info") {
+      toast.className += " bg-blue-900/90 border-blue-600 text-blue-200";
+    } else if (type === "ticket") {
+      toast.className += " bg-slate-900/95 text-slate-200";
+      toast.style.maxWidth = "280px";
     }
 
-    toast.innerHTML = `
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="material-icons text-sm">${type === "success" ? "check_circle" : "error"}</span>
-          <span class="text-sm">${message}</span>
+    if (type === "ticket") {
+      toast.innerHTML = `
+        <div class="flex items-start justify-between">
+          <div class="flex-1">${message}</div>
+          <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-50 hover:opacity-100">
+            <span class="material-icons text-xs">close</span>
+          </button>
         </div>
-        <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-70 hover:opacity-100">
-          <span class="material-icons text-sm">close</span>
-        </button>
-      </div>
-      <div class="text-xs mt-1 opacity-70">Press Space or Esc to dismiss</div>
-    `;
+      `;
+    } else {
+      toast.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-icons text-sm">${type === "success" ? "check_circle" : type === "error" ? "error" : "info"}</span>
+            <span class="text-sm">${message}</span>
+          </div>
+          <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-70 hover:opacity-100">
+            <span class="material-icons text-sm">close</span>
+          </button>
+        </div>
+        <div class="text-xs mt-1 opacity-70">Press Space or Esc to dismiss</div>
+      `;
+    }
 
     // Add to page
     document.body.appendChild(toast);
 
-    // Auto-dismiss after 4 seconds
-    setTimeout(() => {
-      if (toast.parentElement) {
-        toast.remove();
-      }
-    }, 4000);
+    // Auto-dismiss after specified duration (unless duration is 0 for manual-only)
+    if (duration > 0) {
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.remove();
+        }
+      }, duration);
+    }
 
     // Set up keyboard dismissal
     const handleKeyPress = (e) => {
