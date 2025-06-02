@@ -161,6 +161,7 @@ func cleanGameData(app *pocketbase.PocketBase) {
 	// First delete child records, then parent records
 	deleteOrder := []string{
 		// Child records first
+		"fleet_orders",     // references fleets and systems
 		"resource_nodes",    // references planets
 		"populations",       // references planets  
 		"buildings",         // references planets
