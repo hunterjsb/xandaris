@@ -800,10 +800,20 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		order.Set("original_system_id", data.FromID)
 		order.Set("travel_time_ticks", travelDurationInTicks)
 
+		log.Printf("DEBUG: Creating fleet order with values:")
+		log.Printf("  user_id: %s", user.Id)
+		log.Printf("  fleet_id: %s", fleet.Id)
+		log.Printf("  destination_system_id: %s", data.ToID)
+		log.Printf("  original_system_id: %s", data.FromID)
+		log.Printf("  travel_time_ticks: %d", travelDurationInTicks)
+		log.Printf("  execute_at_tick: %d", executeAtTick)
+
 		if err := app.Dao().SaveRecord(order); err != nil {
 			log.Printf("Error saving fleet order: %v", err)
 			return apis.NewBadRequestError("Failed to create fleet move order", err)
 		}
+
+		log.Printf("DEBUG: Fleet order saved successfully with ID: %s", order.Id)
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":  true,
