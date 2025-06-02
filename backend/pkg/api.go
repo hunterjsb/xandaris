@@ -554,7 +554,7 @@ func getFleets(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		if userID != "" {
 			filter := fmt.Sprintf("owner_id='%s'", userID)
-			fleets, err = app.Dao().FindRecordsByFilter("fleets", filter, "eta", 0, 0)
+			fleets, err = app.Dao().FindRecordsByFilter("fleets", filter, "name", 0, 0)
 		} else {
 			fleets, err = app.Dao().FindRecordsByExpr("fleets", nil, nil)
 		}
