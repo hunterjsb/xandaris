@@ -1897,6 +1897,7 @@ export class UIController {
       movingFleetIds.add(fleet.id);
       const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
       const originSystem = allSystems.find(s => s.id === fleet.current_system);
+      const originName = originSystem ? originSystem.name : "Deep Space";
       
       let destName = "Unknown System";
       let orderData = order.data;

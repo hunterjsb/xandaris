@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/models"
 
 	"github.com/hunterjsb/xandaris/internal/economy"
 	"github.com/hunterjsb/xandaris/internal/websocket"
@@ -195,7 +194,7 @@ func EvaluateTreaties(app *pocketbase.PocketBase) error {
 func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) error {
 	log.Printf("Starting ProcessPendingFleetOrders for tick #%d", currentTick)
 
-	fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+	_, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
 	if err != nil {
 		return fmt.Errorf("failed to find 'fleet_orders' collection: %w", err)
 	}
@@ -220,7 +219,7 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 
 	log.Printf("Found %d pending fleet orders to process for tick #%d", len(records), currentTick)
 
-	fleetsCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
+	_, err = app.Dao().FindCollectionByNameOrId("fleets")
 	if err != nil {
 		// If fleets collection isn't found, we can't process any fleet orders.
 		return fmt.Errorf("failed to find 'fleets' collection: %w", err)
@@ -258,7 +257,7 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 						processingError = fmt.Errorf("missing or invalid 'destination_system_id' in data for fleet order %s", order.Id)
 						finalStatus = "failed"
 					} else {
-						fleet, err := app.Dao().FindRecordById(fleetsCollection.Id, fleetID)
+						fleet, err := app.Dao().FindRecordById("fleets", fleetID)
 						if err != nil {
 							processingError = fmt.Errorf("fleet %s not found for order %s: %w", fleetID, order.Id, err)
 							finalStatus = "failed"

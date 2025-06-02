@@ -73,7 +73,6 @@ func init() {
 				MaxSelect: 1,
 				Values:    []string{"pending", "processing", "completed", "failed", "cancelled"},
 			},
-			DefaultValue: "pending",
 		})
 
 		// execute_at_tick
