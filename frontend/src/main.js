@@ -487,7 +487,7 @@ class XanNationApp {
       try {
         console.log(`🚀 Creating fleet order: ${fromSystem.name || fromSystem.id.slice(-4)} → ${toSystem.name || toSystem.id.slice(-4)}`);
         
-        const result = await gameData.sendFleet(selectedFleet.current_system, toSystem.id);
+        const result = await gameData.sendFleet(selectedFleet.current_system, toSystem.id, null, selectedFleet.id);
         
         this.uiController.showToast(
           `Fleet order created: ${toSystem.name || `System ${toSystem.id.slice(-4)}`} (arrives in ~20s)`,

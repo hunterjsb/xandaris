@@ -393,17 +393,23 @@ export class GameDataManager {
   }
 
   // Action methods
-  async sendFleet(fromId, toId, strength) {
+  async sendFleet(fromId, toId, strength, fleetId = null) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
+      const payload = {
+        from_id: fromId,
+        to_id: toId,
+        strength: strength,
+      };
+      
+      if (fleetId) {
+        payload.fleet_id = fleetId;
+      }
+
       return await pb.send("/api/orders/fleet", {
         method: "POST",
-        body: JSON.stringify({
-          from_id: fromId,
-          to_id: toId,
-          strength: strength,
-        }),
+        body: JSON.stringify(payload),
         headers: {
           "Content-Type": "application/json",
         },

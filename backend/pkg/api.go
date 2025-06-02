@@ -697,6 +697,7 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		data := struct {
 			FromID   string `json:"from_id"`
 			ToID     string `json:"to_id"`
+			FleetID  string `json:"fleet_id"`
 			Strength int    `json:"strength"`
 		}{}
 
@@ -709,22 +710,53 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewUnauthorizedError("Authentication required", nil)
 		}
 
-		// Find an existing fleet at the source system that's NOT already moving
-		fleetFilter := fmt.Sprintf("owner_id='%s' && current_system='%s' && destination_system=''", user.Id, data.FromID)
-		fmt.Printf("DEBUG Fleet Filter: %s\n", fleetFilter)
-		fleets, err := app.Dao().FindRecordsByFilter("fleets", fleetFilter, "", 1, 0)
-		if err != nil {
-			fmt.Printf("DEBUG Fleet Filter Error: %v\n", err)
-			return apis.NewBadRequestError("Failed to find fleets", err)
-		}
-		fmt.Printf("DEBUG Found %d fleets\n", len(fleets))
+		var fleet *models.Record
+		var err error
 
-		if len(fleets) == 0 {
-			return apis.NewBadRequestError("No available fleets at source system", nil)
+		if data.FleetID != "" {
+			// Use specific fleet if provided
+			fleet, err = app.Dao().FindRecordById("fleets", data.FleetID)
+			if err != nil {
+				return apis.NewBadRequestError("Fleet not found", err)
+			}
+			
+			// Verify ownership
+			if fleet.GetString("owner_id") != user.Id {
+				return apis.NewForbiddenError("You don't own this fleet", nil)
+			}
+			
+			// Verify fleet is at source system
+			if fleet.GetString("current_system") != data.FromID {
+				return apis.NewBadRequestError("Fleet is not at source system", nil)
+			}
+		} else {
+			// Find an existing fleet at the source system
+			fleetFilter := fmt.Sprintf("owner_id='%s' && current_system='%s'", user.Id, data.FromID)
+			fmt.Printf("DEBUG Fleet Filter: %s\n", fleetFilter)
+			fleets, err := app.Dao().FindRecordsByFilter("fleets", fleetFilter, "", 1, 0)
+			if err != nil {
+				fmt.Printf("DEBUG Fleet Filter Error: %v\n", err)
+				return apis.NewBadRequestError("Failed to find fleets", err)
+			}
+			fmt.Printf("DEBUG Found %d fleets\n", len(fleets))
+
+			if len(fleets) == 0 {
+				return apis.NewBadRequestError("No available fleets at source system", nil)
+			}
+
+			// Use the first available fleet
+			fleet = fleets[0]
 		}
 
-		// Use the first available fleet
-		fleet := fleets[0]
+		// Check if fleet already has pending orders
+		existingOrders, err := app.Dao().FindRecordsByFilter(
+			"fleet_orders", 
+			fmt.Sprintf("fleet_id='%s' && (status='pending' || status='processing')", fleet.Id),
+			"", 1, 0,
+		)
+		if err == nil && len(existingOrders) > 0 {
+			return apis.NewBadRequestError("Fleet already has pending orders", nil)
+		}
 
 		// Validate hyperlane range (same as navigation system - 800 units max)
 		fromSystem, err := app.Dao().FindRecordById("systems", data.FromID)
