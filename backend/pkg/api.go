@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -27,6 +28,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 
 		// Game data endpoints
 		e.Router.GET("/api/map", getMapData(app))
+		e.Router.GET("/api/debug/buildings/:planetId", debugBuildings(app))
 		e.Router.GET("/api/systems", getSystems(app))
 		e.Router.GET("/api/systems/:id", getSystem(app))
 		e.Router.GET("/api/planets", getPlanets(app))
@@ -38,7 +40,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 
 		// Game actions
 		e.Router.POST("/api/orders/fleet", sendFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
-		e.Router.POST("/api/orders/multi-fleet", sendMultiFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/orders/fleet-route", sendFleetRoute(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/build", queueBuilding(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/trade", createTradeRoute(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/colonize", colonizePlanet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
@@ -53,6 +55,9 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		// Building and Resource Types
 		e.Router.GET("/api/building_types", getBuildingTypes(app))
 		e.Router.GET("/api/resource_types", getResourceTypes(app))
+		
+		// Ship Cargo
+		e.Router.GET("/api/ship_cargo", getShipCargo(app))
 
 		// Worldgen endpoints
 		e.Router.GET("/api/worldgen", getWorldgen(app))
@@ -110,6 +115,9 @@ type BuildingData struct {
 	Active         bool   `json:"active"`
 	CreditsPerTick int    `json:"credits_per_tick"`
 	SystemName     string `json:"system_name,omitempty"`
+	BuildingType   string `json:"building_type"`
+	Res1Stored     int    `json:"res1_stored"`
+	Res2Stored     int    `json:"res2_stored"`
 }
 
 type FleetData struct {
@@ -155,14 +163,17 @@ type LaneData struct {
 
 // BuildingTypeData represents the data structure for building types
 type BuildingTypeData struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Cost        int    `json:"cost"`
-	Description string `json:"description"`
-	Category    string `json:"category"`
-	BuildTime   int    `json:"build_time"`
-	Icon        string `json:"icon"`
-	MaxLevel    int    `json:"max_level"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Cost             int    `json:"cost"`
+	CostResourceType string `json:"cost_resource_type"`
+	CostResourceName string `json:"cost_resource_name"`
+	CostQuantity     int    `json:"cost_quantity"`
+	Description      string `json:"description"`
+	Category         string `json:"category"`
+	BuildTime        int    `json:"build_time"`
+	Icon             string `json:"icon"`
+	MaxLevel         int    `json:"max_level"`
 }
 
 // ResourceTypeData represents the data structure for resource types
@@ -218,9 +229,11 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		// Transform planets data
 		planetsData := make([]PlanetData, len(planets))
+		log.Printf("Processing %d planets in map API", len(planets))
 		for i, planet := range planets {
+			log.Printf("Processing planet %s (colonized by %s)", planet.Id, planet.GetString("colonized_by"))
 			// Calculate aggregated data for each planet
-			totalPop := planet.GetInt("population") // Start with the planet's own population
+			totalPop := 0
 			totalFood := 0
 			totalOre := 0
 			totalGoods := 0
@@ -228,26 +241,66 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 			totalCredits := 0
 			buildingCounts := make(map[string]int)
 
-			// Get buildings for this planet
-			buildings, _ := app.Dao().FindRecordsByFilter("buildings", fmt.Sprintf("planet_id='%s'", planet.Id), "", 0, 0)
-			for _, building := range buildings {
-				buildingType := building.GetString("building_type")
-				buildingCounts[buildingType]++
-
-				// Calculate building production based on type
-				switch buildingType {
-				case "farm":
-					totalFood += building.GetInt("level") * 10
-				case "mine":
-					totalOre += building.GetInt("level") * 8
-				case "factory":
-					totalGoods += building.GetInt("level") * 6
-				case "refinery":
-					totalFuel += building.GetInt("level") * 5
-				case "bank":
-					totalCredits += building.GetInt("level") * 1
+			// Get population for this planet using raw DB query
+			popRows := []struct {
+				Count int `db:"count"`
+			}{}
+			if err := app.Dao().DB().Select("count").From("populations").Where(dbx.HashExp{"planet_id": planet.Id}).All(&popRows); err != nil {
+				log.Printf("Error querying populations for planet %s: %v", planet.Id, err)
+			} else {
+				log.Printf("Found %d population records for planet %s", len(popRows), planet.Id)
+				for _, row := range popRows {
+					totalPop += row.Count
 				}
 			}
+
+			// Get buildings for this planet using raw DB query
+			buildingRows := []struct {
+				BuildingType string `db:"building_type"`
+				Level        int    `db:"level"`
+			}{}
+			if err := app.Dao().DB().Select("building_type", "level").From("buildings").Where(dbx.HashExp{"planet_id": planet.Id}).All(&buildingRows); err != nil {
+				log.Printf("Error querying buildings for planet %s: %v", planet.Id, err)
+			} else {
+				log.Printf("Found %d buildings for planet %s", len(buildingRows), planet.Id)
+				// Process building data
+				for _, row := range buildingRows {
+				buildingTypeID := row.BuildingType
+				level := row.Level
+				
+				// Get building type name using raw query
+				buildingTypeRows := []struct {
+					Name string `db:"name"`
+				}{}
+				if err := app.Dao().DB().Select("name").From("building_types").Where(dbx.HashExp{"id": buildingTypeID}).All(&buildingTypeRows); err != nil {
+					log.Printf("Error querying building type %s: %v", buildingTypeID, err)
+				}
+				
+				buildingTypeName := buildingTypeID
+				if len(buildingTypeRows) > 0 {
+					buildingTypeName = buildingTypeRows[0].Name
+				}
+				
+				buildingCounts[buildingTypeName]++
+				log.Printf("Planet %s: Added building %s (total: %d)", planet.Id, buildingTypeName, buildingCounts[buildingTypeName])
+
+				// Calculate building production based on type name
+				switch buildingTypeName {
+				case "farm":
+					totalFood += level * 10
+				case "mine":
+					totalOre += level * 8
+				case "factory":
+					totalGoods += level * 6
+				case "refinery":
+					totalFuel += level * 5
+				case "bank":
+					totalCredits += level * 1
+				}
+				}
+			}
+
+			log.Printf("Planet %s final data: totalPop=%d, buildingCounts=%v", planet.Id, totalPop, buildingCounts)
 
 			planetsData[i] = PlanetData{
 				ID:            planet.Id,
@@ -255,8 +308,8 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 				SystemID:      planet.GetString("system_id"),
 				PlanetType:    planet.GetString("planet_type"),
 				Size:          planet.GetInt("size"),
-				Population:    planet.GetInt("population"), // This is base population, totalPop includes this.
-				MaxPopulation: planet.GetInt("max_population"),
+				Population:    totalPop, // This is base population, totalPop includes this.
+				MaxPopulation: 1000,     // Default max population
 				ColonizedBy:   planet.GetString("colonized_by"),
 				ColonizedAt:   planet.GetString("colonized_at"),
 				Pop:           totalPop, // This is the aggregated population for the planet
@@ -289,6 +342,72 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 	}
 }
 
+// debugBuildings returns building data for a specific planet for debugging
+func debugBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		planetId := c.PathParam("planetId")
+		
+		result := map[string]interface{}{
+			"planetId": planetId,
+		}
+		
+		// Test population query
+		popRows := []struct {
+			Count int `db:"count"`
+		}{}
+		err := app.Dao().DB().Select("count").From("populations").Where(dbx.HashExp{"planet_id": planetId}).All(&popRows)
+		result["populationQuery"] = map[string]interface{}{
+			"error": err,
+			"rows": popRows,
+		}
+		
+		// Test building query
+		buildingRows := []struct {
+			BuildingType string `db:"building_type"`
+			Level        int    `db:"level"`
+		}{}
+		err = app.Dao().DB().Select("building_type", "level").From("buildings").Where(dbx.HashExp{"planet_id": planetId}).All(&buildingRows)
+		
+		// Test building type name lookup
+		buildingCounts := make(map[string]int)
+		buildingDetails := []map[string]interface{}{}
+		
+		for _, row := range buildingRows {
+			buildingTypeID := row.BuildingType
+			level := row.Level
+			
+			// Get building type name using raw query
+			buildingTypeRows := []struct {
+				Name string `db:"name"`
+			}{}
+			nameErr := app.Dao().DB().Select("name").From("building_types").Where(dbx.HashExp{"id": buildingTypeID}).All(&buildingTypeRows)
+			
+			buildingTypeName := buildingTypeID
+			if nameErr == nil && len(buildingTypeRows) > 0 {
+				buildingTypeName = buildingTypeRows[0].Name
+			}
+			
+			buildingCounts[buildingTypeName]++
+			
+			buildingDetails = append(buildingDetails, map[string]interface{}{
+				"id": buildingTypeID,
+				"name": buildingTypeName,
+				"level": level,
+				"nameError": nameErr,
+			})
+		}
+		
+		result["buildingQuery"] = map[string]interface{}{
+			"error": err,
+			"rows": buildingRows,
+			"buildingDetails": buildingDetails,
+			"buildingCounts": buildingCounts,
+		}
+		
+		return c.JSON(http.StatusOK, result)
+	}
+}
+
 // getBuildingTypes returns all building types
 func getBuildingTypes(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -302,15 +421,28 @@ func getBuildingTypes(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		buildingTypesData := make([]BuildingTypeData, len(records))
 		for i, record := range records {
+			costResourceType := record.GetString("cost_resource_type")
+			costResourceName := ""
+			
+			// Get resource name if cost_resource_type is specified
+			if costResourceType != "" {
+				if resourceType, err := app.Dao().FindRecordById("resource_types", costResourceType); err == nil {
+					costResourceName = resourceType.GetString("name")
+				}
+			}
+			
 			buildingTypesData[i] = BuildingTypeData{
-				ID:          record.Id,
-				Name:        record.GetString("name"),
-				Cost:        record.GetInt("cost"),
-				Description: record.GetString("description"),
-				Category:    record.GetString("category"),
-				BuildTime:   record.GetInt("build_time"),
-				Icon:        record.GetString("icon"),
-				MaxLevel:    record.GetInt("max_level"),
+				ID:               record.Id,
+				Name:             record.GetString("name"),
+				Cost:             record.GetInt("cost"),
+				CostResourceType: costResourceType,
+				CostResourceName: costResourceName,
+				CostQuantity:     record.GetInt("cost_quantity"),
+				Description:      record.GetString("description"),
+				Category:         record.GetString("category"),
+				BuildTime:        record.GetInt("build_time"),
+				Icon:            record.GetString("icon"),
+				MaxLevel:        record.GetInt("max_level"),
 			}
 		}
 
@@ -532,6 +664,9 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 				Level:          building.GetInt("level"),
 				Active:         building.GetBool("active"),
 				CreditsPerTick: creditsPerTick,
+				BuildingType:   buildingTypeID,
+				Res1Stored:     building.GetInt("res1_stored"),
+				Res2Stored:     building.GetInt("res2_stored"),
 			}
 		}
 
@@ -554,7 +689,7 @@ func getFleets(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		if userID != "" {
 			filter := fmt.Sprintf("owner_id='%s'", userID)
-			fleets, err = app.Dao().FindRecordsByFilter("fleets", filter, "eta", 0, 0)
+			fleets, err = app.Dao().FindRecordsByFilter("fleets", filter, "name", 0, 0)
 		} else {
 			fleets, err = app.Dao().FindRecordsByExpr("fleets", nil, nil)
 		}
@@ -697,6 +832,7 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		data := struct {
 			FromID   string `json:"from_id"`
 			ToID     string `json:"to_id"`
+			FleetID  string `json:"fleet_id"`
 			Strength int    `json:"strength"`
 		}{}
 
@@ -709,22 +845,53 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewUnauthorizedError("Authentication required", nil)
 		}
 
-		// Find an existing fleet at the source system that's NOT already moving
-		fleetFilter := fmt.Sprintf("owner_id='%s' && current_system='%s' && destination_system=''", user.Id, data.FromID)
-		fmt.Printf("DEBUG Fleet Filter: %s\n", fleetFilter)
-		fleets, err := app.Dao().FindRecordsByFilter("fleets", fleetFilter, "", 1, 0)
-		if err != nil {
-			fmt.Printf("DEBUG Fleet Filter Error: %v\n", err)
-			return apis.NewBadRequestError("Failed to find fleets", err)
-		}
-		fmt.Printf("DEBUG Found %d fleets\n", len(fleets))
+		var fleet *models.Record
+		var err error
 
-		if len(fleets) == 0 {
-			return apis.NewBadRequestError("No available fleets at source system", nil)
+		if data.FleetID != "" {
+			// Use specific fleet if provided
+			fleet, err = app.Dao().FindRecordById("fleets", data.FleetID)
+			if err != nil {
+				return apis.NewBadRequestError("Fleet not found", err)
+			}
+			
+			// Verify ownership
+			if fleet.GetString("owner_id") != user.Id {
+				return apis.NewForbiddenError("You don't own this fleet", nil)
+			}
+			
+			// Verify fleet is at source system
+			if fleet.GetString("current_system") != data.FromID {
+				return apis.NewBadRequestError("Fleet is not at source system", nil)
+			}
+		} else {
+			// Find an existing fleet at the source system
+			fleetFilter := fmt.Sprintf("owner_id='%s' && current_system='%s'", user.Id, data.FromID)
+			fmt.Printf("DEBUG Fleet Filter: %s\n", fleetFilter)
+			fleets, err := app.Dao().FindRecordsByFilter("fleets", fleetFilter, "", 1, 0)
+			if err != nil {
+				fmt.Printf("DEBUG Fleet Filter Error: %v\n", err)
+				return apis.NewBadRequestError("Failed to find fleets", err)
+			}
+			fmt.Printf("DEBUG Found %d fleets\n", len(fleets))
+
+			if len(fleets) == 0 {
+				return apis.NewBadRequestError("No available fleets at source system", nil)
+			}
+
+			// Use the first available fleet
+			fleet = fleets[0]
 		}
 
-		// Use the first available fleet
-		fleet := fleets[0]
+		// Check if fleet already has pending orders
+		existingOrders, err := app.Dao().FindRecordsByFilter(
+			"fleet_orders", 
+			fmt.Sprintf("fleet_id='%s' && (status='pending' || status='processing')", fleet.Id),
+			"", 1, 0,
+		)
+		if err == nil && len(existingOrders) > 0 {
+			return apis.NewBadRequestError("Fleet already has pending orders", nil)
+		}
 
 		// Validate hyperlane range (same as navigation system - 800 units max)
 		fromSystem, err := app.Dao().FindRecordById("systems", data.FromID)
@@ -744,30 +911,57 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError("Target system too far - outside hyperlane range", nil)
 		}
 
-		// Calculate ETA (2 minutes from now)
-		etaTime := time.Now().Add(2 * time.Minute)
-
-		// Move the existing fleet by setting destination and ETA, keeping current_system for hyperlane tracking
-		fleet.Set("destination_system", data.ToID)
-		fleet.Set("eta", etaTime)
-
-		if err := app.Dao().SaveRecord(fleet); err != nil {
-			return apis.NewBadRequestError("Failed to move fleet", err)
+		// Get Fleet Orders collection
+		fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+		if err != nil {
+			log.Printf("Error finding fleet_orders collection: %v", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Fleet Orders collection not found", err)
 		}
+
+		// Calculate execute_at_tick
+		currentTick := tick.GetCurrentTick(app)
+		// Travel duration is 2 ticks (20 seconds at 10 seconds/tick) for faster testing
+		travelDurationInTicks := int64(2)
+		executeAtTick := currentTick + travelDurationInTicks
+
+		// Create a new fleet_order record
+		order := models.NewRecord(fleetOrdersCollection)
+		order.Set("user_id", user.Id)
+		order.Set("fleet_id", fleet.Id)
+		order.Set("type", "move") // Type is "move" for fleet_orders
+		order.Set("status", "pending")
+		order.Set("execute_at_tick", executeAtTick)
+		order.Set("destination_system_id", data.ToID)
+		order.Set("original_system_id", data.FromID)
+		order.Set("travel_time_ticks", travelDurationInTicks)
+
+		log.Printf("DEBUG: Creating fleet order with values:")
+		log.Printf("  user_id: %s", user.Id)
+		log.Printf("  fleet_id: %s", fleet.Id)
+		log.Printf("  destination_system_id: %s", data.ToID)
+		log.Printf("  original_system_id: %s", data.FromID)
+		log.Printf("  travel_time_ticks: %d", travelDurationInTicks)
+		log.Printf("  execute_at_tick: %d", executeAtTick)
+
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("Error saving fleet order: %v", err)
+			return apis.NewBadRequestError("Failed to create fleet move order", err)
+		}
+
+		log.Printf("DEBUG: Fleet order saved successfully with ID: %s", order.Id)
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"success":  true,
-			"fleet_id": fleet.Id,
+			"order_id": order.Id,
 		})
 	}
 }
 
-func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
+func sendFleetRoute(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		data := struct {
-			FleetID   string `json:"fleet_id"`
-			NextStop  string `json:"next_stop"`    // Immediate next system
-			TravelSec int    `json:"travel_sec"`   // Travel time in seconds
+			FleetID   string   `json:"fleet_id"`
+			RoutePath []string `json:"route_path"`
 		}{}
 
 		if err := c.Bind(&data); err != nil {
@@ -777,6 +971,11 @@ func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
 		if user == nil {
 			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Validate route path
+		if len(data.RoutePath) < 2 {
+			return apis.NewBadRequestError("Route path must have at least 2 systems", nil)
 		}
 
 		// Validate fleet ownership and availability
@@ -789,37 +988,70 @@ func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewForbiddenError("You don't own this fleet", nil)
 		}
 
-		// Check if fleet is already moving
-		if fleet.GetString("destination_system") != "" {
-			return apis.NewBadRequestError("Fleet is already in transit", nil)
+		// Check if fleet already has pending orders
+		existingOrders, err := app.Dao().FindRecordsByFilter(
+			"fleet_orders", 
+			fmt.Sprintf("fleet_id='%s' && (status='pending' || status='processing')", fleet.Id),
+			"", 1, 0,
+		)
+		if err == nil && len(existingOrders) > 0 {
+			return apis.NewBadRequestError("Fleet already has pending orders", nil)
 		}
 
-		// Validate next_stop exists
-		if data.NextStop == "" {
-			return apis.NewBadRequestError("Next stop system ID required", nil)
+		// Ensure fleet starts at the first system in the route
+		currentSystem := fleet.GetString("current_system")
+		if currentSystem != data.RoutePath[0] {
+			return apis.NewBadRequestError("Fleet is not at the starting system of the route", nil)
 		}
 
-		// Calculate ETA (use provided time or default to 120 seconds)
-		travelTime := data.TravelSec
-		if travelTime <= 0 {
-			travelTime = 120
+		// Validate that all systems in the route exist
+		for _, systemId := range data.RoutePath {
+			if _, err := app.Dao().FindRecordById("systems", systemId); err != nil {
+				return apis.NewBadRequestError("Invalid system in route path: "+systemId, err)
+			}
 		}
-		etaTime := time.Now().Add(time.Duration(travelTime) * time.Second)
 
-		// Update fleet with next hop
-		fleet.Set("next_stop", data.NextStop)
-		fleet.Set("destination_system", data.NextStop) // For tracking purposes
-		fleet.Set("eta", etaTime)
+		// Get Fleet Orders collection
+		fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+		if err != nil {
+			log.Printf("Error finding fleet_orders collection: %v", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Fleet Orders collection not found", err)
+		}
 
-		if err := app.Dao().SaveRecord(fleet); err != nil {
-			return apis.NewBadRequestError("Failed to start fleet movement", err)
+		// Calculate execute_at_tick for first hop
+		currentTick := tick.GetCurrentTick(app)
+		travelDurationInTicks := int64(2) // 2 ticks per hop
+		executeAtTick := currentTick + travelDurationInTicks
+
+		// Create a new fleet_order record with multi-hop route data
+		order := models.NewRecord(fleetOrdersCollection)
+		order.Set("user_id", user.Id)
+		order.Set("fleet_id", fleet.Id)
+		order.Set("type", "move")
+		order.Set("status", "pending")
+		order.Set("execute_at_tick", executeAtTick)
+		
+		// Set single hop fields (first hop)
+		order.Set("destination_system_id", data.RoutePath[1])
+		order.Set("original_system_id", data.RoutePath[0])
+		order.Set("travel_time_ticks", travelDurationInTicks)
+		
+		// Set multi-hop fields
+		order.Set("route_path", data.RoutePath)
+		order.Set("current_hop", 0)
+		order.Set("final_destination_id", data.RoutePath[len(data.RoutePath)-1])
+
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("Error saving fleet route order: %v", err)
+			return apis.NewBadRequestError("Failed to create fleet route order", err)
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success":   true,
-			"fleet_id":  fleet.Id,
-			"next_stop": data.NextStop,
-			"eta":       etaTime,
+			"success":           true,
+			"order_id":          order.Id,
+			"route_path":        data.RoutePath,
+			"final_destination": data.RoutePath[len(data.RoutePath)-1],
+			"total_hops":        len(data.RoutePath) - 1,
 		})
 	}
 }
@@ -851,6 +1083,7 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 		data := struct {
 			PlanetID     string `json:"planet_id"` // Changed from SystemID
 			BuildingType string `json:"building_type"`
+			FleetID      string `json:"fleet_id"` // Fleet containing ships with resources
 		}{}
 
 		if err := c.Bind(&data); err != nil {
@@ -877,108 +1110,237 @@ func queueBuilding(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError(fmt.Sprintf("Building type %s not found", data.BuildingType), err)
 		}
 
-		// Check building cost and deduct resources
-		costRaw := buildingTypeRecord.Get("cost")
-		originalCostPayload := buildingTypeRecord.Get("cost")
+		// Get cost resource type and quantity from new flexible system
+		costResourceType := buildingTypeRecord.GetString("cost_resource_type")
+		costQuantity := buildingTypeRecord.GetInt("cost_quantity")
 
-		switch costValue := costRaw.(type) {
-		case int64:
-			cost := int(costValue)
-			hasCredits, err := credits.HasSufficientCredits(app, user.Id, cost)
-			if err != nil {
-				return apis.NewBadRequestError("Failed to check credits", err)
+		if costResourceType != "" && costQuantity > 0 {
+			// New flexible resource cost system - check and consume from ship cargo
+			if data.FleetID == "" {
+				return apis.NewBadRequestError("Fleet ID required for resource-based building costs", nil)
 			}
-			if !hasCredits {
-				userCredits, _ := credits.GetUserCredits(app, user.Id)
-				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
-			}
-			if err := credits.DeductUserCredits(app, user.Id, cost); err != nil {
-				return apis.NewBadRequestError("Failed to deduct credits", err)
-			}
-		case float64:
-			cost := int(costValue)
-			hasCredits, err := credits.HasSufficientCredits(app, user.Id, cost)
-			if err != nil {
-				return apis.NewBadRequestError("Failed to check credits", err)
-			}
-			if !hasCredits {
-				userCredits, _ := credits.GetUserCredits(app, user.Id)
-				return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
-			}
-			if err := credits.DeductUserCredits(app, user.Id, cost); err != nil {
-				return apis.NewBadRequestError("Failed to deduct credits", err)
-			}
-		case map[string]interface{}:
-			costMap := costValue
-			for resourceId, amountInterface := range costMap {
-				amount, ok := amountInterface.(float64)
-				if !ok {
-					return apis.NewBadRequestError(fmt.Sprintf("Invalid amount type for resource %s in cost", resourceId), nil)
-				}
-				amountInt := int(amount)
 
-				// Get resource name from ID
-				resourceType, err := app.Dao().FindRecordById("resource_types", resourceId)
+			// Verify fleet ownership
+			fleet, err := app.Dao().FindRecordById("fleets", data.FleetID)
+			if err != nil {
+				return apis.NewBadRequestError("Fleet not found", err)
+			}
+			if fleet.GetString("owner_id") != user.Id {
+				return apis.NewForbiddenError("You don't own this fleet", nil)
+			}
+
+			// Check if fleet is at the same system as the planet
+			planet, err := app.Dao().FindRecordById("planets", data.PlanetID)
+			if err != nil {
+				return apis.NewBadRequestError("Planet not found", err)
+			}
+			planetSystemID := planet.GetString("system_id")
+			fleetSystemID := fleet.GetString("current_system")
+			
+			if planetSystemID != fleetSystemID {
+				return apis.NewBadRequestError("Fleet must be in the same system as the planet to build", nil)
+			}
+
+			// Get ships in this fleet
+			ships, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", data.FleetID), "", 0, 0)
+			if err != nil {
+				return apis.NewBadRequestError("Failed to find ships in fleet", err)
+			}
+
+			// Calculate total resource quantity available in fleet cargo
+			totalAvailable := 0
+			var cargoRecords []*models.Record
+
+			for _, ship := range ships {
+				cargo, err := app.Dao().FindRecordsByFilter("ship_cargo", 
+					fmt.Sprintf("ship_id='%s' && resource_type='%s'", ship.Id, costResourceType), "", 0, 0)
 				if err != nil {
-					return apis.NewBadRequestError(fmt.Sprintf("Invalid resource ID %s", resourceId), err)
+					continue
 				}
-				resourceName := resourceType.GetString("name")
+				for _, cargoRecord := range cargo {
+					totalAvailable += cargoRecord.GetInt("quantity")
+					cargoRecords = append(cargoRecords, cargoRecord)
+				}
+			}
 
-				// For now, only handle credits - other resources still use legacy system
-				if resourceName == "credits" {
-					hasCredits, err := credits.HasSufficientCredits(app, user.Id, amountInt)
-					if err != nil {
-						return apis.NewBadRequestError("Failed to check credits", err)
-					}
-					if !hasCredits {
-						currentCredits, _ := credits.GetUserCredits(app, user.Id)
-						return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", amountInt, currentCredits), nil)
-					}
-					if err := credits.DeductUserCredits(app, user.Id, amountInt); err != nil {
-						return apis.NewBadRequestError("Failed to deduct credits", err)
+			// Check if we have enough resources
+			if totalAvailable < costQuantity {
+				resourceType, _ := app.Dao().FindRecordById("resource_types", costResourceType)
+				resourceName := "unknown resource"
+				if resourceType != nil {
+					resourceName = resourceType.GetString("name")
+				}
+				return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceName, costQuantity, totalAvailable), nil)
+			}
+
+			// Consume resources from ship cargo
+			remainingToConsume := costQuantity
+			for _, cargoRecord := range cargoRecords {
+				if remainingToConsume <= 0 {
+					break
+				}
+				
+				currentQuantity := cargoRecord.GetInt("quantity")
+				consumeFromThis := currentQuantity
+				if consumeFromThis > remainingToConsume {
+					consumeFromThis = remainingToConsume
+				}
+
+				newQuantity := currentQuantity - consumeFromThis
+				if newQuantity <= 0 {
+					// Delete empty cargo record
+					if err := app.Dao().DeleteRecord(cargoRecord); err != nil {
+						return apis.NewBadRequestError("Failed to update ship cargo", err)
 					}
 				} else {
-					// Legacy system for other resources
-					currentResourceValue := user.GetInt(resourceName)
-					if currentResourceValue < amountInt {
-						return apis.NewBadRequestError(fmt.Sprintf("Insufficient %s. Need %d, have %d", resourceName, amountInt, currentResourceValue), nil)
-					}
-					user.Set(resourceName, currentResourceValue-amountInt)
-					if err := app.Dao().SaveRecord(user); err != nil {
-						return apis.NewBadRequestError("Failed to update user resources", err)
+					// Update cargo quantity
+					cargoRecord.Set("quantity", newQuantity)
+					if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+						return apis.NewBadRequestError("Failed to update ship cargo", err)
 					}
 				}
+
+				remainingToConsume -= consumeFromThis
 			}
-		default:
-			return apis.NewBadRequestError(fmt.Sprintf("Unsupported cost type: %T", costRaw), nil)
+		} else {
+			// Legacy credit-based system fallback
+			cost := buildingTypeRecord.GetInt("cost")
+			if cost > 0 {
+				hasCredits, err := credits.HasSufficientCredits(app, user.Id, cost)
+				if err != nil {
+					return apis.NewBadRequestError("Failed to check credits", err)
+				}
+				if !hasCredits {
+					userCredits, _ := credits.GetUserCredits(app, user.Id)
+					return apis.NewBadRequestError(fmt.Sprintf("Insufficient credits. Need %d, have %d", cost, userCredits), nil)
+				}
+				if err := credits.DeductUserCredits(app, user.Id, cost); err != nil {
+					return apis.NewBadRequestError("Failed to deduct credits", err)
+				}
+			}
 		}
 
-		// Create building record
-		collection, err := app.Dao().FindCollectionByNameOrId("buildings")
+		// Create building record directly
+		buildingsCollection, err := app.Dao().FindCollectionByNameOrId("buildings")
 		if err != nil {
-			return apis.NewBadRequestError("Buildings collection not found", err)
+			log.Printf("Error finding buildings collection: %v", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Buildings collection not found", err)
 		}
 
-		building := models.NewRecord(collection)
-		building.Set("planet_id", data.PlanetID) // Use PlanetID from request
-		building.Set("building_type", data.BuildingType)
+		building := models.NewRecord(buildingsCollection)
+		building.Set("planet_id", data.PlanetID)
+		building.Set("building_type", data.BuildingType) // This is the ID of the building type
 		building.Set("level", 1)
 		building.Set("active", true)
-
-		// Crypto servers start empty - they generate credits over time
+		// TODO: Set owner_id if your buildings schema requires it and it's not automatically handled
+		// Example: building.Set("owner_id", user.Id) if buildings are directly owned by users
 
 		if err := app.Dao().SaveRecord(building); err != nil {
+			log.Printf("Error saving new building: %v", err)
 			return apis.NewBadRequestError("Failed to create building", err)
 		}
 
-		// Get current credits for response
-		currentCredits, _ := credits.GetUserCredits(app, user.Id)
+		// Prepare response with resource info
+		response := map[string]interface{}{
+			"success":     true,
+			"building_id": building.Id,
+		}
+
+		if costResourceType != "" && costQuantity > 0 {
+			// For resource-based costs, include resource info
+			resourceType, _ := app.Dao().FindRecordById("resource_types", costResourceType)
+			resourceName := "unknown"
+			if resourceType != nil {
+				resourceName = resourceType.GetString("name")
+			}
+			response["cost_resource"] = resourceName
+			response["cost_quantity"] = costQuantity
+		} else {
+			// For credit-based costs, include credits info
+			currentCredits, _ := credits.GetUserCredits(app, user.Id)
+			response["cost"] = buildingTypeRecord.Get("cost")
+			response["credits_remaining"] = currentCredits
+		}
+
+		return c.JSON(http.StatusOK, response)
+	}
+}
+
+func getShipCargo(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		fleetID := c.QueryParam("fleet_id")
+		if fleetID == "" {
+			return apis.NewBadRequestError("fleet_id parameter required", nil)
+		}
+
+		// Verify fleet ownership
+		fleet, err := app.Dao().FindRecordById("fleets", fleetID)
+		if err != nil {
+			return apis.NewBadRequestError("Fleet not found", err)
+		}
+		if fleet.GetString("owner_id") != user.Id {
+			return apis.NewForbiddenError("You don't own this fleet", nil)
+		}
+
+		// Get ships in this fleet
+		ships, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", fleetID), "", 0, 0)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find ships in fleet", err)
+		}
+
+		// Aggregate cargo across all ships
+		cargoSummary := make(map[string]interface{})
+		totalCapacity := 0
+
+		for _, ship := range ships {
+			// Get ship type for capacity info
+			shipType, err := app.Dao().FindRecordById("ship_types", ship.GetString("ship_type"))
+			if err == nil {
+				totalCapacity += shipType.GetInt("cargo_capacity")
+			}
+
+			// Get cargo for this ship
+			cargo, err := app.Dao().FindRecordsByFilter("ship_cargo", fmt.Sprintf("ship_id='%s'", ship.Id), "", 0, 0)
+			if err != nil {
+				continue
+			}
+
+			for _, cargoRecord := range cargo {
+				resourceTypeID := cargoRecord.GetString("resource_type")
+				quantity := cargoRecord.GetInt("quantity")
+
+				// Get resource type info
+				resourceType, err := app.Dao().FindRecordById("resource_types", resourceTypeID)
+				if err != nil {
+					continue
+				}
+
+				resourceName := resourceType.GetString("name")
+				if existing, exists := cargoSummary[resourceName]; exists {
+					cargoSummary[resourceName] = existing.(int) + quantity
+				} else {
+					cargoSummary[resourceName] = quantity
+				}
+			}
+		}
+
+		// Calculate used capacity
+		usedCapacity := 0
+		for _, quantity := range cargoSummary {
+			usedCapacity += quantity.(int)
+		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success":           true,
-			"building_id":       building.Id,
-			"cost":              originalCostPayload, // Return the original cost structure
-			"credits_remaining": currentCredits,      // Return current credits
+			"fleet_id":       fleetID,
+			"cargo":          cargoSummary,
+			"used_capacity":  usedCapacity,
+			"total_capacity": totalCapacity,
+			"available_space": totalCapacity - usedCapacity,
 		})
 	}
 }
@@ -1115,42 +1477,70 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewBadRequestError("Fleet must be at the same system as the planet", nil)
 		}
 
-		// Find settler ship in the fleet
-		settlerShipType, err := app.Dao().FindFirstRecordByFilter("ship_types", "name='settler'")
+		// Get ore resource type
+		oreResource, err := app.Dao().FindFirstRecordByFilter("resource_types", "name='ore'")
 		if err != nil {
-			return apis.NewBadRequestError("Settler ship type not found", err)
+			return apis.NewBadRequestError("Ore resource type not found", err)
 		}
 
-		settlerShip, err := app.Dao().FindFirstRecordByFilter("ships", 
-			fmt.Sprintf("fleet_id='%s' && ship_type='%s' && count > 0", fleet.Id, settlerShipType.Id))
+		// Check colonization cost (30 ore)
+		colonizationCost := 30
+
+		// Get ships in this fleet
+		ships, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", fleet.Id), "", 0, 0)
 		if err != nil {
-			return apis.NewBadRequestError("No settler ships found in this fleet", nil)
+			return apis.NewBadRequestError("Failed to find ships in fleet", err)
 		}
 
-		// Consume one settler ship
-		currentCount := settlerShip.GetInt("count")
-		if currentCount <= 1 {
-			// Delete the ship record if it's the last one
-			if err := app.Dao().DeleteRecord(settlerShip); err != nil {
-				return apis.NewBadRequestError("Failed to consume settler ship", err)
+		// Calculate total ore available in fleet cargo
+		totalOre := 0
+		var cargoRecords []*models.Record
+
+		for _, ship := range ships {
+			cargo, err := app.Dao().FindRecordsByFilter("ship_cargo", 
+				fmt.Sprintf("ship_id='%s' && resource_type='%s'", ship.Id, oreResource.Id), "", 0, 0)
+			if err != nil {
+				continue
 			}
-		} else {
-			// Decrease count by 1
-			settlerShip.Set("count", currentCount-1)
-			if err := app.Dao().SaveRecord(settlerShip); err != nil {
-				return apis.NewBadRequestError("Failed to consume settler ship", err)
+			for _, cargoRecord := range cargo {
+				totalOre += cargoRecord.GetInt("quantity")
+				cargoRecords = append(cargoRecords, cargoRecord)
 			}
 		}
 
-		// Check if fleet has any remaining ships, delete if empty
-		remainingShips, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", fleet.Id), "", 0, 0)
-		if err == nil && len(remainingShips) == 0 {
-			// Fleet is now empty, delete it
-			if err := app.Dao().DeleteRecord(fleet); err != nil {
-				log.Printf("Warning: Failed to delete empty fleet %s: %v", fleet.Id, err)
+		// Check if we have enough ore
+		if totalOre < colonizationCost {
+			return apis.NewBadRequestError(fmt.Sprintf("Insufficient ore for colonization. Need %d ore, have %d", colonizationCost, totalOre), nil)
+		}
+
+		// Consume ore from ship cargo
+		remainingToConsume := colonizationCost
+		for _, cargoRecord := range cargoRecords {
+			if remainingToConsume <= 0 {
+				break
+			}
+			
+			currentQuantity := cargoRecord.GetInt("quantity")
+			consumeFromThis := currentQuantity
+			if consumeFromThis > remainingToConsume {
+				consumeFromThis = remainingToConsume
+			}
+
+			newQuantity := currentQuantity - consumeFromThis
+			if newQuantity <= 0 {
+				// Delete empty cargo record
+				if err := app.Dao().DeleteRecord(cargoRecord); err != nil {
+					return apis.NewBadRequestError("Failed to update ship cargo", err)
+				}
 			} else {
-				log.Printf("Deleted empty fleet %s after consuming last ship", fleet.Id)
+				// Update cargo quantity
+				cargoRecord.Set("quantity", newQuantity)
+				if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+					return apis.NewBadRequestError("Failed to update ship cargo", err)
+				}
 			}
+
+			remainingToConsume -= consumeFromThis
 		}
 
 		// Set colonization data
@@ -1173,10 +1563,12 @@ func colonizePlanet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success":   true,
-			"planet_id": planet.Id,
-			"fleet_id":  fleet.Id,
-			"message":   "Planet colonized successfully using settler ship",
+			"success":     true,
+			"planet_id":   planet.Id,
+			"fleet_id":    fleet.Id,
+			"ore_used":    colonizationCost,
+			"ore_remaining": totalOre - colonizationCost,
+			"message":     fmt.Sprintf("Planet colonized successfully using %d ore", colonizationCost),
 		})
 	}
 }

@@ -7,6 +7,8 @@ export class UIController {
     this.currentSystemId = null; // Track current system/planet ID being viewed
     this.planetTypes = new Map(); // Store planet types with their icons
     this.pb = null; // Will be set when PocketBase is available
+    this.resourceTypes = new Map(); // Store resource types with their icons
+    this.displayedResources = this.loadResourcePreferences(); // Which resources to show in top bar
 
     // Make instance available globally, for event handlers in dynamically created HTML
     window.uiController = this;
@@ -21,11 +23,15 @@ export class UIController {
         "#expanded-view-container not found during UIController construction",
       );
     }
+
+    // Initialize resources dropdown
+    this.initializeResourcesDropdown();
   }
 
   setPocketBase(pb) {
     this.pb = pb;
     this.loadPlanetTypes(); // Load planet types when PocketBase is available
+    this.loadResourceTypes(); // Load resource types when PocketBase is available
   }
 
   async loadPlanetTypes() {
@@ -45,6 +51,31 @@ export class UIController {
       });
     } catch (error) {
       console.warn("Failed to load planet types:", error);
+    }
+  }
+
+  async loadResourceTypes() {
+    try {
+      if (!this.pb) return; // PocketBase not initialized yet
+      const response = await this.pb.send("/api/resource_types", {
+        method: "GET",
+      });
+      this.resourceTypes.clear();
+
+      response.items.forEach((type) => {
+        // Store by both name and ID for lookup flexibility
+        const typeData = {
+          name: type.name,
+          icon: type.icon || "", // URL to icon image
+        };
+        this.resourceTypes.set(type.name.toLowerCase(), typeData);
+        this.resourceTypes.set(type.id, typeData);
+      });
+
+      // Update resources dropdown after loading types
+      this.updateResourcesDropdown();
+    } catch (error) {
+      console.warn("Failed to load resource types:", error);
     }
   }
 
@@ -679,7 +710,7 @@ export class UIController {
     const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
     const planetTypeValue = planet.planet_type || planet.type;
     const planetTypeName = this.getPlanetTypeName(planetTypeValue);
-    const planetGif = this.getPlanetAnimatedGif(planetTypeValue);
+    const planetGif = this.getPlanetAnimatedGif(planetTypeName);
     const isOwned = planet.colonized_by === currentUserId;
     const population = planet.Pop || 0;
     const maxPop = planet.MaxPopulation || "N/A";
@@ -889,11 +920,29 @@ export class UIController {
 
     let buildingsHtml =
       '<div class="text-sm text-space-400">No buildings constructed.</div>';
+    let buildingWarnings = [];
+    
     if (planet.Buildings && Object.keys(planet.Buildings).length > 0) {
+      // Get population assignments for this planet
+      const planetPopulations = this.gameState?.populations?.filter(pop => pop.planet_id === planet.id) || [];
+      const assignedBuildingIds = new Set(planetPopulations.map(pop => pop.employed_at).filter(Boolean));
+      
       const buildingEntries = Object.entries(planet.Buildings)
         .map(([buildingName, level]) => {
           let displayName = buildingName;
           let buildingIcon = "🏢";
+          let buildingId = buildingName;
+          
+          // Find the actual building record to get its ID
+          const buildingRecord = this.gameState?.buildings?.find(b => 
+            b.planet_id === planet.id && 
+            (b.building_type === buildingName || b.id === buildingName)
+          );
+          
+          if (buildingRecord) {
+            buildingId = buildingRecord.id;
+          }
+          
           if (this.gameState && this.gameState.buildingTypes) {
             const buildingType = this.gameState.buildingTypes.find(
               (bt) =>
@@ -915,29 +964,62 @@ export class UIController {
                 buildingIcon = "🔬";
             }
           }
+          
+          // Check if this building has population assigned
+          const hasWorkers = assignedBuildingIds.has(buildingId);
+          const workerCount = planetPopulations.find(pop => pop.employed_at === buildingId)?.count || 0;
+          
+          // Add to warnings if no workers
+          if (!hasWorkers) {
+            buildingWarnings.push(displayName);
+          }
+          
+          const warningIcon = hasWorkers ? '' : '<span class="text-yellow-400 text-sm ml-1" title="No workers assigned">⚠️</span>';
+          const workerInfo = hasWorkers ? `<div class="text-xs text-green-400">${workerCount} workers</div>` : '<div class="text-xs text-yellow-400">No workers</div>';
+          
           return `
-          <li class="p-3 bg-space-700 rounded-md flex items-center justify-between hover:bg-space-600 transition-colors">
+          <li class="p-3 ${hasWorkers ? 'bg-space-700' : 'bg-yellow-900/20 border border-yellow-600/30'} rounded-md flex items-center justify-between hover:bg-space-600 transition-colors">
             <div class="flex items-center gap-2">
               <span class="text-xl">${buildingIcon}</span>
-              <span class="font-semibold">${displayName}</span>
+              <div>
+                <div class="flex items-center">
+                  <span class="font-semibold">${displayName}</span>
+                  ${warningIcon}
+                </div>
+                ${workerInfo}
+              </div>
             </div>
             <span class="text-sm text-space-300">Level ${level}</span>
           </li>
         `;
         })
         .join("");
-      buildingsHtml = `<ul class="space-y-2">${buildingEntries}</ul>`;
+      
+      let warningHtml = '';
+      if (buildingWarnings.length > 0) {
+        warningHtml = `
+        <div class="p-3 bg-yellow-900/20 border border-yellow-600/50 rounded-md mb-3">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-yellow-400">⚠️</span>
+            <span class="font-semibold text-yellow-200">Production Warning</span>
+          </div>
+          <div class="text-sm text-yellow-100">
+            ${buildingWarnings.length} building${buildingWarnings.length > 1 ? 's' : ''} without workers: 
+            <strong>${buildingWarnings.join(', ')}</strong>
+          </div>
+          <div class="text-xs text-yellow-300 mt-1">
+            Buildings without assigned population will not produce resources.
+          </div>
+        </div>`;
+      }
+      
+      buildingsHtml = `${warningHtml}<ul class="space-y-2">${buildingEntries}</ul>`;
     }
 
     const isColonized = planet.colonized_by && planet.colonized_by !== "";
     const isOwnedByPlayer =
       isColonized && planet.colonized_by === this.currentUser?.id;
-    const canColonize =
-      !isColonized &&
-      this.currentUser &&
-      this.gameState;
-
-
+    const canColonize = !isColonized && this.currentUser && this.gameState;
 
     // Redraw inner content structure
     container.innerHTML = `
@@ -989,7 +1071,7 @@ export class UIController {
     planetHeader.className = `panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r ${planetTypeGradient}`;
 
     container.querySelector("#planet-icon").innerHTML =
-      this.getPlanetAnimatedGif(planetTypeValue) || planetIcon;
+      this.getPlanetAnimatedGif(planetTypeName) || planetIcon;
     container.querySelector("#planet-name").textContent = planetName;
     container.querySelector("#planet-seed").textContent =
       `Seed: ${planet.id.slice(-8)}`;
@@ -1097,6 +1179,11 @@ export class UIController {
       container.querySelector("#planet-buildings-html").innerHTML =
         buildingsHtml;
       buildingsContainer.style.display = "block";
+
+      // --- CONSTRUCTION QUEUE SECTION REMOVED ---
+      // Building construction queue display is deferred as per recent changes.
+      // The logic previously here for `buildQueueContainer` that used `window.gameState.orders`
+      // and filtered for `building_construct` has been removed.
     } else {
       buildingsContainer.style.display = "none";
     }
@@ -1120,7 +1207,6 @@ export class UIController {
         colonizeButton.onclick = () =>
           window.uiController.colonizePlanetWrapper(planet.id);
         actionsContainer.appendChild(colonizeButton);
-
       }
     } else if (!isColonized && this.currentUser && this.gameState) {
       const noSettlerButton = document.createElement("button");
@@ -1129,7 +1215,6 @@ export class UIController {
       noSettlerButton.innerHTML = `<span class="material-icons">rocket_launch</span> Colonize Planet (Need Settler Ship)`;
       noSettlerButton.disabled = true;
       actionsContainer.appendChild(noSettlerButton);
-
     }
 
     if (isOwnedByPlayer) {
@@ -1201,51 +1286,46 @@ export class UIController {
       });
     }
 
+    // Get fleets at this system for resource checking
+    const systemId = planet.system_id;
+    const currentUser = this.currentUser;
+    const availableFleets =
+      this.gameState?.fleets?.filter(
+        (fleet) =>
+          fleet.current_system === systemId &&
+          fleet.owner_id === currentUser?.id,
+      ) || [];
+
     const buildingOptions = buildingTypes
       .map((buildingType) => {
         let costString = "Cost: ";
         let canBuild = true;
         let missingResources = [];
 
-        if (buildingType.cost === undefined) {
-          costString += "N/A (data missing)";
-        } else if (typeof buildingType.cost === "number") {
+        // Handle new resource cost system
+        if (buildingType.cost_resource_type && buildingType.cost_quantity > 0) {
+          const resourceName =
+            buildingType.cost_resource_name || "Unknown Resource";
+          costString += `${buildingType.cost_quantity} ${resourceName}`;
+
+          // Check if any fleet at this system has enough resources
+          let hasEnoughResources = false;
+          if (availableFleets.length > 0) {
+            // For now, assume fleets have resources (we'll implement cargo checking later)
+            hasEnoughResources = true;
+          }
+
+          if (!hasEnoughResources) {
+            canBuild = false;
+            missingResources.push(
+              `${buildingType.cost_quantity} ${resourceName}`,
+            );
+          }
+        } else if (buildingType.cost > 0) {
+          // Legacy credit system
           costString += `${buildingType.cost} Credits`;
-        } else if (
-          typeof buildingType.cost === "object" &&
-          buildingType.cost !== null
-        ) {
-          const resourceTypesMap = (this.gameState?.resourceTypes || []).reduce(
-            (map, rt) => {
-              map[rt.id] = rt.name;
-              return map;
-            },
-            {},
-          );
-
-          const costEntries = Object.entries(buildingType.cost).map(
-            ([resourceId, amount]) => {
-              const resourceName = resourceTypesMap[resourceId] || resourceId;
-              const hasResource = availableResources.has(
-                resourceName.toLowerCase(),
-              );
-
-              if (!hasResource) {
-                canBuild = false;
-                missingResources.push(resourceName);
-              }
-
-              const colorClass = hasResource
-                ? "text-green-400"
-                : "text-red-400";
-              return `<span class="${colorClass}">${amount} ${resourceName}</span>`;
-            },
-          );
-
-          costString += costEntries.join(", ");
-          if (Object.keys(buildingType.cost).length === 0) costString += "Free";
         } else {
-          costString += "N/A";
+          costString += "Free";
         }
 
         // Check if building requires specific resources
@@ -1277,9 +1357,16 @@ export class UIController {
           ? "w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left cursor-pointer"
           : "w-full p-3 bg-space-800 rounded mb-2 text-left cursor-not-allowed opacity-60";
 
-        const onclickHandler = canBuild
-          ? `onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}'); window.uiController.hideModal();"`
-          : "";
+        const onclickHandler =
+          canBuild && availableFleets.length > 0
+            ? `onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}', '${availableFleets[0].id}'); window.uiController.hideModal();"`
+            : "";
+
+        // Update canBuild to require fleets
+        if (availableFleets.length === 0) {
+          canBuild = false;
+          missingResources.push("Fleet at this system");
+        }
 
         let requirementsText = "";
         if (!canBuild && missingResources.length > 0) {
@@ -1340,8 +1427,11 @@ export class UIController {
       }
 
       // Check if fleet has settler ships
-      return fleet.ships && fleet.ships.some((ship) => 
-        ship.ship_type_name === "settler" && ship.count > 0
+      return (
+        fleet.ships &&
+        fleet.ships.some(
+          (ship) => ship.ship_type_name === "settler" && ship.count > 0,
+        )
       );
     });
   }
@@ -1531,24 +1621,285 @@ export class UIController {
     this.updateGameStatusUI(state);
   }
 
+  loadResourcePreferences() {
+    try {
+      const stored = localStorage.getItem("xan_displayed_resources");
+      return stored ? JSON.parse(stored) : ["credits", "ore"]; // Default to credits and ore
+    } catch (error) {
+      return ["credits", "ore"];
+    }
+  }
+
+  saveResourcePreferences() {
+    try {
+      localStorage.setItem(
+        "xan_displayed_resources",
+        JSON.stringify(this.displayedResources),
+      );
+    } catch (error) {
+      console.warn("Failed to save resource preferences:", error);
+    }
+  }
+
+  initializeResourcesDropdown() {
+    // Set up resources dropdown toggle
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById('resources-dropdown');
+      const toggle = document.getElementById('resources-toggle');
+      
+      if (e.target.closest('#resources-toggle')) {
+        if (dropdown.classList.contains('hidden')) {
+          // Position dropdown near the toggle button like context menu
+          const toggleRect = toggle.getBoundingClientRect();
+          const canvasRect = document.getElementById('game-canvas').getBoundingClientRect();
+          
+          // Position relative to canvas
+          const x = toggleRect.right - canvasRect.left - 256; // 256px = dropdown width
+          const y = toggleRect.bottom - canvasRect.top + 8; // 8px gap
+          
+          dropdown.style.left = `${x}px`;
+          dropdown.style.top = `${y}px`;
+          dropdown.classList.remove('hidden');
+        } else {
+          dropdown.classList.add('hidden');
+        }
+      } else if (!e.target.closest('#resources-dropdown')) {
+        dropdown.classList.add('hidden');
+      }
+    });
+
+    // Set up settings button
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#resources-settings')) {
+        this.showResourcesSettingsModal();
+      }
+    });
+  }
+
+  updateResourcesDropdown() {
+    const resourcesList = document.getElementById("resources-list");
+    if (!resourcesList) return;
+
+    const resources = this.gameState?.playerResources || {};
+    resourcesList.innerHTML = "";
+
+    // Define all possible resources with their default icons
+    const allResources = [
+      {
+        name: "credits",
+        icon: "account_balance_wallet",
+        color: "text-nebula-300",
+      },
+      { name: "ore", icon: "construction", color: "text-orange-400" },
+      { name: "food", icon: "restaurant", color: "text-green-400" },
+      { name: "fuel", icon: "local_gas_station", color: "text-blue-400" },
+      { name: "metal", icon: "build", color: "text-gray-400" },
+      {
+        name: "titanium",
+        icon: "precision_manufacturing",
+        color: "text-purple-400",
+      },
+      { name: "xanium", icon: "auto_awesome", color: "text-yellow-400" },
+    ];
+
+    // Add each resource type
+    for (const resourceDef of allResources) {
+      const amount = resources[resourceDef.name] || 0;
+
+      if (resourceDef.name === "credits") {
+        // Special handling for credits with income display
+        const incomeText =
+          this.gameState?.creditIncome > 0
+            ? ` (+${this.gameState.creditIncome}/tick)`
+            : "";
+        resourcesList.innerHTML += `
+          <div class="flex items-center justify-between py-1">
+            <div class="flex items-center gap-2">
+              <span class="material-icons text-sm ${resourceDef.color}">${resourceDef.icon}</span>
+              <span class="text-sm">Credits</span>
+            </div>
+            <div class="text-sm font-mono">
+              <span class="${resourceDef.color}">${amount.toLocaleString()}</span>
+              ${incomeText ? `<span class="text-xs text-plasma-300">${incomeText}</span>` : ""}
+            </div>
+          </div>
+        `;
+      } else {
+        // Get resource icon from resource types, fall back to default
+        const resourceType = this.resourceTypes.get(
+          resourceDef.name.toLowerCase(),
+        );
+        const icon = resourceType?.icon
+          ? `<img src="${resourceType.icon}" class="w-4 h-4" alt="${resourceDef.name}" />`
+          : `<span class="material-icons text-sm ${resourceDef.color}">${resourceDef.icon}</span>`;
+
+        resourcesList.innerHTML += `
+          <div class="flex items-center justify-between py-1">
+            <div class="flex items-center gap-2">
+              ${icon}
+              <span class="text-sm capitalize">${resourceDef.name}</span>
+            </div>
+            <span class="text-sm font-mono text-space-200">${amount.toLocaleString()}</span>
+          </div>
+        `;
+      }
+    }
+  }
+
   updateResourcesUI(resources) {
-    document.getElementById("credits").textContent =
-      resources.credits?.toLocaleString();
+    // Update main resources display
+    const resourcesDisplay = document.getElementById("resources-display");
+    if (!resourcesDisplay) return;
 
-    // Show credit income if available
-    const incomeElement = document.getElementById("credit-income");
-    if (this.gameState?.creditIncome > 0) {
-      incomeElement.textContent = `(+${this.gameState.creditIncome}/tick)`;
-      incomeElement.style.display = "inline";
-    } else {
-      incomeElement.style.display = "none";
+    // Clear current display
+    resourcesDisplay.innerHTML = "";
+
+    // Add each displayed resource
+    for (const resourceName of this.displayedResources) {
+      const amount = resources[resourceName];
+      if (amount === undefined) continue;
+
+      if (resourceName === "credits") {
+        // Special handling for credits
+        resourcesDisplay.innerHTML += `
+          <button id="credits-btn" class="text-nebula-300 hover:text-nebula-200 hover:bg-nebula-900/20 px-2 py-1 rounded transition-all cursor-pointer border border-nebula-600/30 hover:border-nebula-500/50 flex items-center gap-1">
+            <span class="material-icons text-base">account_balance_wallet</span>
+            <span id="credits">${amount?.toLocaleString() || 0}</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span>
+          </button>
+        `;
+
+        // Set up credit income display
+        const incomeElement = document.getElementById("credit-income");
+        if (incomeElement) {
+          if (this.gameState?.creditIncome > 0) {
+            incomeElement.textContent = `(+${this.gameState.creditIncome}/tick)`;
+            incomeElement.style.display = "inline";
+          } else {
+            incomeElement.style.display = "none";
+          }
+        }
+
+        // Set up credits button click handler for breakdown modal
+        const creditsBtn = document.getElementById("credits-btn");
+        if (creditsBtn) {
+          creditsBtn.onclick = () => this.showCreditsBreakdown();
+        }
+      } else {
+        // Other resources
+        const resourceDef = this.getResourceDefinition(resourceName);
+        const resourceType = this.resourceTypes.get(resourceName.toLowerCase());
+        const icon = resourceType?.icon
+          ? `<img src="${resourceType.icon}" class="w-4 h-4" alt="${resourceName}" />`
+          : `<span class="material-icons text-base">${resourceDef.icon}</span>`;
+
+        const colorClass = resourceDef.color || "text-space-300";
+
+        resourcesDisplay.innerHTML += `
+          <button class="${colorClass} hover:text-space-200 hover:bg-space-900/20 px-2 py-1 rounded transition-all cursor-pointer border border-space-600/30 hover:border-space-500/50 flex items-center gap-1">
+            ${icon}
+            <span class="font-mono">${amount?.toLocaleString() || 0}</span>
+          </button>
+        `;
+      }
     }
 
-    // Set up credits button click handler for breakdown modal
-    const creditsBtn = document.getElementById("credits-btn");
-    if (creditsBtn) {
-      creditsBtn.onclick = () => this.showCreditsBreakdown();
-    }
+    // Update dropdown display
+    this.updateResourcesDropdown();
+  }
+
+  getResourceDefinition(resourceName) {
+    const resourceDefs = {
+      credits: { icon: "account_balance_wallet", color: "text-nebula-300" },
+      ore: { icon: "construction", color: "text-orange-400" },
+      food: { icon: "restaurant", color: "text-green-400" },
+      fuel: { icon: "local_gas_station", color: "text-blue-400" },
+      metal: { icon: "build", color: "text-gray-400" },
+      titanium: { icon: "precision_manufacturing", color: "text-purple-400" },
+      xanium: { icon: "auto_awesome", color: "text-yellow-400" },
+    };
+    return (
+      resourceDefs[resourceName] || {
+        icon: "inventory",
+        color: "text-space-300",
+      }
+    );
+  }
+
+  showResourcesSettingsModal() {
+    // Define all possible resources for settings
+    const allResources = [
+      { name: "credits", icon: "account_balance_wallet" },
+      { name: "ore", icon: "construction" },
+      { name: "food", icon: "restaurant" },
+      { name: "fuel", icon: "local_gas_station" },
+      { name: "metal", icon: "build" },
+      { name: "titanium", icon: "precision_manufacturing" },
+      { name: "xanium", icon: "auto_awesome" },
+    ];
+
+    const resourceOptions = allResources
+      .map((resourceDef) => {
+        const isDisplayed = this.displayedResources.includes(resourceDef.name);
+        const resourceType = this.resourceTypes.get(resourceDef.name);
+        const icon = resourceType?.icon
+          ? `<img src="${resourceType.icon}" class="w-4 h-4" alt="${resourceDef.name}" />`
+          : `<span class="material-icons text-sm">${resourceDef.icon}</span>`;
+
+        return `
+        <label class="flex items-center gap-3 p-2 hover:bg-space-700/50 rounded cursor-pointer">
+          <input type="checkbox" ${isDisplayed ? "checked" : ""}
+                 class="resource-checkbox" data-resource="${resourceDef.name}">
+          <div class="flex items-center gap-2">
+            ${icon}
+            <span class="capitalize">${resourceDef.name}</span>
+          </div>
+        </label>
+      `;
+      })
+      .join("");
+
+    this.showModal(
+      "Resource Display Settings",
+      `
+      <form id="resources-settings-form" class="space-y-4">
+        <div>
+          <p class="text-sm text-space-400 mb-3">Choose which resources to display in the top bar:</p>
+          <div class="space-y-1 max-h-60 overflow-y-auto">
+            ${resourceOptions}
+          </div>
+        </div>
+        <div class="flex space-x-2">
+          <button type="submit" class="flex-1 btn btn-success">
+            Save Settings
+          </button>
+          <button type="button" onclick="document.getElementById('modal-overlay').classList.add('hidden')"
+                  class="flex-1 btn btn-secondary">
+            Cancel
+          </button>
+        </div>
+      </form>
+      `,
+    );
+
+    document
+      .getElementById("resources-settings-form")
+      .addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const checkboxes = document.querySelectorAll(".resource-checkbox");
+        this.displayedResources = Array.from(checkboxes)
+          .filter((cb) => cb.checked)
+          .map((cb) => cb.dataset.resource);
+
+        // Ensure at least one resource is displayed
+        if (this.displayedResources.length === 0) {
+          this.displayedResources = ["credits"];
+        }
+
+        this.saveResourcePreferences();
+        this.updateResourcesUI(this.gameState?.playerResources || {});
+        this.hideModal();
+      });
   }
 
   // updateSystemInfoUI and loadSystemPlanets are removed as their functionality
@@ -1861,28 +2212,171 @@ export class UIController {
   }
 
   showFleetPanel() {
-    const fleets = this.gameState?.getPlayerFleets() || [];
+    if (!this.gameState || !this.currentUser) {
+      this.showModal(
+        "Your Fleets",
+        '<div class="text-space-400">Game data not loaded or user not available.</div>',
+      );
+      return;
+    }
 
-    const fleetList =
-      fleets.length > 0
-        ? fleets
-            .map(
-              (fleet) => `
-      <div class="bg-space-700 p-3 rounded mb-2">
-        <div class="font-semibold">Fleet ${fleet.id.slice(-3)}</div>
-        <div class="text-sm text-space-300">
-          <div>From: ${fleet.from_name || fleet.from_id}</div>
-          <div>To: ${fleet.to_name || fleet.to_id}</div>
-          <div>Strength: ${fleet.strength}</div>
-          <div>ETA: ${fleet.eta_tick ? `Tick ${fleet.eta_tick}` : "Unknown"}</div>
+    const currentUserId = this.currentUser.id;
+    const allFleetOrders = window.gameState.fleetOrders || []; // Changed to fleetOrders
+    const allFleets = window.gameState.fleets || [];
+    const allSystems = window.gameState.systems || [];
+    const currentTick = window.gameState.currentTick || 0;
+    const TICKS_PER_MINUTE = window.gameState.ticksPerMinute || 6;
+    const SECONDS_PER_TICK = 60 / TICKS_PER_MINUTE;
+    const FLEET_MOVEMENT_DURATION_TICKS = 2; // Updated for faster testing
+
+    let movingFleetsHtml = "";
+    const movingFleetIds = new Set();
+
+    const fleetMoveOrders = allFleetOrders // Changed to allFleetOrders
+      .filter(
+        (order) =>
+          order.user_id === currentUserId && // Ensure orders are for the current user
+          // order.type === "move" && // Type is implicit for fleet_orders, but can be kept for safety if schema allows other types
+          (order.status === "pending" || order.status === "processing"),
+      )
+      .sort((a, b) => a.execute_at_tick - b.execute_at_tick);
+
+    fleetMoveOrders.forEach((order) => {
+      const fleet = allFleets.find((f) => f.id === order.fleet_id);
+      if (!fleet) return;
+
+      movingFleetIds.add(fleet.id);
+      const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
+      const originSystem = allSystems.find(
+        (s) => s.id === fleet.current_system,
+      );
+      const originName = originSystem ? originSystem.name : "Deep Space";
+
+      let destName = "Unknown System";
+      const destinationSystemId = order.destination_system_id;
+      const destinationSystem = destinationSystemId
+        ? allSystems.find((s) => s.id === destinationSystemId)
+        : null;
+      if (destinationSystem) destName = destinationSystem.name;
+
+      const ticksRemaining = Math.max(0, order.execute_at_tick - currentTick);
+      const secondsRemaining = (ticksRemaining * SECONDS_PER_TICK).toFixed(0);
+      let etaDisplay = `${ticksRemaining} ticks (~${secondsRemaining}s)`;
+      if (ticksRemaining === 0 && order.status === "processing") {
+        etaDisplay = "Finalizing Jump";
+      } else if (ticksRemaining === 0 && order.status === "pending") {
+        etaDisplay = "Initiating Jump";
+      }
+
+      // Show progress for current hop
+      const totalMovementTicks =
+        order.travel_time_ticks || FLEET_MOVEMENT_DURATION_TICKS;
+      const progressTicks = totalMovementTicks - ticksRemaining;
+      const progressPercent = Math.round(
+        (progressTicks / totalMovementTicks) * 100,
+      );
+
+      const statusDisplay =
+        order.status.charAt(0).toUpperCase() + order.status.slice(1);
+
+      // Multi-hop route information
+      let routeInfo = "";
+      if (order.route_path && order.route_path.length > 2) {
+        const currentHop = order.current_hop || 0;
+        const totalHops = order.route_path.length - 1;
+        const remainingHops = totalHops - currentHop;
+
+        const finalDestId = order.final_destination_id;
+        const finalDestSystem = finalDestId
+          ? allSystems.find((s) => s.id === finalDestId)
+          : null;
+        const finalDestName = finalDestSystem
+          ? finalDestSystem.name || `System ${finalDestSystem.id.slice(-4)}`
+          : "Unknown";
+
+        routeInfo = `
+          <div class="border-t border-space-500 mt-2 pt-2">
+            <div><span class="text-space-400">Route:</span> <span class="text-purple-400">Multi-hop</span></div>
+            <div><span class="text-space-400">Final Dest:</span> ${finalDestName}</div>
+            <div><span class="text-space-400">Hop:</span> <span class="text-cyan-400">${currentHop + 1}/${totalHops}</span></div>
+            <div><span class="text-space-400">Remaining:</span> <span class="text-yellow-400">${remainingHops} hops</span></div>
+          </div>
+        `;
+      }
+
+      movingFleetsHtml += `
+        <div class="bg-space-700 p-3 rounded mb-2 border border-space-600 shadow-md">
+          <div class="font-semibold text-nebula-300">${fleetName}</div>
+          <div class="text-sm text-space-300">
+            <div><span class="text-space-400">From:</span> ${originName}</div>
+            <div><span class="text-space-400">To:</span> ${destName}</div>
+            <div><span class="text-space-400">ETA:</span> <span class="text-yellow-400">${etaDisplay}</span></div>
+            <div><span class="text-space-400">Progress:</span> <span class="text-green-400">${progressPercent}%</span></div>
+            <div><span class="text-space-400">Status:</span> <span class="text-cyan-400">${statusDisplay}</span></div>
+            ${routeInfo}
+          </div>
         </div>
-      </div>
-    `,
-            )
-            .join("")
-        : '<div class="text-space-400">No fleets in transit</div>';
+      `;
+    });
 
-    this.showModal("Your Fleets", fleetList);
+    let stationaryFleetsHtml = "";
+    const playerFleets = this.gameState.getPlayerFleets(); // Already filters by owner
+
+    playerFleets.forEach((fleet) => {
+      if (movingFleetIds.has(fleet.id)) return; // Already displayed as moving
+
+      const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
+      const currentSystem = allSystems.find(
+        (s) => s.id === fleet.current_system,
+      );
+      const systemName = currentSystem ? currentSystem.name : "Deep Space";
+
+      // Get cargo information for this fleet
+      const cargoData = this.gameState?.getFleetCargo(fleet.id) || { cargo: {}, used_capacity: 0, total_capacity: 0 };
+      let cargoHtml = "";
+      
+      if (cargoData.cargo && Object.keys(cargoData.cargo).length > 0) {
+        const cargoItems = Object.entries(cargoData.cargo)
+          .filter(([resource, amount]) => amount > 0)
+          .map(([resource, amount]) => {
+            const resourceDef = this.getResourceDefinition(resource);
+            const icon = `<span class="material-icons text-xs ${resourceDef.color}">${resourceDef.icon}</span>`;
+            return `${icon} ${amount}`;
+          })
+          .join(" • ");
+        cargoHtml = `<div><span class="text-space-500">Cargo:</span> ${cargoItems}</div>`;
+      }
+
+      stationaryFleetsHtml += `
+        <div class="bg-space-650 p-3 rounded mb-2 border border-space-700 shadow-sm">
+          <div class="font-semibold text-gray-300">${fleetName}</div>
+          <div class="text-sm text-space-400">
+            <div><span class="text-space-500">Location:</span> ${systemName}</div>
+            <div><span class="text-space-500">Status:</span> <span class="text-gray-400">Stationary</span></div>
+            ${cargoHtml}
+            <div class="text-xs text-space-500 mt-1">Capacity: ${cargoData.used_capacity}/${cargoData.total_capacity}</div>
+          </div>
+        </div>
+      `;
+    });
+
+    let finalHtml = "";
+    if (movingFleetsHtml) {
+      finalHtml += `<h3 class="text-lg font-semibold text-plasma-300 mb-2 mt-3">Moving Fleets</h3>${movingFleetsHtml}`;
+    }
+    if (stationaryFleetsHtml) {
+      finalHtml += `<h3 class="text-lg font-semibold text-gray-400 mb-2 mt-3">Stationary Fleets</h3>${stationaryFleetsHtml}`;
+    }
+
+    if (finalHtml === "") {
+      finalHtml =
+        '<div class="text-space-400 text-center py-4">No fleets deployed.</div>';
+    }
+
+    this.showModal(
+      "Your Fleets",
+      `<div class="max-h-96 overflow-y-auto custom-scrollbar pr-1">${finalHtml}</div>`,
+    );
   }
 
   showTradePanel() {

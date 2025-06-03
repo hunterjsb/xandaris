@@ -113,6 +113,97 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 		return nil // No population or crypto servers to simulate
 	}
 
+	// Auto-employ population to buildings if not already employed
+	if totalPop > 0 {
+		log.Printf("DEBUG: Planet %s has %d total population, checking employment", planet.Id, totalPop)
+		
+		unemployedPops := make([]*models.Record, 0)
+		for _, pop := range populations {
+			if pop.GetString("employed_at") == "" {
+				unemployedPops = append(unemployedPops, pop)
+				log.Printf("DEBUG: Found unemployed population: %d people", pop.GetInt("count"))
+			}
+		}
+
+		log.Printf("DEBUG: Found %d unemployed population groups", len(unemployedPops))
+
+		// Assign unemployed population to buildings that need workers
+		for _, building := range buildings {
+			if len(unemployedPops) == 0 {
+				break
+			}
+
+			buildingTypeID := building.GetString("building_type")
+			buildingType, err := app.Dao().FindRecordById("building_types", buildingTypeID)
+			if err != nil {
+				log.Printf("DEBUG: Failed to get building type %s: %v", buildingTypeID, err)
+				continue
+			}
+
+			buildingName := buildingType.GetString("name")
+			log.Printf("DEBUG: Processing building %s (type: %s)", building.Id, buildingName)
+
+			// Skip crypto servers (they don't need workers)
+			if buildingName == "crypto_server" {
+				log.Printf("DEBUG: Skipping crypto server %s", building.Id)
+				continue
+			}
+
+			level := building.GetInt("level")
+			if level == 0 {
+				level = 1
+			}
+			// Use default worker capacity since the field doesn't exist in schema
+			var baseWorkerCapacity int
+			switch buildingName {
+			case "mine":
+				baseWorkerCapacity = 10
+			case "farm":
+				baseWorkerCapacity = 8
+			case "factory":
+				baseWorkerCapacity = 12
+			case "power_plant":
+				baseWorkerCapacity = 6
+			case "oil_rig":
+				baseWorkerCapacity = 8
+			case "deep_mine":
+				baseWorkerCapacity = 15
+			case "metal_refinery":
+				baseWorkerCapacity = 10
+			case "oil_refinery":
+				baseWorkerCapacity = 10
+			default:
+				baseWorkerCapacity = 5 // Default for other buildings
+			}
+			workerCapacity := baseWorkerCapacity * level
+
+			// Count currently employed at this building
+			currentWorkers := 0
+			for _, pop := range populations {
+				if pop.GetString("employed_at") == building.Id {
+					currentWorkers += pop.GetInt("count")
+				}
+			}
+
+			log.Printf("DEBUG: Building %s needs %d workers, has %d workers", building.Id, workerCapacity, currentWorkers)
+
+			// Assign more workers if needed and available
+			if currentWorkers < workerCapacity && len(unemployedPops) > 0 {
+				pop := unemployedPops[0]
+				pop.Set("employed_at", building.Id)
+				if err := app.Dao().SaveRecord(pop); err != nil {
+					log.Printf("Failed to employ population: %v", err)
+				} else {
+					log.Printf("Employed %d population to work %s building %s", 
+						pop.GetInt("count"), buildingType.GetString("name"), building.Id)
+					unemployedPops = unemployedPops[1:] // Remove from unemployed list
+				}
+			}
+		}
+		
+		log.Printf("DEBUG: Employment complete. Remaining unemployed groups: %d", len(unemployedPops))
+	}
+
 	// Get resource nodes on this planet
 	resourceNodes, err := app.Dao().FindRecordsByFilter("resource_nodes", 
 		fmt.Sprintf("planet_id = '%s' && exhausted = false", planet.Id), "", 0, 0)
@@ -136,7 +227,30 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 			level = 1
 		}
 
-		workerCapacity := buildingType.GetInt("worker_capacity") * level
+		// Use default worker capacity since the field doesn't exist in schema
+		var baseWorkerCapacity int
+		buildingName := buildingType.GetString("name")
+		switch buildingName {
+		case "mine":
+			baseWorkerCapacity = 10
+		case "farm":
+			baseWorkerCapacity = 8
+		case "factory":
+			baseWorkerCapacity = 12
+		case "power_plant":
+			baseWorkerCapacity = 6
+		case "oil_rig":
+			baseWorkerCapacity = 8
+		case "deep_mine":
+			baseWorkerCapacity = 15
+		case "metal_refinery":
+			baseWorkerCapacity = 10
+		case "oil_refinery":
+			baseWorkerCapacity = 10
+		default:
+			baseWorkerCapacity = 5 // Default for other buildings
+		}
+		workerCapacity := baseWorkerCapacity * level
 
 		// Get employed population for this building
 		employedPops, err := app.Dao().FindRecordsByFilter("populations",
@@ -161,7 +275,7 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 		}
 
 		// Handle crypto_servers first (they work without workers)
-		buildingName := buildingType.GetString("name")
+		buildingName = buildingType.GetString("name")
 		if buildingName == "crypto_server" {
 			// Crypto servers produce credits automatically without needing workers
 			creditsProduced := buildingType.GetInt("res1_quantity") * level
@@ -191,7 +305,8 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 		case "farm":
 			production["food"] += baseProduction
 		case "mine":
-			// Mines work ore resource nodes
+			// Mines store ore in building storage instead of global production
+			oreProduced := 0
 			for _, node := range resourceNodes {
 				resourceType, err := app.Dao().FindRecordById("resource_types", node.GetString("resource_type"))
 				if err != nil {
@@ -199,9 +314,30 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 				}
 				if resourceType.GetString("name") == "ore" {
 					richness := node.GetInt("richness")
-					production["ore"] += baseProduction * richness / 5
+					oreProduced += baseProduction * richness / 5
 					break
 				}
+			}
+			
+			if oreProduced > 0 {
+				// Store ore directly in mine building storage
+				currentStored := building.GetInt("res1_stored")
+				// Use massive capacity of 100,000 per level for better visualization
+				capacity := 100000 * level
+				newStored := currentStored + oreProduced
+				if newStored > capacity {
+					newStored = capacity
+				}
+				
+				building.Set("res1_stored", newStored)
+				if err := app.Dao().SaveRecord(building); err != nil {
+					log.Printf("Failed to update mine storage: %v", err)
+				} else {
+					log.Printf("Mine %s produced %d ore (stored: %d/%d)", 
+						building.Id, oreProduced, newStored, capacity)
+				}
+			} else {
+				log.Printf("DEBUG: Mine %s produced 0 ore (efficiency: %f, workers: %d)", building.Id, efficiency, workers)
 			}
 		case "factory":
 			production["goods"] += baseProduction

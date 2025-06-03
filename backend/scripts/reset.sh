@@ -32,6 +32,10 @@ echo "🌱 Seeding new universe..."
 ./seed
 
 echo ""
+echo "🚀 Setting up starter fleets for existing users..."
+./util setup
+
+echo ""
 echo "✅ Reset complete!"
 echo ""
 echo "📊 Final status:"

@@ -1395,74 +1395,66 @@ export class MapRenderer {
   }
 
   drawFleets(deltaTime) {
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 2; // Fixed assumption - updated for faster testing
+
+    if (!window.gameState || !this.fleets) {
+      return;
+    }
+
     this.fleets.forEach((fleet) => {
       let worldX, worldY;
       let isMoving = false;
       let movementAngle = 0;
 
-      // Check if fleet is in transit (has both current_system and destination_system)
-      if (
-        fleet.destination_system &&
-        fleet.destination_system !== "" &&
-        fleet.current_system &&
-        fleet.current_system !== "" &&
-        fleet.destination_system !== fleet.current_system
-      ) {
-        // Fleet is moving between systems
-        const fromSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        const toSystem = this.systems.find(
-          (s) => s.id === fleet.destination_system,
-        );
+      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find(
+        (order) =>
+          order.fleet_id === fleet.id &&
+          (order.status === "pending" || order.status === "processing"),
+      );
 
-        if (!fromSystem || !toSystem) return;
+      if (activeOrder) {
+        const fromSystem = this.systems.find((s) => s.id === fleet.current_system);
+        const toSystem = this.systems.find((s) => s.id === activeOrder.destination_system_id);
 
-        // Validate hyperlane range (same as navigation system)
-        const deltaX = toSystem.x - fromSystem.x;
-        const deltaY = toSystem.y - fromSystem.y;
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-        // Only allow movement within hyperlane range
-        if (distance > 800) return;
-
-        isMoving = true;
-
-        // Calculate progress based on ETA and distance-based travel time
-        let progress = 0.5; // Default fallback
-        if (fleet.eta) {
-          const now = new Date();
-          const eta = new Date(fleet.eta);
+        if (!fromSystem || !toSystem) {
+          console.warn(`MapRenderer: Could not find from/to system for moving fleet ${fleet.id}. Order: ${activeOrder.id}`);
+          const currentSystem = this.systems.find(s => s.id === fleet.current_system);
+          if (currentSystem) {
+            worldX = currentSystem.x + 15;
+            worldY = currentSystem.y + 15;
+          } else { return; }
+        } else {
+          isMoving = true;
+          const current_tick = window.gameState.currentTick || 0;
+          const order_execute_at_tick = activeOrder.execute_at_tick || 0;
           
-          // Calculate actual travel time based on distance (same as backend logic)
-          const travelTimeSec = Math.max(10, Math.min(120, Math.round(distance / 800 * 120)));
-          const departureTime = new Date(eta.getTime() - travelTimeSec * 1000);
-          const totalTime = eta.getTime() - departureTime.getTime();
-          const elapsed = now.getTime() - departureTime.getTime();
-          progress = Math.max(0, Math.min(1, elapsed / totalTime));
+          let total_duration_in_ticks = activeOrder.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
+          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS;
+
+          const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
+          const elapsed_ticks = current_tick - start_tick_of_movement;
+          const progress = Math.max(0, Math.min(1, elapsed_ticks / total_duration_in_ticks));
+
+          worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
+          worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
+          movementAngle = Math.atan2(toSystem.y - fromSystem.y, toSystem.x - fromSystem.x);
+
+          // Show route visualization for multi-hop routes
+          if (activeOrder.route_path && activeOrder.route_path.length > 2) {
+            this.drawActiveMultiHopRoute(activeOrder, progress);
+          }
         }
-
-        // Interpolate position along the hyperlane
-        worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
-        worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
-
-        // Calculate movement angle for directional arrow
-        movementAngle = Math.atan2(
-          toSystem.y - fromSystem.y,
-          toSystem.x - fromSystem.x,
-        );
       } else if (fleet.current_system && fleet.current_system !== "") {
-        // Fleet is stationary at current system
-        const currentSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        if (!currentSystem) return;
-
-        // Offset fleet position slightly from system center to make it visible
+        // Stationary Fleet
+        const currentSystem = this.systems.find((s) => s.id === fleet.current_system);
+        if (!currentSystem) {
+            console.warn(`MapRenderer: Could not find current system for stationary fleet ${fleet.id}`);
+            return;
+        }
         worldX = currentSystem.x + 15;
         worldY = currentSystem.y + 15;
       } else {
-        // Fleet has no valid position, skip rendering
+        console.warn(`MapRenderer: Fleet ${fleet.id} has no valid position.`);
         return;
       }
 
@@ -1642,54 +1634,48 @@ export class MapRenderer {
 
   getFleetAt(worldX, worldY) {
     const clickRadius = 20; // Pixels
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 2;
+
+    if (!window.gameState || !this.fleets) {
+      return null;
+    }
 
     for (const fleet of this.fleets) {
       let fleetWorldX, fleetWorldY;
 
-      // Calculate fleet position (same logic as drawFleets)
-      if (
-        fleet.destination_system &&
-        fleet.destination_system !== "" &&
-        fleet.current_system &&
-        fleet.current_system !== "" &&
-        fleet.destination_system !== fleet.current_system
-      ) {
-        // Fleet is moving between systems
-        const fromSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
-        const toSystem = this.systems.find(
-          (s) => s.id === fleet.destination_system,
-        );
+      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find(
+        (order) =>
+          order.fleet_id === fleet.id &&
+          (order.status === "pending" || order.status === "processing"),
+      );
 
-        if (!fromSystem || !toSystem) continue;
+      if (activeOrder) {
+        const fromSystem = this.systems.find((s) => s.id === fleet.current_system);
+        const toSystem = this.systems.find((s) => s.id === activeOrder.destination_system_id);
 
-        // Calculate progress and interpolated position
-        let progress = 0.5;
-        if (fleet.eta) {
-          const now = new Date();
-          const eta = new Date(fleet.eta);
+        if (!fromSystem || !toSystem) {
+           const currentSystem = this.systems.find(s => s.id === fleet.current_system);
+           if (currentSystem) {
+            fleetWorldX = currentSystem.x + 15;
+            fleetWorldY = currentSystem.y + 15;
+           } else { continue; }
+        } else {
+          const current_tick = window.gameState.currentTick || 0;
+          const order_execute_at_tick = activeOrder.execute_at_tick || 0;
           
-          // Calculate actual travel time based on distance (same as backend logic)
-          const deltaX = toSystem.x - fromSystem.x;
-          const deltaY = toSystem.y - fromSystem.y;
-          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-          const travelTimeSec = Math.max(10, Math.min(120, Math.round(distance / 800 * 120)));
-          const departureTime = new Date(eta.getTime() - travelTimeSec * 1000);
-          const totalTime = eta.getTime() - departureTime.getTime();
-          const elapsed = now.getTime() - departureTime.getTime();
-          progress = Math.max(0, Math.min(1, elapsed / totalTime));
+          let total_duration_in_ticks = activeOrder.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
+          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS;
+          
+          const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
+          const elapsed_ticks = current_tick - start_tick_of_movement;
+          const progress = Math.max(0, Math.min(1, elapsed_ticks / total_duration_in_ticks));
+          
+          fleetWorldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
+          fleetWorldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
         }
-
-        fleetWorldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
-        fleetWorldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
       } else if (fleet.current_system && fleet.current_system !== "") {
-        // Fleet is stationary
-        const currentSystem = this.systems.find(
-          (s) => s.id === fleet.current_system,
-        );
+        const currentSystem = this.systems.find((s) => s.id === fleet.current_system);
         if (!currentSystem) continue;
-
         fleetWorldX = currentSystem.x + 15;
         fleetWorldY = currentSystem.y + 15;
       } else {
@@ -1786,6 +1772,143 @@ export class MapRenderer {
     this.viewY = -centerY;
     this.targetViewX = this.viewX;
     this.targetViewY = this.viewY;
+  }
+
+  // Draw real-time multi-hop route visualization
+  drawActiveMultiHopRoute(order, currentProgress = 0) {
+    if (!order.route_path || !this.systems) return;
+
+    const ctx = this.ctx;
+    const routeSystemIds = order.route_path;
+    const currentHop = order.current_hop || 0;
+
+    // Convert system IDs to system objects
+    const routeSystems = routeSystemIds.map(id => 
+      this.systems.find(s => s.id === id)
+    ).filter(s => s !== undefined);
+
+    if (routeSystems.length < 2) return;
+
+    // Draw route segments
+    for (let i = 0; i < routeSystems.length - 1; i++) {
+      const from = routeSystems[i];
+      const to = routeSystems[i + 1];
+
+      // Determine segment color and style
+      let color, alpha, lineWidth, lineDash;
+      if (i < currentHop) {
+        // Completed segments - green
+        color = "#22c55e";
+        alpha = 0.4;
+        lineWidth = 2;
+        lineDash = [];
+      } else if (i === currentHop) {
+        // Current segment - animated yellow
+        color = "#fbbf24";
+        alpha = 0.8;
+        lineWidth = 3;
+        lineDash = [10 / this.zoom, 5 / this.zoom];
+      } else {
+        // Upcoming segments - blue
+        color = "#3b82f6";
+        alpha = 0.3;
+        lineWidth = 2;
+        lineDash = [5 / this.zoom, 5 / this.zoom];
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth / this.zoom;
+      ctx.setLineDash(lineDash);
+
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Draw waypoint markers
+    routeSystems.forEach((system, index) => {
+      let color, size, label;
+
+      if (index === 0) {
+        // Start point
+        color = "#10b981";
+        size = 8;
+        label = "START";
+      } else if (index === routeSystems.length - 1) {
+        // End point
+        color = "#ef4444";
+        size = 10;
+        label = "DEST";
+      } else if (index === currentHop + 1) {
+        // Next waypoint
+        color = "#fbbf24";
+        size = 6;
+        label = "NEXT";
+      } else if (index <= currentHop) {
+        // Completed waypoint
+        color = "#22c55e";
+        size = 4;
+        label = null;
+      } else {
+        // Future waypoint
+        color = "#3b82f6";
+        size = 4;
+        label = null;
+      }
+
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1 / this.zoom;
+
+      // Draw marker circle
+      ctx.beginPath();
+      ctx.arc(system.x, system.y, size / this.zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw label if present and zoom is sufficient
+      if (label && this.zoom > 0.4) {
+        ctx.font = `${8 / this.zoom}px monospace`;
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.fillText(label, system.x, system.y - 12 / this.zoom);
+      }
+
+      ctx.restore();
+    });
+
+    // Draw progress indicator on current segment
+    if (currentHop < routeSystems.length - 1 && currentProgress > 0) {
+      const fromSystem = routeSystems[currentHop];
+      const toSystem = routeSystems[currentHop + 1];
+      
+      const progressX = fromSystem.x + (toSystem.x - fromSystem.x) * currentProgress;
+      const progressY = fromSystem.y + (toSystem.y - fromSystem.y) * currentProgress;
+
+      ctx.save();
+      ctx.fillStyle = "#fbbf24";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2 / this.zoom;
+
+      ctx.beginPath();
+      ctx.arc(progressX, progressY, 6 / this.zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Add pulsing effect
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(progressX, progressY, 12 / this.zoom, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
   }
 
   destroy() {

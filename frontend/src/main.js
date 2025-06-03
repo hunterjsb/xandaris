@@ -67,6 +67,11 @@ class XanNationApp {
   }
 
   handleGameStateChange(state) {
+    // Debug logging for fleet orders
+    if (state.fleetOrders && state.fleetOrders.length > 0) {
+      console.log(`Fleet orders updated: ${state.fleetOrders.length} orders`, state.fleetOrders);
+    }
+    
     // Update map renderer with new data
     if (this.mapRenderer) {
       this.mapRenderer.setSystems(state.systems);
@@ -444,14 +449,20 @@ class XanNationApp {
       return;
     }
 
-    // Check if fleet is owned by current user and not moving
+    // Check if fleet is owned by current user
     if (selectedFleet.owner_id !== authManager.getUser()?.id) {
       this.uiController.showToast("You don't own this fleet", "error");
       return;
     }
 
-    if (selectedFleet.destination_system) {
-      this.uiController.showToast("Fleet is already moving", "error");
+    // Check if fleet already has pending orders
+    const existingOrder = gameState.fleetOrders?.find(order => 
+      order.fleet_id === selectedFleet.id && 
+      (order.status === "pending" || order.status === "processing")
+    );
+    
+    if (existingOrder) {
+      this.uiController.showToast("Fleet already has pending orders", "error");
       return;
     }
 
@@ -462,135 +473,110 @@ class XanNationApp {
       return;
     }
 
-    // Find path from source to destination
+    // For now, use new fleet orders system for direct moves only
+    // TODO: Implement multi-hop routing with fleet orders later
     const path = this.findFleetPath(fromSystem, toSystem);
-
-    if (!path || path.length < 2) {
-      this.uiController.showToast(
-        "No valid route found to target system",
-        "error",
-      );
-      return;
-    }
-
-    // Store the full route for this fleet
-    this.fleetRoutes.set(selectedFleet.id, {
-      fullPath: path,
-      currentHop: 0,
-      targetSystem: toSystem
-    });
-
-    // Send first hop
-    await this.sendNextFleetHop(selectedFleet.id, path);
-  }
-
-  async sendNextFleetHop(fleetId, path) {
-    const routeData = this.fleetRoutes.get(fleetId);
-    console.log(`DEBUG: sendNextFleetHop called for fleet ${fleetId}, route data:`, routeData);
-    if (!routeData || routeData.currentHop >= path.length - 1) {
-      // Route complete or invalid
-      console.log(`DEBUG: Route complete or invalid for fleet ${fleetId}, cleaning up`);
-      this.fleetRoutes.delete(fleetId);
-      return;
-    }
-
-    const nextSystemIndex = routeData.currentHop + 1;
-    const nextSystem = path[nextSystemIndex];
-    const currentSystem = path[routeData.currentHop];
-
-    // Calculate distance and travel time for this hop
-    const deltaX = nextSystem.x - currentSystem.x;
-    const deltaY = nextSystem.y - currentSystem.y;
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     
-    // Scale travel time with distance: 10-120 seconds (800 units = 2 minutes max)
-    const travelSec = Math.max(10, Math.min(120, Math.round(distance / 800 * 120)));
+    if (!path || path.length < 2) {
+      this.uiController.showToast("No valid route found to target system", "error");
+      return;
+    }
 
-    try {
-      const response = await gameData.sendMultiMoveFleet(
-        fleetId,
-        nextSystem.id,
-        travelSec
-      );
-
-      if (response) {
-        // Immediately update fleet visually on frontend
-        const fleet = gameState.fleets.find(f => f.id === fleetId);
-        if (fleet) {
-          // Calculate ETA for frontend display
-          const etaTime = new Date();
-          etaTime.setSeconds(etaTime.getSeconds() + travelSec);
-          
-          // Update fleet state immediately for smooth movement
-          fleet.destination_system = nextSystem.id;
-          fleet.eta = etaTime.toISOString();
-          fleet.next_stop = nextSystem.id;
-          
-          // Notify UI to update
-          gameState.notifyCallbacks();
-        }
-
-        // Update route progress - fleet is now moving to nextSystemIndex
-        // but currentHop should only be updated when the fleet actually arrives
-        // We'll update it in onFleetArrival instead
+    if (path.length === 2) {
+      // Direct hop - use single fleet orders system
+      try {
+        console.log(`🚀 Creating single-hop fleet order: ${fromSystem.name || fromSystem.id.slice(-4)} → ${toSystem.name || toSystem.id.slice(-4)}`);
         
-        const isLastHop = nextSystemIndex === path.length - 1;
-        const systemName = nextSystem.name || `System ${nextSystem.id.slice(-4)}`;
+        const result = await gameData.sendFleet(selectedFleet.current_system, toSystem.id, null, selectedFleet.id);
         
-        if (isLastHop) {
-          const pathNames = path
-            .map((sys) => sys.name || `System ${sys.id.slice(-4)}`)
-            .join(" → ");
-          this.uiController.showToast(
-            `Fleet dispatched via: ${pathNames}`,
-            "info",
-            3000
-          );
-          // Visual feedback - draw the entire route
-          this.mapRenderer.showMultiFleetRoute(path);
-        } else {
-          this.uiController.showToast(
-            `Fleet en route to ${systemName} (hop ${nextSystemIndex}/${path.length - 1})`,
-            "info",
-            2000
-          );
-        }
+        this.uiController.showToast(
+          `Fleet order created: ${toSystem.name || `System ${toSystem.id.slice(-4)}`} (arrives in ~20s)`,
+          "success"
+        );
+        
+        console.log("Single-hop fleet order created:", result);
+        
+      } catch (error) {
+        console.error("Failed to create fleet order:", error);
+        this.uiController.showToast(
+          error.message || "Failed to create fleet order",
+          "error"
+        );
       }
-    } catch (error) {
-      console.error("Failed to send fleet hop:", error);
-      this.uiController.showToast(
-        "Failed to dispatch fleet. Try again.",
-        "error",
-      );
-      // Clean up route on error
-      this.fleetRoutes.delete(fleetId);
+    } else {
+      // Multi-hop - use new fleet route system!
+      try {
+        console.log(`🚀 Creating multi-hop fleet route: ${path.length - 1} hops`);
+        console.log(`Route: ${path.map(s => s.name || s.id.slice(-4)).join(" → ")}`);
+        
+        // Convert path to system IDs
+        const routePath = path.map(system => system.id);
+        
+        const result = await gameData.sendFleetRoute(selectedFleet.id, routePath);
+        
+        this.uiController.showToast(
+          `Multi-hop route created: ${toSystem.name || `System ${toSystem.id.slice(-4)}`} (${path.length - 1} hops, ~${(path.length - 1) * 20}s total)`,
+          "success"
+        );
+        
+        console.log("Multi-hop fleet route created:", result);
+        
+        // Store route data for visualization
+        this.fleetRoutes.set(selectedFleet.id, {
+          fullPath: path,
+          currentHop: 0,
+          targetSystem: toSystem,
+          lastUpdate: Date.now(),
+          isMultiHop: true,
+          totalHops: path.length - 1
+        });
+        
+        // Show route visualization on map
+        this.mapRenderer.showFleetRoute(path, 0);
+        
+      } catch (error) {
+        console.error("Failed to create multi-hop fleet route:", error);
+        this.uiController.showToast(
+          error.message || "Failed to create multi-hop fleet route",
+          "error"
+        );
+      }
     }
   }
+
+
 
   onFleetArrival(fleetId) {
     console.log(`DEBUG: onFleetArrival called for fleet ${fleetId}`);
-    // Check if this fleet has a pending multi-hop route
+    // Check if this fleet has route visualization data
     const routeData = this.fleetRoutes.get(fleetId);
     console.log(`DEBUG: Route data for fleet ${fleetId}:`, routeData);
-    if (routeData) {
-      // Fleet has arrived at the next system, so increment currentHop
-      routeData.currentHop++;
-      console.log(`DEBUG: Fleet ${fleetId} arrived at system ${routeData.currentHop}/${routeData.fullPath.length - 1}, checking if journey continues`);
+    
+    if (routeData && routeData.isMultiHop) {
+      // Update visualization data based on backend fleet orders
+      const activeOrder = gameState.fleetOrders?.find(order => 
+        order.fleet_id === fleetId && 
+        (order.status === "pending" || order.status === "processing")
+      );
       
-      // Check if we've reached the final destination
-      if (routeData.currentHop >= routeData.fullPath.length - 1) {
-        console.log(`DEBUG: Fleet ${fleetId} reached final destination, cleaning up route`);
+      if (activeOrder) {
+        // Update our visualization to match backend state
+        const currentHop = activeOrder.current_hop || 0;
+        routeData.currentHop = currentHop;
+        routeData.lastUpdate = Date.now();
+        
+        console.log(`DEBUG: Updated route visualization for fleet ${fleetId}, hop ${currentHop}/${routeData.totalHops}`);
+        
+        // Update map visualization
+        this.mapRenderer.showFleetRoute(routeData.fullPath, currentHop);
+      } else {
+        // No active order found - route completed
+        console.log(`DEBUG: Fleet ${fleetId} route completed, cleaning up visualization`);
         this.fleetRoutes.delete(fleetId);
-        return;
+        this.mapRenderer.clearFleetRoute();
       }
-      
-      // Continue to next hop
-      console.log(`DEBUG: Continuing multi-hop journey for fleet ${fleetId} to next system`);
-      setTimeout(() => {
-        this.sendNextFleetHop(fleetId, routeData.fullPath);
-      }, 500); // Small delay to ensure backend has processed the arrival
     } else {
-      console.log(`DEBUG: No route data found for fleet ${fleetId}, journey complete or single-hop`);
+      console.log(`DEBUG: No multi-hop route data found for fleet ${fleetId}`);
     }
   }
 

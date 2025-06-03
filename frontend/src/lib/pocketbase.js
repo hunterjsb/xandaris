@@ -85,6 +85,7 @@ export class GameDataManager {
       fleets: [],
       trades: [],
       tick: [],
+      fleet_orders: [], // Renamed from orders
     };
   }
 
@@ -197,8 +198,46 @@ export class GameDataManager {
       case "trade_update":
         this.notifyCallbacks("trades", data.payload);
         break;
+      case "fleet_order_update": // Renamed from order_update
+        this.notifyCallbacks("fleet_orders", data.payload);
+        break;
       default:
         console.log("Unknown WebSocket message type:", data.type);
+    }
+  }
+
+  async getFleetOrders(userId = null) { // Renamed from getOrders
+    if (!pb.authStore.isValid && !userId) {
+        // For player view, userId will always be present.
+    }
+    if (!userId && pb.authStore.isValid) { // If called without userId but user is logged in.
+        userId = pb.authStore.model.id;
+    }
+
+    if (!userId) { // If still no userId, cannot fetch user-specific orders
+        console.warn("getFleetOrders called without userId and no authenticated user.");
+        return [];
+    }
+
+    try {
+        const filterParts = [
+            `(status != "completed" && status != "failed" && status != "cancelled")`,
+            `user_id = "${userId}"`
+        ];
+        const filter = filterParts.join(" && ");
+        
+        return await pb.collection("fleet_orders").getFullList({ // Changed to fleet_orders
+            filter: filter,
+            sort: "execute_at_tick", // Ascending is default
+            requestKey: `getFleetOrders-${userId}-${Date.now()}`, 
+        });
+    } catch (error) {
+        try {
+            suppressAutoCancelError(error);
+        } catch (e) {
+            console.error("Failed to fetch fleet orders:", e);
+        }
+        return [];
     }
   }
 
@@ -354,17 +393,23 @@ export class GameDataManager {
   }
 
   // Action methods
-  async sendFleet(fromId, toId, strength) {
+  async sendFleet(fromId, toId, strength, fleetId = null) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
+      const payload = {
+        from_id: fromId,
+        to_id: toId,
+        strength: strength,
+      };
+      
+      if (fleetId) {
+        payload.fleet_id = fleetId;
+      }
+
       return await pb.send("/api/orders/fleet", {
         method: "POST",
-        body: JSON.stringify({
-          from_id: fromId,
-          to_id: toId,
-          strength: strength,
-        }),
+        body: JSON.stringify(payload),
         headers: {
           "Content-Type": "application/json",
         },
@@ -375,28 +420,29 @@ export class GameDataManager {
     }
   }
 
-  async sendMultiMoveFleet(fleetId, nextStop, travelSec = 120) {
+
+
+  async sendFleetRoute(fleetId, routePath) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
-      return await pb.send("/api/orders/multi-fleet", {
+      return await pb.send("/api/orders/fleet-route", {
         method: "POST",
         body: JSON.stringify({
           fleet_id: fleetId,
-          next_stop: nextStop,
-          travel_sec: travelSec,
+          route_path: routePath,
         }),
         headers: {
           "Content-Type": "application/json",
         },
       });
     } catch (error) {
-      console.error("Failed to send multi-move fleet:", error);
+      console.error("Failed to send fleet route:", error);
       throw error;
     }
   }
 
-  async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
+  async queueBuilding(planetId, buildingType, fleetId) { // Added fleetId parameter
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
@@ -405,6 +451,7 @@ export class GameDataManager {
         body: JSON.stringify({
           planet_id: planetId, // Changed system_id to planet_id
           building_type: buildingType,
+          fleet_id: fleetId, // Include fleet_id for resource consumption
         }),
         headers: {
           "Content-Type": "application/json",
@@ -412,6 +459,22 @@ export class GameDataManager {
       });
     } catch (error) {
       console.error("Failed to queue building:", error);
+      throw error;
+    }
+  }
+
+  async getShipCargo(fleetId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    try {
+      return await pb.send(`/api/ship_cargo?fleet_id=${fleetId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      console.error("Failed to get ship cargo:", error);
       throw error;
     }
   }
@@ -515,6 +578,30 @@ export class GameDataManager {
         suppressAutoCancelError(error);
       } catch (e) {
         console.error("Failed to fetch resource types:", e);
+      }
+      return [];
+    }
+  }
+
+  async getPopulations(userId = null) {
+    try {
+      let url = "/api/collections/populations/records";
+      const params = {};
+      if (userId) {
+        params.filter = `owner_id='${userId}'`;
+      }
+      params.expand = 'employed_at,planet_id';
+
+      const response = await pb.send(url, {
+        method: "GET",
+        params: params,
+      });
+      return response.items || [];
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error("Failed to fetch populations:", e);
       }
       return [];
     }

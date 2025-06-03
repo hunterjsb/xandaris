@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <title>Xan Nation</title>
-    <script type="module" crossorigin src="/assets/main-CdfvuVKz.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/main-DjrkyWVp.css">
+    <script type="module" crossorigin src="/assets/main-qf4OXWch.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/main-B_SeejRp.css">
   </head>
   <body class="text-space-100">
     <div id="app">
@@ -21,10 +21,17 @@
               <span id="next-tick-display" class="text-amber-300">Next Tick: --:--</span>
             </div>
             <div id="resources" class="flex space-x-3 text-sm">
-              <button id="credits-btn" class="text-nebula-300 hover:text-nebula-200 hover:bg-nebula-900/20 px-2 py-1 rounded transition-all cursor-pointer border border-nebula-600/30 hover:border-nebula-500/50 flex items-center gap-1">
-                <span class="material-icons text-base">account_balance_wallet</span>
-                <span id="credits">0</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span>
+              <button id="resources-toggle" class="text-nebula-300 hover:text-nebula-200 hover:bg-nebula-900/20 px-2 py-1 rounded transition-all cursor-pointer border border-nebula-600/30 hover:border-nebula-500/50 flex items-center gap-1">
+                <span class="material-icons text-base">inventory_2</span>
+                <span class="text-xs">Resources</span>
+                <span class="material-icons text-sm ml-1">expand_more</span>
               </button>
+              <div id="resources-display" class="flex space-x-3">
+                <button id="credits-btn" class="text-nebula-300 hover:text-nebula-200 hover:bg-nebula-900/20 px-2 py-1 rounded transition-all cursor-pointer border border-nebula-600/30 hover:border-nebula-500/50 flex items-center gap-1">
+                  <span class="material-icons text-base">account_balance_wallet</span>
+                  <span id="credits">0</span><span id="credit-income" class="text-xs text-plasma-300 ml-1"></span>
+                </button>
+              </div>
             </div>
             <div id="auth-section">
               <button id="login-btn" class="px-3 py-1 bg-gradient-to-r from-nebula-600 to-plasma-600 hover:from-nebula-500 hover:to-plasma-500 rounded text-sm transition-all duration-200">
@@ -81,6 +88,21 @@
                   Trade Route
                 </button>
 
+              </div>
+            </div>
+            
+            <!-- Resources Dropdown -->
+            <div id="resources-dropdown" class="absolute w-64 aerogel-panel border border-space-600 rounded-lg shadow-lg hidden z-30 pointer-events-auto">
+              <div class="p-3">
+                <div class="flex justify-between items-center mb-3">
+                  <h3 class="text-sm font-medium text-space-200">Resource Display</h3>
+                  <button id="resources-settings" class="text-space-400 hover:text-space-200 transition-colors">
+                    <span class="material-icons text-sm">settings</span>
+                  </button>
+                </div>
+                <div id="resources-list" class="space-y-2">
+                  <!-- Resources will be populated here -->
+                </div>
               </div>
             </div>
           </div>

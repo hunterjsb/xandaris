@@ -1,6 +1,7 @@
 package tick
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -16,7 +17,7 @@ import (
 var (
 	currentTick   int64 = 1
 	tickMutex     sync.RWMutex
-	tickRate      int   = 6 // ticks per minute (10 seconds per tick)
+	tickRate      int   = 60 // ticks per minute (1 second per tick)
 	processingTick bool = false
 )
 
@@ -70,16 +71,17 @@ func ProcessTick(app *pocketbase.PocketBase) error {
 	log.Printf("Processing game tick #%d...", tick)
 	startTime := time.Now()
 
-	// 1. Update markets and economy
+	// 1. Process Pending Fleet Orders
+	if err := ProcessPendingFleetOrders(app, tick); err != nil {
+		log.Printf("Error processing pending fleet orders: %v", err)
+		// Decide if this error is critical enough to stop the entire tick.
+		// For now, we'll log and continue, but this could be returned.
+	}
+
+	// 2. Update markets and economy
 	if err := economy.UpdateMarkets(app); err != nil {
 		log.Printf("Error updating markets: %v", err)
 		return fmt.Errorf("market update failed: %w", err)
-	}
-
-	// 2. Apply building completions
-	if err := ApplyBuildingCompletions(app); err != nil {
-		log.Printf("Error applying building completions: %v", err)
-		return fmt.Errorf("building completion failed: %w", err)
 	}
 
 	// 3. Move cargo on trade routes
@@ -88,31 +90,17 @@ func ProcessTick(app *pocketbase.PocketBase) error {
 		return fmt.Errorf("cargo movement failed: %w", err)
 	}
 
-	// 4. Resolve fleet arrivals
-	if err := ResolveFleetArrivals(app); err != nil {
-		log.Printf("Error resolving fleet arrivals: %v", err)
-		return fmt.Errorf("fleet resolution failed: %w", err)
-	}
-
-	// 5. Evaluate treaties
+	// 4. Evaluate treaties
 	if err := EvaluateTreaties(app); err != nil {
 		log.Printf("Error evaluating treaties: %v", err)
 		return fmt.Errorf("treaty evaluation failed: %w", err)
 	}
 
-	// 6. Broadcast tick completion via WebSocket
+	// 5. Broadcast tick completion via WebSocket
 	websocket.BroadcastTickUpdate(int(tick), "")
 
 	duration := time.Since(startTime)
 	log.Printf("Game tick #%d completed in %v", tick, duration)
-	return nil
-}
-
-// ApplyBuildingCompletions checks for completed buildings and applies them
-func ApplyBuildingCompletions(app *pocketbase.PocketBase) error {
-	// TODO: Implement building queue system
-	// For now, buildings complete instantly when queued
-	log.Println("Applied building completions")
 	return nil
 }
 
@@ -166,113 +154,6 @@ func transferCargo(app *pocketbase.PocketBase, fromId, toId, resourceType string
 }
 
 
-// ResolveFleetArrivals handles fleet arrivals and combat
-func ResolveFleetArrivals(app *pocketbase.PocketBase) error {
-	// Get all fleets that have an ETA (including past due)
-	currentTime := time.Now()
-	log.Printf("DEBUG: Current time for fleet arrivals: %s", currentTime.Format("2006-01-02 15:04:05.000Z"))
-	
-	// Find all fleets with destination_system set (in transit)
-	fleets, err := app.Dao().FindRecordsByFilter("fleets", "destination_system != '' && eta != ''", "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to fetch fleets in transit: %w", err)
-	}
-
-	arrivedCount := 0
-	for _, fleet := range fleets {
-		etaTime := fleet.GetDateTime("eta")
-		if etaTime.IsZero() {
-			continue
-		}
-
-		// Convert PocketBase DateTime to Go time.Time for comparison
-		etaGoTime := etaTime.Time()
-		
-		// Check if fleet should have arrived (ETA is in the past or now)
-		if etaGoTime.Before(currentTime) || etaGoTime.Equal(currentTime) {
-			log.Printf("DEBUG: Processing arrival for fleet %s, eta: %s, current: %s, dest: %s", 
-				fleet.Id, etaGoTime.Format("2006-01-02 15:04:05.000Z"), fleet.GetString("current_system"), fleet.GetString("destination_system"))
-			
-			// Check if this is a multi-hop journey with next_stop set
-			nextStop := fleet.GetString("next_stop")
-			
-			if nextStop != "" {
-				// This is a multi-hop journey - move to next_stop
-				fleet.Set("current_system", nextStop)
-				fleet.Set("next_stop", "")
-				
-				// Clear destination and eta - frontend will send next hop if needed
-				fleet.Set("destination_system", "")
-				fleet.Set("eta", "")
-				log.Printf("DEBUG: Fleet %s reached waypoint %s in multi-hop journey", fleet.Id, nextStop)
-			} else {
-				// Single-hop journey - move to destination and clear
-				fleet.Set("current_system", fleet.GetString("destination_system"))
-				fleet.Set("destination_system", "")
-				fleet.Set("eta", "")
-				log.Printf("DEBUG: Fleet %s completed single-hop journey", fleet.Id)
-			}
-
-			if err := app.Dao().SaveRecord(fleet); err != nil {
-				log.Printf("Failed to save arrived fleet %s: %v", fleet.Id, err)
-			} else {
-				log.Printf("DEBUG: Successfully moved fleet %s to destination", fleet.Id)
-				arrivedCount++
-			}
-		}
-	}
-
-	log.Printf("Resolved %d fleet arrivals", arrivedCount)
-	return nil
-}
-
-// resolveFleetArrival handles a single fleet arrival
-func resolveFleetArrival(app *pocketbase.PocketBase, fleet *models.Record) error {
-	destinationSystemId := fleet.GetString("destination_system")
-	ownerId := fleet.GetString("owner_id")
-	
-	// Get ships in this fleet to calculate total strength
-	ships, err := app.Dao().FindRecordsByFilter("ships", "fleet_id = '"+fleet.Id+"'", "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get ships for fleet: %w", err)
-	}
-	
-	totalStrength := 0
-	for _, ship := range ships {
-		shipTypeId := ship.GetString("ship_type")
-		shipType, err := app.Dao().FindRecordById("ship_types", shipTypeId)
-		if err != nil {
-			continue
-		}
-		strength := shipType.GetInt("strength")
-		count := ship.GetInt("count")
-		totalStrength += strength * count
-	}
-
-	// Update fleet location
-	fleet.Set("current_system", destinationSystemId)
-	fleet.Set("destination_system", "")
-	fleet.Set("eta", "")
-	
-	// Get planets in target system
-	planets, err := app.Dao().FindRecordsByFilter("planets", "system_id = '"+destinationSystemId+"'", "", 0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get planets in system: %w", err)
-	}
-
-	if len(planets) == 0 {
-		log.Printf("Fleet %s (owner %s) arrived at empty system %s", fleet.Id, ownerId, destinationSystemId)
-		return app.Dao().SaveRecord(fleet)
-	}
-
-	// For now, just move fleet to the system and log arrival
-	// TODO: Implement proper colonization, combat, and planet management
-	log.Printf("Fleet %s (owner %s, strength %d) arrived at system %s with %d planets", 
-		fleet.Id, ownerId, totalStrength, destinationSystemId, len(planets))
-
-	return app.Dao().SaveRecord(fleet)
-}
-
 // EvaluateTreaties checks for expired treaties and updates statuses
 func EvaluateTreaties(app *pocketbase.PocketBase) error {
 	// Check if treaties collection exists
@@ -308,5 +189,215 @@ func EvaluateTreaties(app *pocketbase.PocketBase) error {
 	if expired > 0 {
 		log.Printf("Expired %d treaties", expired)
 	}
+	return nil
+}
+
+// ProcessPendingFleetOrders fetches and processes fleet_orders that are due.
+func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) error {
+	log.Printf("Starting ProcessPendingFleetOrders for tick #%d", currentTick)
+
+	_, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+	if err != nil {
+		return fmt.Errorf("failed to find 'fleet_orders' collection: %w", err)
+	}
+
+	sort := "execute_at_tick,created"
+	
+	records, err := app.Dao().FindRecordsByFilter(
+		"fleet_orders",
+		fmt.Sprintf("status = 'pending' && execute_at_tick <= %d", currentTick),
+		sort, 
+		0,    
+		0,    
+	)
+	if err != nil {
+		return fmt.Errorf("failed to fetch pending fleet orders: %w", err)
+	}
+
+	if len(records) == 0 {
+		log.Printf("No pending fleet orders to process for tick #%d", currentTick)
+		return nil
+	}
+
+	log.Printf("Found %d pending fleet orders to process for tick #%d", len(records), currentTick)
+
+	_, err = app.Dao().FindCollectionByNameOrId("fleets")
+	if err != nil {
+		// If fleets collection isn't found, we can't process any fleet orders.
+		return fmt.Errorf("failed to find 'fleets' collection: %w", err)
+	}
+
+	for _, order := range records {
+		orderType := order.GetString("type") // Should always be "move" for fleet_orders
+		log.Printf("Processing fleet order %s of type %s", order.Id, orderType)
+
+		// Atomically mark as "processing"
+		originalStatus := order.GetString("status")
+		order.Set("status", "processing")
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("Error marking fleet order %s as processing: %v. Original status: %s. Skipping.", order.Id, err, originalStatus)
+			order.Set("status", originalStatus) 
+			continue 
+		}
+
+		var processingError error
+		finalStatus := "completed" // Assume success
+
+		if orderType == "move" {
+			fleetID := order.GetString("fleet_id")
+			if fleetID == "" {
+				processingError = fmt.Errorf("missing fleet_id in fleet order %s", order.Id)
+				finalStatus = "failed"
+			} else {
+				destinationSystemID := order.GetString("destination_system_id")
+				if destinationSystemID == "" {
+					processingError = fmt.Errorf("missing destination_system_id in fleet order %s", order.Id)
+					finalStatus = "failed"
+				} else {
+					fleet, err := app.Dao().FindRecordById("fleets", fleetID)
+					if err != nil {
+						processingError = fmt.Errorf("fleet %s not found for order %s: %w", fleetID, order.Id, err)
+						finalStatus = "failed"
+					} else {
+						// Move fleet to destination
+						fleet.Set("current_system", destinationSystemID)
+
+						if err := app.Dao().SaveRecord(fleet); err != nil {
+							processingError = fmt.Errorf("failed to save fleet %s for order %s: %w", fleetID, order.Id, err)
+							finalStatus = "failed"
+						} else {
+							log.Printf("Fleet %s moved to system %s successfully for order %s.", fleetID, destinationSystemID, order.Id)
+							
+							// Check if this is part of a multi-hop route
+							routePath := order.Get("route_path")
+							currentHop := order.GetInt("current_hop")
+							finalDestinationID := order.GetString("final_destination_id")
+							
+							log.Printf("DEBUG: Multi-hop check for order %s: routePath=%v, currentHop=%d, finalDest=%s", 
+								order.Id, routePath, currentHop, finalDestinationID)
+							
+							if routePath != nil {
+								// Multi-hop route - check if we need to continue
+								var routePathSlice []string
+								var ok bool
+								
+								// Handle different JSON formats from PocketBase
+								switch v := routePath.(type) {
+								case []interface{}:
+									routePathSlice = make([]string, len(v))
+									for i, item := range v {
+										if str, ok := item.(string); ok {
+											routePathSlice[i] = str
+										} else {
+											log.Printf("ERROR: Non-string item in route_path: %v", item)
+											ok = false
+											break
+										}
+									}
+									ok = true
+								case []string:
+									routePathSlice = v
+									ok = true
+								case string:
+									// If it's a JSON string, try to parse it
+									log.Printf("DEBUG: Route path is string, attempting JSON parse: %s", v)
+									if err := json.Unmarshal([]byte(v), &routePathSlice); err != nil {
+										log.Printf("ERROR: Failed to parse route_path JSON string: %v", err)
+										ok = false
+									} else {
+										ok = true
+									}
+								default:
+									// Handle PocketBase JsonRaw type
+									log.Printf("DEBUG: Attempting to unmarshal JsonRaw type: %T", v)
+									if jsonBytes, err := v.(interface{ MarshalJSON() ([]byte, error) }).MarshalJSON(); err == nil {
+										if json.Unmarshal(jsonBytes, &routePathSlice) == nil {
+											ok = true
+											log.Printf("DEBUG: Successfully parsed JsonRaw: %v", routePathSlice)
+										} else {
+											log.Printf("DEBUG: Failed to unmarshal JsonRaw to []string")
+											ok = false
+										}
+									} else {
+										log.Printf("DEBUG: Failed to marshal JsonRaw: %v", err)
+										ok = false
+									}
+								}
+								
+								log.Printf("DEBUG: Route path slice conversion: ok=%t, len=%d, path=%v", ok, len(routePathSlice), routePathSlice)
+								if ok && len(routePathSlice) > 0 && finalDestinationID != "" {
+									nextHop := currentHop + 1
+									
+									log.Printf("DEBUG: Route progression check: nextHop=%d, totalSystems=%d", nextHop, len(routePathSlice))
+									// Check if there are more hops remaining
+									if nextHop < len(routePathSlice)-1 {
+										// Create next hop order
+										nextSystemId := routePathSlice[nextHop+1]
+										
+										log.Printf("DEBUG: Creating next hop order: nextSystemId=%s", nextSystemId)
+										
+										// Calculate execute time for next hop
+										nextExecuteAtTick := GetCurrentTick(app) + int64(2) // 2 ticks per hop
+										
+										// Create new order for next hop
+										fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+										if err == nil {
+											nextOrder := models.NewRecord(fleetOrdersCollection)
+											nextOrder.Set("user_id", order.GetString("user_id"))
+											nextOrder.Set("fleet_id", fleetID)
+											nextOrder.Set("type", "move")
+											nextOrder.Set("status", "pending")
+											nextOrder.Set("execute_at_tick", nextExecuteAtTick)
+											nextOrder.Set("destination_system_id", nextSystemId)
+											nextOrder.Set("original_system_id", destinationSystemID)
+											nextOrder.Set("travel_time_ticks", 2)
+											// Preserve the original route path as []string to ensure consistency
+											nextOrder.Set("route_path", routePathSlice)
+											nextOrder.Set("current_hop", nextHop)
+											nextOrder.Set("final_destination_id", finalDestinationID)
+											
+											if err := app.Dao().SaveRecord(nextOrder); err != nil {
+												log.Printf("ERROR: Failed to create next hop order for fleet %s: %v", fleetID, err)
+											} else {
+												log.Printf("SUCCESS: Created next hop order for fleet %s: hop %d/%d to system %s", 
+													fleetID, nextHop+1, len(routePathSlice)-1, nextSystemId)
+											}
+										} else {
+											log.Printf("ERROR: Failed to find fleet_orders collection: %v", err)
+										}
+									} else {
+										log.Printf("SUCCESS: Fleet %s completed multi-hop route to final destination %s", fleetID, finalDestinationID)
+									}
+								} else {
+									log.Printf("DEBUG: Multi-hop route check failed: ok=%t, len=%d, finalDest='%s'", ok, len(routePathSlice), finalDestinationID)
+								}
+							} else {
+								log.Printf("DEBUG: No route path found for order %s", order.Id)
+							}
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("Unknown order type '%s' in fleet_orders collection for order ID %s. Marking as failed.", orderType, order.Id)
+			processingError = fmt.Errorf("unknown order type in fleet_orders: %s", orderType)
+			finalStatus = "failed"
+		}
+
+		// Update order status and save
+		order.Set("status", finalStatus)
+		if processingError != nil {
+			log.Printf("Fleet order %s failed: %v", order.Id, processingError)
+			// Error details are logged, status is set to "failed" - that's sufficient
+		}
+
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("CRITICAL: Failed to save final status for fleet order %s (%s): %v. Data may be inconsistent.", order.Id, finalStatus, err)
+		} else {
+			log.Printf("Fleet order %s successfully updated to status '%s'.", order.Id, finalStatus)
+		}
+	}
+
+	log.Printf("Finished ProcessPendingFleetOrders for tick #%d. Processed %d fleet orders.", currentTick, len(records))
 	return nil
 }
