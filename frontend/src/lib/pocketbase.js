@@ -441,6 +441,26 @@ export class GameDataManager {
     }
   }
 
+  async sendFleetRoute(fleetId, routePath) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    try {
+      return await pb.send("/api/orders/fleet-route", {
+        method: "POST",
+        body: JSON.stringify({
+          fleet_id: fleetId,
+          route_path: routePath,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      console.error("Failed to send fleet route:", error);
+      throw error;
+    }
+  }
+
   async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 

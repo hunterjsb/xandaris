@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/models"
 
 	"github.com/hunterjsb/xandaris/internal/economy"
 	"github.com/hunterjsb/xandaris/internal/websocket"
@@ -257,7 +258,7 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 						processingError = fmt.Errorf("fleet %s not found for order %s: %w", fleetID, order.Id, err)
 						finalStatus = "failed"
 					} else {
-						// Successfully fetched fleet and destination
+						// Move fleet to destination
 						fleet.Set("current_system", destinationSystemID)
 
 						if err := app.Dao().SaveRecord(fleet); err != nil {
@@ -265,6 +266,54 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 							finalStatus = "failed"
 						} else {
 							log.Printf("Fleet %s moved to system %s successfully for order %s.", fleetID, destinationSystemID, order.Id)
+							
+							// Check if this is part of a multi-hop route
+							routePath := order.Get("route_path")
+							currentHop := order.GetInt("current_hop")
+							finalDestinationID := order.GetString("final_destination_id")
+							
+							if routePath != nil {
+								// Multi-hop route - check if we need to continue
+								routePathSlice, ok := routePath.([]interface{})
+								if ok && len(routePathSlice) > 0 && finalDestinationID != "" {
+									nextHop := currentHop + 1
+									
+									// Check if there are more hops remaining
+									if nextHop < len(routePathSlice)-1 {
+										// Create next hop order
+										nextSystemId := routePathSlice[nextHop+1].(string)
+										
+										// Calculate execute time for next hop
+										nextExecuteAtTick := GetCurrentTick(app) + int64(2) // 2 ticks per hop
+										
+										// Create new order for next hop
+										fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+										if err == nil {
+											nextOrder := models.NewRecord(fleetOrdersCollection)
+											nextOrder.Set("user_id", order.GetString("user_id"))
+											nextOrder.Set("fleet_id", fleetID)
+											nextOrder.Set("type", "move")
+											nextOrder.Set("status", "pending")
+											nextOrder.Set("execute_at_tick", nextExecuteAtTick)
+											nextOrder.Set("destination_system_id", nextSystemId)
+											nextOrder.Set("original_system_id", destinationSystemID)
+											nextOrder.Set("travel_time_ticks", 2)
+											nextOrder.Set("route_path", routePath)
+											nextOrder.Set("current_hop", nextHop)
+											nextOrder.Set("final_destination_id", finalDestinationID)
+											
+											if err := app.Dao().SaveRecord(nextOrder); err != nil {
+												log.Printf("Warning: Failed to create next hop order for fleet %s: %v", fleetID, err)
+											} else {
+												log.Printf("Created next hop order for fleet %s: hop %d/%d to system %s", 
+													fleetID, nextHop+1, len(routePathSlice)-1, nextSystemId)
+											}
+										}
+									} else {
+										log.Printf("Fleet %s completed multi-hop route to final destination %s", fleetID, finalDestinationID)
+									}
+								}
+							}
 						}
 					}
 				}

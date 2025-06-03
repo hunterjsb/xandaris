@@ -38,7 +38,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 
 		// Game actions
 		e.Router.POST("/api/orders/fleet", sendFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
-		e.Router.POST("/api/orders/multi-fleet", sendMultiFleet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/orders/fleet-route", sendFleetRoute(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/build", queueBuilding(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/trade", createTradeRoute(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
 		e.Router.POST("/api/orders/colonize", colonizePlanet(app), apis.ActivityLogger(app), apis.RequireAdminOrRecordAuth())
@@ -822,12 +822,11 @@ func sendFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 	}
 }
 
-func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
+func sendFleetRoute(app *pocketbase.PocketBase) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		data := struct {
-			FleetID   string `json:"fleet_id"`
-			NextStop  string `json:"next_stop"`    // Immediate next system
-			TravelSec int    `json:"travel_sec"`   // Travel time in seconds
+			FleetID   string   `json:"fleet_id"`
+			RoutePath []string `json:"route_path"`
 		}{}
 
 		if err := c.Bind(&data); err != nil {
@@ -837,6 +836,11 @@ func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
 		if user == nil {
 			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Validate route path
+		if len(data.RoutePath) < 2 {
+			return apis.NewBadRequestError("Route path must have at least 2 systems", nil)
 		}
 
 		// Validate fleet ownership and availability
@@ -849,37 +853,70 @@ func sendMultiFleet(app *pocketbase.PocketBase) echo.HandlerFunc {
 			return apis.NewForbiddenError("You don't own this fleet", nil)
 		}
 
-		// Check if fleet is already moving
-		if fleet.GetString("destination_system") != "" {
-			return apis.NewBadRequestError("Fleet is already in transit", nil)
+		// Check if fleet already has pending orders
+		existingOrders, err := app.Dao().FindRecordsByFilter(
+			"fleet_orders", 
+			fmt.Sprintf("fleet_id='%s' && (status='pending' || status='processing')", fleet.Id),
+			"", 1, 0,
+		)
+		if err == nil && len(existingOrders) > 0 {
+			return apis.NewBadRequestError("Fleet already has pending orders", nil)
 		}
 
-		// Validate next_stop exists
-		if data.NextStop == "" {
-			return apis.NewBadRequestError("Next stop system ID required", nil)
+		// Ensure fleet starts at the first system in the route
+		currentSystem := fleet.GetString("current_system")
+		if currentSystem != data.RoutePath[0] {
+			return apis.NewBadRequestError("Fleet is not at the starting system of the route", nil)
 		}
 
-		// Calculate ETA (use provided time or default to 120 seconds)
-		travelTime := data.TravelSec
-		if travelTime <= 0 {
-			travelTime = 120
+		// Validate that all systems in the route exist
+		for _, systemId := range data.RoutePath {
+			if _, err := app.Dao().FindRecordById("systems", systemId); err != nil {
+				return apis.NewBadRequestError("Invalid system in route path: "+systemId, err)
+			}
 		}
-		etaTime := time.Now().Add(time.Duration(travelTime) * time.Second)
 
-		// Update fleet with next hop
-		fleet.Set("next_stop", data.NextStop)
-		fleet.Set("destination_system", data.NextStop) // For tracking purposes
-		fleet.Set("eta", etaTime)
+		// Get Fleet Orders collection
+		fleetOrdersCollection, err := app.Dao().FindCollectionByNameOrId("fleet_orders")
+		if err != nil {
+			log.Printf("Error finding fleet_orders collection: %v", err)
+			return apis.NewApiError(http.StatusInternalServerError, "Fleet Orders collection not found", err)
+		}
 
-		if err := app.Dao().SaveRecord(fleet); err != nil {
-			return apis.NewBadRequestError("Failed to start fleet movement", err)
+		// Calculate execute_at_tick for first hop
+		currentTick := tick.GetCurrentTick(app)
+		travelDurationInTicks := int64(2) // 2 ticks per hop
+		executeAtTick := currentTick + travelDurationInTicks
+
+		// Create a new fleet_order record with multi-hop route data
+		order := models.NewRecord(fleetOrdersCollection)
+		order.Set("user_id", user.Id)
+		order.Set("fleet_id", fleet.Id)
+		order.Set("type", "move")
+		order.Set("status", "pending")
+		order.Set("execute_at_tick", executeAtTick)
+		
+		// Set single hop fields (first hop)
+		order.Set("destination_system_id", data.RoutePath[1])
+		order.Set("original_system_id", data.RoutePath[0])
+		order.Set("travel_time_ticks", travelDurationInTicks)
+		
+		// Set multi-hop fields
+		order.Set("route_path", data.RoutePath)
+		order.Set("current_hop", 0)
+		order.Set("final_destination_id", data.RoutePath[len(data.RoutePath)-1])
+
+		if err := app.Dao().SaveRecord(order); err != nil {
+			log.Printf("Error saving fleet route order: %v", err)
+			return apis.NewBadRequestError("Failed to create fleet route order", err)
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"success":   true,
-			"fleet_id":  fleet.Id,
-			"next_stop": data.NextStop,
-			"eta":       etaTime,
+			"success":           true,
+			"order_id":          order.Id,
+			"route_path":        data.RoutePath,
+			"final_destination": data.RoutePath[len(data.RoutePath)-1],
+			"total_hops":        len(data.RoutePath) - 1,
 		})
 	}
 }
