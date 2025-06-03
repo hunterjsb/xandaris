@@ -43,6 +43,29 @@ func main() {
 		return nil
 	})
 
+	// Create default superuser from environment variables
+	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+		email := os.Getenv("SUPERUSER_EMAIL")
+		password := os.Getenv("SUPERUSER_PASSWORD")
+		if email != "" && password != "" {
+			// Check if admin already exists
+			_, err := app.Dao().FindAdminByEmail(email)
+			if err != nil {
+				// Create new admin
+				admin := &models.Admin{}
+				admin.Email = email
+				admin.SetPassword(password)
+				
+				if err := app.Dao().SaveAdmin(admin); err != nil {
+					log.Printf("Failed to create superuser: %v", err)
+				} else {
+					log.Printf("Superuser created: %s", email)
+				}
+			}
+		}
+		return nil
+	})
+
 	// Set up user creation hook for starting resources
 	app.OnModelAfterCreate().Add(func(e *core.ModelEvent) error {
 		if e.Model.TableName() == "users" {
