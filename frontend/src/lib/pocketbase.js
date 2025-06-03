@@ -442,7 +442,7 @@ export class GameDataManager {
     }
   }
 
-  async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
+  async queueBuilding(planetId, buildingType, fleetId) { // Added fleetId parameter
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
@@ -451,6 +451,7 @@ export class GameDataManager {
         body: JSON.stringify({
           planet_id: planetId, // Changed system_id to planet_id
           building_type: buildingType,
+          fleet_id: fleetId, // Include fleet_id for resource consumption
         }),
         headers: {
           "Content-Type": "application/json",
@@ -458,6 +459,22 @@ export class GameDataManager {
       });
     } catch (error) {
       console.error("Failed to queue building:", error);
+      throw error;
+    }
+  }
+
+  async getShipCargo(fleetId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    try {
+      return await pb.send(`/api/ship_cargo?fleet_id=${fleetId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      console.error("Failed to get ship cargo:", error);
       throw error;
     }
   }

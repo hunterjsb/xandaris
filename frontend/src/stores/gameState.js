@@ -25,6 +25,7 @@ export class GameState {
       fuel: 0,
     };
     this.creditIncome = 0; // To store calculated income per tick
+    this.shipCargo = new Map(); // Store cargo data for fleets
 
     this.callbacks = [];
     this.initialized = false;
@@ -491,8 +492,24 @@ export class GameState {
     return await gameData.sendFleet(fromId, toId, strength);
   }
 
-  async queueBuilding(planetId, buildingType) { // Renamed systemId to planetId
-    return await gameData.queueBuilding(planetId, buildingType); // Pass planetId
+  async queueBuilding(planetId, buildingType, fleetId) { // Added fleetId parameter
+    return await gameData.queueBuilding(planetId, buildingType, fleetId); // Pass fleetId
+  }
+
+  async getShipCargo(fleetId) {
+    try {
+      const cargoData = await gameData.getShipCargo(fleetId);
+      this.shipCargo.set(fleetId, cargoData);
+      this.notifyCallbacks();
+      return cargoData;
+    } catch (error) {
+      console.error("Failed to load ship cargo:", error);
+      throw error;
+    }
+  }
+
+  getFleetCargo(fleetId) {
+    return this.shipCargo.get(fleetId) || { cargo: {}, used_capacity: 0, total_capacity: 0 };
   }
 
   async createTradeRoute(fromId, toId, cargo, capacity) {

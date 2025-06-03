@@ -1206,51 +1206,41 @@ export class UIController {
       });
     }
 
+    // Get fleets at this system for resource checking
+    const systemId = planet.system_id;
+    const currentUser = this.currentUser;
+    const availableFleets = this.gameState?.fleets?.filter(fleet => 
+      fleet.current_system === systemId && 
+      fleet.owner_id === currentUser?.id
+    ) || [];
+
     const buildingOptions = buildingTypes
       .map((buildingType) => {
         let costString = "Cost: ";
         let canBuild = true;
         let missingResources = [];
 
-        if (buildingType.cost === undefined) {
-          costString += "N/A (data missing)";
-        } else if (typeof buildingType.cost === "number") {
+        // Handle new resource cost system
+        if (buildingType.cost_resource_type && buildingType.cost_quantity > 0) {
+          const resourceName = buildingType.cost_resource_name || "Unknown Resource";
+          costString += `${buildingType.cost_quantity} ${resourceName}`;
+          
+          // Check if any fleet at this system has enough resources
+          let hasEnoughResources = false;
+          if (availableFleets.length > 0) {
+            // For now, assume fleets have resources (we'll implement cargo checking later)
+            hasEnoughResources = true;
+          }
+          
+          if (!hasEnoughResources) {
+            canBuild = false;
+            missingResources.push(`${buildingType.cost_quantity} ${resourceName}`);
+          }
+        } else if (buildingType.cost > 0) {
+          // Legacy credit system
           costString += `${buildingType.cost} Credits`;
-        } else if (
-          typeof buildingType.cost === "object" &&
-          buildingType.cost !== null
-        ) {
-          const resourceTypesMap = (this.gameState?.resourceTypes || []).reduce(
-            (map, rt) => {
-              map[rt.id] = rt.name;
-              return map;
-            },
-            {},
-          );
-
-          const costEntries = Object.entries(buildingType.cost).map(
-            ([resourceId, amount]) => {
-              const resourceName = resourceTypesMap[resourceId] || resourceId;
-              const hasResource = availableResources.has(
-                resourceName.toLowerCase(),
-              );
-
-              if (!hasResource) {
-                canBuild = false;
-                missingResources.push(resourceName);
-              }
-
-              const colorClass = hasResource
-                ? "text-green-400"
-                : "text-red-400";
-              return `<span class="${colorClass}">${amount} ${resourceName}</span>`;
-            },
-          );
-
-          costString += costEntries.join(", ");
-          if (Object.keys(buildingType.cost).length === 0) costString += "Free";
         } else {
-          costString += "N/A";
+          costString += "Free";
         }
 
         // Check if building requires specific resources
@@ -1282,9 +1272,15 @@ export class UIController {
           ? "w-full p-3 bg-space-700 hover:bg-space-600 rounded mb-2 text-left cursor-pointer"
           : "w-full p-3 bg-space-800 rounded mb-2 text-left cursor-not-allowed opacity-60";
 
-        const onclickHandler = canBuild
-          ? `onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}'); window.uiController.hideModal();"`
+        const onclickHandler = canBuild && availableFleets.length > 0
+          ? `onclick="window.gameState.queueBuilding('${safePlanetId}', '${safeBuildingTypeId}', '${availableFleets[0].id}'); window.uiController.hideModal();"`
           : "";
+
+        // Update canBuild to require fleets
+        if (availableFleets.length === 0) {
+          canBuild = false;
+          missingResources.push("Fleet at this system");
+        }
 
         let requirementsText = "";
         if (!canBuild && missingResources.length > 0) {
