@@ -30,7 +30,7 @@ export class GameState {
     this.callbacks = [];
     this.initialized = false;
     this.updatingResources = false; // Prevent overlapping resource updates
-    
+
     // Debouncing and update prevention
     this.updateTimer = null;
     this.tickRefreshTimer = null; // Debounce tick refreshes
@@ -104,6 +104,19 @@ export class GameState {
         this.fleetOrders = await gameData.getFleetOrders(userId); // Use getFleetOrders
         await new Promise(resolve => setTimeout(resolve, 50));
 
+        // Load ship cargo for all user fleets (only on full refresh, not every tick)
+        if (this.fleets && this.fleets.length > 0 && !this.cargoLoaded) {
+          for (const fleet of this.fleets) {
+            try {
+              const cargoData = await this.getShipCargo(fleet.id);
+              await new Promise(resolve => setTimeout(resolve, 25)); // Small delay between cargo requests
+            } catch (error) {
+              console.warn(`Failed to load cargo for fleet ${fleet.id}:`, error);
+            }
+          }
+          this.cargoLoaded = true;
+        }
+
         // Player resources will be loaded via updatePlayerResources()
       }
 
@@ -136,7 +149,7 @@ export class GameState {
       }
 
       this.updatePlayerResources();
-      
+
       // Center camera on player's first fleet if this is their first time
       if (userId && this.fleets && this.fleets.length > 0 && this.systems && this.systems.length > 0) {
         const firstFleet = this.fleets[0];
@@ -145,7 +158,7 @@ export class GameState {
           this.centerOnFleetSystem = firstFleet.current_system;
         }
       }
-      
+
       this.notifyCallbacks();
     } catch (error) {
       console.error("Failed to load game data:", error);
@@ -160,6 +173,48 @@ export class GameState {
     }
 
     await this.loadGameData();
+  }
+
+  async lightweightTickUpdate() {
+    // Only update essential data that changes frequently
+    const user = authManager.getUser();
+    if (!user) return;
+
+    try {
+      // Update only resources and status - don't reload everything
+      await this.updatePlayerResources();
+
+      // Update status for tick counter
+      const status = await gameData.getStatus();
+      if (status) {
+        this.currentTick = status.current_tick || this.currentTick;
+        this.ticksPerMinute = status.ticks_per_minute || this.ticksPerMinute;
+      }
+
+      this.notifyCallbacks();
+    } catch (error) {
+      console.warn("Failed to perform lightweight tick update:", error);
+    }
+  }
+
+  handleTick(tickData) {
+    console.log("Received tick:", tickData);
+    this.currentTick = tickData.tick || tickData.current_tick || this.currentTick;
+
+    // Debounce rapid tick updates
+    if (this.tickRefreshTimer) {
+      clearTimeout(this.tickRefreshTimer);
+    }
+
+    this.tickRefreshTimer = setTimeout(() => {
+      // Only do full data refresh every 10th tick to reduce API load
+      // Otherwise do lightweight updates for resources/status only
+      if (this.currentTick % 10 === 0) {
+        this.refreshGameData();
+      } else {
+        this.lightweightTickUpdate();
+      }
+    }, 500); // Increased debounce to 500ms
   }
 
   reset() {
@@ -195,13 +250,13 @@ export class GameState {
       if (mapData && mapData.systems) {
         this.systems = mapData.systems;
         this.mapData = mapData;
-        
+
         // Also load hyperlanes when map data is loaded
         const hyperlanes = await gameData.getHyperlanes();
         if (hyperlanes) {
           this.hyperlanes = hyperlanes;
         }
-        
+
         this.notifyCallbacks();
       }
     } catch (error) {
@@ -221,23 +276,23 @@ export class GameState {
   notifyCallbacks() {
     // Prevent recursive updates
     if (this.isUpdating) return;
-    
+
     // Debounce rapid updates
     if (this.updateTimer) {
       this.pendingUpdate = true;
       return;
     }
-    
+
     this.updateTimer = setTimeout(() => {
       this.updateTimer = null;
       this.isUpdating = true;
-      
+
       try {
         this.callbacks.forEach((callback) => callback(this));
       } finally {
         this.isUpdating = false;
       }
-      
+
       if (this.pendingUpdate) {
         this.pendingUpdate = false;
         this.notifyCallbacks();
@@ -263,12 +318,12 @@ export class GameState {
 
   updateFleets(fleetsData) {
     console.log(`DEBUG: updateFleets called with:`, Array.isArray(fleetsData) ? `array of ${fleetsData.length} fleets` : 'single fleet', fleetsData);
-    
+
     if (Array.isArray(fleetsData)) {
       // Check for fleet arrivals when updating with array
       const oldFleets = new Map(this.fleets.map(f => [f.id, f]));
       console.log(`DEBUG: Checking ${fleetsData.length} fleets for arrivals against ${oldFleets.size} old fleets`);
-      
+
       for (const newFleet of fleetsData) {
         const oldFleet = oldFleets.get(newFleet.id);
         if (oldFleet) {
@@ -279,14 +334,14 @@ export class GameState {
           }
         }
       }
-      
+
       this.fleets = fleetsData;
     } else {
       const index = this.fleets.findIndex((f) => f.id === fleetsData.id);
       if (index >= 0) {
         const oldFleet = this.fleets[index];
         this.fleets[index] = fleetsData;
-        
+
         // Check for fleet arrival (had destination, now doesn't)
         if (oldFleet.destination_system && !fleetsData.destination_system) {
           console.log(`DEBUG: Fleet arrival detected for fleet ${fleetsData.id}, old destination: ${oldFleet.destination_system}, new destination: ${fleetsData.destination_system}`);
@@ -341,21 +396,7 @@ export class GameState {
     this.notifyCallbacks();
   }
 
-  handleTick(tickData) {
-    this.currentTick = tickData.tick || this.currentTick + 1;
 
-    // Debounce tick updates to prevent rapid refreshes
-    if (this.tickRefreshTimer) {
-      clearTimeout(this.tickRefreshTimer);
-    }
-    
-    this.tickRefreshTimer = setTimeout(() => {
-      // Refresh data every tick, which includes resource calculation.
-      // Consider optimizing if performance becomes an issue.
-      this.refreshGameData();
-      // notifyCallbacks() is called within refreshGameData and updatePlayerResources
-    }, 100); // 100ms debounce
-  }
 
   async updatePlayerResources() {
     const user = authManager.getUser(); // Get current user
@@ -374,13 +415,13 @@ export class GameState {
     try {
       // Get user resources from the new API endpoint
       const userResources = await gameData.getUserResources();
-      
+
       // Handle auto-cancellation gracefully
       if (userResources === null) {
         // Request was cancelled, skip this update
         return;
       }
-    
+
     if (!this.mapData || !this.mapData.planets) {
       this.playerResources = userResources;
       this.creditIncome = 0;
@@ -420,12 +461,58 @@ export class GameState {
       }
     }
 
+    // Calculate ship cargo resources
+    let shipCargoOre = 0;
+    let shipCargoFood = 0;
+    let shipCargoFuel = 0;
+    let shipCargoMetal = 0;
+    let shipCargoTitanium = 0;
+    let shipCargoXanium = 0;
+
+    // Sum up resources from ship cargo across all user's fleets
+    for (const [fleetId, cargoData] of this.shipCargo.entries()) {
+      if (cargoData && cargoData.cargo) {
+        shipCargoOre += cargoData.cargo.ore || 0;
+        shipCargoFood += cargoData.cargo.food || 0;
+        shipCargoFuel += cargoData.cargo.fuel || 0;
+        shipCargoMetal += cargoData.cargo.metal || 0;
+        shipCargoTitanium += cargoData.cargo.titanium || 0;
+        shipCargoXanium += cargoData.cargo.xanium || 0;
+      }
+    }
+
+    // Calculate building stored resources
+    let buildingStoredOre = 0;
+    let buildingStoredCredits = 0;
+
+    // Sum up resources from building storage on user's planets
+    if (this.buildings && Array.isArray(this.buildings)) {
+      for (const building of this.buildings) {
+        // Get building type to determine what's stored
+        const buildingType = this.buildingTypes.find(bt => bt.id === building.building_type);
+        if (buildingType) {
+          const buildingName = buildingType.name?.toLowerCase();
+
+          if (buildingName === 'mine' && building.res1_stored > 0) {
+            // Mines store ore in res1_stored
+            buildingStoredOre += building.res1_stored;
+          } else if (buildingName === 'crypto_server' && building.res1_stored > 0) {
+            // Crypto servers store credits in res1_stored (already handled by userResources.credits)
+            buildingStoredCredits += building.res1_stored;
+          }
+          // Add other building types as needed
+        }
+      }
+    }
+
     this.playerResources = {
       credits: userResources.credits, // Credits from crypto_server buildings
-      food: totalFood,
-      ore: totalOre,
-      goods: totalGoods,
-      fuel: totalFuel,
+      food: totalFood + shipCargoFood,
+      ore: totalOre + shipCargoOre + buildingStoredOre, // Include mine storage
+      fuel: totalFuel + shipCargoFuel,
+      metal: shipCargoMetal, // Metal only comes from ship cargo for now
+      titanium: shipCargoTitanium, // Titanium only comes from ship cargo for now
+      xanium: shipCargoXanium, // Xanium only comes from ship cargo for now
     };
     this.creditIncome = calculatedCreditIncome; // Store income calculated from buildings for UI display
 
@@ -453,7 +540,7 @@ export class GameState {
     if (this.selectedSystem && this.selectedSystem.id === systemId) {
       return;
     }
-    
+
     this.selectedSystem = this.systems.find((s) => s.id === systemId) || null;
     if (this.selectedSystem) {
       this.selectedSystemPlanets = this.getSystemPlanets(this.selectedSystem.id);
@@ -505,6 +592,24 @@ export class GameState {
     } catch (error) {
       console.error("Failed to load ship cargo:", error);
       throw error;
+    }
+  }
+
+  async refreshAllShipCargo() {
+    if (!this.fleets || this.fleets.length === 0) return;
+
+    const user = authManager.getUser();
+    if (!user) return;
+
+    const userFleets = this.fleets.filter(fleet => fleet.owner_id === user.id);
+
+    for (const fleet of userFleets) {
+      try {
+        await this.getShipCargo(fleet.id);
+        await new Promise(resolve => setTimeout(resolve, 25)); // Small delay between requests
+      } catch (error) {
+        console.warn(`Failed to refresh cargo for fleet ${fleet.id}:`, error);
+      }
     }
   }
 

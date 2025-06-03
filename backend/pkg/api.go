@@ -113,6 +113,9 @@ type BuildingData struct {
 	Active         bool   `json:"active"`
 	CreditsPerTick int    `json:"credits_per_tick"`
 	SystemName     string `json:"system_name,omitempty"`
+	BuildingType   string `json:"building_type"`
+	Res1Stored     int    `json:"res1_stored"`
+	Res2Stored     int    `json:"res2_stored"`
 }
 
 type FleetData struct {
@@ -551,6 +554,9 @@ func getBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
 				Level:          building.GetInt("level"),
 				Active:         building.GetBool("active"),
 				CreditsPerTick: creditsPerTick,
+				BuildingType:   buildingTypeID,
+				Res1Stored:     building.GetInt("res1_stored"),
+				Res2Stored:     building.GetInt("res2_stored"),
 			}
 		}
 
