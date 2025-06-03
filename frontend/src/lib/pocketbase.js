@@ -420,26 +420,7 @@ export class GameDataManager {
     }
   }
 
-  async sendMultiMoveFleet(fleetId, nextStop, travelSec = 120) {
-    if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
-    try {
-      return await pb.send("/api/orders/multi-fleet", {
-        method: "POST",
-        body: JSON.stringify({
-          fleet_id: fleetId,
-          next_stop: nextStop,
-          travel_sec: travelSec,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-    } catch (error) {
-      console.error("Failed to send multi-move fleet:", error);
-      throw error;
-    }
-  }
 
   async sendFleetRoute(fleetId, routePath) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");

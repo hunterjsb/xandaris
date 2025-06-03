@@ -1,6 +1,7 @@
 package tick
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -16,7 +17,7 @@ import (
 var (
 	currentTick   int64 = 1
 	tickMutex     sync.RWMutex
-	tickRate      int   = 6 // ticks per minute (10 seconds per tick)
+	tickRate      int   = 60 // ticks per minute (1 second per tick)
 	processingTick bool = false
 )
 
@@ -272,16 +273,68 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 							currentHop := order.GetInt("current_hop")
 							finalDestinationID := order.GetString("final_destination_id")
 							
+							log.Printf("DEBUG: Multi-hop check for order %s: routePath=%v, currentHop=%d, finalDest=%s", 
+								order.Id, routePath, currentHop, finalDestinationID)
+							
 							if routePath != nil {
 								// Multi-hop route - check if we need to continue
-								routePathSlice, ok := routePath.([]interface{})
+								var routePathSlice []string
+								var ok bool
+								
+								// Handle different JSON formats from PocketBase
+								switch v := routePath.(type) {
+								case []interface{}:
+									routePathSlice = make([]string, len(v))
+									for i, item := range v {
+										if str, ok := item.(string); ok {
+											routePathSlice[i] = str
+										} else {
+											log.Printf("ERROR: Non-string item in route_path: %v", item)
+											ok = false
+											break
+										}
+									}
+									ok = true
+								case []string:
+									routePathSlice = v
+									ok = true
+								case string:
+									// If it's a JSON string, try to parse it
+									log.Printf("DEBUG: Route path is string, attempting JSON parse: %s", v)
+									if err := json.Unmarshal([]byte(v), &routePathSlice); err != nil {
+										log.Printf("ERROR: Failed to parse route_path JSON string: %v", err)
+										ok = false
+									} else {
+										ok = true
+									}
+								default:
+									// Handle PocketBase JsonRaw type
+									log.Printf("DEBUG: Attempting to unmarshal JsonRaw type: %T", v)
+									if jsonBytes, err := v.(interface{ MarshalJSON() ([]byte, error) }).MarshalJSON(); err == nil {
+										if json.Unmarshal(jsonBytes, &routePathSlice) == nil {
+											ok = true
+											log.Printf("DEBUG: Successfully parsed JsonRaw: %v", routePathSlice)
+										} else {
+											log.Printf("DEBUG: Failed to unmarshal JsonRaw to []string")
+											ok = false
+										}
+									} else {
+										log.Printf("DEBUG: Failed to marshal JsonRaw: %v", err)
+										ok = false
+									}
+								}
+								
+								log.Printf("DEBUG: Route path slice conversion: ok=%t, len=%d, path=%v", ok, len(routePathSlice), routePathSlice)
 								if ok && len(routePathSlice) > 0 && finalDestinationID != "" {
 									nextHop := currentHop + 1
 									
+									log.Printf("DEBUG: Route progression check: nextHop=%d, totalSystems=%d", nextHop, len(routePathSlice))
 									// Check if there are more hops remaining
 									if nextHop < len(routePathSlice)-1 {
 										// Create next hop order
-										nextSystemId := routePathSlice[nextHop+1].(string)
+										nextSystemId := routePathSlice[nextHop+1]
+										
+										log.Printf("DEBUG: Creating next hop order: nextSystemId=%s", nextSystemId)
 										
 										// Calculate execute time for next hop
 										nextExecuteAtTick := GetCurrentTick(app) + int64(2) // 2 ticks per hop
@@ -298,21 +351,28 @@ func ProcessPendingFleetOrders(app *pocketbase.PocketBase, currentTick int64) er
 											nextOrder.Set("destination_system_id", nextSystemId)
 											nextOrder.Set("original_system_id", destinationSystemID)
 											nextOrder.Set("travel_time_ticks", 2)
-											nextOrder.Set("route_path", routePath)
+											// Preserve the original route path as []string to ensure consistency
+											nextOrder.Set("route_path", routePathSlice)
 											nextOrder.Set("current_hop", nextHop)
 											nextOrder.Set("final_destination_id", finalDestinationID)
 											
 											if err := app.Dao().SaveRecord(nextOrder); err != nil {
-												log.Printf("Warning: Failed to create next hop order for fleet %s: %v", fleetID, err)
+												log.Printf("ERROR: Failed to create next hop order for fleet %s: %v", fleetID, err)
 											} else {
-												log.Printf("Created next hop order for fleet %s: hop %d/%d to system %s", 
+												log.Printf("SUCCESS: Created next hop order for fleet %s: hop %d/%d to system %s", 
 													fleetID, nextHop+1, len(routePathSlice)-1, nextSystemId)
 											}
+										} else {
+											log.Printf("ERROR: Failed to find fleet_orders collection: %v", err)
 										}
 									} else {
-										log.Printf("Fleet %s completed multi-hop route to final destination %s", fleetID, finalDestinationID)
+										log.Printf("SUCCESS: Fleet %s completed multi-hop route to final destination %s", fleetID, finalDestinationID)
 									}
+								} else {
+									log.Printf("DEBUG: Multi-hop route check failed: ok=%t, len=%d, finalDest='%s'", ok, len(routePathSlice), finalDestinationID)
 								}
+							} else {
+								log.Printf("DEBUG: No route path found for order %s", order.Id)
 							}
 						}
 					}
