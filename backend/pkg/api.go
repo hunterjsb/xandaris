@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -27,6 +28,7 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 
 		// Game data endpoints
 		e.Router.GET("/api/map", getMapData(app))
+		e.Router.GET("/api/debug/buildings/:planetId", debugBuildings(app))
 		e.Router.GET("/api/systems", getSystems(app))
 		e.Router.GET("/api/systems/:id", getSystem(app))
 		e.Router.GET("/api/planets", getPlanets(app))
@@ -227,9 +229,11 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 
 		// Transform planets data
 		planetsData := make([]PlanetData, len(planets))
+		log.Printf("Processing %d planets in map API", len(planets))
 		for i, planet := range planets {
+			log.Printf("Processing planet %s (colonized by %s)", planet.Id, planet.GetString("colonized_by"))
 			// Calculate aggregated data for each planet
-			totalPop := planet.GetInt("population") // Start with the planet's own population
+			totalPop := 0
 			totalFood := 0
 			totalOre := 0
 			totalGoods := 0
@@ -237,26 +241,66 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 			totalCredits := 0
 			buildingCounts := make(map[string]int)
 
-			// Get buildings for this planet
-			buildings, _ := app.Dao().FindRecordsByFilter("buildings", fmt.Sprintf("planet_id='%s'", planet.Id), "", 0, 0)
-			for _, building := range buildings {
-				buildingType := building.GetString("building_type")
-				buildingCounts[buildingType]++
-
-				// Calculate building production based on type
-				switch buildingType {
-				case "farm":
-					totalFood += building.GetInt("level") * 10
-				case "mine":
-					totalOre += building.GetInt("level") * 8
-				case "factory":
-					totalGoods += building.GetInt("level") * 6
-				case "refinery":
-					totalFuel += building.GetInt("level") * 5
-				case "bank":
-					totalCredits += building.GetInt("level") * 1
+			// Get population for this planet using raw DB query
+			popRows := []struct {
+				Count int `db:"count"`
+			}{}
+			if err := app.Dao().DB().Select("count").From("populations").Where(dbx.HashExp{"planet_id": planet.Id}).All(&popRows); err != nil {
+				log.Printf("Error querying populations for planet %s: %v", planet.Id, err)
+			} else {
+				log.Printf("Found %d population records for planet %s", len(popRows), planet.Id)
+				for _, row := range popRows {
+					totalPop += row.Count
 				}
 			}
+
+			// Get buildings for this planet using raw DB query
+			buildingRows := []struct {
+				BuildingType string `db:"building_type"`
+				Level        int    `db:"level"`
+			}{}
+			if err := app.Dao().DB().Select("building_type", "level").From("buildings").Where(dbx.HashExp{"planet_id": planet.Id}).All(&buildingRows); err != nil {
+				log.Printf("Error querying buildings for planet %s: %v", planet.Id, err)
+			} else {
+				log.Printf("Found %d buildings for planet %s", len(buildingRows), planet.Id)
+				// Process building data
+				for _, row := range buildingRows {
+				buildingTypeID := row.BuildingType
+				level := row.Level
+				
+				// Get building type name using raw query
+				buildingTypeRows := []struct {
+					Name string `db:"name"`
+				}{}
+				if err := app.Dao().DB().Select("name").From("building_types").Where(dbx.HashExp{"id": buildingTypeID}).All(&buildingTypeRows); err != nil {
+					log.Printf("Error querying building type %s: %v", buildingTypeID, err)
+				}
+				
+				buildingTypeName := buildingTypeID
+				if len(buildingTypeRows) > 0 {
+					buildingTypeName = buildingTypeRows[0].Name
+				}
+				
+				buildingCounts[buildingTypeName]++
+				log.Printf("Planet %s: Added building %s (total: %d)", planet.Id, buildingTypeName, buildingCounts[buildingTypeName])
+
+				// Calculate building production based on type name
+				switch buildingTypeName {
+				case "farm":
+					totalFood += level * 10
+				case "mine":
+					totalOre += level * 8
+				case "factory":
+					totalGoods += level * 6
+				case "refinery":
+					totalFuel += level * 5
+				case "bank":
+					totalCredits += level * 1
+				}
+				}
+			}
+
+			log.Printf("Planet %s final data: totalPop=%d, buildingCounts=%v", planet.Id, totalPop, buildingCounts)
 
 			planetsData[i] = PlanetData{
 				ID:            planet.Id,
@@ -264,8 +308,8 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 				SystemID:      planet.GetString("system_id"),
 				PlanetType:    planet.GetString("planet_type"),
 				Size:          planet.GetInt("size"),
-				Population:    planet.GetInt("population"), // This is base population, totalPop includes this.
-				MaxPopulation: planet.GetInt("max_population"),
+				Population:    totalPop, // This is base population, totalPop includes this.
+				MaxPopulation: 1000,     // Default max population
 				ColonizedBy:   planet.GetString("colonized_by"),
 				ColonizedAt:   planet.GetString("colonized_at"),
 				Pop:           totalPop, // This is the aggregated population for the planet
@@ -295,6 +339,72 @@ func getMapData(app *pocketbase.PocketBase) echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusOK, mapData)
+	}
+}
+
+// debugBuildings returns building data for a specific planet for debugging
+func debugBuildings(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		planetId := c.PathParam("planetId")
+		
+		result := map[string]interface{}{
+			"planetId": planetId,
+		}
+		
+		// Test population query
+		popRows := []struct {
+			Count int `db:"count"`
+		}{}
+		err := app.Dao().DB().Select("count").From("populations").Where(dbx.HashExp{"planet_id": planetId}).All(&popRows)
+		result["populationQuery"] = map[string]interface{}{
+			"error": err,
+			"rows": popRows,
+		}
+		
+		// Test building query
+		buildingRows := []struct {
+			BuildingType string `db:"building_type"`
+			Level        int    `db:"level"`
+		}{}
+		err = app.Dao().DB().Select("building_type", "level").From("buildings").Where(dbx.HashExp{"planet_id": planetId}).All(&buildingRows)
+		
+		// Test building type name lookup
+		buildingCounts := make(map[string]int)
+		buildingDetails := []map[string]interface{}{}
+		
+		for _, row := range buildingRows {
+			buildingTypeID := row.BuildingType
+			level := row.Level
+			
+			// Get building type name using raw query
+			buildingTypeRows := []struct {
+				Name string `db:"name"`
+			}{}
+			nameErr := app.Dao().DB().Select("name").From("building_types").Where(dbx.HashExp{"id": buildingTypeID}).All(&buildingTypeRows)
+			
+			buildingTypeName := buildingTypeID
+			if nameErr == nil && len(buildingTypeRows) > 0 {
+				buildingTypeName = buildingTypeRows[0].Name
+			}
+			
+			buildingCounts[buildingTypeName]++
+			
+			buildingDetails = append(buildingDetails, map[string]interface{}{
+				"id": buildingTypeID,
+				"name": buildingTypeName,
+				"level": level,
+				"nameError": nameErr,
+			})
+		}
+		
+		result["buildingQuery"] = map[string]interface{}{
+			"error": err,
+			"rows": buildingRows,
+			"buildingDetails": buildingDetails,
+			"buildingCounts": buildingCounts,
+		}
+		
+		return c.JSON(http.StatusOK, result)
 	}
 }
 

@@ -19,6 +19,7 @@ func main() {
 		fmt.Println("  check    - Check colony distribution")
 		fmt.Println("  reset    - Reset colonies to realistic numbers")
 		fmt.Println("  clean    - Clean all game data")
+		fmt.Println("  setup    - Create starter fleets for existing users")
 		os.Exit(1)
 	}
 
@@ -35,6 +36,8 @@ func main() {
 		resetColonies(app)
 	case "clean":
 		cleanGameData(app)
+	case "setup":
+		setupStarterFleets(app)
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		os.Exit(1)
@@ -162,6 +165,7 @@ func cleanGameData(app *pocketbase.PocketBase) {
 	deleteOrder := []string{
 		// Child records first
 		"fleet_orders",     // references fleets and systems
+		"ship_cargo",       // references ships and resource_types
 		"resource_nodes",    // references planets
 		"populations",       // references planets  
 		"buildings",         // references planets
@@ -235,4 +239,106 @@ func createBuildings(app *pocketbase.PocketBase, planetID string, count int) {
 		building.Set("active", true)
 		app.Dao().SaveRecord(building)
 	}
+}
+
+func setupStarterFleets(app *pocketbase.PocketBase) {
+	fmt.Println("=== SETTING UP STARTER FLEETS ===")
+	fmt.Println("🚀 Creating starter fleets for existing users")
+
+	// Get all users
+	users, err := app.Dao().FindRecordsByExpr("users", nil, nil)
+	if err != nil {
+		fmt.Printf("❌ Failed to get users: %v\n", err)
+		return
+	}
+
+	fmt.Printf("📋 Found %d users\n", len(users))
+
+	for _, user := range users {
+		// Check if user already has a fleet
+		existingFleets, err := app.Dao().FindRecordsByFilter("fleets", fmt.Sprintf("owner_id='%s'", user.Id), "", 1, 0)
+		if err == nil && len(existingFleets) > 0 {
+			fmt.Printf("⏭️  User %s already has fleet, skipping\n", user.GetString("username"))
+			continue
+		}
+
+		fmt.Printf("🆕 Setting up starter resources for user: %s\n", user.GetString("username"))
+
+		// Create starter fleet
+		fleetsCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
+		if err != nil {
+			fmt.Printf("❌ Fleets collection not found: %v\n", err)
+			continue
+		}
+
+		fleet := models.NewRecord(fleetsCollection)
+		fleet.Set("owner_id", user.Id)
+		fleet.Set("name", "Settler Fleet")
+		
+		// Find a random system for starting location
+		systems, err := app.Dao().FindRecordsByExpr("systems", nil, nil)
+		if err != nil || len(systems) == 0 {
+			fmt.Printf("❌ No systems found for starting location\n")
+			continue
+		}
+		fleet.Set("current_system", systems[0].Id)
+
+		if err := app.Dao().SaveRecord(fleet); err != nil {
+			fmt.Printf("❌ Failed to create starter fleet: %v\n", err)
+			continue
+		}
+
+		// Get settler ship type
+		settlerShipType, err := app.Dao().FindFirstRecordByFilter("ship_types", "name='settler'")
+		if err != nil {
+			fmt.Printf("❌ Settler ship type not found: %v\n", err)
+			continue
+		}
+
+		// Create settler ship
+		shipsCollection, err := app.Dao().FindCollectionByNameOrId("ships")
+		if err != nil {
+			fmt.Printf("❌ Ships collection not found: %v\n", err)
+			continue
+		}
+
+		ship := models.NewRecord(shipsCollection)
+		ship.Set("fleet_id", fleet.Id)
+		ship.Set("ship_type", settlerShipType.Id)
+		ship.Set("count", 1)
+		ship.Set("health", 100)
+
+		if err := app.Dao().SaveRecord(ship); err != nil {
+			fmt.Printf("❌ Failed to create starter ship: %v\n", err)
+			continue
+		}
+
+		// Add 50 ore to ship cargo
+		oreResource, err := app.Dao().FindFirstRecordByFilter("resource_types", "name='ore'")
+		if err != nil {
+			fmt.Printf("❌ Ore resource type not found: %v\n", err)
+			continue
+		}
+
+		cargoCollection, err := app.Dao().FindCollectionByNameOrId("ship_cargo")
+		if err != nil {
+			fmt.Printf("❌ Ship_cargo collection not found: %v\n", err)
+			continue
+		}
+
+		cargo := models.NewRecord(cargoCollection)
+		cargo.Set("ship_id", ship.Id)
+		cargo.Set("resource_type", oreResource.Id)
+		cargo.Set("quantity", 50)
+
+		if err := app.Dao().SaveRecord(cargo); err != nil {
+			fmt.Printf("❌ Failed to create starter cargo: %v\n", err)
+			continue
+		}
+
+		fmt.Printf("✅ Created starter fleet '%s' with settler ship and 50 ore for user %s\n", 
+			fleet.GetString("name"), user.GetString("username"))
+	}
+
+	fmt.Println("🎉 Starter fleet setup completed!")
 }

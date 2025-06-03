@@ -8,6 +8,7 @@ export class GameState {
     this.trades = [];
     this.treaties = [];
     this.buildings = [];
+    this.populations = [];
     this.fleetOrders = []; // Renamed from orders
     this.hyperlanes = [];
     this.mapData = null;
@@ -99,6 +100,9 @@ export class GameState {
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         this.buildings = await gameData.getBuildings(userId);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        this.populations = await gameData.getPopulations(userId);
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         this.fleetOrders = await gameData.getFleetOrders(userId); // Use getFleetOrders
@@ -223,6 +227,7 @@ export class GameState {
     this.trades = [];
     this.treaties = [];
     this.buildings = [];
+    this.populations = [];
     this.fleetOrders = []; // Reset fleetOrders
     this.hyperlanes = [];
     this.mapData = null;

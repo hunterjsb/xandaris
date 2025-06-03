@@ -710,7 +710,7 @@ export class UIController {
     const planetName = planet.name || `Planet ${planet.id.slice(-4)}`;
     const planetTypeValue = planet.planet_type || planet.type;
     const planetTypeName = this.getPlanetTypeName(planetTypeValue);
-    const planetGif = this.getPlanetAnimatedGif(planetTypeValue);
+    const planetGif = this.getPlanetAnimatedGif(planetTypeName);
     const isOwned = planet.colonized_by === currentUserId;
     const population = planet.Pop || 0;
     const maxPop = planet.MaxPopulation || "N/A";
@@ -920,11 +920,29 @@ export class UIController {
 
     let buildingsHtml =
       '<div class="text-sm text-space-400">No buildings constructed.</div>';
+    let buildingWarnings = [];
+    
     if (planet.Buildings && Object.keys(planet.Buildings).length > 0) {
+      // Get population assignments for this planet
+      const planetPopulations = this.gameState?.populations?.filter(pop => pop.planet_id === planet.id) || [];
+      const assignedBuildingIds = new Set(planetPopulations.map(pop => pop.employed_at).filter(Boolean));
+      
       const buildingEntries = Object.entries(planet.Buildings)
         .map(([buildingName, level]) => {
           let displayName = buildingName;
           let buildingIcon = "🏢";
+          let buildingId = buildingName;
+          
+          // Find the actual building record to get its ID
+          const buildingRecord = this.gameState?.buildings?.find(b => 
+            b.planet_id === planet.id && 
+            (b.building_type === buildingName || b.id === buildingName)
+          );
+          
+          if (buildingRecord) {
+            buildingId = buildingRecord.id;
+          }
+          
           if (this.gameState && this.gameState.buildingTypes) {
             const buildingType = this.gameState.buildingTypes.find(
               (bt) =>
@@ -946,18 +964,56 @@ export class UIController {
                 buildingIcon = "🔬";
             }
           }
+          
+          // Check if this building has population assigned
+          const hasWorkers = assignedBuildingIds.has(buildingId);
+          const workerCount = planetPopulations.find(pop => pop.employed_at === buildingId)?.count || 0;
+          
+          // Add to warnings if no workers
+          if (!hasWorkers) {
+            buildingWarnings.push(displayName);
+          }
+          
+          const warningIcon = hasWorkers ? '' : '<span class="text-yellow-400 text-sm ml-1" title="No workers assigned">⚠️</span>';
+          const workerInfo = hasWorkers ? `<div class="text-xs text-green-400">${workerCount} workers</div>` : '<div class="text-xs text-yellow-400">No workers</div>';
+          
           return `
-          <li class="p-3 bg-space-700 rounded-md flex items-center justify-between hover:bg-space-600 transition-colors">
+          <li class="p-3 ${hasWorkers ? 'bg-space-700' : 'bg-yellow-900/20 border border-yellow-600/30'} rounded-md flex items-center justify-between hover:bg-space-600 transition-colors">
             <div class="flex items-center gap-2">
               <span class="text-xl">${buildingIcon}</span>
-              <span class="font-semibold">${displayName}</span>
+              <div>
+                <div class="flex items-center">
+                  <span class="font-semibold">${displayName}</span>
+                  ${warningIcon}
+                </div>
+                ${workerInfo}
+              </div>
             </div>
             <span class="text-sm text-space-300">Level ${level}</span>
           </li>
         `;
         })
         .join("");
-      buildingsHtml = `<ul class="space-y-2">${buildingEntries}</ul>`;
+      
+      let warningHtml = '';
+      if (buildingWarnings.length > 0) {
+        warningHtml = `
+        <div class="p-3 bg-yellow-900/20 border border-yellow-600/50 rounded-md mb-3">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-yellow-400">⚠️</span>
+            <span class="font-semibold text-yellow-200">Production Warning</span>
+          </div>
+          <div class="text-sm text-yellow-100">
+            ${buildingWarnings.length} building${buildingWarnings.length > 1 ? 's' : ''} without workers: 
+            <strong>${buildingWarnings.join(', ')}</strong>
+          </div>
+          <div class="text-xs text-yellow-300 mt-1">
+            Buildings without assigned population will not produce resources.
+          </div>
+        </div>`;
+      }
+      
+      buildingsHtml = `${warningHtml}<ul class="space-y-2">${buildingEntries}</ul>`;
     }
 
     const isColonized = planet.colonized_by && planet.colonized_by !== "";
@@ -1015,7 +1071,7 @@ export class UIController {
     planetHeader.className = `panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r ${planetTypeGradient}`;
 
     container.querySelector("#planet-icon").innerHTML =
-      this.getPlanetAnimatedGif(planetTypeValue) || planetIcon;
+      this.getPlanetAnimatedGif(planetTypeName) || planetIcon;
     container.querySelector("#planet-name").textContent = planetName;
     container.querySelector("#planet-seed").textContent =
       `Seed: ${planet.id.slice(-8)}`;

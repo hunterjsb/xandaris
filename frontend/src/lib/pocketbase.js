@@ -582,6 +582,30 @@ export class GameDataManager {
       return [];
     }
   }
+
+  async getPopulations(userId = null) {
+    try {
+      let url = "/api/collections/populations/records";
+      const params = {};
+      if (userId) {
+        params.filter = `owner_id='${userId}'`;
+      }
+      params.expand = 'employed_at,planet_id';
+
+      const response = await pb.send(url, {
+        method: "GET",
+        params: params,
+      });
+      return response.items || [];
+    } catch (error) {
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error("Failed to fetch populations:", e);
+      }
+      return [];
+    }
+  }
 }
 
 // Create singleton game data manager
