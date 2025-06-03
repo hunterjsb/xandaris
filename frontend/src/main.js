@@ -705,7 +705,13 @@ class XanNationApp {
       `;
     }
     
-    this.uiController.showToast(ticketContent, 'ticket', 0); // 0 duration = manual dismiss only
+    // Show toast with click handler to open detailed fleet view
+    this.uiController.showToast(ticketContent, 'ticket', 0, () => {
+      // Open detailed fleet view when clicked
+      if (this.uiController.fleetComponentManager) {
+        this.uiController.fleetComponentManager.showFleetDetails(fleet.id);
+      }
+    });
   }
 
   handleKeyboardInput(e) {

@@ -1,3 +1,5 @@
+import { FleetComponentManager } from './fleet/FleetComponentManager.js';
+
 // UI Controller for handling all UI interactions and updates
 export class UIController {
   constructor() {
@@ -8,6 +10,7 @@ export class UIController {
     this.planetTypes = new Map(); // Store planet types with their icons
     this.pb = null; // Will be set when PocketBase is available
     this.resourceTypes = new Map(); // Store resource types with their icons
+    this.fleetComponentManager = null; // Will be initialized when game state is available
     this.displayedResources = this.loadResourcePreferences(); // Which resources to show in top bar
 
     // Make instance available globally, for event handlers in dynamically created HTML
@@ -1616,6 +1619,14 @@ export class UIController {
 
   updateGameUI(state) {
     this.gameState = state;
+    
+    // Initialize FleetComponentManager if not already done
+    if (!this.fleetComponentManager && this.currentUser) {
+      this.fleetComponentManager = new FleetComponentManager(this, state);
+    } else if (this.fleetComponentManager) {
+      this.fleetComponentManager.updateGameState(state);
+    }
+    
     this.updateResourcesUI(state.playerResources);
     // this.updateSystemInfoUI(state.selectedSystem); // Removed: Replaced by expanded-view-container logic
     this.updateGameStatusUI(state);
@@ -2212,171 +2223,15 @@ export class UIController {
   }
 
   showFleetPanel() {
-    if (!this.gameState || !this.currentUser) {
+    if (!this.fleetComponentManager) {
       this.showModal(
         "Your Fleets",
-        '<div class="text-space-400">Game data not loaded or user not available.</div>',
+        '<div class="text-space-400">Fleet system not initialized.</div>',
       );
       return;
     }
-
-    const currentUserId = this.currentUser.id;
-    const allFleetOrders = window.gameState.fleetOrders || []; // Changed to fleetOrders
-    const allFleets = window.gameState.fleets || [];
-    const allSystems = window.gameState.systems || [];
-    const currentTick = window.gameState.currentTick || 0;
-    const TICKS_PER_MINUTE = window.gameState.ticksPerMinute || 6;
-    const SECONDS_PER_TICK = 60 / TICKS_PER_MINUTE;
-    const FLEET_MOVEMENT_DURATION_TICKS = 2; // Updated for faster testing
-
-    let movingFleetsHtml = "";
-    const movingFleetIds = new Set();
-
-    const fleetMoveOrders = allFleetOrders // Changed to allFleetOrders
-      .filter(
-        (order) =>
-          order.user_id === currentUserId && // Ensure orders are for the current user
-          // order.type === "move" && // Type is implicit for fleet_orders, but can be kept for safety if schema allows other types
-          (order.status === "pending" || order.status === "processing"),
-      )
-      .sort((a, b) => a.execute_at_tick - b.execute_at_tick);
-
-    fleetMoveOrders.forEach((order) => {
-      const fleet = allFleets.find((f) => f.id === order.fleet_id);
-      if (!fleet) return;
-
-      movingFleetIds.add(fleet.id);
-      const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
-      const originSystem = allSystems.find(
-        (s) => s.id === fleet.current_system,
-      );
-      const originName = originSystem ? originSystem.name : "Deep Space";
-
-      let destName = "Unknown System";
-      const destinationSystemId = order.destination_system_id;
-      const destinationSystem = destinationSystemId
-        ? allSystems.find((s) => s.id === destinationSystemId)
-        : null;
-      if (destinationSystem) destName = destinationSystem.name;
-
-      const ticksRemaining = Math.max(0, order.execute_at_tick - currentTick);
-      const secondsRemaining = (ticksRemaining * SECONDS_PER_TICK).toFixed(0);
-      let etaDisplay = `${ticksRemaining} ticks (~${secondsRemaining}s)`;
-      if (ticksRemaining === 0 && order.status === "processing") {
-        etaDisplay = "Finalizing Jump";
-      } else if (ticksRemaining === 0 && order.status === "pending") {
-        etaDisplay = "Initiating Jump";
-      }
-
-      // Show progress for current hop
-      const totalMovementTicks =
-        order.travel_time_ticks || FLEET_MOVEMENT_DURATION_TICKS;
-      const progressTicks = totalMovementTicks - ticksRemaining;
-      const progressPercent = Math.round(
-        (progressTicks / totalMovementTicks) * 100,
-      );
-
-      const statusDisplay =
-        order.status.charAt(0).toUpperCase() + order.status.slice(1);
-
-      // Multi-hop route information
-      let routeInfo = "";
-      if (order.route_path && order.route_path.length > 2) {
-        const currentHop = order.current_hop || 0;
-        const totalHops = order.route_path.length - 1;
-        const remainingHops = totalHops - currentHop;
-
-        const finalDestId = order.final_destination_id;
-        const finalDestSystem = finalDestId
-          ? allSystems.find((s) => s.id === finalDestId)
-          : null;
-        const finalDestName = finalDestSystem
-          ? finalDestSystem.name || `System ${finalDestSystem.id.slice(-4)}`
-          : "Unknown";
-
-        routeInfo = `
-          <div class="border-t border-space-500 mt-2 pt-2">
-            <div><span class="text-space-400">Route:</span> <span class="text-purple-400">Multi-hop</span></div>
-            <div><span class="text-space-400">Final Dest:</span> ${finalDestName}</div>
-            <div><span class="text-space-400">Hop:</span> <span class="text-cyan-400">${currentHop + 1}/${totalHops}</span></div>
-            <div><span class="text-space-400">Remaining:</span> <span class="text-yellow-400">${remainingHops} hops</span></div>
-          </div>
-        `;
-      }
-
-      movingFleetsHtml += `
-        <div class="bg-space-700 p-3 rounded mb-2 border border-space-600 shadow-md">
-          <div class="font-semibold text-nebula-300">${fleetName}</div>
-          <div class="text-sm text-space-300">
-            <div><span class="text-space-400">From:</span> ${originName}</div>
-            <div><span class="text-space-400">To:</span> ${destName}</div>
-            <div><span class="text-space-400">ETA:</span> <span class="text-yellow-400">${etaDisplay}</span></div>
-            <div><span class="text-space-400">Progress:</span> <span class="text-green-400">${progressPercent}%</span></div>
-            <div><span class="text-space-400">Status:</span> <span class="text-cyan-400">${statusDisplay}</span></div>
-            ${routeInfo}
-          </div>
-        </div>
-      `;
-    });
-
-    let stationaryFleetsHtml = "";
-    const playerFleets = this.gameState.getPlayerFleets(); // Already filters by owner
-
-    playerFleets.forEach((fleet) => {
-      if (movingFleetIds.has(fleet.id)) return; // Already displayed as moving
-
-      const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
-      const currentSystem = allSystems.find(
-        (s) => s.id === fleet.current_system,
-      );
-      const systemName = currentSystem ? currentSystem.name : "Deep Space";
-
-      // Get cargo information for this fleet
-      const cargoData = this.gameState?.getFleetCargo(fleet.id) || { cargo: {}, used_capacity: 0, total_capacity: 0 };
-      let cargoHtml = "";
-      
-      if (cargoData.cargo && Object.keys(cargoData.cargo).length > 0) {
-        const cargoItems = Object.entries(cargoData.cargo)
-          .filter(([resource, amount]) => amount > 0)
-          .map(([resource, amount]) => {
-            const resourceDef = this.getResourceDefinition(resource);
-            const icon = `<span class="material-icons text-xs ${resourceDef.color}">${resourceDef.icon}</span>`;
-            return `${icon} ${amount}`;
-          })
-          .join(" • ");
-        cargoHtml = `<div><span class="text-space-500">Cargo:</span> ${cargoItems}</div>`;
-      }
-
-      stationaryFleetsHtml += `
-        <div class="bg-space-650 p-3 rounded mb-2 border border-space-700 shadow-sm">
-          <div class="font-semibold text-gray-300">${fleetName}</div>
-          <div class="text-sm text-space-400">
-            <div><span class="text-space-500">Location:</span> ${systemName}</div>
-            <div><span class="text-space-500">Status:</span> <span class="text-gray-400">Stationary</span></div>
-            ${cargoHtml}
-            <div class="text-xs text-space-500 mt-1">Capacity: ${cargoData.used_capacity}/${cargoData.total_capacity}</div>
-          </div>
-        </div>
-      `;
-    });
-
-    let finalHtml = "";
-    if (movingFleetsHtml) {
-      finalHtml += `<h3 class="text-lg font-semibold text-plasma-300 mb-2 mt-3">Moving Fleets</h3>${movingFleetsHtml}`;
-    }
-    if (stationaryFleetsHtml) {
-      finalHtml += `<h3 class="text-lg font-semibold text-gray-400 mb-2 mt-3">Stationary Fleets</h3>${stationaryFleetsHtml}`;
-    }
-
-    if (finalHtml === "") {
-      finalHtml =
-        '<div class="text-space-400 text-center py-4">No fleets deployed.</div>';
-    }
-
-    this.showModal(
-      "Your Fleets",
-      `<div class="max-h-96 overflow-y-auto custom-scrollbar pr-1">${finalHtml}</div>`,
-    );
+    
+    this.fleetComponentManager.showFleetPanel();
   }
 
   showTradePanel() {
@@ -2556,7 +2411,7 @@ export class UIController {
       });
   }
 
-  showToast(message, type = "success", duration = 4000) {
+  showToast(message, type = "success", duration = 4000, clickHandler = null) {
     // Remove any existing toast
     const existingToast = document.getElementById("fleet-toast");
     if (existingToast) {
@@ -2567,6 +2422,11 @@ export class UIController {
     const toast = document.createElement("div");
     toast.id = "fleet-toast";
     toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50 p-2 rounded shadow-md transition-all duration-200 max-w-xs`;
+
+    // Add cursor pointer if clickable
+    if (clickHandler) {
+      toast.className += " cursor-pointer hover:opacity-80";
+    }
 
     if (type === "success") {
       toast.className +=
@@ -2580,28 +2440,50 @@ export class UIController {
       toast.style.maxWidth = "280px";
     }
 
+    // Function to remove toast and clean up
+    const removeToast = () => {
+      if (toast.parentElement) {
+        toast.remove();
+      }
+      document.removeEventListener("keydown", handleKeyPress);
+    };
+
     if (type === "ticket") {
       toast.innerHTML = `
         <div class="flex items-start justify-between">
           <div class="flex-1">${message}</div>
-          <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-50 hover:opacity-100">
+          <button onclick="event.stopPropagation(); this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-50 hover:opacity-100">
             <span class="material-icons text-xs">close</span>
           </button>
         </div>
       `;
     } else {
+      const clickHint = clickHandler ? '<div class="text-xs mt-1 opacity-70">Click for details • Press Space or Esc to dismiss</div>' : '<div class="text-xs mt-1 opacity-70">Press Space or Esc to dismiss</div>';
+      
       toast.innerHTML = `
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span class="material-icons text-sm">${type === "success" ? "check_circle" : type === "error" ? "error" : "info"}</span>
             <span class="text-sm">${message}</span>
           </div>
-          <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-70 hover:opacity-100">
+          <button onclick="event.stopPropagation(); this.parentElement.parentElement.remove()" class="ml-2 text-current opacity-70 hover:opacity-100">
             <span class="material-icons text-sm">close</span>
           </button>
         </div>
-        <div class="text-xs mt-1 opacity-70">Press Space or Esc to dismiss</div>
+        ${clickHint}
       `;
+    }
+
+    // Add click handler to the toast if provided
+    if (clickHandler) {
+      toast.addEventListener('click', (e) => {
+        // Don't trigger on close button clicks
+        if (e.target.closest('button')) {
+          return;
+        }
+        clickHandler();
+        removeToast();
+      });
     }
 
     // Add to page
@@ -2610,9 +2492,7 @@ export class UIController {
     // Auto-dismiss after specified duration (unless duration is 0 for manual-only)
     if (duration > 0) {
       setTimeout(() => {
-        if (toast.parentElement) {
-          toast.remove();
-        }
+        removeToast();
       }, duration);
     }
 
@@ -2620,10 +2500,7 @@ export class UIController {
     const handleKeyPress = (e) => {
       if (e.code === "Space" || e.code === "Escape") {
         e.preventDefault();
-        if (toast.parentElement) {
-          toast.remove();
-        }
-        document.removeEventListener("keydown", handleKeyPress);
+        removeToast();
       }
     };
 
