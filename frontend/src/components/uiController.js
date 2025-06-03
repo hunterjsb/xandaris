@@ -1914,12 +1914,33 @@ export class UIController {
           etaDisplay = "Initiating Jump";
       }
       
-      // Show progress for fast testing (movement is only 2 ticks total)
+      // Show progress for current hop
       const totalMovementTicks = order.travel_time_ticks || FLEET_MOVEMENT_DURATION_TICKS;
       const progressTicks = totalMovementTicks - ticksRemaining;
       const progressPercent = Math.round((progressTicks / totalMovementTicks) * 100);
       
       const statusDisplay = order.status.charAt(0).toUpperCase() + order.status.slice(1);
+
+      // Multi-hop route information
+      let routeInfo = "";
+      if (order.route_path && order.route_path.length > 2) {
+        const currentHop = order.current_hop || 0;
+        const totalHops = order.route_path.length - 1;
+        const remainingHops = totalHops - currentHop;
+        
+        const finalDestId = order.final_destination_id;
+        const finalDestSystem = finalDestId ? allSystems.find(s => s.id === finalDestId) : null;
+        const finalDestName = finalDestSystem ? (finalDestSystem.name || `System ${finalDestSystem.id.slice(-4)}`) : "Unknown";
+        
+        routeInfo = `
+          <div class="border-t border-space-500 mt-2 pt-2">
+            <div><span class="text-space-400">Route:</span> <span class="text-purple-400">Multi-hop</span></div>
+            <div><span class="text-space-400">Final Dest:</span> ${finalDestName}</div>
+            <div><span class="text-space-400">Hop:</span> <span class="text-cyan-400">${currentHop + 1}/${totalHops}</span></div>
+            <div><span class="text-space-400">Remaining:</span> <span class="text-yellow-400">${remainingHops} hops</span></div>
+          </div>
+        `;
+      }
 
       movingFleetsHtml += `
         <div class="bg-space-700 p-3 rounded mb-2 border border-space-600 shadow-md">
@@ -1930,6 +1951,7 @@ export class UIController {
             <div><span class="text-space-400">ETA:</span> <span class="text-yellow-400">${etaDisplay}</span></div>
             <div><span class="text-space-400">Progress:</span> <span class="text-green-400">${progressPercent}%</span></div>
             <div><span class="text-space-400">Status:</span> <span class="text-cyan-400">${statusDisplay}</span></div>
+            ${routeInfo}
           </div>
         </div>
       `;

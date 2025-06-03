@@ -483,9 +483,9 @@ class XanNationApp {
     }
 
     if (path.length === 2) {
-      // Direct hop - use new fleet orders system
+      // Direct hop - use single fleet orders system
       try {
-        console.log(`🚀 Creating fleet order: ${fromSystem.name || fromSystem.id.slice(-4)} → ${toSystem.name || toSystem.id.slice(-4)}`);
+        console.log(`🚀 Creating single-hop fleet order: ${fromSystem.name || fromSystem.id.slice(-4)} → ${toSystem.name || toSystem.id.slice(-4)}`);
         
         const result = await gameData.sendFleet(selectedFleet.current_system, toSystem.id, null, selectedFleet.id);
         
@@ -494,7 +494,7 @@ class XanNationApp {
           "success"
         );
         
-        console.log("Fleet order created:", result);
+        console.log("Single-hop fleet order created:", result);
         
       } catch (error) {
         console.error("Failed to create fleet order:", error);
@@ -504,11 +504,43 @@ class XanNationApp {
         );
       }
     } else {
-      // Multi-hop - fall back to legacy system for now
-      this.uiController.showToast(
-        `Multi-hop routing not yet implemented with new system (${path.length - 1} hops)`,
-        "error"
-      );
+      // Multi-hop - use new fleet route system!
+      try {
+        console.log(`🚀 Creating multi-hop fleet route: ${path.length - 1} hops`);
+        console.log(`Route: ${path.map(s => s.name || s.id.slice(-4)).join(" → ")}`);
+        
+        // Convert path to system IDs
+        const routePath = path.map(system => system.id);
+        
+        const result = await gameData.sendFleetRoute(selectedFleet.id, routePath);
+        
+        this.uiController.showToast(
+          `Multi-hop route created: ${toSystem.name || `System ${toSystem.id.slice(-4)}`} (${path.length - 1} hops, ~${(path.length - 1) * 20}s total)`,
+          "success"
+        );
+        
+        console.log("Multi-hop fleet route created:", result);
+        
+        // Store route data for visualization
+        this.fleetRoutes.set(selectedFleet.id, {
+          fullPath: path,
+          currentHop: 0,
+          targetSystem: toSystem,
+          lastUpdate: Date.now(),
+          isMultiHop: true,
+          totalHops: path.length - 1
+        });
+        
+        // Show route visualization on map
+        this.mapRenderer.showFleetRoute(path, 0);
+        
+      } catch (error) {
+        console.error("Failed to create multi-hop fleet route:", error);
+        this.uiController.showToast(
+          error.message || "Failed to create multi-hop fleet route",
+          "error"
+        );
+      }
     }
   }
 
@@ -597,28 +629,35 @@ class XanNationApp {
 
   onFleetArrival(fleetId) {
     console.log(`DEBUG: onFleetArrival called for fleet ${fleetId}`);
-    // Check if this fleet has a pending multi-hop route
+    // Check if this fleet has route visualization data
     const routeData = this.fleetRoutes.get(fleetId);
     console.log(`DEBUG: Route data for fleet ${fleetId}:`, routeData);
-    if (routeData) {
-      // Fleet has arrived at the next system, so increment currentHop
-      routeData.currentHop++;
-      console.log(`DEBUG: Fleet ${fleetId} arrived at system ${routeData.currentHop}/${routeData.fullPath.length - 1}, checking if journey continues`);
+    
+    if (routeData && routeData.isMultiHop) {
+      // Update visualization data based on backend fleet orders
+      const activeOrder = gameState.fleetOrders?.find(order => 
+        order.fleet_id === fleetId && 
+        (order.status === "pending" || order.status === "processing")
+      );
       
-      // Check if we've reached the final destination
-      if (routeData.currentHop >= routeData.fullPath.length - 1) {
-        console.log(`DEBUG: Fleet ${fleetId} reached final destination, cleaning up route`);
+      if (activeOrder) {
+        // Update our visualization to match backend state
+        const currentHop = activeOrder.current_hop || 0;
+        routeData.currentHop = currentHop;
+        routeData.lastUpdate = Date.now();
+        
+        console.log(`DEBUG: Updated route visualization for fleet ${fleetId}, hop ${currentHop}/${routeData.totalHops}`);
+        
+        // Update map visualization
+        this.mapRenderer.showFleetRoute(routeData.fullPath, currentHop);
+      } else {
+        // No active order found - route completed
+        console.log(`DEBUG: Fleet ${fleetId} route completed, cleaning up visualization`);
         this.fleetRoutes.delete(fleetId);
-        return;
+        this.mapRenderer.clearFleetRoute();
       }
-      
-      // Continue to next hop
-      console.log(`DEBUG: Continuing multi-hop journey for fleet ${fleetId} to next system`);
-      setTimeout(() => {
-        this.sendNextFleetHop(fleetId, routeData.fullPath);
-      }, 500); // Small delay to ensure backend has processed the arrival
     } else {
-      console.log(`DEBUG: No route data found for fleet ${fleetId}, journey complete or single-hop`);
+      console.log(`DEBUG: No multi-hop route data found for fleet ${fleetId}`);
     }
   }
 

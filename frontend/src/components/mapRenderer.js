@@ -1406,10 +1406,9 @@ export class MapRenderer {
       let isMoving = false;
       let movementAngle = 0;
 
-      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find( // Changed to fleetOrders
+      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find(
         (order) =>
           order.fleet_id === fleet.id &&
-          // order.type === "move" && // Type is implicit for fleet_orders
           (order.status === "pending" || order.status === "processing"),
       );
 
@@ -1430,40 +1429,31 @@ export class MapRenderer {
           const order_execute_at_tick = activeOrder.execute_at_tick || 0;
           
           let total_duration_in_ticks = activeOrder.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
-          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS; // Fallback
+          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS;
 
           const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
           const elapsed_ticks = current_tick - start_tick_of_movement;
           const progress = Math.max(0, Math.min(1, elapsed_ticks / total_duration_in_ticks));
 
-          // Debug logging for fleet movement
-          if (fleet.id && Math.random() < 0.1) { // Log 10% of the time to avoid spam
-            console.log(`Fleet ${fleet.id.slice(-4)} movement:`, {
-              currentTick: current_tick,
-              executeAtTick: order_execute_at_tick,
-              startTick: start_tick_of_movement,
-              elapsedTicks: elapsed_ticks,
-              totalDuration: total_duration_in_ticks,
-              progress: progress,
-              status: activeOrder.status
-            });
-          }
-
           worldX = fromSystem.x + (toSystem.x - fromSystem.x) * progress;
           worldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
           movementAngle = Math.atan2(toSystem.y - fromSystem.y, toSystem.x - fromSystem.x);
+
+          // Show route visualization for multi-hop routes
+          if (activeOrder.route_path && activeOrder.route_path.length > 2) {
+            this.drawActiveMultiHopRoute(activeOrder, progress);
+          }
         }
       } else if (fleet.current_system && fleet.current_system !== "") {
         // Stationary Fleet
         const currentSystem = this.systems.find((s) => s.id === fleet.current_system);
         if (!currentSystem) {
             console.warn(`MapRenderer: Could not find current system for stationary fleet ${fleet.id}`);
-            return; // Cannot determine position
+            return;
         }
-        worldX = currentSystem.x + 15; // Offset slightly
+        worldX = currentSystem.x + 15;
         worldY = currentSystem.y + 15;
       } else {
-        // Fleet has no valid position
         console.warn(`MapRenderer: Fleet ${fleet.id} has no valid position.`);
         return;
       }
@@ -1644,7 +1634,7 @@ export class MapRenderer {
 
   getFleetAt(worldX, worldY) {
     const clickRadius = 20; // Pixels
-    const TOTAL_FLEET_MOVE_DURATION_TICKS = 2; // Fixed assumption - updated for faster testing
+    const TOTAL_FLEET_MOVE_DURATION_TICKS = 2;
 
     if (!window.gameState || !this.fleets) {
       return null;
@@ -1653,10 +1643,9 @@ export class MapRenderer {
     for (const fleet of this.fleets) {
       let fleetWorldX, fleetWorldY;
 
-      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find( // Changed to fleetOrders
+      const activeOrder = window.gameState.fleetOrders && window.gameState.fleetOrders.find(
         (order) =>
           order.fleet_id === fleet.id &&
-          // order.type === "move" && // Type is implicit
           (order.status === "pending" || order.status === "processing"),
       );
 
@@ -1675,7 +1664,7 @@ export class MapRenderer {
           const order_execute_at_tick = activeOrder.execute_at_tick || 0;
           
           let total_duration_in_ticks = activeOrder.travel_time_ticks || TOTAL_FLEET_MOVE_DURATION_TICKS;
-          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS; // Fallback
+          if (total_duration_in_ticks <= 0) total_duration_in_ticks = TOTAL_FLEET_MOVE_DURATION_TICKS;
           
           const start_tick_of_movement = order_execute_at_tick - total_duration_in_ticks;
           const elapsed_ticks = current_tick - start_tick_of_movement;
@@ -1685,13 +1674,12 @@ export class MapRenderer {
           fleetWorldY = fromSystem.y + (toSystem.y - fromSystem.y) * progress;
         }
       } else if (fleet.current_system && fleet.current_system !== "") {
-        // Stationary Fleet
         const currentSystem = this.systems.find((s) => s.id === fleet.current_system);
         if (!currentSystem) continue;
         fleetWorldX = currentSystem.x + 15;
         fleetWorldY = currentSystem.y + 15;
       } else {
-        continue; // No valid position
+        continue;
       }
 
       // Check if click is within fleet bounds
@@ -1784,6 +1772,143 @@ export class MapRenderer {
     this.viewY = -centerY;
     this.targetViewX = this.viewX;
     this.targetViewY = this.viewY;
+  }
+
+  // Draw real-time multi-hop route visualization
+  drawActiveMultiHopRoute(order, currentProgress = 0) {
+    if (!order.route_path || !this.systems) return;
+
+    const ctx = this.ctx;
+    const routeSystemIds = order.route_path;
+    const currentHop = order.current_hop || 0;
+
+    // Convert system IDs to system objects
+    const routeSystems = routeSystemIds.map(id => 
+      this.systems.find(s => s.id === id)
+    ).filter(s => s !== undefined);
+
+    if (routeSystems.length < 2) return;
+
+    // Draw route segments
+    for (let i = 0; i < routeSystems.length - 1; i++) {
+      const from = routeSystems[i];
+      const to = routeSystems[i + 1];
+
+      // Determine segment color and style
+      let color, alpha, lineWidth, lineDash;
+      if (i < currentHop) {
+        // Completed segments - green
+        color = "#22c55e";
+        alpha = 0.4;
+        lineWidth = 2;
+        lineDash = [];
+      } else if (i === currentHop) {
+        // Current segment - animated yellow
+        color = "#fbbf24";
+        alpha = 0.8;
+        lineWidth = 3;
+        lineDash = [10 / this.zoom, 5 / this.zoom];
+      } else {
+        // Upcoming segments - blue
+        color = "#3b82f6";
+        alpha = 0.3;
+        lineWidth = 2;
+        lineDash = [5 / this.zoom, 5 / this.zoom];
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth / this.zoom;
+      ctx.setLineDash(lineDash);
+
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Draw waypoint markers
+    routeSystems.forEach((system, index) => {
+      let color, size, label;
+
+      if (index === 0) {
+        // Start point
+        color = "#10b981";
+        size = 8;
+        label = "START";
+      } else if (index === routeSystems.length - 1) {
+        // End point
+        color = "#ef4444";
+        size = 10;
+        label = "DEST";
+      } else if (index === currentHop + 1) {
+        // Next waypoint
+        color = "#fbbf24";
+        size = 6;
+        label = "NEXT";
+      } else if (index <= currentHop) {
+        // Completed waypoint
+        color = "#22c55e";
+        size = 4;
+        label = null;
+      } else {
+        // Future waypoint
+        color = "#3b82f6";
+        size = 4;
+        label = null;
+      }
+
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1 / this.zoom;
+
+      // Draw marker circle
+      ctx.beginPath();
+      ctx.arc(system.x, system.y, size / this.zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw label if present and zoom is sufficient
+      if (label && this.zoom > 0.4) {
+        ctx.font = `${8 / this.zoom}px monospace`;
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.fillText(label, system.x, system.y - 12 / this.zoom);
+      }
+
+      ctx.restore();
+    });
+
+    // Draw progress indicator on current segment
+    if (currentHop < routeSystems.length - 1 && currentProgress > 0) {
+      const fromSystem = routeSystems[currentHop];
+      const toSystem = routeSystems[currentHop + 1];
+      
+      const progressX = fromSystem.x + (toSystem.x - fromSystem.x) * currentProgress;
+      const progressY = fromSystem.y + (toSystem.y - fromSystem.y) * currentProgress;
+
+      ctx.save();
+      ctx.fillStyle = "#fbbf24";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2 / this.zoom;
+
+      ctx.beginPath();
+      ctx.arc(progressX, progressY, 6 / this.zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Add pulsing effect
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(progressX, progressY, 12 / this.zoom, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
   }
 
   destroy() {
