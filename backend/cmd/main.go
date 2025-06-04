@@ -17,7 +17,7 @@ import (
 	"github.com/hunterjsb/xandaris/internal/tick"
 	"github.com/hunterjsb/xandaris/internal/websocket"
 
-	_ "github.com/hunterjsb/xandaris/migrations"
+	// _ "github.com/hunterjsb/xandaris/migrations"
 	"github.com/hunterjsb/xandaris/pkg"
 )
 
