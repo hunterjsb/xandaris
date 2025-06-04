@@ -27,10 +27,7 @@ export class FleetComponentManager {
     this.currentFleetId = null;
     this.currentShipId = null;
     
-    const content = this.fleetListComponent.render();
-    const title = this.getFleetCount();
-    
-    this.uiController.showModal(title, content);
+    this.uiController.showFleetPanelAsFloating();
   }
 
   // Show detailed view of a specific fleet
@@ -39,11 +36,7 @@ export class FleetComponentManager {
     this.currentFleetId = fleetId;
     this.currentShipId = null;
     
-    const content = this.fleetComponent.render(fleetId);
-    const fleet = this.gameState.fleets?.find(f => f.id === fleetId);
-    const fleetName = fleet ? (fleet.name || `Fleet ${fleet.id.slice(-4)}`) : 'Unknown Fleet';
-    
-    this.uiController.showModal(`Fleet Details: ${fleetName}`, content);
+    this.uiController.showFleetDetailsAsFloating(fleetId);
   }
 
   // Show detailed view of a specific ship
@@ -51,11 +44,7 @@ export class FleetComponentManager {
     this.currentView = 'ship';
     this.currentShipId = shipId;
     
-    const content = this.shipComponent.render(shipId);
-    const ship = this.findShip(shipId);
-    const shipName = ship ? `${ship.count || 1}x ${ship.ship_type_name || 'Unknown'}` : 'Unknown Ship';
-    
-    this.uiController.showModal(`Ship Details: ${shipName}`, content);
+    this.uiController.showShipDetailsAsFloating(shipId);
   }
 
   // Show detailed cargo view of a specific ship
@@ -63,11 +52,7 @@ export class FleetComponentManager {
     this.currentView = 'cargo';
     this.currentShipId = shipId;
     
-    const content = this.shipCargoComponent.render(shipId);
-    const ship = this.findShip(shipId);
-    const shipName = ship ? `${ship.count || 1}x ${ship.ship_type_name || 'Unknown'}` : 'Unknown Ship';
-    
-    this.uiController.showModal(`Cargo Management: ${shipName}`, content);
+    this.uiController.showShipCargoAsFloating(shipId);
   }
 
   // Navigation methods

@@ -543,7 +543,7 @@ export class UIController {
             <div class="flex items-center gap-2">
               <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
                       class="pin-button text-space-400 hover:text-white transition-colors" 
-                      title="Pin panel">
+                      title="Pin">
                 <span class="material-icons text-sm">push_pin</span>
               </button>
               <button onclick="window.uiController.clearExpandedView()"
@@ -1620,12 +1620,12 @@ export class UIController {
         <div class="flex items-center gap-2">
           <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
                   class="pin-button text-space-400 hover:text-white transition-colors" 
-                  title="Pin panel">
+                  title="Pin">
             <span class="material-icons text-sm">push_pin</span>
           </button>
           <button onclick="window.uiController.clearExpandedView()" 
                   class="text-space-400 hover:text-white transition-colors"
-                  title="Close panel">
+                  title="Close">
             <span class="material-icons">close</span>
           </button>
         </div>
@@ -1686,27 +1686,23 @@ export class UIController {
       container._isPinned = false;
       if (pinButton) {
         pinButton.classList.remove('pinned');
-        pinButton.title = 'Pin panel';
+        pinButton.title = 'Pin';
       }
       if (pinIcon) {
         pinIcon.textContent = 'push_pin';
         pinIcon.style.transform = '';
       }
-      // Show brief feedback
-      this.showToast('Panel unpinned', 'info', 1500);
     } else {
       // Pin the panel
       container.classList.add('pinned-panel');
       container._isPinned = true;
       if (pinButton) {
         pinButton.classList.add('pinned');
-        pinButton.title = 'Unpin panel - will stay in current position';
+        pinButton.title = 'Unpin';
       }
       if (pinIcon) {
         pinIcon.textContent = 'push_pin';
       }
-      // Show brief feedback
-      this.showToast('Panel pinned - will stay anchored here', 'success', 2000);
     }
   }
 
@@ -2145,10 +2141,10 @@ export class UIController {
         <div class="flex items-center gap-2">
           <button onclick="window.uiController.togglePinModal()" 
                   class="pin-button text-space-400 hover:text-white transition-colors" 
-                  title="Pin modal">
+                  title="Pin">
             <span class="material-icons text-sm">push_pin</span>
           </button>
-          <button id="modal-close" class="text-space-400 hover:text-white transition-colors" title="Close modal">
+          <button id="modal-close" class="text-space-400 hover:text-white transition-colors" title="Close">
             <span class="material-icons">close</span>
           </button>
         </div>
@@ -2434,7 +2430,279 @@ export class UIController {
       return;
     }
     
-    this.fleetComponentManager.showFleetPanel();
+    // Use floating panel instead of modal
+    this.showFleetPanelAsFloating();
+  }
+
+  showFleetPanelAsFloating() {
+    const container = this.expandedView;
+    if (!container) {
+      console.error("#expanded-view-container not found in showFleetPanelAsFloating");
+      return;
+    }
+
+    // Preserve pinned state while clearing content
+    const wasPinned = container._isPinned;
+    
+    // Clear content but preserve state
+    if (!wasPinned) {
+      this.clearExpandedView();
+    }
+
+    // Set up the container
+    container.classList.remove("hidden");
+    container.classList.add("floating-panel", "glass-panel");
+    
+    // Restore pinned state if it was pinned
+    if (wasPinned) {
+      container.classList.add("pinned-panel");
+      container._isPinned = true;
+    }
+
+    // Get fleet content
+    const content = this.fleetComponentManager.fleetListComponent.render();
+    const title = this.fleetComponentManager.getFleetCount();
+
+    container.innerHTML = `
+      <div class="panel-header flex items-center justify-between p-3 cursor-move border-b border-space-600/30">
+        <div class="flex items-center gap-2">
+          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
+          <h2 class="text-lg font-semibold text-white">${title}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                  class="pin-button text-space-400 hover:text-white transition-colors" 
+                  title="Pin">
+            <span class="material-icons text-sm">push_pin</span>
+          </button>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-space-400 hover:text-white transition-colors"
+                  title="Close">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="floating-panel-content p-4">
+        ${content}
+      </div>
+    `;
+
+    // Position the panel (only if not pinned)
+    if (!container._isPinned) {
+      container.style.top = "20px";
+      container.style.left = "20px";
+      container.style.right = "auto";
+    }
+
+    // Set up dragging functionality
+    this.setupPanelDragging(container);
+    
+    // Add focus effects
+    this.addPanelFocusEffects(container);
+  }
+
+  showFleetDetailsAsFloating(fleetId) {
+    const container = this.expandedView;
+    if (!container) {
+      console.error("#expanded-view-container not found in showFleetDetailsAsFloating");
+      return;
+    }
+
+    // Preserve pinned state while clearing content
+    const wasPinned = container._isPinned;
+    
+    // Clear content but preserve state
+    if (!wasPinned) {
+      this.clearExpandedView();
+    }
+
+    // Set up the container
+    container.classList.remove("hidden");
+    container.classList.add("floating-panel", "glass-panel");
+    
+    // Restore pinned state if it was pinned
+    if (wasPinned) {
+      container.classList.add("pinned-panel");
+      container._isPinned = true;
+    }
+
+    // Get fleet content
+    const content = this.fleetComponentManager.fleetComponent.render(fleetId);
+    const fleet = this.fleetComponentManager.gameState.fleets?.find(f => f.id === fleetId);
+    const fleetName = fleet ? (fleet.name || `Fleet ${fleet.id.slice(-4)}`) : 'Unknown Fleet';
+
+    container.innerHTML = `
+      <div class="panel-header flex items-center justify-between p-3 cursor-move border-b border-space-600/30">
+        <div class="flex items-center gap-2">
+          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
+          <h2 class="text-lg font-semibold text-white">${fleetName}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                  class="pin-button text-space-400 hover:text-white transition-colors" 
+                  title="Pin">
+            <span class="material-icons text-sm">push_pin</span>
+          </button>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-space-400 hover:text-white transition-colors"
+                  title="Close">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="floating-panel-content p-4">
+        ${content}
+      </div>
+    `;
+
+    // Position the panel (only if not pinned)
+    if (!container._isPinned) {
+      container.style.top = "20px";
+      container.style.left = "20px";
+      container.style.right = "auto";
+    }
+
+    // Set up dragging functionality
+    this.setupPanelDragging(container);
+    
+    // Add focus effects
+    this.addPanelFocusEffects(container);
+  }
+
+  showShipDetailsAsFloating(shipId) {
+    const container = this.expandedView;
+    if (!container) {
+      console.error("#expanded-view-container not found in showShipDetailsAsFloating");
+      return;
+    }
+
+    // Preserve pinned state while clearing content
+    const wasPinned = container._isPinned;
+    
+    // Clear content but preserve state
+    if (!wasPinned) {
+      this.clearExpandedView();
+    }
+
+    // Set up the container
+    container.classList.remove("hidden");
+    container.classList.add("floating-panel", "glass-panel");
+    
+    // Restore pinned state if it was pinned
+    if (wasPinned) {
+      container.classList.add("pinned-panel");
+      container._isPinned = true;
+    }
+
+    // Get ship content
+    const content = this.fleetComponentManager.shipComponent.render(shipId);
+    const ship = this.fleetComponentManager.findShip(shipId);
+    const shipName = ship ? `${ship.count || 1}x ${ship.ship_type_name || 'Unknown'}` : 'Unknown Ship';
+
+    container.innerHTML = `
+      <div class="panel-header flex items-center justify-between p-3 cursor-move border-b border-space-600/30">
+        <div class="flex items-center gap-2">
+          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
+          <h2 class="text-lg font-semibold text-white">${shipName}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                  class="pin-button text-space-400 hover:text-white transition-colors" 
+                  title="Pin">
+            <span class="material-icons text-sm">push_pin</span>
+          </button>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-space-400 hover:text-white transition-colors"
+                  title="Close">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="floating-panel-content p-4">
+        ${content}
+      </div>
+    `;
+
+    // Position the panel (only if not pinned)
+    if (!container._isPinned) {
+      container.style.top = "20px";
+      container.style.left = "20px";
+      container.style.right = "auto";
+    }
+
+    // Set up dragging functionality
+    this.setupPanelDragging(container);
+    
+    // Add focus effects
+    this.addPanelFocusEffects(container);
+  }
+
+  showShipCargoAsFloating(shipId) {
+    const container = this.expandedView;
+    if (!container) {
+      console.error("#expanded-view-container not found in showShipCargoAsFloating");
+      return;
+    }
+
+    // Preserve pinned state while clearing content
+    const wasPinned = container._isPinned;
+    
+    // Clear content but preserve state
+    if (!wasPinned) {
+      this.clearExpandedView();
+    }
+
+    // Set up the container
+    container.classList.remove("hidden");
+    container.classList.add("floating-panel", "glass-panel");
+    
+    // Restore pinned state if it was pinned
+    if (wasPinned) {
+      container.classList.add("pinned-panel");
+      container._isPinned = true;
+    }
+
+    // Get cargo content
+    const content = this.fleetComponentManager.shipCargoComponent.render(shipId);
+    const ship = this.fleetComponentManager.findShip(shipId);
+    const shipName = ship ? `${ship.count || 1}x ${ship.ship_type_name || 'Unknown'}` : 'Unknown Ship';
+
+    container.innerHTML = `
+      <div class="panel-header flex items-center justify-between p-3 cursor-move border-b border-space-600/30">
+        <div class="flex items-center gap-2">
+          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
+          <h2 class="text-lg font-semibold text-white">Cargo: ${shipName}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                  class="pin-button text-space-400 hover:text-white transition-colors" 
+                  title="Pin">
+            <span class="material-icons text-sm">push_pin</span>
+          </button>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-space-400 hover:text-white transition-colors"
+                  title="Close">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="floating-panel-content p-4">
+        ${content}
+      </div>
+    `;
+
+    // Position the panel (only if not pinned)
+    if (!container._isPinned) {
+      container.style.top = "20px";
+      container.style.left = "20px";
+      container.style.right = "auto";
+    }
+
+    // Set up dragging functionality
+    this.setupPanelDragging(container);
+    
+    // Add focus effects
+    this.addPanelFocusEffects(container);
   }
 
   showTradePanel() {

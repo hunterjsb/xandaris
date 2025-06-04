@@ -7,10 +7,10 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <title>Xan Nation</title>
   </head>
-  <body class="text-space-100">
-    <div id="app">
+  <body class="text-space-100 overflow-hidden h-full">
+    <div id="app" class="h-full flex flex-col">
       <!-- Top Bar -->
-      <nav class="aerogel-panel border-b border-space-700/20 p-4">
+      <nav class="aerogel-panel border-b border-space-700/20 p-4 flex-shrink-0">
         <div class="flex items-center justify-between">
           <h1 class="text-2xl font-bold gradient-heading">XAN NATION</h1>
           <div class="flex items-center space-x-6">
@@ -47,9 +47,9 @@
       </nav>
 
       <!-- Main Content -->
-      <div class="flex h-screen">
+      <div class="flex flex-1 min-h-0">
         <!-- Left Sidebar -->
-        <nav class="w-16 aerogel-panel border-r border-space-700/20 flex flex-col items-center py-4 space-y-3">
+        <nav class="w-16 aerogel-panel border-r border-space-700/20 flex flex-col items-center py-4 space-y-3 flex-shrink-0">
           <button id="fleet-btn" class="w-12 h-12 void-surface hover:nebula-glow rounded text-sm transition-all duration-200 flex items-center justify-center" title="Fleet">
             <span class="material-icons text-lg">rocket_launch</span>
           </button>
@@ -107,7 +107,7 @@
         </div>
       </div>
       <!-- Expanded View Container -->
-      <div id="expanded-view-container" class="absolute top-16 left-16 w-96 max-w-md h-[calc(100vh-4rem)] hidden z-10 aerogel-panel rounded-r-lg shadow-2xl overflow-hidden">
+      <div id="expanded-view-container" class="absolute top-20 left-20 w-96 max-w-md max-h-[calc(100vh-5rem)] hidden z-10 aerogel-panel rounded-lg shadow-2xl overflow-hidden">
           <!-- Content will be dynamically inserted here by uiController.js -->
       </div>
     </div>
