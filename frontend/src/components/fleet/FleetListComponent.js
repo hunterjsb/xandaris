@@ -1,3 +1,5 @@
+import { gameData } from '../../lib/pocketbase.js';
+
 export class FleetListComponent {
   constructor(uiController, gameState) {
     this.uiController = uiController;
@@ -18,7 +20,7 @@ export class FleetListComponent {
         ${movingFleets.length > 0 ? this.renderMovingFleets(movingFleets) : ''}
         ${stationaryFleets.length > 0 ? this.renderStationaryFleets(stationaryFleets) : ''}
         ${movingFleets.length === 0 && stationaryFleets.length === 0 ? 
-          '<div class="text-space-400 text-center py-8">No fleets found.</div>' : ''}
+          this.renderNoFleets() : ''}
       </div>
     `;
   }
@@ -240,5 +242,60 @@ export class FleetListComponent {
         ` : ''}
       </div>
     `;
+  }
+
+  renderNoFleets() {
+    return `
+      <div class="text-center py-12">
+        <span class="material-icons text-6xl text-space-500 mb-4">rocket_launch</span>
+        <div class="text-space-400 text-lg mb-6">No fleets found</div>
+        <div class="text-space-500 text-sm mb-6">You need ships to explore the galaxy and colonize planets</div>
+        
+        <div class="bg-space-800 rounded-lg p-6 border border-space-600 max-w-md mx-auto">
+          <h3 class="text-orange-200 font-semibold mb-3">Debug: Spawn Starter Ship</h3>
+          <div class="text-space-400 text-sm mb-4">
+            Get a settler ship loaded with materials:
+            <br>• 50 ore • 25 food • 20 metal • 15 fuel
+          </div>
+          <button 
+            class="btn btn-primary w-full flex items-center justify-center gap-2"
+            onclick="window.fleetComponents.spawnStarterShip()"
+            id="spawn-starter-btn">
+            <span class="material-icons text-sm">add</span>
+            Spawn Starter Ship
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  async spawnStarterShip() {
+    const button = document.getElementById('spawn-starter-btn');
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="material-icons animate-spin text-sm">refresh</span> Spawning...';
+    }
+
+    try {
+      const result = await gameData.spawnStarterShip();
+      
+      if (result.success) {
+        this.uiController.showToast('Starter ship spawned successfully!', 'success', 4000);
+        
+        // Refresh the game state to show the new fleet
+        await this.gameState.lightweightTickUpdate();
+        
+        // Refresh the fleet list
+        this.uiController.refreshActiveComponent();
+      }
+    } catch (error) {
+      console.error('Failed to spawn starter ship:', error);
+      this.uiController.showToast(`Failed to spawn starter ship: ${error.message}`, 'error', 5000);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = '<span class="material-icons text-sm">add</span> Spawn Starter Ship';
+      }
+    }
   }
 }

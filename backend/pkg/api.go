@@ -63,6 +63,9 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		
 		// Building Storage
 		e.Router.GET("/api/building_storage", getBuildingStorage(app), apis.RequireAdminOrRecordAuth())
+		
+		// Debug endpoints
+		e.Router.POST("/api/debug/spawn_starter_ship", spawnStarterShip(app), apis.RequireAdminOrRecordAuth())
 
 		// Worldgen endpoints
 		e.Router.GET("/api/worldgen", getWorldgen(app))
@@ -1899,6 +1902,115 @@ func getIndividualShipCargo(app *pocketbase.PocketBase) echo.HandlerFunc {
 			"used_capacity":  usedCapacity,
 			"total_capacity": cargoCapacity,
 			"available_space": cargoCapacity - usedCapacity,
+		})
+	}
+}
+
+func spawnStarterShip(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		// Find settler ship type
+		settlerShipTypes, err := app.Dao().FindRecordsByFilter("ship_types", "name='settler'", "", 1, 0)
+		if err != nil || len(settlerShipTypes) == 0 {
+			return apis.NewBadRequestError("Settler ship type not found", err)
+		}
+		settlerShipType := settlerShipTypes[0]
+
+		// Find a system for the user (preferably one they own, or any system)
+		var targetSystem *models.Record
+		userSystems, err := app.Dao().FindRecordsByExpr("systems", dbx.HashExp{"discovered_by": user.Id}, nil)
+		if err == nil && len(userSystems) > 0 {
+			targetSystem = userSystems[0]
+		} else {
+			// Fallback to any system
+			allSystems, err := app.Dao().FindRecordsByExpr("systems", nil, nil)
+			if err != nil || len(allSystems) == 0 {
+				return apis.NewBadRequestError("No systems found", err)
+			}
+			targetSystem = allSystems[0]
+		}
+
+		// Create fleet
+		fleetCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find fleets collection", err)
+		}
+
+		fleet := models.NewRecord(fleetCollection)
+		fleet.Set("owner_id", user.Id)
+		fleet.Set("name", "Starter Fleet")
+		fleet.Set("current_system", targetSystem.Id)
+		fleet.Set("eta", "")
+
+		if err := app.Dao().SaveRecord(fleet); err != nil {
+			return apis.NewBadRequestError("Failed to create fleet", err)
+		}
+
+		// Create settler ship
+		shipCollection, err := app.Dao().FindCollectionByNameOrId("ships")
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find ships collection", err)
+		}
+
+		ship := models.NewRecord(shipCollection)
+		ship.Set("fleet_id", fleet.Id)
+		ship.Set("ship_type", settlerShipType.Id)
+		ship.Set("count", 1)
+		ship.Set("health", 100)
+
+		if err := app.Dao().SaveRecord(ship); err != nil {
+			return apis.NewBadRequestError("Failed to create ship", err)
+		}
+
+		// Add starter cargo to the ship
+		cargoCollection, err := app.Dao().FindCollectionByNameOrId("ship_cargo")
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find ship_cargo collection", err)
+		}
+
+		// Get resource types
+		resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find resource types", err)
+		}
+
+		resourceTypeMap := make(map[string]string) // name -> ID
+		for _, rt := range resourceTypes {
+			resourceTypeMap[rt.GetString("name")] = rt.Id
+		}
+
+		// Add starter materials
+		starterCargo := map[string]int{
+			"ore":      50,
+			"food":     25,
+			"metal":    20,
+			"fuel":     15,
+		}
+
+		for resourceName, quantity := range starterCargo {
+			if resourceTypeID, exists := resourceTypeMap[resourceName]; exists {
+				cargoRecord := models.NewRecord(cargoCollection)
+				cargoRecord.Set("ship_id", ship.Id)
+				cargoRecord.Set("resource_type", resourceTypeID)
+				cargoRecord.Set("quantity", quantity)
+
+				if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+					log.Printf("Failed to add %s cargo: %v", resourceName, err)
+				}
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":    true,
+			"message":    "Starter ship spawned successfully",
+			"fleet_id":   fleet.Id,
+			"ship_id":    ship.Id,
+			"system_id":  targetSystem.Id,
+			"cargo":      starterCargo,
 		})
 	}
 }

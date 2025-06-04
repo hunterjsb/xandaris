@@ -331,6 +331,10 @@ export class FleetComponentManager {
     this.showShipCargo(shipId);
   }
 
+  async spawnStarterShip() {
+    return await this.fleetListComponent.spawnStarterShip();
+  }
+
   repairShip(shipId) {
     // TODO: Implement ship repair functionality
     this.uiController.showToast('Ship repair coming soon!', 'info', 3000);

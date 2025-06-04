@@ -543,6 +543,22 @@ export class GameDataManager {
     }
   }
 
+  async spawnStarterShip() {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    try {
+      return await pb.send("/api/debug/spawn_starter_ship", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      console.error("Failed to spawn starter ship:", error);
+      throw error;
+    }
+  }
+
   async createTradeRoute(fromId, toId, cargo, capacity) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
