@@ -285,8 +285,10 @@ export class FleetListComponent {
         // Refresh the game state to show the new fleet
         await this.gameState.lightweightTickUpdate();
         
-        // Refresh the fleet list
-        this.uiController.refreshActiveComponent();
+        // Refresh the fleet list through the fleet component manager
+        if (this.uiController.fleetComponentManager) {
+          this.uiController.fleetComponentManager.refresh();
+        }
       }
     } catch (error) {
       console.error('Failed to spawn starter ship:', error);
