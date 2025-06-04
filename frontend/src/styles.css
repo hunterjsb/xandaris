@@ -53,7 +53,14 @@
 /* Floating Panel Style */
 @layer components {
   .floating-panel {
-    @apply fixed aerogel-panel p-0 rounded-lg shadow-2xl;
+    @apply fixed p-0 rounded-lg;
+    background: rgba(15, 23, 42, 0.85); /* space-900 with transparency */
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(148, 163, 184, 0.2); /* space-400 with transparency */
+    box-shadow: 
+      0 20px 25px -5px rgba(0, 0, 0, 0.3),
+      0 10px 10px -5px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
     z-index: 20; /* Above canvas, below modals (modal z-index is typically higher e.g. 50 for overlay) */
     width: 400px; /* Slightly wider for better content layout */
     max-height: calc(100vh - 40px); /* Max height considering some viewport padding */
@@ -100,6 +107,60 @@
   
   .floating-panel-content > div:last-child {
     @apply flex-1 overflow-y-auto custom-scrollbar;
+  }
+
+  /* Pinning styles */
+  .pinned-panel {
+    border: 2px solid rgba(34, 197, 94, 0.4) !important;
+    box-shadow: 
+      0 20px 25px -5px rgba(0, 0, 0, 0.3),
+      0 10px 10px -5px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 0 20px rgba(34, 197, 94, 0.2) !important;
+  }
+
+  .pin-button {
+    transition: all 0.2s ease-in-out;
+  }
+
+  .pin-button:hover {
+    color: rgba(34, 197, 94, 0.8);
+    transform: scale(1.1);
+  }
+
+  .pin-button.pinned {
+    color: rgba(34, 197, 94, 1);
+    background: rgba(34, 197, 94, 0.1);
+    border-radius: 4px;
+  }
+
+  /* Modal glass effects */
+  .modal-content {
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: 
+      0 20px 25px -5px rgba(0, 0, 0, 0.4),
+      0 10px 10px -5px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .modal-header {
+    background: linear-gradient(135deg, 
+      rgba(64, 128, 255, 0.08) 0%,
+      rgba(139, 92, 246, 0.05) 50%,
+      rgba(241, 169, 255, 0.08) 100%);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  }
+
+  /* Enhanced glass effect for focused panels */
+  .floating-panel.focused {
+    border: 2px solid rgba(64, 128, 255, 0.3);
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.4),
+      0 0 30px rgba(64, 128, 255, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
 }
 

@@ -321,21 +321,27 @@ export class UIController {
 
   clearExpandedView() {
     if (this.expandedView) {
+      // Don't close if panel is pinned
+      if (this.expandedView._isPinned) {
+        return;
+      }
+
       // Clean up drag event listeners if they exist
       if (this.expandedView._dragCleanup) {
         this.expandedView._dragCleanup();
         delete this.expandedView._dragCleanup;
       }
 
+      // Remove all panel classes
+      this.expandedView.classList.remove("focused", "pinned-panel", "glass-panel");
+      
       // Don't clear innerHTML here, as content might be reused or fade out.
       // Content replacement will happen in displaySystemView/displayPlanetView.
       this.expandedView.classList.add("hidden");
       // Move it off-screen to prevent interaction and ensure it's visually gone
-      this.expandedView.style.left = "-2000px";
-      this.expandedView.style.top = "-2000px";
-      this.expandedView.style.right = "auto";
+      this.expandedView.style.left = "-9999px";
+      this.expandedView.style.top = "-9999px";
     }
-    this.currentSystemId = null;
   }
 
   positionPanel(container, screenX, screenY) {
@@ -434,7 +440,7 @@ export class UIController {
       // return; // Potentially skip if no new position and system is same.
     }
 
-    container.className = "floating-panel"; // Ensure base class is set, removes 'hidden' implicitly if it was only 'hidden'
+    container.className = "floating-panel glass-panel"; // Ensure base class is set, removes 'hidden' implicitly if it was only 'hidden'
 
     this.currentSystemId = system.id;
 
@@ -532,10 +538,17 @@ export class UIController {
               <div id="system-seed" class="font-semibold text-nebula-200 text-sm"></div>
               <div id="system-coords" class="font-mono text-xs text-gray-500"></div>
             </div>
-            <button onclick="window.uiController.clearExpandedView()"
-                    class="btn-icon hover:bg-space-700 rounded">
-              <span class="material-icons text-sm">close</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                      class="pin-button text-space-400 hover:text-white transition-colors" 
+                      title="Pin panel">
+                <span class="material-icons text-sm">push_pin</span>
+              </button>
+              <button onclick="window.uiController.clearExpandedView()"
+                      class="btn-icon hover:bg-space-700 rounded">
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="p-4">
@@ -588,6 +601,9 @@ export class UIController {
 
     // Always re-add drag functionality after content recreation
     this.makePanelDraggable(container);
+    
+    // Add focus effects
+    this.addPanelFocusEffects(container);
   }
 
   makePanelDraggable(container) {
@@ -1542,19 +1558,8 @@ export class UIController {
     }
   }
 
-  goBackToSystemView(systemId) {
-    if (
-      !this.gameState ||
-      !this.gameState.mapData ||
-      !this.gameState.mapData.systems
-    ) {
-      this.showError("Game data not fully loaded.");
-      this.clearExpandedView();
-      return;
-    }
-    const system = this.gameState.mapData.systems.find(
-      (s) => s.id === systemId,
-    );
+  goBackToSystemView() {
+    const system = this.gameState.getSelectedSystem();
     if (system) {
       let planetsInSystem = [];
       if (this.gameState.mapData.planets) {
@@ -1566,9 +1571,128 @@ export class UIController {
       }
       this.displaySystemView(system, planetsInSystem);
     } else {
-      this.showError("System data not found. Cannot go back.");
       this.clearExpandedView();
     }
+  }
+
+  async displayFleetView(fleet, screenX, screenY) {
+    const container = this.expandedView;
+    if (!container) {
+      console.error("#expanded-view-container not found in displayFleetView");
+      return;
+    }
+
+    // Clear any existing content
+    this.clearExpandedView();
+
+    // Set up the container
+    container.classList.remove("hidden");
+    container.classList.add("floating-panel", "glass-panel");
+
+    // Render fleet content using FleetComponent
+    const fleetContent = this.renderFleetView(fleet);
+    const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
+
+    container.innerHTML = `
+      <div class="panel-header flex items-center justify-between p-3 cursor-move border-b border-space-600/30">
+        <div class="flex items-center gap-2">
+          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
+          <h2 class="text-lg font-semibold text-white">${fleetName}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                  class="pin-button text-space-400 hover:text-white transition-colors" 
+                  title="Pin panel">
+            <span class="material-icons text-sm">push_pin</span>
+          </button>
+          <button onclick="window.uiController.clearExpandedView()" 
+                  class="text-space-400 hover:text-white transition-colors"
+                  title="Close panel">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="floating-panel-content p-4">
+        ${fleetContent}
+      </div>
+    `;
+
+    // Position the panel near the fleet if coordinates provided
+    if (screenX !== null && screenY !== null) {
+      this.positionPanel(container, screenX, screenY);
+    }
+
+    // Set up dragging functionality
+    this.setupPanelDragging(container);
+    
+    // Add focus effect
+    this.addPanelFocusEffects(container);
+  }
+
+  setupPanelDragging(container) {
+    this.makePanelDraggable(container);
+  }
+
+  addPanelFocusEffects(container) {
+    // Add focus when clicking on panel
+    container.addEventListener('mousedown', () => {
+      // Remove focused class from other panels
+      document.querySelectorAll('.floating-panel.focused').forEach(panel => {
+        if (panel !== container) {
+          panel.classList.remove('focused');
+        }
+      });
+      
+      // Add focused class to this panel
+      container.classList.add('focused');
+    });
+
+    // Remove focus when clicking outside (unless pinned)
+    document.addEventListener('click', (e) => {
+      if (!container.contains(e.target) && !container._isPinned) {
+        container.classList.remove('focused');
+      }
+    });
+  }
+
+  togglePinPanel(container) {
+    if (!container) return;
+    
+    const isPinned = container.classList.contains('pinned-panel');
+    const pinButton = container.querySelector('.pin-button');
+    
+    if (isPinned) {
+      // Unpin the panel
+      container.classList.remove('pinned-panel');
+      container._isPinned = false;
+      if (pinButton) {
+        pinButton.classList.remove('pinned');
+        pinButton.title = 'Pin panel';
+      }
+    } else {
+      // Pin the panel
+      container.classList.add('pinned-panel');
+      container._isPinned = true;
+      if (pinButton) {
+        pinButton.classList.add('pinned');
+        pinButton.title = 'Unpin panel';
+      }
+    }
+  }
+
+  renderFleetView(fleet) {
+    if (!this.fleetComponentManager) {
+      return `
+        <div class="p-4 bg-space-700 rounded-lg border border-space-600">
+          <h3 class="text-red-400 font-semibold mb-2">Fleet System Not Available</h3>
+          <p class="text-space-300 text-sm">Fleet management system is not initialized.</p>
+        </div>
+      `;
+    }
+
+    // Use the FleetComponent to render the fleet details
+    const fleetComponent = this.fleetComponentManager.fleetComponent;
+    return fleetComponent.render(fleet.id);
   }
 
   manageColony(planetId) {
@@ -1979,12 +2103,29 @@ export class UIController {
     const modalOverlay = document.getElementById("modal-overlay");
     const modalContent = document.getElementById("modal-content");
 
+    // Add glass effect classes to modal
+    modalContent.classList.add("modal-content");
+
     modalContent.innerHTML = `
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">${title}</h2>
-        <button id="modal-close" class="text-space-400 hover:text-space-200">&times;</button>
+      <div class="modal-header panel-header cursor-move flex justify-between items-center p-4">
+        <div class="flex items-center gap-2">
+          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
+          <h2 class="text-xl font-bold">${title}</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.uiController.togglePinModal()" 
+                  class="pin-button text-space-400 hover:text-white transition-colors" 
+                  title="Pin modal">
+            <span class="material-icons text-sm">push_pin</span>
+          </button>
+          <button id="modal-close" class="text-space-400 hover:text-white transition-colors" title="Close modal">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
       </div>
-      ${content}
+      <div class="modal-body p-4">
+        ${content}
+      </div>
     `;
 
     modalOverlay.classList.remove("hidden");
@@ -1993,10 +2134,42 @@ export class UIController {
     document.getElementById("modal-close").addEventListener("click", () => {
       this.hideModal();
     });
+
+    // Make modal draggable
+    this.makePanelDraggable(modalContent);
+    
+    // Add focus effects
+    this.addPanelFocusEffects(modalContent);
+    
+    // Reset position to center
+    modalContent.style.left = '';
+    modalContent.style.top = '';
+    modalContent.style.transform = 'translate(-50%, -50%)';
   }
 
   hideModal() {
-    document.getElementById("modal-overlay").classList.add("hidden");
+    const modalOverlay = document.getElementById("modal-overlay");
+    const modalContent = document.getElementById("modal-content");
+    
+    // Don't close if modal is pinned
+    if (modalContent._isPinned) {
+      return;
+    }
+    
+    // Clean up drag handlers
+    if (modalContent._dragCleanup) {
+      modalContent._dragCleanup();
+      delete modalContent._dragCleanup;
+    }
+    
+    modalOverlay.classList.add("hidden");
+    modalContent.classList.remove("focused", "pinned-panel");
+    modalContent._isPinned = false;
+  }
+
+  togglePinModal() {
+    const modalContent = document.getElementById("modal-content");
+    this.togglePinPanel(modalContent);
   }
 
   showError(message) {

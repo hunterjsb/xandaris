@@ -140,7 +140,9 @@ class XanNationApp {
     // Fleet selection
     canvas.addEventListener("fleetSelected", (e) => {
       const fleet = e.detail.fleet;
-      this.displaySelectedFleetInfo(fleet);
+      const screenX = e.detail.screenX;
+      const screenY = e.detail.screenY;
+      this.displaySelectedFleetInfo(fleet, screenX, screenY);
     });
 
     // Context menu actions
@@ -649,69 +651,9 @@ class XanNationApp {
     return totalDistance;
   }
 
-  displaySelectedFleetInfo(fleet) {
-    const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
-    const currentSystem = this.mapRenderer.systems.find(s => s.id === fleet.current_system);
-    const currentName = currentSystem ? (currentSystem.name || `System ${currentSystem.id.slice(-4)}`) : "Unknown";
-    
-    // Check if fleet is moving
-    let ticketContent = "";
-    if (fleet.destination_system) {
-      // Moving fleet - show transit info
-      const destSystem = this.mapRenderer.systems.find(s => s.id === fleet.destination_system);
-      const destName = destSystem ? (destSystem.name || `System ${destSystem.id.slice(-4)}`) : "Unknown";
-      const nextSystem = this.mapRenderer.systems.find(s => s.id === fleet.next_stop);
-      const nextName = nextSystem ? (nextSystem.name || `System ${nextSystem.id.slice(-4)}`) : null;
-      
-      // Format ETA
-      let etaText = "Unknown";
-      if (fleet.eta) {
-        const eta = new Date(fleet.eta);
-        const now = new Date();
-        const diffMs = eta.getTime() - now.getTime();
-        const diffMin = Math.ceil(diffMs / (1000 * 60));
-        etaText = diffMin > 0 ? `${diffMin}m` : "Arriving";
-      }
-      
-      ticketContent = `
-        <div class="font-mono text-xs bg-slate-800 p-2 rounded">
-          <div class="space-y-0.5">
-            <div><span class="text-slate-400">FLEET:</span> ${fleetName}</div>
-            <div><span class="text-slate-400">FROM:</span> ${currentName}</div>
-            ${nextName && nextName !== destName ? `<div><span class="text-slate-400">NEXT:</span> ${nextName}</div>` : ''}
-            <div><span class="text-slate-400">DEST:</span> ${destName}</div>
-            <div><span class="text-slate-400">ETA:</span> ${etaText}</div>
-          </div>
-        </div>
-      `;
-    } else {
-      // Stationary fleet - show selection info
-      let shipInfo = "No ships";
-      if (fleet.ships && fleet.ships.length > 0) {
-        shipInfo = fleet.ships.map(ship => 
-          `${ship.count}x ${ship.ship_type_name || 'Unknown'}`
-        ).join(', ');
-      }
-      
-      ticketContent = `
-        <div class="font-mono text-xs bg-slate-800 p-2 rounded">
-          <div class="space-y-0.5">
-            <div><span class="text-slate-400">FLEET:</span> ${fleetName}</div>
-            <div><span class="text-slate-400">LOCATION:</span> ${currentName}</div>
-            <div><span class="text-slate-400">SHIPS:</span> ${shipInfo}</div>
-            <div><span class="text-slate-400">STATUS:</span> Docked</div>
-          </div>
-        </div>
-      `;
-    }
-    
-    // Show toast with click handler to open detailed fleet view
-    this.uiController.showToast(ticketContent, 'ticket', 0, () => {
-      // Open detailed fleet view when clicked
-      if (this.uiController.fleetComponentManager) {
-        this.uiController.fleetComponentManager.showFleetDetails(fleet.id);
-      }
-    });
+  displaySelectedFleetInfo(fleet, screenX, screenY) {
+    // Use the new displayFleetView method instead of toast
+    this.uiController.displayFleetView(fleet, screenX, screenY);
   }
 
   handleKeyboardInput(e) {

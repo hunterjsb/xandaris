@@ -93,7 +93,7 @@ export class MapRenderer {
 
         if (clickedFleet) {
           // Fleet clicked
-          this.selectFleet(clickedFleet);
+          this.selectFleet(clickedFleet, e.offsetX, e.offsetY);
           return;
         }
 
@@ -117,7 +117,7 @@ export class MapRenderer {
           }
 
           this.selectSystem(clickedSystem); // Selects and centers
-          this.selectFleet(null); // Clear fleet selection when selecting system
+          this.selectFleet(null, null, null); // Clear fleet selection when selecting system
           // Calculate where the system will appear after centering (offset slightly from center)
           const centeredScreenPos = {
             x: this.canvas.width / 2 + 30, // Offset right to avoid covering system icon
@@ -1695,7 +1695,7 @@ export class MapRenderer {
     return null;
   }
 
-  selectFleet(fleet) {
+  selectFleet(fleet, screenX = null, screenY = null) {
     this.selectedFleet = fleet;
     this.isDirty = true;
 
@@ -1703,7 +1703,11 @@ export class MapRenderer {
     if (fleet) {
       this.canvas.dispatchEvent(
         new CustomEvent("fleetSelected", {
-          detail: { fleet: fleet },
+          detail: { 
+            fleet: fleet,
+            screenX: screenX,
+            screenY: screenY
+          },
           bubbles: true,
         }),
       );

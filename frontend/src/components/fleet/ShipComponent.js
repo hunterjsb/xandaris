@@ -325,9 +325,28 @@ export class ShipComponent {
   }
 
   getShipCargo() {
-    // Get cargo for this specific ship from the game state
-    const allCargo = this.gameState.shipCargo || [];
-    return allCargo.filter((cargo) => cargo.ship_id === this.ship.id);
+    // Get fleet cargo data and simulate ship-level cargo
+    const fleetCargo = this.gameState?.getFleetCargo(this.fleet.id);
+    
+    if (!fleetCargo || !fleetCargo.cargo) {
+      return [];
+    }
+
+    // Convert fleet cargo object to array format for ship display
+    // For now, we'll show fleet cargo as if it belongs to this ship
+    const cargoArray = [];
+    for (const [resourceName, quantity] of Object.entries(fleetCargo.cargo)) {
+      if (quantity > 0) {
+        cargoArray.push({
+          ship_id: this.ship.id,
+          resource_name: resourceName,
+          resource_type: resourceName, // Simplified for now
+          quantity: quantity
+        });
+      }
+    }
+    
+    return cargoArray;
   }
 
   isFleetMoving() {
