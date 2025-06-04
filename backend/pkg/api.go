@@ -57,7 +57,12 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/resource_types", getResourceTypes(app))
 		
 		// Ship Cargo
-		e.Router.GET("/api/ship_cargo", getShipCargo(app))
+		e.Router.GET("/api/ship_cargo", getShipCargo(app), apis.RequireAdminOrRecordAuth())
+		e.Router.GET("/api/ship_cargo/:ship_id", getIndividualShipCargo(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/cargo/transfer", transferCargo(app), apis.RequireAdminOrRecordAuth())
+		
+		// Building Storage
+		e.Router.GET("/api/building_storage", getBuildingStorage(app), apis.RequireAdminOrRecordAuth())
 
 		// Worldgen endpoints
 		e.Router.GET("/api/worldgen", getWorldgen(app))
@@ -1341,6 +1346,559 @@ func getShipCargo(app *pocketbase.PocketBase) echo.HandlerFunc {
 			"used_capacity":  usedCapacity,
 			"total_capacity": totalCapacity,
 			"available_space": totalCapacity - usedCapacity,
+		})
+	}
+}
+
+func transferCargo(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		data := struct {
+			FleetID      string `json:"fleet_id"`
+			ResourceType string `json:"resource_type"`
+			Quantity     int    `json:"quantity"`
+			Direction    string `json:"direction"` // "load" or "unload"
+		}{}
+
+		if err := c.Bind(&data); err != nil {
+			return apis.NewBadRequestError("Invalid request data", err)
+		}
+
+		// Validate fleet ownership
+		fleet, err := app.Dao().FindRecordById("fleets", data.FleetID)
+		if err != nil {
+			return apis.NewBadRequestError("Fleet not found", err)
+		}
+
+		if fleet.GetString("owner_id") != user.Id {
+			return apis.NewForbiddenError("You don't own this fleet", nil)
+		}
+
+		// Get fleet ships
+		ships, err := app.Dao().FindRecordsByFilter("ships", fmt.Sprintf("fleet_id='%s'", data.FleetID), "", 0, 0)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find ships", err)
+		}
+
+		// Find resource type
+		resourceType, err := app.Dao().FindRecordsByFilter("resource_types", fmt.Sprintf("name='%s'", data.ResourceType), "", 1, 0)
+		if err != nil || len(resourceType) == 0 {
+			return apis.NewBadRequestError("Resource type not found", err)
+		}
+		resourceTypeID := resourceType[0].Id
+	
+		var remaining int
+
+		if data.Direction == "unload" {
+			// Transfer from fleet to player resources
+			totalAvailable := 0
+			var cargoRecords []*models.Record
+
+			// Find all cargo of this type in the fleet
+			for _, ship := range ships {
+				cargo, err := app.Dao().FindRecordsByFilter("ship_cargo", 
+					fmt.Sprintf("ship_id='%s' && resource_type='%s'", ship.Id, resourceTypeID), "", 0, 0)
+				if err != nil {
+					continue
+				}
+				for _, cargoRecord := range cargo {
+					totalAvailable += cargoRecord.GetInt("quantity")
+					cargoRecords = append(cargoRecords, cargoRecord)
+				}
+			}
+
+			if totalAvailable < data.Quantity {
+				return apis.NewBadRequestError(fmt.Sprintf("Not enough %s in fleet. Available: %d, Requested: %d", 
+					data.ResourceType, totalAvailable, data.Quantity), nil)
+			}
+
+			// Remove from ship cargo
+			remaining = data.Quantity
+			for _, cargoRecord := range cargoRecords {
+				if remaining <= 0 {
+					break
+				}
+
+				currentQuantity := cargoRecord.GetInt("quantity")
+				if currentQuantity <= remaining {
+					// Remove entire record
+					remaining -= currentQuantity
+					if err := app.Dao().DeleteRecord(cargoRecord); err != nil {
+						return apis.NewBadRequestError("Failed to update ship cargo", err)
+					}
+				} else {
+					// Reduce quantity
+					cargoRecord.Set("quantity", currentQuantity-remaining)
+					remaining = 0
+					if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+						return apis.NewBadRequestError("Failed to update ship cargo", err)
+					}
+				}
+			}
+
+			// Add to building storage - find suitable buildings in this system
+			currentSystem := fleet.GetString("current_system")
+			planets, err := app.Dao().FindRecordsByFilter("planets", 
+				fmt.Sprintf("system_id='%s' && colonized_by='%s'", currentSystem, user.Id), "", 0, 0)
+			if err != nil || len(planets) == 0 {
+				return apis.NewBadRequestError("No colonized planets in this system to unload to", nil)
+			}
+
+			// Find buildings that can store this resource type
+			var suitableBuildings []*models.Record
+			for _, planet := range planets {
+				buildings, err := app.Dao().FindRecordsByFilter("buildings", 
+					fmt.Sprintf("planet_id='%s' && active=true", planet.Id), "", 0, 0)
+				if err != nil {
+					continue
+				}
+				
+				for _, building := range buildings {
+					buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+					if err != nil {
+						continue
+					}
+					
+					// Check if this building can store the resource type
+					if buildingType.GetString("res1_type") == resourceTypeID || buildingType.GetString("res2_type") == resourceTypeID {
+						suitableBuildings = append(suitableBuildings, building)
+					}
+				}
+			}
+
+			if len(suitableBuildings) == 0 {
+				return apis.NewBadRequestError("No suitable storage buildings found for "+data.ResourceType, nil)
+			}
+
+			// Distribute the cargo to buildings with available capacity
+			remaining = data.Quantity
+			for _, building := range suitableBuildings {
+				if remaining <= 0 {
+					break
+				}
+
+				buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+				if err != nil {
+					continue
+				}
+				
+				level := building.GetInt("level")
+				if level == 0 {
+					level = 1
+				}
+				
+				// Try to add to res1 storage first
+				if buildingType.GetString("res1_type") == resourceTypeID {
+					currentStored := building.GetInt("res1_stored")
+					capacity := buildingType.GetInt("res1_capacity") * level
+					availableSpace := capacity - currentStored
+					
+					if availableSpace > 0 {
+						toAdd := remaining
+						if toAdd > availableSpace {
+							toAdd = availableSpace
+						}
+						building.Set("res1_stored", currentStored+toAdd)
+						remaining -= toAdd
+						if err := app.Dao().SaveRecord(building); err != nil {
+							return apis.NewBadRequestError("Failed to update building storage", err)
+						}
+					}
+				}
+				
+				// Try res2 storage if still have cargo and res1 didn't work
+				if remaining > 0 && buildingType.GetString("res2_type") == resourceTypeID {
+					currentStored := building.GetInt("res2_stored")
+					capacity := buildingType.GetInt("res2_capacity") * level
+					availableSpace := capacity - currentStored
+					
+					if availableSpace > 0 {
+						toAdd := remaining
+						if toAdd > availableSpace {
+							toAdd = availableSpace
+						}
+						building.Set("res2_stored", currentStored+toAdd)
+						remaining -= toAdd
+						if err := app.Dao().SaveRecord(building); err != nil {
+							return apis.NewBadRequestError("Failed to update building storage", err)
+						}
+					}
+				}
+			}
+
+			if remaining > 0 {
+				return apis.NewBadRequestError(fmt.Sprintf("Not enough storage capacity. Could only store %d of %d %s", 
+					data.Quantity-remaining, data.Quantity, data.ResourceType), nil)
+			}
+
+			log.Printf("Transferred %d %s from fleet %s to building storage for player %s", data.Quantity, data.ResourceType, data.FleetID, user.Id)
+
+		} else if data.Direction == "load" {
+			// Transfer from building storage to fleet
+			// First, find planets in the fleet's current system that the player owns
+			currentSystem := fleet.GetString("current_system")
+			planets, err := app.Dao().FindRecordsByFilter("planets", 
+				fmt.Sprintf("system_id='%s' && colonized_by='%s'", currentSystem, user.Id), "", 0, 0)
+			if err != nil {
+				return apis.NewBadRequestError("Failed to find planets", err)
+			}
+
+			if len(planets) == 0 {
+				return apis.NewBadRequestError("No colonized planets in this system to load from", nil)
+			}
+
+			// Find buildings with stored resources across all player planets in the system
+			totalAvailable := 0
+			var buildingsWithResource []*models.Record
+
+			for _, planet := range planets {
+				buildings, err := app.Dao().FindRecordsByFilter("buildings", 
+					fmt.Sprintf("planet_id='%s' && active=true", planet.Id), "", 0, 0)
+				if err != nil {
+					continue
+				}
+				
+				for _, building := range buildings {
+					// Check both res1 and res2 storage for the requested resource type
+					buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+					if err != nil {
+						continue
+					}
+					
+					// Check res1 storage
+					if buildingType.GetString("res1_type") == resourceTypeID {
+						stored := building.GetInt("res1_stored")
+						if stored > 0 {
+							totalAvailable += stored
+							buildingsWithResource = append(buildingsWithResource, building)
+						}
+					}
+					
+					// Check res2 storage
+					if buildingType.GetString("res2_type") == resourceTypeID {
+						stored := building.GetInt("res2_stored")
+						if stored > 0 {
+							totalAvailable += stored
+							buildingsWithResource = append(buildingsWithResource, building)
+						}
+					}
+				}
+			}
+
+			if totalAvailable < data.Quantity {
+				return apis.NewBadRequestError(fmt.Sprintf("Not enough %s in building storage. Available: %d, Requested: %d", 
+					data.ResourceType, totalAvailable, data.Quantity), nil)
+			}
+
+			// Check fleet cargo capacity
+			totalCapacity := 0
+			currentCargo := 0
+			for _, ship := range ships {
+				shipType, err := app.Dao().FindRecordById("ship_types", ship.GetString("ship_type"))
+				if err == nil {
+					totalCapacity += shipType.GetInt("cargo_capacity")
+				}
+
+				// Count current cargo
+				cargo, err := app.Dao().FindRecordsByFilter("ship_cargo", 
+					fmt.Sprintf("ship_id='%s'", ship.Id), "", 0, 0)
+				if err == nil {
+					for _, cargoRecord := range cargo {
+						currentCargo += cargoRecord.GetInt("quantity")
+					}
+				}
+			}
+
+			if currentCargo + data.Quantity > totalCapacity {
+				return apis.NewBadRequestError(fmt.Sprintf("Not enough fleet cargo space. Current: %d, Capacity: %d, Trying to add: %d", 
+					currentCargo, totalCapacity, data.Quantity), nil)
+			}
+
+			// Remove from building storage
+			remaining = data.Quantity
+			for _, building := range buildingsWithResource {
+				if remaining <= 0 {
+					break
+				}
+
+				buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+				if err != nil {
+					continue
+				}
+				
+				// Check res1 storage first
+				if buildingType.GetString("res1_type") == resourceTypeID {
+					stored := building.GetInt("res1_stored")
+					if stored > 0 && remaining > 0 {
+						toTake := stored
+						if toTake > remaining {
+							toTake = remaining
+						}
+						building.Set("res1_stored", stored-toTake)
+						remaining -= toTake
+						if err := app.Dao().SaveRecord(building); err != nil {
+							return apis.NewBadRequestError("Failed to update building storage", err)
+						}
+					}
+				}
+				
+				// Check res2 storage if still need more
+				if buildingType.GetString("res2_type") == resourceTypeID && remaining > 0 {
+					stored := building.GetInt("res2_stored")
+					if stored > 0 {
+						toTake := stored
+						if toTake > remaining {
+							toTake = remaining
+						}
+						building.Set("res2_stored", stored-toTake)
+						remaining -= toTake
+						if err := app.Dao().SaveRecord(building); err != nil {
+							return apis.NewBadRequestError("Failed to update building storage", err)
+						}
+					}
+				}
+			}
+
+			// Add to fleet cargo - find a ship with available space
+			toLoad := data.Quantity
+			for _, ship := range ships {
+				if toLoad <= 0 {
+					break
+				}
+
+				// Check existing cargo for this resource type
+				existingCargo, err := app.Dao().FindRecordsByFilter("ship_cargo", 
+					fmt.Sprintf("ship_id='%s' && resource_type='%s'", ship.Id, resourceTypeID), "", 1, 0)
+				
+				if err == nil && len(existingCargo) > 0 {
+					// Add to existing cargo
+					cargoRecord := existingCargo[0]
+					newQuantity := cargoRecord.GetInt("quantity") + toLoad
+					cargoRecord.Set("quantity", newQuantity)
+					if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+						return apis.NewBadRequestError("Failed to update ship cargo", err)
+					}
+					toLoad = 0
+				} else {
+					// Create new cargo record
+					cargoCollection, err := app.Dao().FindCollectionByNameOrId("ship_cargo")
+					if err != nil {
+						return apis.NewBadRequestError("Failed to find ship_cargo collection", err)
+					}
+
+					cargoRecord := models.NewRecord(cargoCollection)
+					cargoRecord.Set("ship_id", ship.Id)
+					cargoRecord.Set("resource_type", resourceTypeID)
+					cargoRecord.Set("quantity", toLoad)
+
+					if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+						return apis.NewBadRequestError("Failed to create ship cargo", err)
+					}
+					toLoad = 0
+				}
+			}
+
+			log.Printf("Transferred %d %s from building storage to fleet %s for player %s", data.Quantity, data.ResourceType, data.FleetID, user.Id)
+
+		} else {
+			return apis.NewBadRequestError("Invalid direction. Use 'load' or 'unload'", nil)
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"message":  fmt.Sprintf("Successfully %sed %d %s", data.Direction, data.Quantity, data.ResourceType),
+			"fleet_id": data.FleetID,
+		})
+	}
+}
+
+func getBuildingStorage(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		systemID := c.QueryParam("system_id")
+		if systemID == "" {
+			return apis.NewBadRequestError("system_id parameter required", nil)
+		}
+
+		// Find user's planets in the system
+		planets, err := app.Dao().FindRecordsByFilter("planets", 
+			fmt.Sprintf("system_id='%s' && colonized_by='%s'", systemID, user.Id), "", 0, 0)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find planets", err)
+		}
+
+		if len(planets) == 0 {
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"storage": map[string]int{},
+				"buildings": []interface{}{},
+			})
+		}
+
+		// Get all resource types for name mapping
+		resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find resource types", err)
+		}
+		
+		resourceTypeMap := make(map[string]string) // ID -> name
+		for _, rt := range resourceTypes {
+			resourceTypeMap[rt.Id] = rt.GetString("name")
+		}
+
+		// Aggregate storage across all buildings
+		totalStorage := make(map[string]int)
+		var buildingDetails []interface{}
+
+		for _, planet := range planets {
+			buildings, err := app.Dao().FindRecordsByFilter("buildings", 
+				fmt.Sprintf("planet_id='%s' && active=true", planet.Id), "", 0, 0)
+			if err != nil {
+				continue
+			}
+
+			for _, building := range buildings {
+				buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+				if err != nil {
+					continue
+				}
+
+				buildingName := buildingType.GetString("name")
+				level := building.GetInt("level")
+				if level == 0 {
+					level = 1
+				}
+
+				// Check res1 storage
+				res1Stored := building.GetInt("res1_stored")
+				res1TypeID := buildingType.GetString("res1_type")
+				res1Capacity := buildingType.GetInt("res1_capacity") * level
+
+				if res1Stored > 0 && res1TypeID != "" {
+					resourceName := resourceTypeMap[res1TypeID]
+					if resourceName != "" {
+						totalStorage[resourceName] += res1Stored
+					}
+				}
+
+				// Check res2 storage
+				res2Stored := building.GetInt("res2_stored")
+				res2TypeID := buildingType.GetString("res2_type")
+				res2Capacity := buildingType.GetInt("res2_capacity") * level
+
+				if res2Stored > 0 && res2TypeID != "" {
+					resourceName := resourceTypeMap[res2TypeID]
+					if resourceName != "" {
+						totalStorage[resourceName] += res2Stored
+					}
+				}
+
+				// Add building details if it has storage
+				if (res1Stored > 0 && res1TypeID != "") || (res2Stored > 0 && res2TypeID != "") {
+					buildingDetail := map[string]interface{}{
+						"id":           building.Id,
+						"name":         buildingName,
+						"level":        level,
+						"planet_id":    building.GetString("planet_id"),
+						"planet_name":  planet.GetString("name"),
+					}
+
+					if res1Stored > 0 && res1TypeID != "" {
+						buildingDetail["res1_type"] = resourceTypeMap[res1TypeID]
+						buildingDetail["res1_stored"] = res1Stored
+						buildingDetail["res1_capacity"] = res1Capacity
+					}
+
+					if res2Stored > 0 && res2TypeID != "" {
+						buildingDetail["res2_type"] = resourceTypeMap[res2TypeID]
+						buildingDetail["res2_stored"] = res2Stored
+						buildingDetail["res2_capacity"] = res2Capacity
+					}
+
+					buildingDetails = append(buildingDetails, buildingDetail)
+				}
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"storage":   totalStorage,
+			"buildings": buildingDetails,
+		})
+	}
+}
+
+func getIndividualShipCargo(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+		if user == nil {
+			return apis.NewUnauthorizedError("Authentication required", nil)
+		}
+
+		shipID := c.PathParam("ship_id")
+		if shipID == "" {
+			return apis.NewBadRequestError("ship_id parameter required", nil)
+		}
+
+		// Get the ship and verify ownership through fleet
+		ship, err := app.Dao().FindRecordById("ships", shipID)
+		if err != nil {
+			return apis.NewBadRequestError("Ship not found", err)
+		}
+
+		// Verify fleet ownership
+		fleet, err := app.Dao().FindRecordById("fleets", ship.GetString("fleet_id"))
+		if err != nil {
+			return apis.NewBadRequestError("Fleet not found", err)
+		}
+		if fleet.GetString("owner_id") != user.Id {
+			return apis.NewForbiddenError("You don't own this ship", nil)
+		}
+
+		// Get ship type for capacity info
+		shipType, err := app.Dao().FindRecordById("ship_types", ship.GetString("ship_type"))
+		if err != nil {
+			return apis.NewBadRequestError("Ship type not found", err)
+		}
+
+		cargoCapacity := shipType.GetInt("cargo_capacity")
+
+		// Get cargo for this specific ship
+		cargo, err := app.Dao().FindRecordsByFilter("ship_cargo", fmt.Sprintf("ship_id='%s'", shipID), "", 0, 0)
+		if err != nil {
+			return apis.NewBadRequestError("Failed to find ship cargo", err)
+		}
+
+		cargoSummary := make(map[string]interface{})
+		usedCapacity := 0
+
+		for _, cargoRecord := range cargo {
+			resourceTypeID := cargoRecord.GetString("resource_type")
+			quantity := cargoRecord.GetInt("quantity")
+
+			// Get resource type info
+			resourceType, err := app.Dao().FindRecordById("resource_types", resourceTypeID)
+			if err != nil {
+				continue
+			}
+
+			resourceName := resourceType.GetString("name")
+			cargoSummary[resourceName] = quantity
+			usedCapacity += quantity
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"ship_id":        shipID,
+			"cargo":          cargoSummary,
+			"used_capacity":  usedCapacity,
+			"total_capacity": cargoCapacity,
+			"available_space": cargoCapacity - usedCapacity,
 		})
 	}
 }

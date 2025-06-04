@@ -206,38 +206,44 @@ export class GameDataManager {
     }
   }
 
-  async getFleetOrders(userId = null) { // Renamed from getOrders
+  async getFleetOrders(userId = null) {
+    // Renamed from getOrders
     if (!pb.authStore.isValid && !userId) {
-        // For player view, userId will always be present.
+      // For player view, userId will always be present.
     }
-    if (!userId && pb.authStore.isValid) { // If called without userId but user is logged in.
-        userId = pb.authStore.model.id;
+    if (!userId && pb.authStore.isValid) {
+      // If called without userId but user is logged in.
+      userId = pb.authStore.model.id;
     }
 
-    if (!userId) { // If still no userId, cannot fetch user-specific orders
-        console.warn("getFleetOrders called without userId and no authenticated user.");
-        return [];
+    if (!userId) {
+      // If still no userId, cannot fetch user-specific orders
+      console.warn(
+        "getFleetOrders called without userId and no authenticated user.",
+      );
+      return [];
     }
 
     try {
-        const filterParts = [
-            `(status != "completed" && status != "failed" && status != "cancelled")`,
-            `user_id = "${userId}"`
-        ];
-        const filter = filterParts.join(" && ");
-        
-        return await pb.collection("fleet_orders").getFullList({ // Changed to fleet_orders
-            filter: filter,
-            sort: "execute_at_tick", // Ascending is default
-            requestKey: `getFleetOrders-${userId}-${Date.now()}`, 
-        });
+      const filterParts = [
+        `(status != "completed" && status != "failed" && status != "cancelled")`,
+        `user_id = "${userId}"`,
+      ];
+      const filter = filterParts.join(" && ");
+
+      return await pb.collection("fleet_orders").getFullList({
+        // Changed to fleet_orders
+        filter: filter,
+        sort: "execute_at_tick", // Ascending is default
+        requestKey: `getFleetOrders-${userId}-${Date.now()}`,
+      });
     } catch (error) {
-        try {
-            suppressAutoCancelError(error);
-        } catch (e) {
-            console.error("Failed to fetch fleet orders:", e);
-        }
-        return [];
+      try {
+        suppressAutoCancelError(error);
+      } catch (e) {
+        console.error("Failed to fetch fleet orders:", e);
+      }
+      return [];
     }
   }
 
@@ -277,15 +283,17 @@ export class GameDataManager {
 
   async getUserResources() {
     try {
-      const response = await pb.send('/api/user/resources', {
-        method: 'GET',
+      const response = await pb.send("/api/user/resources", {
+        method: "GET",
         requestKey: `getUserResources-${Date.now()}`,
       });
       return response.resources;
     } catch (error) {
       // Handle auto-cancellation silently - it's expected behavior
-      if (error.status === 0 && error.message?.includes('autocancelled')) {
-        console.debug("User resources request was auto-cancelled (expected behavior)");
+      if (error.status === 0 && error.message?.includes("autocancelled")) {
+        console.debug(
+          "User resources request was auto-cancelled (expected behavior)",
+        );
         // Return null to indicate cancellation, caller should handle gracefully
         return null;
       }
@@ -298,7 +306,7 @@ export class GameDataManager {
         metal: 0,
         oil: 0,
         titanium: 0,
-        xanium: 0
+        xanium: 0,
       };
     }
   }
@@ -320,11 +328,11 @@ export class GameDataManager {
           Authorization: pb.authStore.token || "",
         },
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
+
       const data = await response.json();
       return data.items || [];
     } catch (error) {
@@ -402,7 +410,7 @@ export class GameDataManager {
         to_id: toId,
         strength: strength,
       };
-      
+
       if (fleetId) {
         payload.fleet_id = fleetId;
       }
@@ -419,8 +427,6 @@ export class GameDataManager {
       throw error;
     }
   }
-
-
 
   async sendFleetRoute(fleetId, routePath) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
@@ -442,7 +448,8 @@ export class GameDataManager {
     }
   }
 
-  async queueBuilding(planetId, buildingType, fleetId) { // Added fleetId parameter
+  async queueBuilding(planetId, buildingType, fleetId) {
+    // Added fleetId parameter
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
@@ -479,21 +486,78 @@ export class GameDataManager {
     }
   }
 
+  async transferCargo(fleetId, resourceType, quantity, direction) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    try {
+      return await pb.send("/api/cargo/transfer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fleet_id: fleetId,
+          resource_type: resourceType,
+          quantity: quantity,
+          direction: direction, // "load" or "unload"
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to transfer cargo:", error);
+      throw error;
+    }
+  }
+
+  async getBuildingStorage(systemId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    console.log("Auth token valid, user:", pb.authStore.model?.id);
+    console.log("Requesting building storage for system:", systemId);
+
+    try {
+      const response = await pb.send(
+        `/api/building_storage?system_id=${systemId}`,
+        {
+          method: "GET",
+        },
+      );
+      console.log("Building storage API response:", response);
+      return response;
+    } catch (error) {
+      console.error("Failed to get building storage:", error);
+      console.error("Error details:", error.response || error);
+      throw error;
+    }
+  }
+
+  async getIndividualShipCargo(shipId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+
+    try {
+      return await pb.send(`/api/ship_cargo/${shipId}`, {
+        method: "GET",
+      });
+    } catch (error) {
+      console.error("Failed to get individual ship cargo:", error);
+      throw error;
+    }
+  }
+
   async createTradeRoute(fromId, toId, cargo, capacity) {
     if (!pb.authStore.isValid) throw new Error("Not authenticated");
 
     try {
-      return await pb.send("/api/orders/trade", {
+      return await pb.send("/api/trade_route", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           from_id: fromId,
           to_id: toId,
           cargo: cargo,
           capacity: capacity,
         }),
-        headers: {
-          "Content-Type": "application/json",
-        },
       });
     } catch (error) {
       console.error("Failed to create trade route:", error);
@@ -590,7 +654,7 @@ export class GameDataManager {
       if (userId) {
         params.filter = `owner_id='${userId}'`;
       }
-      params.expand = 'employed_at,planet_id';
+      params.expand = "employed_at,planet_id";
 
       const response = await pb.send(url, {
         method: "GET",

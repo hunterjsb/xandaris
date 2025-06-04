@@ -199,6 +199,45 @@ html, body {
   border-radius: 8px;
 }
 
+/* Cargo transfer modal styles */
+.cargo-transfer-modal .cargo-section {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.cargo-transfer-modal .cargo-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.cargo-transfer-modal .cargo-item:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.cargo-transfer-modal .custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.cargo-transfer-modal .custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cargo-transfer-modal .custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cargo-transfer-modal .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+.cargo-transfer-modal .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
 /* Modal overlay positioning */
 #modal-overlay {
   position: fixed;

@@ -21,49 +21,57 @@ export class FleetComponent {
     const currentSystem = systems.find(s => s.id === this.fleet.current_system);
     const systemName = currentSystem ? currentSystem.name : "Deep Space";
 
-    const cargoData = this.gameState?.getFleetCargo(this.fleet.id) || { 
-      cargo: {}, 
-      used_capacity: 0, 
-      total_capacity: 0 
-    };
-
     const isMoving = this.isFleetMoving();
     const movementInfo = isMoving ? this.getMovementInfo() : null;
 
     return `
       <div class="fleet-details-container">
-        ${this.renderFleetHeader(fleetName, systemName, isMoving)}
+        ${this.renderFleetHeader(fleetName, systemName, currentSystem)}
         ${isMoving ? this.renderMovementStatus(movementInfo) : ''}
-        ${this.renderFleetStats(cargoData)}
         ${this.renderShipsList()}
-        ${this.renderFleetActions()}
+        ${this.renderFleetActions(currentSystem)}
       </div>
     `;
   }
 
-  renderFleetHeader(fleetName, systemName, isMoving) {
-    const statusIcon = isMoving ? 'rocket_launch' : 'anchor';
-    const statusColor = isMoving ? 'text-plasma-400' : 'text-nebula-400';
-    const statusText = isMoving ? 'In Transit' : 'Docked';
-
+  renderFleetHeader(fleetName, systemName, currentSystem) {
+    const fleetGradient = this.getFleetGradient();
+    
     return `
-      <div class="fleet-header mb-4 p-4 bg-gradient-to-r from-space-800 to-space-700 rounded-lg border border-space-600">
-        <div class="flex items-start justify-between">
-          <div class="flex items-center gap-3">
-            <span class="material-icons text-2xl ${statusColor}">${statusIcon}</span>
-            <div>
-              <h2 class="text-xl font-bold text-white">${fleetName}</h2>
-              <div class="text-sm text-space-300">Fleet ID: ${this.fleet.id}</div>
-              <div class="text-sm text-space-300">Location: ${systemName}</div>
-            </div>
-          </div>
+      <div class="fleet-header panel-header flex justify-between items-center p-3 cursor-move border-b border-space-700/50 bg-gradient-to-r ${fleetGradient}" draggable="false">
+        <div class="flex items-center gap-2">
+          <span class="material-icons text-space-400 drag-handle">drag_indicator</span>
+          <span id="fleet-name" class="text-xl font-bold text-nebula-200">${fleetName}</span>
+        </div>
+        <div class="flex items-center gap-4">
           <div class="text-right">
-            <div class="text-xs text-space-400">Status</div>
-            <div class="text-sm font-semibold ${statusColor}">${statusText}</div>
+            <div id="fleet-seed" class="font-semibold text-nebula-200 text-sm">ID: ${this.fleet.id.slice(-8)}</div>
+            <div id="fleet-coords" class="font-mono text-xs text-gray-500">${currentSystem ? `${currentSystem.x}, ${currentSystem.y}` : 'Unknown'}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
+                    class="pin-button text-space-400 hover:text-white transition-colors" 
+                    title="Pin">
+              <span class="material-icons text-sm">push_pin</span>
+            </button>
+            <button onclick="window.uiController.clearExpandedView()" 
+                    class="text-space-400 hover:text-white transition-colors"
+                    title="Close">
+              <span class="material-icons">close</span>
+            </button>
           </div>
         </div>
       </div>
     `;
+  }
+
+  getFleetGradient() {
+    const isMoving = this.isFleetMoving();
+    if (isMoving) {
+      return "from-plasma-900/30 to-cyan-900/30";
+    } else {
+      return "from-nebula-900/30 to-space-900/30";
+    }
   }
 
   renderMovementStatus(movementInfo) {
@@ -136,51 +144,6 @@ export class FleetComponent {
     `;
   }
 
-  renderFleetStats(cargoData) {
-    const shipCount = this.fleet.ships ? this.fleet.ships.reduce((sum, ship) => sum + ship.count, 0) : 0;
-    const shipTypes = this.fleet.ships ? this.fleet.ships.length : 0;
-
-    const cargoUsagePercent = cargoData.total_capacity > 0 ? 
-      Math.round((cargoData.used_capacity / cargoData.total_capacity) * 100) : 0;
-
-    return `
-      <div class="fleet-stats mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
-        <h3 class="text-lg font-semibold mb-3 text-nebula-200 flex items-center gap-2">
-          <span class="material-icons text-sm">assessment</span>
-          Fleet Statistics
-        </h3>
-        
-        <div class="grid grid-cols-3 gap-4 text-sm">
-          <div class="text-center p-3 bg-space-800 rounded">
-            <div class="text-2xl font-bold text-blue-400">${shipCount}</div>
-            <div class="text-space-400">Total Ships</div>
-          </div>
-          <div class="text-center p-3 bg-space-800 rounded">
-            <div class="text-2xl font-bold text-green-400">${shipTypes}</div>
-            <div class="text-space-400">Ship Types</div>
-          </div>
-          <div class="text-center p-3 bg-space-800 rounded">
-            <div class="text-2xl font-bold text-purple-400">${cargoUsagePercent}%</div>
-            <div class="text-space-400">Cargo Full</div>
-          </div>
-        </div>
-
-        ${cargoData.total_capacity > 0 ? `
-          <div class="mt-4">
-            <div class="flex justify-between text-sm mb-2">
-              <span class="text-space-400">Cargo Capacity</span>
-              <span class="text-white">${cargoData.used_capacity} / ${cargoData.total_capacity}</span>
-            </div>
-            <div class="w-full bg-space-600 rounded-full h-3">
-              <div class="bg-gradient-to-r from-nebula-500 to-purple-500 h-3 rounded-full transition-all duration-300" 
-                   style="width: ${cargoUsagePercent}%"></div>
-            </div>
-          </div>
-        ` : ''}
-      </div>
-    `;
-  }
-
   renderShipsList() {
     if (!this.fleet.ships || this.fleet.ships.length === 0) {
       return `
@@ -194,7 +157,19 @@ export class FleetComponent {
       `;
     }
 
-    const shipsHtml = this.fleet.ships.map(ship => this.renderShipItem(ship)).join('');
+    // Separate settlers from other ships
+    const settlers = this.fleet.ships.filter(ship => 
+      ship.ship_type_name && ship.ship_type_name.toLowerCase().includes('settler')
+    );
+    const otherShips = this.fleet.ships.filter(ship => 
+      !ship.ship_type_name || !ship.ship_type_name.toLowerCase().includes('settler')
+    );
+
+    const settlersHtml = settlers.length > 0 ? 
+      settlers.map(ship => this.renderShipItem(ship, true)).join('') : '';
+    
+    const otherShipsHtml = otherShips.length > 0 ? 
+      otherShips.map(ship => this.renderShipItem(ship, false)).join('') : '';
 
     return `
       <div class="ships-list mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
@@ -202,14 +177,35 @@ export class FleetComponent {
           <span class="material-icons text-sm">rocket</span>
           Ships (${this.fleet.ships.length})
         </h3>
-        <div class="space-y-2">
-          ${shipsHtml}
-        </div>
+        
+        ${settlers.length > 0 ? `
+          <div class="settlers-section mb-4">
+            <h4 class="text-md font-medium mb-2 text-green-300 flex items-center gap-2">
+              <span class="material-icons text-sm">groups</span>
+              Settler Ships (${settlers.length})
+            </h4>
+            <div class="space-y-2">
+              ${settlersHtml}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${otherShips.length > 0 ? `
+          <div class="other-ships-section">
+            <h4 class="text-md font-medium mb-2 text-cyan-300 flex items-center gap-2">
+              <span class="material-icons text-sm">rocket_launch</span>
+              Other Ships (${otherShips.length})
+            </h4>
+            <div class="space-y-2">
+              ${otherShipsHtml}
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
   }
 
-  renderShipItem(ship) {
+  renderShipItem(ship, isSettler) {
     const shipTypeName = ship.ship_type_name || 'Unknown';
     const shipCount = ship.count || 1;
     const healthPercent = ship.health || 100;
@@ -220,12 +216,15 @@ export class FleetComponent {
     const cargoCapacity = shipType?.cargo_capacity || 0;
     const hasCargoCapacity = cargoCapacity > 0;
 
+    const accentColor = isSettler ? 'text-green-400' : 'text-cyan-400';
+    const iconName = isSettler ? 'groups' : (hasCargoCapacity ? 'local_shipping' : 'rocket_launch');
+
     return `
       <div class="ship-item p-3 bg-space-800 rounded border border-space-500 cursor-pointer hover:bg-space-750 transition-colors"
            onclick="window.fleetComponents.showShipDetails('${ship.id}')">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <span class="material-icons text-cyan-400">${hasCargoCapacity ? 'local_shipping' : 'rocket_launch'}</span>
+            <span class="material-icons ${accentColor}">${iconName}</span>
             <div>
               <div class="font-medium text-white">${shipCount}x ${shipTypeName}</div>
               <div class="text-xs text-space-300">Ship ID: ${ship.id.slice(-8)}</div>
@@ -259,8 +258,11 @@ export class FleetComponent {
     return shipTypes.find(st => st.id === ship.ship_type || st.name === ship.ship_type_name);
   }
 
-  renderFleetActions() {
+  renderFleetActions(currentSystem) {
     const isMoving = this.isFleetMoving();
+    const hasSettlers = this.fleet.ships && this.fleet.ships.some(ship => 
+      ship.ship_type_name && ship.ship_type_name.toLowerCase().includes('settler')
+    );
     
     return `
       <div class="fleet-actions p-4 bg-space-700 rounded-lg border border-space-600">
@@ -274,26 +276,31 @@ export class FleetComponent {
                   onclick="window.fleetComponents.sendFleet('${this.fleet.id}')"
                   ${isMoving ? 'disabled' : ''}>
             <span class="material-icons text-sm">send</span>
-            Send Fleet
+            Move Fleet
           </button>
           
-          <button class="btn btn-secondary flex items-center justify-center gap-2"
-                  onclick="window.fleetComponents.manageFleet('${this.fleet.id}')">
-            <span class="material-icons text-sm">edit</span>
-            Manage Fleet
-          </button>
+          ${currentSystem ? `
+            <button class="btn btn-info flex items-center justify-center gap-2"
+                    onclick="window.fleetComponents.transferCargo('${this.fleet.id}', '${currentSystem.id}')"
+                    ${isMoving ? 'disabled' : ''}>
+              <span class="material-icons text-sm">swap_horiz</span>
+              Transfer Cargo
+            </button>
+          ` : `
+            <button class="btn btn-secondary flex items-center justify-center gap-2" disabled>
+              <span class="material-icons text-sm">block</span>
+              No System
+            </button>
+          `}
           
-          <button class="btn btn-info flex items-center justify-center gap-2"
-                  onclick="window.fleetComponents.viewCargo('${this.fleet.id}')">
-            <span class="material-icons text-sm">inventory</span>
-            Fleet Cargo
-          </button>
-          
-          <button class="btn btn-secondary flex items-center justify-center gap-2"
-                  onclick="window.fleetComponents.back()">
-            <span class="material-icons text-sm">arrow_back</span>
-            Back to List
-          </button>
+          ${hasSettlers && currentSystem ? `
+            <button class="btn btn-success flex items-center justify-center gap-2 col-span-2"
+                    onclick="window.fleetComponents.colonize('${currentSystem.id}')"
+                    ${isMoving ? 'disabled' : ''}>
+              <span class="material-icons text-sm">home</span>
+              Colonize Planet
+            </button>
+          ` : ''}
         </div>
       </div>
     `;

@@ -1,8 +1,9 @@
+import { gameData } from '../../lib/pocketbase.js';
+
 export class ShipComponent {
   constructor(uiController, gameState) {
     this.uiController = uiController;
     this.gameState = gameState;
-    this.currentUser = this.uiController.currentUser;
     this.ship = null;
     this.fleet = null;
   }
@@ -30,220 +31,144 @@ export class ShipComponent {
 
     const shipTypeName = this.ship.ship_type_name || "Unknown Ship";
     const shipCount = this.ship.count || 1;
-    const fleetName = this.fleet.name || `Fleet ${this.fleet.id.slice(-4)}`;
+
+    // Render with loading state, then load cargo asynchronously
+    const containerId = `ship-cargo-${shipId}`;
+    setTimeout(() => this.loadCargoData(shipId, containerId), 100);
 
     return `
       <div class="ship-details-container">
-        ${this.renderShipHeader(shipTypeName, shipCount, fleetName)}
-        ${this.renderShipStats()}
-        ${this.renderShipCargo()}
+        <div id="${containerId}">
+          ${this.renderLoadingCargo(shipTypeName, shipCount)}
+        </div>
         ${this.renderShipActions()}
       </div>
     `;
   }
 
-  renderShipHeader(shipTypeName, shipCount, fleetName) {
-    const healthPercent = this.ship.health || 100;
-    const healthColor =
-      healthPercent > 75
-        ? "text-green-400"
-        : healthPercent > 50
-          ? "text-yellow-400"
-          : "text-red-400";
-    const healthBgColor =
-      healthPercent > 75
-        ? "bg-green-500"
-        : healthPercent > 50
-          ? "bg-yellow-500"
-          : "bg-red-500";
 
+
+  renderLoadingCargo(shipTypeName, shipCount) {
+    const fleetName = this.fleet.name || `Fleet ${this.fleet.id.slice(-4)}`;
+    
     return `
-      <div class="ship-header mb-4 p-4 bg-gradient-to-r from-space-800 to-space-700 rounded-lg border border-space-600">
-        <div class="flex items-start justify-between">
-          <div class="flex items-center gap-3">
-            <span class="material-icons text-2xl text-cyan-400">rocket_launch</span>
-            <div>
-              <h2 class="text-xl font-bold text-white">${shipCount}x ${shipTypeName}</h2>
-              <div class="text-sm text-space-300">Ship ID: ${this.ship.id}</div>
-              <div class="text-sm text-space-300">Fleet: ${fleetName}</div>
-            </div>
+      <div class="ship-cargo mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
+        <div class="mb-4">
+          <h2 class="text-xl font-bold text-white mb-1">${shipCount}x ${shipTypeName}</h2>
+          <div class="text-sm text-space-300">Fleet: ${fleetName}</div>
+        </div>
+
+        <div class="mb-4 p-3 bg-space-800 rounded">
+          <div class="flex justify-between text-sm mb-2">
+            <span class="text-space-400">Cargo Capacity</span>
+            <span class="text-white">Loading...</span>
           </div>
-          <div class="text-right">
-            <div class="text-xs text-space-400">Hull Integrity</div>
-            <div class="text-lg font-bold ${healthColor}">${healthPercent}%</div>
+          <div class="w-full bg-space-600 rounded-full h-2">
+            <div class="bg-gradient-to-r from-space-500 to-space-400 h-2 rounded-full animate-pulse"></div>
           </div>
         </div>
 
-        <div class="mt-3">
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-space-400">Health Status</span>
-            <span class="text-white">${this.getHealthStatus(healthPercent)}</span>
-          </div>
-          <div class="w-full bg-space-600 rounded-full h-3">
-            <div class="${healthBgColor} h-3 rounded-full transition-all duration-300"
-                 style="width: ${healthPercent}%"></div>
-          </div>
+        <h3 class="text-lg font-semibold mb-3 text-orange-200">Cargo</h3>
+        <div class="text-space-400 text-center py-4">
+          <span class="material-icons animate-spin">refresh</span>
+          Loading cargo data...
         </div>
       </div>
     `;
   }
 
-  renderShipStats() {
-    const shipType = this.getShipTypeData();
-    const cargoCapacity = shipType?.cargo_capacity || 0;
-    const strength = shipType?.strength || 0;
-
-    return `
-      <div class="ship-stats mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
-        <h3 class="text-lg font-semibold mb-3 text-cyan-200 flex items-center gap-2">
-          <span class="material-icons text-sm">assessment</span>
-          Ship Specifications
-        </h3>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="stat-item p-3 bg-space-800 rounded">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="material-icons text-sm text-blue-400">inventory</span>
-              <span class="text-space-400">Cargo Capacity</span>
-            </div>
-            <div class="text-xl font-bold text-blue-400">${cargoCapacity}</div>
-            <div class="text-xs text-space-500">units per ship</div>
-          </div>
-
-          <div class="stat-item p-3 bg-space-800 rounded">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="material-icons text-sm text-red-400">military_tech</span>
-              <span class="text-space-400">Combat Strength</span>
-            </div>
-            <div class="text-xl font-bold text-red-400">${strength}</div>
-            <div class="text-xs text-space-500">per ship</div>
-          </div>
-
-          <div class="stat-item p-3 bg-space-800 rounded">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="material-icons text-sm text-green-400">groups</span>
-              <span class="text-space-400">Ship Count</span>
-            </div>
-            <div class="text-xl font-bold text-green-400">${this.ship.count || 1}</div>
-            <div class="text-xs text-space-500">in formation</div>
-          </div>
-
-          <div class="stat-item p-3 bg-space-800 rounded">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="material-icons text-sm text-purple-400">calculate</span>
-              <span class="text-space-400">Total Strength</span>
-            </div>
-            <div class="text-xl font-bold text-purple-400">${strength * (this.ship.count || 1)}</div>
-            <div class="text-xs text-space-500">combined</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  renderShipCargo() {
-    const cargoData = this.getShipCargo();
-    const cargoCapacity = this.getShipTypeData()?.cargo_capacity || 0;
-    const totalCapacity = cargoCapacity * (this.ship.count || 1);
-
-    if (totalCapacity === 0) {
-      return `
-        <div class="ship-cargo mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
-          <h3 class="text-lg font-semibold mb-3 text-orange-200 flex items-center gap-2">
-            <span class="material-icons text-sm">inventory_2</span>
-            Cargo Hold
-          </h3>
-          <div class="text-space-400 text-center py-4">This ship type cannot carry cargo</div>
-        </div>
-      `;
+  async loadCargoData(shipId, containerId) {
+    try {
+      const shipCargo = await gameData.getIndividualShipCargo(shipId);
+      const cargoHtml = this.renderCargoData(shipCargo);
+      
+      const container = document.getElementById(containerId);
+      if (container) {
+        container.innerHTML = cargoHtml;
+      }
+    } catch (error) {
+      console.error('Failed to load ship cargo:', error);
+      const container = document.getElementById(containerId);
+      if (container) {
+        container.innerHTML = this.renderCargoError();
+      }
     }
+  }
 
-    const usedCapacity = cargoData.reduce(
-      (sum, cargo) => sum + cargo.quantity,
-      0,
-    );
-    const usagePercent =
-      totalCapacity > 0 ? Math.round((usedCapacity / totalCapacity) * 100) : 0;
+  renderCargoData(shipCargo) {
+    const shipTypeName = this.ship.ship_type_name || "Unknown Ship";
+    const shipCount = this.ship.count || 1;
+    const fleetName = this.fleet.name || `Fleet ${this.fleet.id.slice(-4)}`;
+    
+    const cargoEntries = Object.entries(shipCargo.cargo || {}).filter(([resource, quantity]) => quantity > 0);
+    const usagePercent = shipCargo.total_capacity > 0 ? Math.round((shipCargo.used_capacity / shipCargo.total_capacity) * 100) : 0;
 
-    const cargoItemsHtml =
-      cargoData.length > 0
-        ? cargoData
-            .slice(0, 3)
-            .map((cargo) => this.renderCargoItem(cargo))
-            .join("")
-        : '<div class="text-space-400 text-center py-4">Cargo hold is empty</div>';
-
-    const hasMoreCargo = cargoData.length > 3;
+    const cargoItemsHtml = cargoEntries.length > 0 
+      ? cargoEntries.map(([resource, quantity]) => {
+          const resourceDef = this.uiController.getResourceDefinition(resource);
+          return `
+            <div class="flex items-center justify-between p-3 bg-space-800 rounded border border-space-600">
+              <div class="flex items-center gap-3">
+                <span class="material-icons ${resourceDef.color}">${resourceDef.icon}</span>
+                <div>
+                  <div class="font-medium text-white">${resource}</div>
+                  <div class="text-sm text-space-300">${quantity} units</div>
+                </div>
+              </div>
+              <button class="btn btn-sm btn-warning" onclick="window.fleetComponents.showShipCargo('${this.ship.id}')">
+                Manage
+              </button>
+            </div>
+          `;
+        }).join('')
+      : '<div class="text-space-400 text-center py-4">No cargo loaded</div>';
 
     return `
       <div class="ship-cargo mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold text-orange-200 flex items-center gap-2">
-            <span class="material-icons text-sm">inventory_2</span>
-            Cargo Hold
-          </h3>
-          <button class="btn btn-sm btn-info flex items-center gap-1"
-                  onclick="window.fleetComponents.showShipCargo('${this.ship.id}')">
-            <span class="material-icons text-xs">open_in_new</span>
-            Detailed View
-          </button>
+        <div class="mb-4">
+          <h2 class="text-xl font-bold text-white mb-1">${shipCount}x ${shipTypeName}</h2>
+          <div class="text-sm text-space-300">Fleet: ${fleetName}</div>
         </div>
 
-        <div class="cargo-capacity mb-4 p-3 bg-space-800 rounded">
+        <div class="mb-4 p-3 bg-space-800 rounded">
           <div class="flex justify-between text-sm mb-2">
-            <span class="text-space-400">Capacity Usage</span>
-            <span class="text-white">${usedCapacity} / ${totalCapacity} units</span>
+            <span class="text-space-400">Cargo Capacity</span>
+            <span class="text-white">${shipCargo.used_capacity} / ${shipCargo.total_capacity} units</span>
           </div>
-          <div class="w-full bg-space-600 rounded-full h-3">
-            <div class="bg-gradient-to-r from-orange-500 to-yellow-500 h-3 rounded-full transition-all duration-300"
+          <div class="w-full bg-space-600 rounded-full h-2">
+            <div class="bg-gradient-to-r from-orange-500 to-yellow-500 h-2 rounded-full transition-all duration-300"
                  style="width: ${usagePercent}%"></div>
           </div>
-          <div class="text-center mt-1">
-            <span class="text-xs ${usagePercent > 90 ? "text-red-400" : usagePercent > 75 ? "text-yellow-400" : "text-green-400"}">
-              ${usagePercent}% Full
-            </span>
-          </div>
         </div>
 
-        <div class="cargo-items space-y-2">
+        <h3 class="text-lg font-semibold mb-3 text-orange-200">Cargo (${cargoEntries.length} types)</h3>
+        <div class="space-y-2">
           ${cargoItemsHtml}
-          ${
-            hasMoreCargo
-              ? `
-            <div class="text-center py-2">
-              <button class="btn btn-sm btn-secondary" onclick="window.fleetComponents.showShipCargo('${this.ship.id}')">
-                View ${cargoData.length - 3} more cargo types...
-              </button>
-            </div>
-          `
-              : ""
-          }
         </div>
       </div>
     `;
   }
 
-  renderCargoItem(cargo) {
-    const resourceDef = this.uiController.getResourceDefinition(
-      cargo.resource_name || "unknown",
-    );
-
+  renderCargoError() {
+    const shipTypeName = this.ship.ship_type_name || "Unknown Ship";
+    const shipCount = this.ship.count || 1;
+    const fleetName = this.fleet.name || `Fleet ${this.fleet.id.slice(-4)}`;
+    
     return `
-      <div class="cargo-item p-3 bg-space-800 rounded border border-space-600 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <span class="material-icons text-xl ${resourceDef.color}">${resourceDef.icon}</span>
-          <div>
-            <div class="font-medium text-white">${cargo.resource_name || "Unknown"}</div>
-            <div class="text-xs text-space-300">Resource ID: ${cargo.resource_type}</div>
-          </div>
+      <div class="ship-cargo mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
+        <div class="mb-4">
+          <h2 class="text-xl font-bold text-white mb-1">${shipCount}x ${shipTypeName}</h2>
+          <div class="text-sm text-space-300">Fleet: ${fleetName}</div>
         </div>
-        <div class="text-right">
-          <div class="text-lg font-bold text-white">${cargo.quantity}</div>
-          <div class="text-xs text-space-400">units</div>
+        <div class="text-red-400 text-center py-4">
+          <span class="material-icons">error</span>
+          Failed to load cargo data
         </div>
       </div>
     `;
   }
+
+
 
   renderShipActions() {
     const isFleetMoving = this.isFleetMoving();
@@ -308,13 +233,7 @@ export class ShipComponent {
     `;
   }
 
-  getHealthStatus(healthPercent) {
-    if (healthPercent >= 90) return "Excellent";
-    if (healthPercent >= 75) return "Good";
-    if (healthPercent >= 50) return "Damaged";
-    if (healthPercent >= 25) return "Heavily Damaged";
-    return "Critical";
-  }
+
 
   getShipTypeData() {
     const shipTypes = this.gameState.shipTypes || [];
@@ -324,30 +243,7 @@ export class ShipComponent {
     );
   }
 
-  getShipCargo() {
-    // Get fleet cargo data and simulate ship-level cargo
-    const fleetCargo = this.gameState?.getFleetCargo(this.fleet.id);
-    
-    if (!fleetCargo || !fleetCargo.cargo) {
-      return [];
-    }
 
-    // Convert fleet cargo object to array format for ship display
-    // For now, we'll show fleet cargo as if it belongs to this ship
-    const cargoArray = [];
-    for (const [resourceName, quantity] of Object.entries(fleetCargo.cargo)) {
-      if (quantity > 0) {
-        cargoArray.push({
-          ship_id: this.ship.id,
-          resource_name: resourceName,
-          resource_type: resourceName, // Simplified for now
-          quantity: quantity
-        });
-      }
-    }
-    
-    return cargoArray;
-  }
 
   isFleetMoving() {
     const allFleetOrders = this.gameState.fleetOrders || [];

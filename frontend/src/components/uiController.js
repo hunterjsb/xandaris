@@ -1612,25 +1612,7 @@ export class UIController {
     const fleetName = fleet.name || `Fleet ${fleet.id.slice(-4)}`;
 
     container.innerHTML = `
-      <div class="panel-header flex items-center justify-between p-3 cursor-move border-b border-space-600/30">
-        <div class="flex items-center gap-2">
-          <span class="material-icons drag-handle text-space-400">drag_indicator</span>
-          <h2 class="text-lg font-semibold text-white">${fleetName}</h2>
-        </div>
-        <div class="flex items-center gap-2">
-          <button onclick="window.uiController.togglePinPanel(this.closest('.floating-panel'))" 
-                  class="pin-button text-space-400 hover:text-white transition-colors" 
-                  title="Pin">
-            <span class="material-icons text-sm">push_pin</span>
-          </button>
-          <button onclick="window.uiController.clearExpandedView()" 
-                  class="text-space-400 hover:text-white transition-colors"
-                  title="Close">
-            <span class="material-icons">close</span>
-          </button>
-        </div>
-      </div>
-      <div class="floating-panel-content p-4">
+      <div class="floating-panel-content">
         ${fleetContent}
       </div>
     `;
