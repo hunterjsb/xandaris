@@ -16,6 +16,7 @@ import (
 
 	"github.com/hunterjsb/xandaris/internal/tick"
 	"github.com/hunterjsb/xandaris/internal/websocket"
+
 	_ "github.com/hunterjsb/xandaris/migrations"
 	"github.com/hunterjsb/xandaris/pkg"
 )
@@ -23,7 +24,7 @@ import (
 func main() {
 	// Seed random number generator
 	rand.Seed(time.Now().UnixNano())
-	
+
 	app := pocketbase.New()
 
 	// loosely check if it was executed using "go run"
@@ -55,7 +56,7 @@ func main() {
 				admin := &models.Admin{}
 				admin.Email = email
 				admin.SetPassword(password)
-				
+
 				if err := app.Dao().SaveAdmin(admin); err != nil {
 					log.Printf("Failed to create superuser: %v", err)
 				} else {
@@ -147,7 +148,7 @@ func createStartingFleet(app *pocketbase.PocketBase, userID string) error {
 	fleet.Set("owner_id", userID)
 	fleet.Set("name", "Starting Fleet")
 	fleet.Set("current_system", startingSystem.Id)
-	
+
 	if err := app.Dao().SaveRecord(fleet); err != nil {
 		return fmt.Errorf("failed to create fleet: %v", err)
 	}
