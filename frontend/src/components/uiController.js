@@ -440,7 +440,9 @@ export class UIController {
       // return; // Potentially skip if no new position and system is same.
     }
 
-    container.className = "floating-panel glass-panel"; // Ensure base class is set, removes 'hidden' implicitly if it was only 'hidden'
+    // Preserve existing classes (like pinned-panel) while ensuring base classes
+    container.classList.remove("hidden");
+    container.classList.add("floating-panel", "glass-panel");
 
     this.currentSystemId = system.id;
 
@@ -584,19 +586,23 @@ export class UIController {
     container.dataset.viewType = "system"; // For potential future logic
     container.dataset.currentId = system.id;
 
-    // Position the panel
+    // Position the panel (only if not pinned)
     container.classList.remove("hidden");
-    if (screenX !== undefined && screenY !== undefined) {
-      this.positionPanel(container, screenX, screenY);
-    } else if (
-      container.style.left === "-2000px" ||
-      container.style.left === "-9999px" ||
-      !container.style.left
-    ) {
-      // If it was off-screen or no position set, place it default
-      container.style.top = "20px";
-      container.style.left = "20px";
-      container.style.right = "auto";
+    
+    // Don't reposition if panel is pinned - keep it where user placed it
+    if (!container._isPinned) {
+      if (screenX !== undefined && screenY !== undefined) {
+        this.positionPanel(container, screenX, screenY);
+      } else if (
+        container.style.left === "-2000px" ||
+        container.style.left === "-9999px" ||
+        !container.style.left
+      ) {
+        // If it was off-screen or no position set, place it default
+        container.style.top = "20px";
+        container.style.left = "20px";
+        container.style.right = "auto";
+      }
     }
 
     // Always re-add drag functionality after content recreation
@@ -1582,12 +1588,24 @@ export class UIController {
       return;
     }
 
-    // Clear any existing content
-    this.clearExpandedView();
+    // Preserve pinned state while clearing content
+    const wasPinned = container._isPinned;
+    const pinnedClasses = container.classList.contains("pinned-panel");
+    
+    // Clear content but preserve state
+    if (!wasPinned) {
+      this.clearExpandedView();
+    }
 
     // Set up the container
     container.classList.remove("hidden");
     container.classList.add("floating-panel", "glass-panel");
+    
+    // Restore pinned state if it was pinned
+    if (wasPinned) {
+      container.classList.add("pinned-panel");
+      container._isPinned = true;
+    }
 
     // Render fleet content using FleetComponent
     const fleetContent = this.renderFleetView(fleet);
@@ -1617,8 +1635,8 @@ export class UIController {
       </div>
     `;
 
-    // Position the panel near the fleet if coordinates provided
-    if (screenX !== null && screenY !== null) {
+    // Position the panel near the fleet if coordinates provided (only if not pinned)
+    if (screenX !== null && screenY !== null && !container._isPinned) {
       this.positionPanel(container, screenX, screenY);
     }
 
@@ -1660,6 +1678,7 @@ export class UIController {
     
     const isPinned = container.classList.contains('pinned-panel');
     const pinButton = container.querySelector('.pin-button');
+    const pinIcon = pinButton?.querySelector('.material-icons');
     
     if (isPinned) {
       // Unpin the panel
@@ -1669,14 +1688,25 @@ export class UIController {
         pinButton.classList.remove('pinned');
         pinButton.title = 'Pin panel';
       }
+      if (pinIcon) {
+        pinIcon.textContent = 'push_pin';
+        pinIcon.style.transform = '';
+      }
+      // Show brief feedback
+      this.showToast('Panel unpinned', 'info', 1500);
     } else {
       // Pin the panel
       container.classList.add('pinned-panel');
       container._isPinned = true;
       if (pinButton) {
         pinButton.classList.add('pinned');
-        pinButton.title = 'Unpin panel';
+        pinButton.title = 'Unpin panel - will stay in current position';
       }
+      if (pinIcon) {
+        pinIcon.textContent = 'push_pin';
+      }
+      // Show brief feedback
+      this.showToast('Panel pinned - will stay anchored here', 'success', 2000);
     }
   }
 

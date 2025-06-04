@@ -134,6 +134,14 @@
     border-radius: 4px;
   }
 
+  .pin-button .material-icons {
+    transition: transform 0.3s ease-in-out;
+  }
+
+  .pin-button.pinned .material-icons {
+    transform: rotate(45deg);
+  }
+
   /* Modal glass effects */
   .modal-content {
     background: rgba(15, 23, 42, 0.85) !important;
