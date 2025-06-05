@@ -947,9 +947,107 @@ export class UIController {
       '<div class="text-sm text-space-400">No buildings constructed.</div>';
     let buildingWarnings = [];
     
+    // Get detailed population data for this planet
+    let populationHtml = '<div class="text-sm text-space-400">Loading population data...</div>';
+    let planetPopulations = [];
+    
+    if (planet.colonized_by === this.currentUser?.id) {
+      try {
+        const popData = await gameData.getPlanetPopulations(planet.id);
+        planetPopulations = popData.populations || [];
+        
+        const totalPop = popData.total_population || 0;
+        const employedPop = popData.employed_population || 0;
+        const unemployedPop = popData.unemployed_population || 0;
+        
+        populationHtml = `
+          <div class="space-y-3">
+            <!-- Population Overview -->
+            <div class="grid grid-cols-3 gap-3 p-3 bg-space-800 rounded-lg">
+              <div class="text-center">
+                <div class="text-2xl font-bold text-blue-300">${totalPop.toLocaleString()}</div>
+                <div class="text-xs text-space-400">Total Population</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-green-300">${employedPop.toLocaleString()}</div>
+                <div class="text-xs text-space-400">Employed</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold ${unemployedPop > 0 ? 'text-yellow-300' : 'text-gray-500'}">${unemployedPop.toLocaleString()}</div>
+                <div class="text-xs text-space-400">Unemployed</div>
+              </div>
+            </div>
+            
+            <!-- Employment Progress Bar -->
+            <div>
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-sm">Employment Rate</span>
+                <span class="text-sm">${totalPop > 0 ? Math.round((employedPop / totalPop) * 100) : 0}%</span>
+              </div>
+              <div class="w-full bg-space-700 rounded-full h-3">
+                <div class="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full transition-all duration-300" 
+                     style="width: ${totalPop > 0 ? (employedPop / totalPop) * 100 : 0}%"></div>
+              </div>
+            </div>
+            
+            ${unemployedPop > 0 ? `
+            <div class="p-3 bg-yellow-900/20 border border-yellow-600/50 rounded-md">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-yellow-400">⚠️</span>
+                <span class="font-semibold text-yellow-200">Unemployment Alert</span>
+              </div>
+              <div class="text-sm text-yellow-100">
+                ${unemployedPop.toLocaleString()} citizens are unemployed and not contributing to production.
+              </div>
+              <div class="text-xs text-yellow-300 mt-1">
+                Build more facilities or check building worker capacity to employ them.
+              </div>
+            </div>
+            ` : ''}
+            
+            <!-- Population Groups -->
+            ${planetPopulations.length > 0 ? `
+            <div class="space-y-2">
+              <h4 class="text-sm font-semibold text-space-200">Population Groups</h4>
+              ${planetPopulations.map(pop => `
+                <div class="p-2 bg-space-800 rounded border-l-4 ${pop.employed_at ? 'border-green-500' : 'border-yellow-500'}">
+                  <div class="flex justify-between items-center">
+                    <div>
+                      <div class="font-medium">${pop.count.toLocaleString()} Citizens</div>
+                      <div class="text-xs text-space-400">
+                        ${pop.employed_at ? `Working at ${pop.building_name || 'Unknown Building'}` : 'Unemployed'}
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-sm ${pop.happiness >= 75 ? 'text-green-400' : pop.happiness >= 50 ? 'text-yellow-400' : 'text-red-400'}">
+                        ${pop.happiness}% Happy
+                      </div>
+                      ${!pop.employed_at ? `
+                        <button class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded mt-1"
+                                onclick="window.uiController.showEmploymentOptions('${pop.id}', '${planet.id}')">
+                          Assign Work
+                        </button>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            ` : ''}
+          </div>
+        `;
+      } catch (error) {
+        console.error('Failed to load population data:', error);
+        populationHtml = '<div class="text-sm text-red-400">Failed to load population data.</div>';
+      }
+    } else if (planet.colonized_by) {
+      populationHtml = '<div class="text-sm text-space-400">This planet is controlled by another player.</div>';
+    } else {
+      populationHtml = '<div class="text-sm text-space-400">This planet is uncolonized.</div>';
+    }
+    
     if (planet.Buildings && Object.keys(planet.Buildings).length > 0) {
       // Get population assignments for this planet
-      const planetPopulations = this.gameState?.populations?.filter(pop => pop.planet_id === planet.id) || [];
       const assignedBuildingIds = new Set(planetPopulations.map(pop => pop.employed_at).filter(Boolean));
       
       const buildingEntries = Object.entries(planet.Buildings)
@@ -1073,6 +1171,13 @@ export class UIController {
           </div>
 
           <div id="planet-details-scroll-container" class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+            <div id="planet-population-container" style="display: none;">
+              <h3 class="text-lg font-semibold mb-3 text-nebula-200 flex items-center gap-2">
+                <span class="material-icons">people</span>
+                Population Management
+              </h3>
+              <div id="planet-population-html"></div>
+            </div>
             <div id="planet-resources-container" style="display: none;">
               <h3 class="text-lg font-semibold mb-3 text-nebula-200">Resources & Stats</h3>
               <div id="planet-resources-html"></div>
@@ -1181,9 +1286,12 @@ export class UIController {
       resourceNodesHtml = `<ul class="space-y-2">${resourceEntries}</ul>`;
     }
 
-    // Update resources and buildings
+    // Update resources, population, and buildings
     const resourcesContainer = container.querySelector(
       "#planet-resources-container",
+    );
+    const populationContainer = container.querySelector(
+      "#planet-population-container",
     );
     const buildingsContainer = container.querySelector(
       "#planet-buildings-container",
@@ -1198,6 +1306,14 @@ export class UIController {
     const resourcesTitle = resourcesContainer.querySelector("h3");
     if (resourcesTitle) {
       resourcesTitle.textContent = "Resource Deposits";
+    }
+
+    // Show population section for colonized planets
+    if (planet.colonized_by) {
+      container.querySelector("#planet-population-html").innerHTML = populationHtml;
+      populationContainer.style.display = "block";
+    } else {
+      populationContainer.style.display = "none";
     }
 
     if (isOwnedByPlayer) {
@@ -1275,6 +1391,226 @@ export class UIController {
 
     // Always re-add drag functionality after content recreation
     this.makePanelDraggable(container);
+  }
+
+  async showEmploymentOptions(populationId, planetId) {
+    try {
+      // Get available buildings on this planet
+      const buildings = this.gameState?.buildings?.filter(b => b.planet_id === planetId) || [];
+      
+      if (buildings.length === 0) {
+        this.showToast('No buildings available for employment on this planet.', 'warning');
+        return;
+      }
+
+      // Create employment modal
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-space-800 rounded-lg p-6 max-w-md w-full mx-4 border border-space-600">
+          <h3 class="text-lg font-semibold mb-4 text-nebula-200">Assign Population to Work</h3>
+          <div class="space-y-3 max-h-60 overflow-y-auto">
+            ${buildings.map(building => {
+              const buildingType = this.gameState?.buildingTypes?.find(bt => bt.id === building.building_type);
+              const buildingName = buildingType?.name || 'Unknown Building';
+              const level = building.level || 1;
+              
+              // Calculate worker capacity and current workers
+              const capacity = this.getWorkerCapacity(buildingName, level);
+              const currentWorkers = this.gameState?.populations?.filter(p => p.employed_at === building.id)
+                .reduce((sum, p) => sum + p.count, 0) || 0;
+              const available = capacity - currentWorkers;
+              
+              return `
+                <button class="w-full p-3 text-left bg-space-700 hover:bg-space-600 rounded border-l-4 border-blue-500 transition-colors ${available <= 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        onclick="window.uiController.assignPopulationToBuilding('${populationId}', '${building.id}', '${buildingName}')"
+                        ${available <= 0 ? 'disabled' : ''}>
+                  <div class="font-medium">${buildingName} (Level ${level})</div>
+                  <div class="text-sm text-space-400">
+                    Workers: ${currentWorkers}/${capacity} 
+                    ${available > 0 ? `(${available} available)` : '(Full)'}
+                  </div>
+                </button>
+              `;
+            }).join('')}
+          </div>
+          <div class="flex gap-2 mt-4">
+            <button class="flex-1 btn btn-secondary" onclick="this.parentElement.parentElement.parentElement.remove()">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Close on backdrop click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+      
+    } catch (error) {
+      console.error('Failed to show employment options:', error);
+      this.showToast('Failed to load employment options.', 'error');
+    }
+  }
+
+  async assignPopulationToBuilding(populationId, buildingId, buildingName) {
+    try {
+      await gameData.employPopulation(populationId, buildingId);
+      this.showToast(`Successfully assigned population to work at ${buildingName}!`, 'success');
+      
+      // Close the modal
+      const modal = document.querySelector('.fixed.inset-0');
+      if (modal) modal.remove();
+      
+      // Refresh the planet view
+      const currentPlanetId = this.expandedView?.dataset?.currentId;
+      if (currentPlanetId) {
+        const planet = this.gameState?.mapData?.planets?.find(p => p.id === currentPlanetId);
+        if (planet) {
+          await this.displayPlanetView(planet);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to assign population:', error);
+      this.showToast(`Failed to assign population: ${error.message}`, 'error');
+    }
+  }
+
+  getWorkerCapacity(buildingName, level) {
+    const baseCapacities = {
+      'mine': 10,
+      'farm': 8,
+      'factory': 12,
+      'power_plant': 6,
+      'oil_rig': 8,
+      'deep_mine': 15,
+      'metal_refinery': 10,
+      'oil_refinery': 10,
+      'crypto_server': 0
+    };
+    
+    const baseCapacity = baseCapacities[buildingName.toLowerCase()] || 5;
+    return baseCapacity * level;
+  }
+
+  async showPopulationTransferOptions(populationId, sourceType) {
+    try {
+      const population = this.gameState?.populations?.find(p => p.id === populationId);
+      if (!population) {
+        this.showToast('Population group not found.', 'error');
+        return;
+      }
+
+      // Get available transfer targets
+      const planets = this.gameState?.mapData?.planets?.filter(p => 
+        p.colonized_by === this.currentUser?.id) || [];
+      const fleets = this.gameState?.fleets?.filter(f => 
+        f.owner_id === this.currentUser?.id) || [];
+
+      // Create transfer modal
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-space-800 rounded-lg p-6 max-w-md w-full mx-4 border border-space-600">
+          <h3 class="text-lg font-semibold mb-4 text-nebula-200">Transfer Population</h3>
+          <div class="mb-4 p-3 bg-space-700 rounded border-l-4 border-blue-500">
+            <div class="font-medium">${population.count.toLocaleString()} Citizens</div>
+            <div class="text-sm text-space-400">From: ${sourceType === 'fleet' ? 'Fleet' : 'Planet'}</div>
+          </div>
+          
+          <div class="space-y-4">
+            ${planets.length > 0 ? `
+            <div>
+              <h4 class="text-sm font-medium mb-2 text-space-200">Transfer to Planet</h4>
+              <div class="space-y-2 max-h-32 overflow-y-auto">
+                ${planets.map(planet => `
+                  <button class="w-full p-2 text-left bg-space-700 hover:bg-space-600 rounded transition-colors"
+                          onclick="window.uiController.transferPopulationTo('${populationId}', 'planet', '${planet.id}', '${planet.name || planet.id}')">
+                    <div class="font-medium">${planet.name || `Planet ${planet.id.slice(-4)}`}</div>
+                    <div class="text-xs text-space-400">System: ${planet.system_name || planet.system_id}</div>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+            
+            ${fleets.length > 0 ? `
+            <div>
+              <h4 class="text-sm font-medium mb-2 text-space-200">Transfer to Fleet</h4>
+              <div class="space-y-2 max-h-32 overflow-y-auto">
+                ${fleets.filter(f => f.id !== population.fleet_id).map(fleet => `
+                  <button class="w-full p-2 text-left bg-space-700 hover:bg-space-600 rounded transition-colors"
+                          onclick="window.uiController.transferPopulationTo('${populationId}', 'fleet', '${fleet.id}', '${fleet.name || fleet.id}')">
+                    <div class="font-medium">${fleet.name || `Fleet ${fleet.id.slice(-4)}`}</div>
+                    <div class="text-xs text-space-400">Current location: ${this.getFleetLocationName(fleet)}</div>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+          </div>
+          
+          <div class="flex gap-2 mt-6">
+            <button class="flex-1 btn btn-secondary" onclick="this.parentElement.parentElement.parentElement.remove()">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Close on backdrop click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+      
+    } catch (error) {
+      console.error('Failed to show population transfer options:', error);
+      this.showToast('Failed to load transfer options.', 'error');
+    }
+  }
+
+  async transferPopulationTo(populationId, targetType, targetId, targetName) {
+    try {
+      await gameData.transferPopulation(populationId, targetType, targetId);
+      this.showToast(`Successfully transferred population to ${targetName}!`, 'success');
+      
+      // Close the modal
+      const modal = document.querySelector('.fixed.inset-0');
+      if (modal) modal.remove();
+      
+      // Refresh the current view
+      if (this.expandedView?.dataset?.viewType === 'planet') {
+        const currentPlanetId = this.expandedView?.dataset?.currentId;
+        if (currentPlanetId) {
+          const planet = this.gameState?.mapData?.planets?.find(p => p.id === currentPlanetId);
+          if (planet) {
+            await this.displayPlanetView(planet);
+          }
+        }
+      }
+      
+      // Refresh game state to update population data
+      await this.gameState.loadGameData();
+      
+    } catch (error) {
+      console.error('Failed to transfer population:', error);
+      this.showToast(`Failed to transfer population: ${error.message}`, 'error');
+    }
+  }
+
+  getFleetLocationName(fleet) {
+    if (!fleet.current_system) return 'Deep Space';
+    const system = this.gameState?.systems?.find(s => s.id === fleet.current_system);
+    return system ? system.name || `System ${system.id.slice(-4)}` : 'Unknown System';
   }
 
   showPlanetBuildModal(planet) {

@@ -28,6 +28,7 @@ export class FleetComponent {
       <div class="fleet-details-container">
         ${this.renderFleetHeader(fleetName, systemName, currentSystem)}
         ${isMoving ? this.renderMovementStatus(movementInfo) : ''}
+        ${this.renderPopulationSection()}
         ${this.renderShipsList()}
         ${this.renderFleetActions(currentSystem)}
       </div>
@@ -139,6 +140,69 @@ export class FleetComponent {
           <div><span class="text-space-400">Final Destination:</span> <span class="text-white">${finalDestName}</span></div>
           <div><span class="text-space-400">Current Hop:</span> <span class="text-cyan-400">${currentHop + 1}/${totalHops}</span></div>
           <div><span class="text-space-400">Remaining Hops:</span> <span class="text-yellow-400">${remainingHops}</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderPopulationSection() {
+    const fleetPopulations = this.gameState?.populations?.filter(pop => pop.fleet_id === this.fleet.id) || [];
+    const totalPopulation = fleetPopulations.reduce((sum, pop) => sum + pop.count, 0);
+
+    if (totalPopulation === 0) {
+      return `
+        <div class="population-section mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
+          <h3 class="text-lg font-semibold mb-3 text-nebula-200 flex items-center gap-2">
+            <span class="material-icons text-sm">people</span>
+            Population (0)
+          </h3>
+          <div class="text-space-400 text-center py-4">No population aboard this fleet</div>
+        </div>
+      `;
+    }
+
+    const avgHappiness = Math.round(fleetPopulations.reduce((sum, pop) => sum + pop.happiness, 0) / fleetPopulations.length);
+    const happinessColor = avgHappiness >= 75 ? 'text-green-400' : avgHappiness >= 50 ? 'text-yellow-400' : 'text-red-400';
+
+    return `
+      <div class="population-section mb-4 p-4 bg-space-700 rounded-lg border border-space-600">
+        <h3 class="text-lg font-semibold mb-3 text-nebula-200 flex items-center gap-2">
+          <span class="material-icons text-sm">people</span>
+          Population (${totalPopulation.toLocaleString()})
+        </h3>
+        
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="text-center p-3 bg-space-800 rounded">
+            <div class="text-2xl font-bold text-blue-300">${totalPopulation.toLocaleString()}</div>
+            <div class="text-xs text-space-400">Total Citizens</div>
+          </div>
+          <div class="text-center p-3 bg-space-800 rounded">
+            <div class="text-2xl font-bold ${happinessColor}">${avgHappiness}%</div>
+            <div class="text-xs text-space-400">Average Happiness</div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="text-sm font-medium text-space-200">Population Groups</h4>
+          ${fleetPopulations.map(pop => `
+            <div class="p-3 bg-space-800 rounded border-l-4 border-blue-500">
+              <div class="flex justify-between items-center">
+                <div>
+                  <div class="font-medium">${pop.count.toLocaleString()} Citizens</div>
+                  <div class="text-xs text-space-400">Group ID: ${pop.id.slice(-8)}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm ${pop.happiness >= 75 ? 'text-green-400' : pop.happiness >= 50 ? 'text-yellow-400' : 'text-red-400'}">
+                    ${pop.happiness}% Happy
+                  </div>
+                  <button class="text-xs px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded mt-1"
+                          onclick="window.uiController.showPopulationTransferOptions('${pop.id}', 'fleet')">
+                    Transfer
+                  </button>
+                </div>
+              </div>
+            </div>
+          `).join('')}
         </div>
       </div>
     `;

@@ -127,20 +127,51 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 
 		log.Printf("DEBUG: Found %d unemployed population groups", len(unemployedPops))
 
-		// Assign unemployed population to buildings that need workers
+		// Sort buildings by priority (farms first, then mines, etc.)
+		buildingsByPriority := make([]*models.Record, 0)
+		buildingTypes := make(map[string]string) // building.Id -> buildingType.name
+		
+		// First, get all building types
 		for _, building := range buildings {
-			if len(unemployedPops) == 0 {
-				break
-			}
-
 			buildingTypeID := building.GetString("building_type")
 			buildingType, err := app.Dao().FindRecordById("building_types", buildingTypeID)
 			if err != nil {
 				log.Printf("DEBUG: Failed to get building type %s: %v", buildingTypeID, err)
 				continue
 			}
+			buildingTypes[building.Id] = buildingType.GetString("name")
+		}
+		
+		// Add buildings in priority order: farms, mines, factories, then others
+		priorities := []string{"farm", "mine", "factory", "power_plant", "oil_rig", "deep_mine", "metal_refinery", "oil_refinery"}
+		for _, priority := range priorities {
+			for _, building := range buildings {
+				if buildingTypes[building.Id] == priority {
+					buildingsByPriority = append(buildingsByPriority, building)
+				}
+			}
+		}
+		// Add any remaining buildings
+		for _, building := range buildings {
+			found := false
+			for _, added := range buildingsByPriority {
+				if added.Id == building.Id {
+					found = true
+					break
+				}
+			}
+			if !found && buildingTypes[building.Id] != "crypto_server" {
+				buildingsByPriority = append(buildingsByPriority, building)
+			}
+		}
 
-			buildingName := buildingType.GetString("name")
+		// Assign unemployed population to buildings that need workers
+		for _, building := range buildingsByPriority {
+			if len(unemployedPops) == 0 {
+				break
+			}
+
+			buildingName := buildingTypes[building.Id]
 			log.Printf("DEBUG: Processing building %s (type: %s)", building.Id, buildingName)
 
 			// Skip crypto servers (they don't need workers)
@@ -153,29 +184,9 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 			if level == 0 {
 				level = 1
 			}
-			// Use default worker capacity since the field doesn't exist in schema
-			var baseWorkerCapacity int
-			switch buildingName {
-			case "mine":
-				baseWorkerCapacity = 10
-			case "farm":
-				baseWorkerCapacity = 8
-			case "factory":
-				baseWorkerCapacity = 12
-			case "power_plant":
-				baseWorkerCapacity = 6
-			case "oil_rig":
-				baseWorkerCapacity = 8
-			case "deep_mine":
-				baseWorkerCapacity = 15
-			case "metal_refinery":
-				baseWorkerCapacity = 10
-			case "oil_refinery":
-				baseWorkerCapacity = 10
-			default:
-				baseWorkerCapacity = 5 // Default for other buildings
-			}
-			workerCapacity := baseWorkerCapacity * level
+			
+			// Get worker capacity for this building type
+			workerCapacity := getWorkerCapacity(buildingName, level)
 
 			// Count currently employed at this building
 			currentWorkers := 0
@@ -185,18 +196,70 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 				}
 			}
 
-			log.Printf("DEBUG: Building %s needs %d workers, has %d workers", building.Id, workerCapacity, currentWorkers)
+			log.Printf("DEBUG: Building %s (%s) needs %d workers, has %d workers", building.Id, buildingName, workerCapacity, currentWorkers)
 
-			// Assign more workers if needed and available
+			// Assign workers if needed and available
 			if currentWorkers < workerCapacity && len(unemployedPops) > 0 {
-				pop := unemployedPops[0]
-				pop.Set("employed_at", building.Id)
-				if err := app.Dao().SaveRecord(pop); err != nil {
-					log.Printf("Failed to employ population: %v", err)
-				} else {
-					log.Printf("Employed %d population to work %s building %s", 
-						pop.GetInt("count"), buildingType.GetString("name"), building.Id)
-					unemployedPops = unemployedPops[1:] // Remove from unemployed list
+				// Calculate how many workers we need
+				workersNeeded := workerCapacity - currentWorkers
+				
+				// Try to assign from unemployed population
+				for i := 0; i < len(unemployedPops) && workersNeeded > 0; {
+					pop := unemployedPops[i]
+					popCount := pop.GetInt("count")
+					
+					if popCount <= workersNeeded {
+						// Assign entire population group
+						pop.Set("employed_at", building.Id)
+						if err := app.Dao().SaveRecord(pop); err != nil {
+							log.Printf("Failed to employ population: %v", err)
+							i++ // Skip this population if there's an error
+							continue
+						}
+						
+						log.Printf("Employed %d population to work %s building %s", 
+							popCount, buildingName, building.Id)
+						workersNeeded -= popCount
+						unemployedPops = append(unemployedPops[:i], unemployedPops[i+1:]...)
+					} else {
+						// Split population group - assign part to building, leave rest unemployed
+						collection, err := app.Dao().FindCollectionByNameOrId("populations")
+						if err != nil {
+							log.Printf("Failed to find populations collection: %v", err)
+							i++
+							continue
+						}
+						
+						newEmployed := models.NewRecord(collection)
+						newEmployed.Set("owner_id", pop.GetString("owner_id"))
+						newEmployed.Set("planet_id", pop.GetString("planet_id"))
+						newEmployed.Set("employed_at", building.Id)
+						newEmployed.Set("count", workersNeeded)
+						newEmployed.Set("happiness", pop.GetInt("happiness"))
+						
+						// Create the new employed population record
+						if err := app.Dao().SaveRecord(newEmployed); err != nil {
+							log.Printf("Failed to save new employed population: %v", err)
+							i++
+							continue
+						}
+						
+						// Update the original population record to reduce count
+						remainingCount := popCount - workersNeeded
+						pop.Set("count", remainingCount)
+						if err := app.Dao().SaveRecord(pop); err != nil {
+							log.Printf("Failed to update remaining unemployed population: %v", err)
+							// Try to clean up the created record
+							app.Dao().DeleteRecord(newEmployed)
+							i++
+							continue
+						}
+						
+						log.Printf("Split population: employed %d to %s building %s, %d remain unemployed", 
+							workersNeeded, buildingName, building.Id, remainingCount)
+						workersNeeded = 0
+						break
+					}
 				}
 			}
 		}
@@ -227,30 +290,9 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 			level = 1
 		}
 
-		// Use default worker capacity since the field doesn't exist in schema
-		var baseWorkerCapacity int
+		// Get worker capacity for this building type
 		buildingName := buildingType.GetString("name")
-		switch buildingName {
-		case "mine":
-			baseWorkerCapacity = 10
-		case "farm":
-			baseWorkerCapacity = 8
-		case "factory":
-			baseWorkerCapacity = 12
-		case "power_plant":
-			baseWorkerCapacity = 6
-		case "oil_rig":
-			baseWorkerCapacity = 8
-		case "deep_mine":
-			baseWorkerCapacity = 15
-		case "metal_refinery":
-			baseWorkerCapacity = 10
-		case "oil_refinery":
-			baseWorkerCapacity = 10
-		default:
-			baseWorkerCapacity = 5 // Default for other buildings
-		}
-		workerCapacity := baseWorkerCapacity * level
+		workerCapacity := getWorkerCapacity(buildingName, level)
 
 		// Get employed population for this building
 		employedPops, err := app.Dao().FindRecordsByFilter("populations",
@@ -502,4 +544,32 @@ func GetPlanetValue(app *pocketbase.PocketBase, planet *models.Record) int {
 	}
 
 	return value
+}
+
+// getWorkerCapacity returns the worker capacity for a building type and level
+func getWorkerCapacity(buildingName string, level int) int {
+	var baseWorkerCapacity int
+	switch buildingName {
+	case "mine":
+		baseWorkerCapacity = 10
+	case "farm":
+		baseWorkerCapacity = 8
+	case "factory":
+		baseWorkerCapacity = 12
+	case "power_plant":
+		baseWorkerCapacity = 6
+	case "oil_rig":
+		baseWorkerCapacity = 8
+	case "deep_mine":
+		baseWorkerCapacity = 15
+	case "metal_refinery":
+		baseWorkerCapacity = 10
+	case "oil_refinery":
+		baseWorkerCapacity = 10
+	case "crypto_server":
+		return 0 // Crypto servers don't need workers
+	default:
+		baseWorkerCapacity = 5 // Default for other buildings
+	}
+	return baseWorkerCapacity * level
 }

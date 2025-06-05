@@ -665,25 +665,104 @@ export class GameDataManager {
 
   async getPopulations(userId = null) {
     try {
-      let url = "/api/collections/populations/records";
-      const params = {};
-      if (userId) {
-        params.filter = `owner_id='${userId}'`;
-      }
-      params.expand = "employed_at,planet_id";
-
-      const response = await pb.send(url, {
+      const response = await pb.send("/api/populations", {
         method: "GET",
-        params: params,
+        requestKey: `getPopulations-${userId || 'all'}-${Date.now()}`
       });
+
       return response.items || [];
     } catch (error) {
       try {
-        suppressAutoCancelError(error);
+        suppressAutoCancel(error);
       } catch (e) {
         console.error("Failed to fetch populations:", e);
       }
       return [];
+    }
+  }
+
+  async getPlanetPopulations(planetId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    
+    try {
+      const response = await pb.send(`/api/populations/planet/${planetId}`, {
+        method: "GET",
+        requestKey: `getPlanetPopulations-${planetId}-${Date.now()}`
+      });
+
+      return response;
+    } catch (error) {
+      console.error("Failed to fetch planet populations:", error);
+      throw error;
+    }
+  }
+
+  async getFleetPopulations(fleetId) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    
+    try {
+      const response = await pb.send(`/api/populations/fleet/${fleetId}`, {
+        method: "GET",
+        requestKey: `getFleetPopulations-${fleetId}-${Date.now()}`
+      });
+
+      return response;
+    } catch (error) {
+      console.error("Failed to fetch fleet populations:", error);
+      throw error;
+    }
+  }
+
+  async employPopulation(populationId, buildingId, count = null) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    
+    try {
+      const body = {
+        population_id: populationId,
+        building_id: buildingId
+      };
+      
+      if (count !== null) {
+        body.count = count;
+      }
+
+      return await pb.send("/api/populations/employ", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+    } catch (error) {
+      console.error("Failed to employ population:", error);
+      throw error;
+    }
+  }
+
+  async transferPopulation(populationId, targetType, targetId, count = null) {
+    if (!pb.authStore.isValid) throw new Error("Not authenticated");
+    
+    try {
+      const body = {
+        population_id: populationId,
+        target_type: targetType,
+        target_id: targetId
+      };
+      
+      if (count !== null) {
+        body.count = count;
+      }
+
+      return await pb.send("/api/populations/transfer", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+    } catch (error) {
+      console.error("Failed to transfer population:", error);
+      throw error;
     }
   }
 }

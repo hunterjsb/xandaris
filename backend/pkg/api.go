@@ -56,6 +56,13 @@ func RegisterAPIRoutes(app *pocketbase.PocketBase) {
 		e.Router.GET("/api/building_types", getBuildingTypes(app))
 		e.Router.GET("/api/resource_types", getResourceTypes(app))
 		
+		// Population Management
+		e.Router.GET("/api/populations", getPopulations(app), apis.RequireAdminOrRecordAuth())
+		e.Router.GET("/api/populations/planet/:planetId", getPlanetPopulations(app), apis.RequireAdminOrRecordAuth())
+		e.Router.GET("/api/populations/fleet/:fleetId", getFleetPopulations(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/populations/employ", employPopulation(app), apis.RequireAdminOrRecordAuth())
+		e.Router.POST("/api/populations/transfer", transferPopulation(app), apis.RequireAdminOrRecordAuth())
+		
 		// Ship Cargo
 		e.Router.GET("/api/ship_cargo", getShipCargo(app), apis.RequireAdminOrRecordAuth())
 		e.Router.GET("/api/ship_cargo/:ship_id", getIndividualShipCargo(app), apis.RequireAdminOrRecordAuth())
@@ -2770,4 +2777,441 @@ func getPlanets(app *pocketbase.PocketBase) echo.HandlerFunc {
 			"items":      planetsData,
 		})
 	}
+}
+
+// Population Management API Functions
+
+type PopulationData struct {
+	ID         string `json:"id"`
+	OwnerID    string `json:"owner_id"`
+	PlanetID   string `json:"planet_id,omitempty"`
+	FleetID    string `json:"fleet_id,omitempty"`
+	EmployedAt string `json:"employed_at,omitempty"`
+	Count      int    `json:"count"`
+	Happiness  int    `json:"happiness"`
+	PlanetName string `json:"planet_name,omitempty"`
+	FleetName  string `json:"fleet_name,omitempty"`
+	BuildingName string `json:"building_name,omitempty"`
+	BuildingType string `json:"building_type,omitempty"`
+	SystemName string `json:"system_name,omitempty"`
+}
+
+func getPopulations(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		info := apis.RequestInfo(c)
+		userID := info.AuthRecord.Id
+
+		// Get all populations for the user
+		populations, err := app.Dao().FindRecordsByFilter("populations", 
+			fmt.Sprintf("owner_id = '%s'", userID), "created ASC", 0, 0)
+		if err != nil {
+			return apis.NewApiError(500, "Failed to fetch populations", err)
+		}
+
+		var populationsData []PopulationData
+		for _, pop := range populations {
+			popData := PopulationData{
+				ID:         pop.Id,
+				OwnerID:    pop.GetString("owner_id"),
+				PlanetID:   pop.GetString("planet_id"),
+				FleetID:    pop.GetString("fleet_id"),
+				EmployedAt: pop.GetString("employed_at"),
+				Count:      pop.GetInt("count"),
+				Happiness:  pop.GetInt("happiness"),
+			}
+
+			// Get planet/fleet/building names for display
+			if popData.PlanetID != "" {
+				if planet, err := app.Dao().FindRecordById("planets", popData.PlanetID); err == nil {
+					popData.PlanetName = planet.GetString("name")
+					if system, err := app.Dao().FindRecordById("systems", planet.GetString("system_id")); err == nil {
+						popData.SystemName = system.GetString("name")
+					}
+				}
+			}
+			if popData.FleetID != "" {
+				if fleet, err := app.Dao().FindRecordById("fleets", popData.FleetID); err == nil {
+					popData.FleetName = fleet.GetString("name")
+				}
+			}
+			if popData.EmployedAt != "" {
+				if building, err := app.Dao().FindRecordById("buildings", popData.EmployedAt); err == nil {
+					if buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type")); err == nil {
+						popData.BuildingName = buildingType.GetString("name")
+						popData.BuildingType = buildingType.GetString("name")
+					}
+				}
+			}
+
+			populationsData = append(populationsData, popData)
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"page":       1,
+			"perPage":    len(populationsData),
+			"totalItems": len(populationsData),
+			"items":      populationsData,
+		})
+	}
+}
+
+func getPlanetPopulations(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		info := apis.RequestInfo(c)
+		userID := info.AuthRecord.Id
+		planetID := c.PathParam("planetId")
+
+		// Verify planet access
+		planet, err := app.Dao().FindRecordById("planets", planetID)
+		if err != nil {
+			return apis.NewApiError(404, "Planet not found", err)
+		}
+
+		if planet.GetString("colonized_by") != userID {
+			return apis.NewApiError(403, "Access denied - planet not owned by user", nil)
+		}
+
+		// Get populations on this planet
+		populations, err := app.Dao().FindRecordsByFilter("populations", 
+			fmt.Sprintf("owner_id = '%s' && planet_id = '%s'", userID, planetID), "created ASC", 0, 0)
+		if err != nil {
+			return apis.NewApiError(500, "Failed to fetch planet populations", err)
+		}
+
+		var populationsData []PopulationData
+		totalPop := 0
+		employedPop := 0
+		unemployedPop := 0
+
+		for _, pop := range populations {
+			popData := PopulationData{
+				ID:         pop.Id,
+				OwnerID:    pop.GetString("owner_id"),
+				PlanetID:   pop.GetString("planet_id"),
+				EmployedAt: pop.GetString("employed_at"),
+				Count:      pop.GetInt("count"),
+				Happiness:  pop.GetInt("happiness"),
+				PlanetName: planet.GetString("name"),
+			}
+
+			totalPop += popData.Count
+			if popData.EmployedAt != "" {
+				employedPop += popData.Count
+				// Get building info
+				if building, err := app.Dao().FindRecordById("buildings", popData.EmployedAt); err == nil {
+					if buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type")); err == nil {
+						popData.BuildingName = buildingType.GetString("name")
+						popData.BuildingType = buildingType.GetString("name")
+					}
+				}
+			} else {
+				unemployedPop += popData.Count
+			}
+
+			populationsData = append(populationsData, popData)
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"planet_id":      planetID,
+			"planet_name":    planet.GetString("name"),
+			"total_population": totalPop,
+			"employed_population": employedPop,
+			"unemployed_population": unemployedPop,
+			"populations":    populationsData,
+		})
+	}
+}
+
+func getFleetPopulations(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		info := apis.RequestInfo(c)
+		userID := info.AuthRecord.Id
+		fleetID := c.PathParam("fleetId")
+
+		// Verify fleet access
+		fleet, err := app.Dao().FindRecordById("fleets", fleetID)
+		if err != nil {
+			return apis.NewApiError(404, "Fleet not found", err)
+		}
+
+		if fleet.GetString("owner_id") != userID {
+			return apis.NewApiError(403, "Access denied - fleet not owned by user", nil)
+		}
+
+		// Get populations in this fleet
+		populations, err := app.Dao().FindRecordsByFilter("populations", 
+			fmt.Sprintf("owner_id = '%s' && fleet_id = '%s'", userID, fleetID), "created ASC", 0, 0)
+		if err != nil {
+			return apis.NewApiError(500, "Failed to fetch fleet populations", err)
+		}
+
+		var populationsData []PopulationData
+		totalPop := 0
+
+		for _, pop := range populations {
+			popData := PopulationData{
+				ID:        pop.Id,
+				OwnerID:   pop.GetString("owner_id"),
+				FleetID:   pop.GetString("fleet_id"),
+				Count:     pop.GetInt("count"),
+				Happiness: pop.GetInt("happiness"),
+				FleetName: fleet.GetString("name"),
+			}
+
+			totalPop += popData.Count
+			populationsData = append(populationsData, popData)
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"fleet_id":       fleetID,
+			"fleet_name":     fleet.GetString("name"),
+			"total_population": totalPop,
+			"populations":    populationsData,
+		})
+	}
+}
+
+func employPopulation(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		info := apis.RequestInfo(c)
+		userID := info.AuthRecord.Id
+
+		var req struct {
+			PopulationID string `json:"population_id"`
+			BuildingID   string `json:"building_id"`
+			Count        int    `json:"count,omitempty"` // Optional - for partial employment
+		}
+
+		if err := c.Bind(&req); err != nil {
+			return apis.NewApiError(400, "Invalid request data", err)
+		}
+
+		// Get population record
+		population, err := app.Dao().FindRecordById("populations", req.PopulationID)
+		if err != nil {
+			return apis.NewApiError(404, "Population not found", err)
+		}
+
+		if population.GetString("owner_id") != userID {
+			return apis.NewApiError(403, "Access denied", nil)
+		}
+
+		// Get building record and verify ownership
+		building, err := app.Dao().FindRecordById("buildings", req.BuildingID)
+		if err != nil {
+			return apis.NewApiError(404, "Building not found", err)
+		}
+
+		// Verify building is on same planet as population
+		if building.GetString("planet_id") != population.GetString("planet_id") {
+			return apis.NewApiError(400, "Building and population must be on same planet", nil)
+		}
+
+		// Get building type to check capacity
+		buildingType, err := app.Dao().FindRecordById("building_types", building.GetString("building_type"))
+		if err != nil {
+			return apis.NewApiError(500, "Failed to get building type", err)
+		}
+
+		// Calculate worker capacity
+		buildingName := buildingType.GetString("name")
+		level := building.GetInt("level")
+		if level == 0 {
+			level = 1
+		}
+		workerCapacity := getWorkerCapacity(buildingName, level)
+
+		// Check current employment at this building
+		currentWorkers := 0
+		employedPops, err := app.Dao().FindRecordsByFilter("populations",
+			fmt.Sprintf("employed_at = '%s'", req.BuildingID), "", 0, 0)
+		if err == nil {
+			for _, emp := range employedPops {
+				currentWorkers += emp.GetInt("count")
+			}
+		}
+
+		// Determine how many to employ
+		availableCapacity := workerCapacity - currentWorkers
+		popCount := population.GetInt("count")
+		employCount := popCount
+
+		if req.Count > 0 && req.Count < popCount {
+			employCount = req.Count
+		}
+
+		if employCount > availableCapacity {
+			return apis.NewApiError(400, fmt.Sprintf("Building capacity exceeded. Available: %d, Requested: %d", availableCapacity, employCount), nil)
+		}
+
+		if employCount == popCount {
+			// Employ entire population
+			population.Set("employed_at", req.BuildingID)
+			if err := app.Dao().SaveRecord(population); err != nil {
+				return apis.NewApiError(500, "Failed to employ population", err)
+			}
+		} else {
+			// Split population - create new employed record
+			collection, err := app.Dao().FindCollectionByNameOrId("populations")
+			if err != nil {
+				return apis.NewApiError(500, "Failed to find populations collection", err)
+			}
+			
+			newEmployed := models.NewRecord(collection)
+			newEmployed.Set("owner_id", population.GetString("owner_id"))
+			newEmployed.Set("planet_id", population.GetString("planet_id"))
+			newEmployed.Set("employed_at", req.BuildingID)
+			newEmployed.Set("count", employCount)
+			newEmployed.Set("happiness", population.GetInt("happiness"))
+
+			if err := app.Dao().SaveRecord(newEmployed); err != nil {
+				return apis.NewApiError(500, "Failed to save employed population", err)
+			}
+
+			// Update original population to reduce count
+			population.Set("count", popCount-employCount)
+			if err := app.Dao().SaveRecord(population); err != nil {
+				return apis.NewApiError(500, "Failed to update remaining population", err)
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("Employed %d population to %s", employCount, buildingName),
+		})
+	}
+}
+
+func transferPopulation(app *pocketbase.PocketBase) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		info := apis.RequestInfo(c)
+		userID := info.AuthRecord.Id
+
+		var req struct {
+			PopulationID string `json:"population_id"`
+			TargetType   string `json:"target_type"`   // "planet" or "fleet"
+			TargetID     string `json:"target_id"`     // planet_id or fleet_id
+			Count        int    `json:"count,omitempty"` // Optional - for partial transfer
+		}
+
+		if err := c.Bind(&req); err != nil {
+			return apis.NewApiError(400, "Invalid request data", err)
+		}
+
+		// Get population record
+		population, err := app.Dao().FindRecordById("populations", req.PopulationID)
+		if err != nil {
+			return apis.NewApiError(404, "Population not found", err)
+		}
+
+		if population.GetString("owner_id") != userID {
+			return apis.NewApiError(403, "Access denied", nil)
+		}
+
+		// Validate target
+		if req.TargetType != "planet" && req.TargetType != "fleet" {
+			return apis.NewApiError(400, "Target type must be 'planet' or 'fleet'", nil)
+		}
+
+		// Verify target ownership
+		if req.TargetType == "planet" {
+			planet, err := app.Dao().FindRecordById("planets", req.TargetID)
+			if err != nil {
+				return apis.NewApiError(404, "Target planet not found", err)
+			}
+			if planet.GetString("colonized_by") != userID {
+				return apis.NewApiError(403, "Target planet not owned by user", nil)
+			}
+		} else {
+			fleet, err := app.Dao().FindRecordById("fleets", req.TargetID)
+			if err != nil {
+				return apis.NewApiError(404, "Target fleet not found", err)
+			}
+			if fleet.GetString("owner_id") != userID {
+				return apis.NewApiError(403, "Target fleet not owned by user", nil)
+			}
+		}
+
+		popCount := population.GetInt("count")
+		transferCount := popCount
+
+		if req.Count > 0 && req.Count < popCount {
+			transferCount = req.Count
+		}
+
+		if transferCount == popCount {
+			// Transfer entire population
+			population.Set("employed_at", "") // Clear employment when transferring
+			if req.TargetType == "planet" {
+				population.Set("planet_id", req.TargetID)
+				population.Set("fleet_id", "")
+			} else {
+				population.Set("fleet_id", req.TargetID)
+				population.Set("planet_id", "")
+			}
+			if err := app.Dao().SaveRecord(population); err != nil {
+				return apis.NewApiError(500, "Failed to transfer population", err)
+			}
+		} else {
+			// Split population - create new transferred record
+			collection, err := app.Dao().FindCollectionByNameOrId("populations")
+			if err != nil {
+				return apis.NewApiError(500, "Failed to find populations collection", err)
+			}
+			
+			newTransferred := models.NewRecord(collection)
+			newTransferred.Set("owner_id", population.GetString("owner_id"))
+			newTransferred.Set("count", transferCount)
+			newTransferred.Set("happiness", population.GetInt("happiness"))
+
+			if req.TargetType == "planet" {
+				newTransferred.Set("planet_id", req.TargetID)
+			} else {
+				newTransferred.Set("fleet_id", req.TargetID)
+			}
+
+			if err := app.Dao().SaveRecord(newTransferred); err != nil {
+				return apis.NewApiError(500, "Failed to save transferred population", err)
+			}
+
+			// Update original population to reduce count
+			population.Set("count", popCount-transferCount)
+			if err := app.Dao().SaveRecord(population); err != nil {
+				return apis.NewApiError(500, "Failed to update remaining population", err)
+			}
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("Transferred %d population to %s", transferCount, req.TargetType),
+		})
+	}
+}
+
+// Helper function for worker capacity calculation
+func getWorkerCapacity(buildingName string, level int) int {
+	var baseWorkerCapacity int
+	switch buildingName {
+	case "mine":
+		baseWorkerCapacity = 10
+	case "farm":
+		baseWorkerCapacity = 8
+	case "factory":
+		baseWorkerCapacity = 12
+	case "power_plant":
+		baseWorkerCapacity = 6
+	case "oil_rig":
+		baseWorkerCapacity = 8
+	case "deep_mine":
+		baseWorkerCapacity = 15
+	case "metal_refinery":
+		baseWorkerCapacity = 10
+	case "oil_refinery":
+		baseWorkerCapacity = 10
+	case "crypto_server":
+		return 0 // Crypto servers don't need workers
+	default:
+		baseWorkerCapacity = 5 // Default for other buildings
+	}
+	return baseWorkerCapacity * level
 }

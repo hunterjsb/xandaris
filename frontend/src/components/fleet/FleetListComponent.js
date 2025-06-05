@@ -186,6 +186,10 @@ export class FleetListComponent {
     const shipCount = fleet.ships ? fleet.ships.reduce((sum, ship) => sum + ship.count, 0) : 0;
     const shipTypes = fleet.ships ? fleet.ships.length : 0;
 
+    // Get population data for this fleet
+    const fleetPopulations = this.gameState?.populations?.filter(pop => pop.fleet_id === fleet.id) || [];
+    const totalPopulation = fleetPopulations.reduce((sum, pop) => sum + pop.count, 0);
+
     let cargoSummary = "Empty";
     if (cargoData.cargo && Object.keys(cargoData.cargo).length > 0) {
       const totalItems = Object.values(cargoData.cargo).reduce((sum, amount) => sum + amount, 0);
@@ -219,14 +223,33 @@ export class FleetListComponent {
             <div class="text-white">${shipCount} (${shipTypes} types)</div>
           </div>
           <div>
+            <div class="text-space-400">Population:</div>
+            <div class="text-white ${totalPopulation > 0 ? 'text-blue-300' : ''}">${totalPopulation > 0 ? totalPopulation.toLocaleString() : 'None'}</div>
+          </div>
+          <div>
             <div class="text-space-400">Cargo:</div>
             <div class="text-white">${cargoSummary}</div>
           </div>
-          <div>
-            <div class="text-space-400">Capacity:</div>
-            <div class="text-white">${cargoData.used_capacity}/${cargoData.total_capacity}</div>
-          </div>
         </div>
+        
+        ${cargoData.total_capacity > 0 ? `
+        <div class="grid grid-cols-2 gap-3 text-xs mt-2 pt-2 border-t border-space-600">
+          <div>
+            <div class="text-space-400">Cargo Usage:</div>
+            <div class="text-white">${cargoData.used_capacity}/${cargoData.total_capacity} (${Math.round((cargoData.used_capacity / cargoData.total_capacity) * 100)}%)</div>
+          </div>
+          ${totalPopulation > 0 ? `
+          <div>
+            <div class="text-space-400">Citizens:</div>
+            <div class="text-blue-300">${fleetPopulations.length} group${fleetPopulations.length !== 1 ? 's' : ''}</div>
+          </div>
+          ` : ''}
+        </div>
+        ` : totalPopulation > 0 ? `
+        <div class="mt-2 pt-2 border-t border-space-600 text-xs">
+          <div class="text-space-400">Citizens: <span class="text-blue-300">${fleetPopulations.length} population group${fleetPopulations.length !== 1 ? 's' : ''}</span></div>
+        </div>
+        ` : ''}
 
         ${cargoData.total_capacity > 0 ? `
           <div class="mt-3">
@@ -237,6 +260,20 @@ export class FleetListComponent {
             <div class="w-full bg-space-600 rounded-full h-2">
               <div class="bg-gradient-to-r from-nebula-500 to-blue-500 h-2 rounded-full transition-all duration-300" 
                    style="width: ${(cargoData.used_capacity / cargoData.total_capacity) * 100}%"></div>
+            </div>
+          </div>
+        ` : ''}
+        
+        ${totalPopulation > 0 ? `
+          <div class="mt-2 p-2 bg-blue-900/20 border border-blue-600/30 rounded">
+            <div class="text-xs text-blue-200 font-medium mb-1">Population Aboard</div>
+            <div class="space-y-1">
+              ${fleetPopulations.map(pop => `
+                <div class="flex justify-between text-xs">
+                  <span class="text-blue-300">${pop.count.toLocaleString()} citizens</span>
+                  <span class="text-space-400">${pop.happiness}% happy</span>
+                </div>
+              `).join('')}
             </div>
           </div>
         ` : ''}
