@@ -171,3 +171,6 @@ npm run preview  # Preview production build
 ## License
 
 MIT
+
+---
+Test commit to check co-author behavior.
