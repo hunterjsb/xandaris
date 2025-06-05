@@ -169,6 +169,44 @@ func createStartingFleet(app *pocketbase.PocketBase, userID string) error {
 		return fmt.Errorf("failed to create settler ship: %v", err)
 	}
 
-	log.Printf("Created starting fleet %s for user %s at system %s", fleet.Id, userID, startingSystem.Id)
+	// Add starter cargo to the ship
+	cargoCollection, err := app.Dao().FindCollectionByNameOrId("ship_cargo")
+	if err != nil {
+		return fmt.Errorf("failed to find ship_cargo collection: %v", err)
+	}
+
+	// Get resource types
+	resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to find resource types: %v", err)
+	}
+
+	resourceTypeMap := make(map[string]string) // name -> ID
+	for _, rt := range resourceTypes {
+		resourceTypeMap[rt.GetString("name")] = rt.Id
+	}
+
+	// Add starter materials
+	starterCargo := map[string]int{
+		"ore":   50,
+		"food":  25,
+		"metal": 20,
+		"fuel":  15,
+	}
+
+	for resourceName, quantity := range starterCargo {
+		if resourceTypeID, exists := resourceTypeMap[resourceName]; exists {
+			cargoRecord := models.NewRecord(cargoCollection)
+			cargoRecord.Set("ship_id", ship.Id)
+			cargoRecord.Set("resource_type", resourceTypeID)
+			cargoRecord.Set("quantity", quantity)
+
+			if err := app.Dao().SaveRecord(cargoRecord); err != nil {
+				log.Printf("Failed to add %s cargo to starting ship: %v", resourceName, err)
+			}
+		}
+	}
+
+	log.Printf("Created starting fleet %s for user %s at system %s with starter cargo", fleet.Id, userID, startingSystem.Id)
 	return nil
 }
