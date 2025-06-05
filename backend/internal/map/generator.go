@@ -256,7 +256,7 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 	}
 
 	// Generate lanes (connections between nearby systems)
-	lanes := generateLanes(systemsData)
+	lanes := GenerateLanes(systemsData) // Changed to public function
 
 	return map[string]interface{}{
 		"systems": systemsData,
@@ -265,7 +265,8 @@ func GetMapData(app *pocketbase.PocketBase) (map[string]interface{}, error) {
 	}, nil
 }
 
-func generateLanes(systems []map[string]interface{}) []map[string]interface{} {
+// GenerateLanes creates connections between systems based on proximity and strategic factors
+func GenerateLanes(systems []map[string]interface{}) []map[string]interface{} {
 	lanes := make([]map[string]interface{}, 0)
 	minDistance := 200.0 // Minimum distance to avoid too many close connections
 	maxDistance := 650.0 // Maximum distance for lane connections (scaled for larger galaxy)

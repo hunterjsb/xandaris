@@ -15,10 +15,11 @@ import (
 )
 
 var (
-	currentTick   int64 = 1
-	tickMutex     sync.RWMutex
-	tickRate      int   = 60 // ticks per minute (1 second per tick)
-	processingTick bool = false
+	currentTick    int64 = 1
+	tickMutex      sync.RWMutex // For protecting currentTick variable
+	processOpMutex sync.Mutex   // For ensuring only one ProcessTick operation runs at a time
+	tickRate       int   = 60   // ticks per minute (1 second per tick)
+	// processingTick bool = false // This will be made redundant by processOpMutex
 )
 
 // StartContinuousProcessor starts the continuous game tick processing
@@ -52,21 +53,14 @@ func GetTickRate() int {
 
 // ProcessTick handles a single game tick processing
 func ProcessTick(app *pocketbase.PocketBase) error {
+	processOpMutex.Lock()
+	defer processOpMutex.Unlock()
+
+	// Atomically update currentTick
 	tickMutex.Lock()
-	if processingTick {
-		tickMutex.Unlock()
-		return nil // Skip if already processing
-	}
-	processingTick = true
 	currentTick++
 	tick := currentTick
 	tickMutex.Unlock()
-
-	defer func() {
-		tickMutex.Lock()
-		processingTick = false
-		tickMutex.Unlock()
-	}()
 
 	log.Printf("Processing game tick #%d...", tick)
 	startTime := time.Now()

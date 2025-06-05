@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
+	"github.com/hunterjsb/xandaris/internal/player" // Added import
 	"github.com/hunterjsb/xandaris/internal/tick"
 	"github.com/hunterjsb/xandaris/internal/websocket"
 
@@ -131,82 +132,15 @@ func createStartingFleet(app *pocketbase.PocketBase, userID string) error {
 
 	// Pick a random system as starting location
 	startingSystem := systems[rand.Intn(len(systems))]
+	log.Printf("INFO: Selected starting system %s for user %s", startingSystem.Id, userID)
 
-	// Get settler ship type
-	settlerShipType, err := app.Dao().FindFirstRecordByFilter("ship_types", "name='settler'")
+	// Call the centralized utility function
+	fleet, ship, err := player.CreateUserStarterFleet(app, userID, startingSystem.Id)
 	if err != nil {
-		return fmt.Errorf("settler ship type not found: %v", err)
+		// The utility function already logs detailed errors
+		return fmt.Errorf("failed to create user starter fleet for user %s in system %s: %w", userID, startingSystem.Id, err)
 	}
 
-	// Create fleet
-	fleetCollection, err := app.Dao().FindCollectionByNameOrId("fleets")
-	if err != nil {
-		return err
-	}
-
-	fleet := models.NewRecord(fleetCollection)
-	fleet.Set("owner_id", userID)
-	fleet.Set("name", "Starting Fleet")
-	fleet.Set("current_system", startingSystem.Id)
-
-	if err := app.Dao().SaveRecord(fleet); err != nil {
-		return fmt.Errorf("failed to create fleet: %v", err)
-	}
-
-	// Create settler ship in the fleet
-	shipCollection, err := app.Dao().FindCollectionByNameOrId("ships")
-	if err != nil {
-		return err
-	}
-
-	ship := models.NewRecord(shipCollection)
-	ship.Set("fleet_id", fleet.Id)
-	ship.Set("ship_type", settlerShipType.Id)
-	ship.Set("count", 1)
-	ship.Set("health", 100)
-
-	if err := app.Dao().SaveRecord(ship); err != nil {
-		return fmt.Errorf("failed to create settler ship: %v", err)
-	}
-
-	// Add starter cargo to the ship
-	cargoCollection, err := app.Dao().FindCollectionByNameOrId("ship_cargo")
-	if err != nil {
-		return fmt.Errorf("failed to find ship_cargo collection: %v", err)
-	}
-
-	// Get resource types
-	resourceTypes, err := app.Dao().FindRecordsByExpr("resource_types", nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed to find resource types: %v", err)
-	}
-
-	resourceTypeMap := make(map[string]string) // name -> ID
-	for _, rt := range resourceTypes {
-		resourceTypeMap[rt.GetString("name")] = rt.Id
-	}
-
-	// Add starter materials
-	starterCargo := map[string]int{
-		"ore":   50,
-		"food":  25,
-		"metal": 20,
-		"fuel":  15,
-	}
-
-	for resourceName, quantity := range starterCargo {
-		if resourceTypeID, exists := resourceTypeMap[resourceName]; exists {
-			cargoRecord := models.NewRecord(cargoCollection)
-			cargoRecord.Set("ship_id", ship.Id)
-			cargoRecord.Set("resource_type", resourceTypeID)
-			cargoRecord.Set("quantity", quantity)
-
-			if err := app.Dao().SaveRecord(cargoRecord); err != nil {
-				log.Printf("Failed to add %s cargo to starting ship: %v", resourceName, err)
-			}
-		}
-	}
-
-	log.Printf("Created starting fleet %s for user %s at system %s with starter cargo", fleet.Id, userID, startingSystem.Id)
+	log.Printf("INFO: Successfully created starting fleet %s with ship %s for user %s at system %s", fleet.Id, ship.Id, userID, startingSystem.Id)
 	return nil
 }
