@@ -10,7 +10,7 @@ import (
 
 // UpdateMarkets handles the economic simulation for all colonized planets
 func UpdateMarkets(app *pocketbase.PocketBase) error {
-	log.Println("Updating markets and economy...")
+	log.Printf("Updating markets and economy...")
 
 	// Process bank income first (if banks still exist)
 	if err := ProcessBankIncome(app); err != nil {
@@ -65,19 +65,17 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 	// Get planet type for habitability modifier
 	planetType, err := app.Dao().FindRecordById("planet_types", planet.GetString("planet_type"))
 	if err != nil {
-		log.Printf("Failed to get planet type for planet %s: %v", planet.Id, err)
-		return nil
+		return fmt.Errorf("failed to get planet type for planet %s: %w", planet.Id, err)
 	}
 
 	habitability := planetType.GetFloat("habitability")
 	maxPop := int(float64(planetType.GetInt("base_max_population")) * float64(planetSize) * habitability)
 
 	// Get population on this planet
-	populations, err := app.Dao().FindRecordsByFilter("populations", 
+	populations, err := app.Dao().FindRecordsByFilter("populations",
 		fmt.Sprintf("owner_id = '%s' && planet_id = '%s'", ownerID, planet.Id), "", 0, 0)
 	if err != nil {
-		log.Printf("Failed to get population for planet %s: %v", planet.Id, err)
-		return nil
+		return fmt.Errorf("failed to get population for planet %s: %w", planet.Id, err)
 	}
 
 	totalPop := 0
@@ -90,11 +88,10 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 	}
 
 	// Get buildings on this planet first (some buildings like crypto_server work without population)
-	buildings, err := app.Dao().FindRecordsByFilter("buildings", 
+	buildings, err := app.Dao().FindRecordsByFilter("buildings",
 		fmt.Sprintf("planet_id = '%s' && active = true", planet.Id), "", 0, 0)
 	if err != nil {
-		log.Printf("Failed to get buildings for planet %s: %v", planet.Id, err)
-		return nil
+		return fmt.Errorf("failed to get buildings for planet %s: %w", planet.Id, err)
 	}
 
 	// Check if there are any crypto_servers that can work without population
@@ -205,11 +202,10 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 	}
 
 	// Get resource nodes on this planet
-	resourceNodes, err := app.Dao().FindRecordsByFilter("resource_nodes", 
+	resourceNodes, err := app.Dao().FindRecordsByFilter("resource_nodes",
 		fmt.Sprintf("planet_id = '%s' && exhausted = false", planet.Id), "", 0, 0)
 	if err != nil {
-		log.Printf("Failed to get resource nodes for planet %s: %v", planet.Id, err)
-		return nil
+		return fmt.Errorf("failed to get resource nodes for planet %s: %w", planet.Id, err)
 	}
 
 	// Calculate production from buildings working resource nodes
@@ -349,8 +345,7 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 	// Get owner's current resources (stored globally per user)
 	owner, err := app.Dao().FindRecordById("users", ownerID)
 	if err != nil {
-		log.Printf("Failed to get owner for planet %s: %v", planet.Id, err)
-		return nil
+		return fmt.Errorf("failed to get owner %s for planet %s: %w", ownerID, planet.Id, err)
 	}
 
 	// Update owner's resources from production
@@ -409,7 +404,7 @@ func updatePlanetEconomy(app *pocketbase.PocketBase, planet *models.Record) erro
 
 	// Save owner's updated resources
 	if err := app.Dao().SaveRecord(owner); err != nil {
-		log.Printf("Failed to save owner resources: %v", err)
+		return fmt.Errorf("failed to save owner %s resources: %w", ownerID, err)
 	}
 
 	return nil
@@ -434,8 +429,11 @@ func ProcessBankIncome(app *pocketbase.PocketBase) error {
 
 	for _, user := range users {
 		if err := processUserBankingIncome(app, user); err != nil {
+			// Log and continue to process other users, but return an error overall
 			log.Printf("Failed to process banking income for user %s: %v", user.Id, err)
-			continue
+			// Optionally, accumulate errors and return them all at the end
+			// For now, just return the first error encountered
+			return fmt.Errorf("failed to process banking income for user %s: %w", user.Id, err)
 		}
 	}
 
@@ -445,14 +443,15 @@ func ProcessBankIncome(app *pocketbase.PocketBase) error {
 // processUserBankingIncome handles banking income for a single user (legacy)
 func processUserBankingIncome(app *pocketbase.PocketBase, user *models.Record) error {
 	// Count active banks owned by this user
-	bankCount, err := app.Dao().FindRecordsByFilter("banks", fmt.Sprintf("owner_id = '%s' && active = true", user.Id), "", 0, 0)
+	bankRecords, err := app.Dao().FindRecordsByFilter("banks", fmt.Sprintf("owner_id = '%s' && active = true", user.Id), "", 0, 0)
 	if err != nil {
-		return nil // Banks collection doesn't exist
+		// If banks collection doesn't exist or other DB error, return the error
+		return fmt.Errorf("failed to query banks for user %s: %w", user.Id, err)
 	}
 
-	creditsPerTick := len(bankCount)
+	creditsPerTick := len(bankRecords)
 	if creditsPerTick <= 0 {
-		return nil // No banking income
+		return nil // No banking income, not an error
 	}
 
 	// Add credits to user's balance
@@ -461,11 +460,11 @@ func processUserBankingIncome(app *pocketbase.PocketBase, user *models.Record) e
 	user.Set("credits", newCredits)
 
 	if err := app.Dao().SaveRecord(user); err != nil {
-		return fmt.Errorf("failed to update user credits: %w", err)
+		return fmt.Errorf("failed to update user %s credits: %w", user.Id, err)
 	}
 
-	log.Printf("User %s earned %d credits from %d banks (new balance: %d)", 
-		user.Id, creditsPerTick, len(bankCount), newCredits)
+	log.Printf("User %s earned %d credits from %d banks (new balance: %d)",
+		user.Id, creditsPerTick, len(bankRecords), newCredits)
 
 	return nil
 }
