@@ -100,12 +100,11 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
 		entity := gen.Generate(params)
 		entities = append(entities, entity)
 	}
-
 	// Generate planets (2-6 per system)
 	planetCount := 2 + rng.Intn(5)
 	planetGenerators := GetGeneratorsByType(EntityTypePlanet)
 	if len(planetGenerators) > 0 {
-		for i := 0; i < planetCount; i++ {
+		for i := range make([]struct{}, planetCount) {
 			gen := SelectRandomGenerator(planetGenerators)
 			params := GenerationParams{
 				SystemID:      systemID,
