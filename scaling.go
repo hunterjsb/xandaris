@@ -2,6 +2,8 @@ package main
 
 import (
 	"math"
+
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 // ViewScale represents different scaling contexts
@@ -91,7 +93,7 @@ func AutoScale(maxOrbitDistance float64, screenWidth, screenHeight int) *ViewSca
 }
 
 // GetSystemMaxOrbitDistance returns the maximum orbital distance in a system
-func GetSystemMaxOrbitDistance(system *System) float64 {
+func GetSystemMaxOrbitDistance(system *entities.System) float64 {
 	maxDistance := 0.0
 
 	for _, entity := range system.Entities {
@@ -115,7 +117,7 @@ func (vs *ViewScale) ScalePosition(worldX, worldY, centerX, centerY float64) (fl
 // ScaleEntityForRendering returns the appropriate size for rendering an entity
 func (vs *ViewScale) ScaleEntityForRendering(entity interface{}) int {
 	switch entity.(type) {
-	case *System:
+	case *entities.System:
 		return vs.ScaleSize(float64(circleRadius))
 	default:
 		// For other entities, use a base size

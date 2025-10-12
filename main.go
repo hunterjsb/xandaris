@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math"
+	"math/rand"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -19,8 +21,14 @@ import (
 )
 
 const (
-	screenWidth  = 1280
-	screenHeight = 720
+	screenWidth      = 1280
+	screenHeight     = 720
+	systemCount      = 40
+	circleRadius     = 8
+	maxHyperlanes    = 3
+	minDistance      = 60.0
+	maxDistance      = 180.0
+	minSystemSpacing = 45.0
 )
 
 // GameSystemContext implements tickable.SystemContext
@@ -42,22 +50,22 @@ func (gsc *GameSystemContext) GetTick() int64 {
 
 // Game implements ebiten.Game interface
 type Game struct {
-	systems     []*System
-	hyperlanes  []Hyperlane
+	systems     []*entities.System
+	hyperlanes  []entities.Hyperlane
 	viewManager *ViewManager
 	seed        int64
-	players     []*Player
-	humanPlayer *Player
+	players     []*entities.Player
+	humanPlayer *entities.Player
 	tickManager *TickManager
 }
 
 // NewGame creates a new game instance
 func NewGame() *Game {
 	g := &Game{
-		systems:    make([]*System, 0),
-		hyperlanes: make([]Hyperlane, 0),
+		systems:    make([]*entities.System, 0),
+		hyperlanes: make([]entities.Hyperlane, 0),
 		seed:       time.Now().UnixNano(),
-		players:    make([]*Player, 0),
+		players:    make([]*entities.Player, 0),
 	}
 
 	// Initialize tick system (10 ticks per second at 1x speed)
@@ -69,14 +77,11 @@ func NewGame() *Game {
 
 	// Create human player
 	playerColor := color.RGBA{100, 200, 100, 255} // Green for player
-	g.humanPlayer = NewPlayer(0, "Player", playerColor, PlayerTypeHuman)
+	g.humanPlayer = entities.NewPlayer(0, "Player", playerColor, entities.PlayerTypeHuman)
 	g.players = append(g.players, g.humanPlayer)
 
 	// Initialize player with starting planet
-	g.InitializePlayer(g.humanPlayer)
-
-	// Register player as tick listener for resource production
-	g.tickManager.AddListener(g.humanPlayer)
+	entities.InitializePlayer(g.humanPlayer, g.systems)
 
 	// Initialize tickable systems
 	context := &GameSystemContext{game: g}
@@ -101,6 +106,124 @@ func NewGame() *Game {
 	g.viewManager.SwitchTo(ViewTypeGalaxy)
 
 	return g
+}
+
+// generateSystems creates systems at random coordinates
+func (g *Game) generateSystems() {
+	colors := GetSystemColors()
+
+	// Generate systems with random positions
+	for i := 0; i < systemCount; i++ {
+		var x, y float64
+		var validPosition bool
+		attempts := 0
+
+		// Keep trying until we find a position that's not too close to existing systems
+		for !validPosition && attempts < 200 {
+			x = 80 + rand.Float64()*(screenWidth-160)
+			y = 80 + rand.Float64()*(screenHeight-160)
+			validPosition = true
+
+			// Check distance to all existing systems
+			for _, existing := range g.systems {
+				distance := math.Sqrt(math.Pow(x-existing.X, 2) + math.Pow(y-existing.Y, 2))
+				if distance < minSystemSpacing {
+					validPosition = false
+					break
+				}
+			}
+			attempts++
+		}
+
+		system := &entities.System{
+			ID:          i,
+			X:           x,
+			Y:           y,
+			Name:        fmt.Sprintf("SYS-%d", i+1),
+			Color:       colors[rand.Intn(len(colors))],
+			Connections: make([]int, 0),
+		}
+
+		g.systems = append(g.systems, system)
+
+		// Generate entities for this system using the new entity generator system
+		seed := int64(i) + g.seed
+		generatedEntities := entities.GenerateEntitiesForSystem(i, seed)
+		for _, entity := range generatedEntities {
+			system.AddEntity(entity)
+		}
+	}
+}
+
+// generateHyperlanes creates connections between systems
+func (g *Game) generateHyperlanes() {
+	for _, system := range g.systems {
+		// Find nearby systems for potential connections
+		var nearbySystemsWithDistance []struct {
+			system   *entities.System
+			distance float64
+		}
+
+		for _, other := range g.systems {
+			if other.ID == system.ID {
+				continue
+			}
+
+			distance := math.Sqrt(math.Pow(system.X-other.X, 2) + math.Pow(system.Y-other.Y, 2))
+			if distance >= minDistance && distance <= maxDistance {
+				nearbySystemsWithDistance = append(nearbySystemsWithDistance, struct {
+					system   *entities.System
+					distance float64
+				}{other, distance})
+			}
+		}
+
+		// Sort by distance (closest first)
+		for i := 0; i < len(nearbySystemsWithDistance)-1; i++ {
+			for j := i + 1; j < len(nearbySystemsWithDistance); j++ {
+				if nearbySystemsWithDistance[i].distance > nearbySystemsWithDistance[j].distance {
+					nearbySystemsWithDistance[i], nearbySystemsWithDistance[j] = nearbySystemsWithDistance[j], nearbySystemsWithDistance[i]
+				}
+			}
+		}
+
+		// Connect to closest systems (max connections per system)
+		connectionsToMake := maxHyperlanes
+		if len(nearbySystemsWithDistance) < maxHyperlanes {
+			connectionsToMake = len(nearbySystemsWithDistance)
+		}
+
+		for i := 0; i < connectionsToMake; i++ {
+			other := nearbySystemsWithDistance[i].system
+
+			// Check if connection already exists
+			connectionExists := false
+			for _, hyperlane := range g.hyperlanes {
+				if (hyperlane.From == system.ID && hyperlane.To == other.ID) ||
+					(hyperlane.From == other.ID && hyperlane.To == system.ID) {
+					connectionExists = true
+					break
+				}
+			}
+
+			if !connectionExists {
+				// Add hyperlane
+				g.hyperlanes = append(g.hyperlanes, entities.Hyperlane{
+					From: system.ID,
+					To:   other.ID,
+				})
+
+				// Add to both systems' connection lists
+				system.Connections = append(system.Connections, other.ID)
+				other.Connections = append(other.Connections, system.ID)
+			}
+		}
+	}
+}
+
+// GetPlayers returns the game's players
+func (g *Game) GetPlayers() []*entities.Player {
+	return g.players
 }
 
 // Update updates the game state

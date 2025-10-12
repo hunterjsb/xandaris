@@ -13,7 +13,7 @@ import (
 // SystemView represents the detailed view of a single system
 type SystemView struct {
 	game              *Game
-	system            *System
+	system            *entities.System
 	clickHandler      *ClickHandler
 	centerX           float64
 	centerY           float64
@@ -38,7 +38,7 @@ func NewSystemView(game *Game) *SystemView {
 }
 
 // SetSystem sets the system to display
-func (sv *SystemView) SetSystem(system *System) {
+func (sv *SystemView) SetSystem(system *entities.System) {
 	sv.system = system
 
 	// Calculate auto-scaling based on system size

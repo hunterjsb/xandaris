@@ -12,7 +12,7 @@ import (
 // PlanetView represents the detailed view of a single planet
 type PlanetView struct {
 	game              *Game
-	system            *System
+	system            *entities.System
 	planet            *entities.Planet
 	clickHandler      *ClickHandler
 	centerX           float64
@@ -37,7 +37,7 @@ func NewPlanetView(game *Game) *PlanetView {
 }
 
 // SetPlanet sets the planet to display
-func (pv *PlanetView) SetPlanet(system *System, planet *entities.Planet) {
+func (pv *PlanetView) SetPlanet(system *entities.System, planet *entities.Planet) {
 	pv.system = system
 	pv.planet = planet
 

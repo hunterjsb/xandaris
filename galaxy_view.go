@@ -5,6 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 // GalaxyView represents the galaxy map view
@@ -47,7 +48,7 @@ func (gv *GalaxyView) Update() error {
 		if distance <= 100 && currentTime-gv.lastClickTime < 60 {
 			// Double click detected - check if we clicked on a system
 			if selectedObj := gv.clickHandler.GetSelectedObject(); selectedObj != nil {
-				if system, ok := selectedObj.(*System); ok {
+				if system, ok := selectedObj.(*entities.System); ok {
 					// Switch to system view
 					gv.game.viewManager.SwitchTo(ViewTypeSystem)
 					if systemView, ok := gv.game.viewManager.GetCurrentView().(*SystemView); ok {
@@ -140,7 +141,7 @@ func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
 }
 
 // drawSystem renders a single system
-func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *System) {
+func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) {
 	centerX := int(system.X)
 	centerY := int(system.Y)
 

@@ -2,6 +2,8 @@ package tickable
 
 import (
 	"fmt"
+
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 func init() {
@@ -30,21 +32,49 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 		return
 	}
 
-	// Get game from context to access planets
-	gameInterface := context.GetGame()
-	if gameInterface == nil {
+	// Get players from context
+	playersInterface := context.GetPlayers()
+	if playersInterface == nil {
 		return
 	}
 
-	// Get systems from game
-	systems := context.GetGame()
-	if systems == nil {
+	players, ok := playersInterface.([]*entities.Player)
+	if !ok {
 		return
 	}
 
-	// Process all systems concurrently
-	// Note: In actual implementation, we need to get the concrete game type
-	// For now, this processes resource accumulation on all owned planets
+	for _, player := range players {
+		for _, planet := range player.OwnedPlanets {
+			// Process each resource deposit on the planet
+			for _, resourceEntity := range planet.Resources {
+				if resource, ok := resourceEntity.(*entities.Resource); ok {
+					// Only accumulate from owned resources
+					if resource.Owner != player.Name {
+						continue
+					}
+
+					// Base extraction rate (1 unit per second)
+					extractionAmount := int(float64(1) * resource.ExtractionRate)
+
+					// Check for mines on this resource
+					mineBonus := 1.0
+					for _, buildingEntity := range planet.Buildings {
+						if building, ok := buildingEntity.(*entities.Building); ok {
+							if building.BuildingType == "Mine" && building.IsOperational && building.AttachedTo == fmt.Sprintf("%d", resource.GetID()) {
+								mineBonus += building.ProductionBonus - 1.0 // Add the bonus portion
+							}
+						}
+					}
+
+					// Apply mine bonus
+					extractionAmount = int(float64(extractionAmount) * mineBonus)
+
+					// Try to add to planet storage
+					planet.AddStoredResource(resource.ResourceType, extractionAmount)
+				}
+			}
+		}
+	}
 }
 
 // ProcessPlanetResources processes resource accumulation for a single planet
@@ -81,33 +111,4 @@ func (ras *ResourceAccumulationSystem) GetProductionBreakdown(playerInterface in
 	// Return map of planet name -> production rate
 	// Useful for detailed economy view
 	return make(map[string]int64)
-}
-
-// AccumulateResourcesForPlanet accumulates resources on a planet (called from main)
-func AccumulateResourcesForPlanet(planet interface{}, buildings []interface{}, resources []interface{}) map[string]int {
-	accumulated := make(map[string]int)
-
-	// For each resource deposit on the planet
-	for _, res := range resources {
-		// Base extraction rate per tick
-		baseRate := 1
-
-		// Apply building multipliers (mines increase extraction)
-		multiplier := 1.0
-		for range buildings {
-			// Check if building affects this resource
-			// Apply production bonus
-			multiplier += 0.5 // Example: +50% per mine
-		}
-
-		// Calculate final amount
-		amount := int(float64(baseRate) * multiplier)
-
-		// Get resource type name
-		resourceType := fmt.Sprintf("%v", res) // Placeholder
-
-		accumulated[resourceType] = amount
-	}
-
-	return accumulated
 }
