@@ -94,6 +94,30 @@ func (p *Player) OwnsPlanet(planet *entities.Planet) bool {
 	return false
 }
 
+// OnTick implements TickListener for resource production and updates
+func (p *Player) OnTick(tick int64) {
+	// Every 10 ticks (1 second at 1x speed), produce resources
+	if tick%10 == 0 {
+		p.produceResources()
+	}
+}
+
+// produceResources generates credits from owned planets
+func (p *Player) produceResources() {
+	// Each planet produces credits based on population
+	for _, planet := range p.OwnedPlanets {
+		// Base production: 1 credit per million population per second
+		production := int(planet.Population / 1000000)
+
+		// Bonus for habitability
+		habitabilityBonus := float64(planet.Habitability) / 100.0
+		production = int(float64(production) * (1.0 + habitabilityBonus))
+
+		// Add production to player credits
+		p.Credits += production
+	}
+}
+
 // PlayerController interface for future AI implementation
 type PlayerController interface {
 	GetPlayer() *Player
