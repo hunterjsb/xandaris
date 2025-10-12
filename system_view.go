@@ -22,6 +22,7 @@ type SystemView struct {
 	lastClickY        int
 	lastClickTime     int64
 	constructionQueue *ConstructionQueueUI
+	orbitOffset       float64 // For animating orbits
 }
 
 // NewSystemView creates a new system view
@@ -52,6 +53,17 @@ func (sv *SystemView) SetSystem(system *System) {
 func (sv *SystemView) Update() error {
 	// Update construction queue UI
 	sv.constructionQueue.Update()
+
+	// Update orbit animation
+	if !sv.game.tickManager.IsPaused() {
+		sv.orbitOffset += 0.0005
+		if sv.orbitOffset > 6.28318 { // 2*PI
+			sv.orbitOffset -= 6.28318
+		}
+	}
+
+	// Update entity positions for animation
+	sv.updateEntityPositions()
 
 	// ESC to return to galaxy view
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
@@ -160,12 +172,15 @@ func (sv *SystemView) updateEntityPositions() {
 		orbitDistance := entity.GetOrbitDistance()
 		orbitAngle := entity.GetOrbitAngle()
 
+		// Add animation offset to orbit angle
+		animatedAngle := orbitAngle + sv.orbitOffset
+
 		// Scale the orbital distance
 		scaledDistance := sv.scale.ScaleOrbitDistance(orbitDistance)
 
-		// Calculate position based on scaled orbit
-		x := sv.centerX + scaledDistance*math.Cos(orbitAngle)
-		y := sv.centerY + scaledDistance*math.Sin(orbitAngle)
+		// Calculate position based on scaled orbit with animation
+		x := sv.centerX + scaledDistance*math.Cos(animatedAngle)
+		y := sv.centerY + scaledDistance*math.Sin(animatedAngle)
 
 		// Update absolute position using the SetAbsolutePosition method
 		entity.SetAbsolutePosition(x, y)

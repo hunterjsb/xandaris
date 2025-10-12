@@ -212,6 +212,8 @@ func (g *Game) handleConstructionComplete(completion tickable.ConstructionComple
 					if building != nil {
 						planet.Buildings = append(planet.Buildings, building)
 					}
+					// Refresh planet view if it's currently viewing this planet
+					g.refreshPlanetViewIfActive(planet)
 					return
 				}
 
@@ -225,9 +227,22 @@ func (g *Game) handleConstructionComplete(completion tickable.ConstructionComple
 							// For now, we'll add to the parent planet
 							planet.Buildings = append(planet.Buildings, building)
 						}
+						// Refresh planet view if it's currently viewing this planet
+						g.refreshPlanetViewIfActive(planet)
 						return
 					}
 				}
+			}
+		}
+	}
+}
+
+// refreshPlanetViewIfActive refreshes planet view if the given planet is currently displayed
+func (g *Game) refreshPlanetViewIfActive(planet *entities.Planet) {
+	if g.viewManager.GetCurrentView().GetType() == ViewTypePlanet {
+		if planetView, ok := g.viewManager.GetCurrentView().(*PlanetView); ok {
+			if planetView.planet == planet {
+				planetView.RefreshPlanet()
 			}
 		}
 	}

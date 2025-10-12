@@ -19,6 +19,7 @@ type PlanetView struct {
 	centerY           float64
 	buildMenu         *BuildMenu
 	constructionQueue *ConstructionQueueUI
+	orbitOffset       float64 // For animating orbits
 }
 
 // NewPlanetView creates a new planet view
@@ -49,6 +50,17 @@ func (pv *PlanetView) SetPlanet(system *System, planet *entities.Planet) {
 func (pv *PlanetView) Update() error {
 	// Update construction queue UI
 	pv.constructionQueue.Update()
+
+	// Update orbit animation
+	if !pv.game.tickManager.IsPaused() {
+		pv.orbitOffset += 0.001
+		if pv.orbitOffset > 6.28318 { // 2*PI
+			pv.orbitOffset -= 6.28318
+		}
+	}
+
+	// Update resource/building positions for animation
+	pv.updateResourcePositions()
 
 	// Update build menu first (it handles its own input)
 	if pv.buildMenu.IsOpen() {
@@ -155,6 +167,14 @@ func (pv *PlanetView) OnEnter() {
 	}
 }
 
+// RefreshPlanet refreshes the planet view (called when construction completes)
+func (pv *PlanetView) RefreshPlanet() {
+	if pv.planet != nil {
+		pv.updateResourcePositions()
+		pv.registerClickables()
+	}
+}
+
 // OnExit implements View interface
 func (pv *PlanetView) OnExit() {
 	pv.clickHandler.ClearClickables()
@@ -190,8 +210,8 @@ func (pv *PlanetView) updateResourcePositions() {
 	buildingRadius := planetRadius + 15.0 // Buildings are offset from planet surface
 
 	for _, building := range pv.planet.Buildings {
-		// Use the orbit angle for positioning around the surface
-		orbitAngle := building.GetOrbitAngle()
+		// Use the orbit angle for positioning around the surface, with animation
+		orbitAngle := building.GetOrbitAngle() + pv.orbitOffset
 
 		// Position at building radius
 		x := pv.centerX + buildingRadius*math.Cos(orbitAngle)
