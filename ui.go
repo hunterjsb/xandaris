@@ -263,6 +263,49 @@ func DrawColoredMenuItem(screen *ebiten.Image, textStr string, x, y int) {
 
 		// Draw the type in its color
 		DrawText(screen, typeText, x+36, y, typeColor)
+	} else if len(textStr) > 4 && textStr[:3] == "  -" {
+		// This is a list item like "  - Planet 1 (Terrestrial)"
+		// Extract planet/station type from parentheses
+		openParen := -1
+		closeParen := -1
+		for i, c := range textStr {
+			if c == '(' {
+				openParen = i
+			} else if c == ')' {
+				closeParen = i
+				break
+			}
+		}
+
+		if openParen > 0 && closeParen > openParen {
+			// Extract the type from parentheses
+			typeText := textStr[openParen+1 : closeParen]
+			beforeType := textStr[:openParen]
+			afterType := textStr[closeParen:]
+
+			// Get color for the type
+			var typeColor color.RGBA
+			if planetColor := getPlanetTypeColor(typeText); planetColor != (color.RGBA{}) {
+				typeColor = planetColor
+			} else if stationColor := getStationTypeColor(typeText); stationColor != (color.RGBA{}) {
+				typeColor = stationColor
+			} else {
+				typeColor = UITextSecondary
+			}
+
+			// Draw everything before the type
+			DrawText(screen, beforeType+"(", x, y, UITextSecondary)
+			// Calculate offset for the type text
+			beforeWidth := len(beforeType+"(") * 6
+			// Draw the type in color
+			DrawText(screen, typeText, x+beforeWidth, y, typeColor)
+			// Draw closing paren and anything after
+			typeWidth := len(typeText) * 6
+			DrawText(screen, afterType, x+beforeWidth+typeWidth, y, UITextSecondary)
+		} else {
+			// No parentheses, just draw normally
+			DrawText(screen, textStr, x, y, UITextSecondary)
+		}
 	} else {
 		// Normal text in secondary color
 		DrawText(screen, textStr, x, y, UITextSecondary)
