@@ -36,9 +36,14 @@ func (gv *GalaxyView) Update() error {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
 
-		// Check for double-click
+		// Check for double-click with more forgiving tolerance
 		currentTime := ebiten.Tick()
-		if x == gv.lastClickX && y == gv.lastClickY && currentTime-gv.lastClickTime < 30 {
+		dx := x - gv.lastClickX
+		dy := y - gv.lastClickY
+		distance := dx*dx + dy*dy // squared distance to avoid sqrt
+
+		// More forgiving double-click: 60 ticks (~1 second) and within 10 pixels
+		if distance <= 100 && currentTime-gv.lastClickTime < 60 {
 			// Double click detected - check if we clicked on a system
 			if selectedObj := gv.clickHandler.GetSelectedObject(); selectedObj != nil {
 				if system, ok := selectedObj.(*System); ok {
