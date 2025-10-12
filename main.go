@@ -6,6 +6,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	_ "github.com/hunterjsb/xandaris/entities/planet"
+	_ "github.com/hunterjsb/xandaris/entities/star"
 	_ "github.com/hunterjsb/xandaris/entities/station"
 )
 

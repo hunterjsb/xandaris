@@ -157,6 +157,14 @@ func (s *System) GetContextMenuTitle() string {
 func (s *System) GetContextMenuItems() []string {
 	items := []string{}
 
+	// Add star information first
+	starEntities := s.GetEntitiesByType(entities.EntityTypeStar)
+	if len(starEntities) > 0 {
+		star := starEntities[0]
+		items = append(items, fmt.Sprintf("Star: %s", star.GetDescription()))
+		items = append(items, "") // Empty line for spacing
+	}
+
 	// Add entity counts summary
 	planetCount := len(s.GetEntitiesByType(entities.EntityTypePlanet))
 	stationCount := len(s.GetEntitiesByType(entities.EntityTypeStation))

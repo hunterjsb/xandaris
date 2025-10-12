@@ -17,6 +17,7 @@ type SystemView struct {
 	clickHandler *ClickHandler
 	centerX      float64
 	centerY      float64
+	scale        *ViewScale
 }
 
 // NewSystemView creates a new system view
@@ -26,12 +27,18 @@ func NewSystemView(game *Game) *SystemView {
 		clickHandler: NewClickHandler(),
 		centerX:      float64(screenWidth) / 2,
 		centerY:      float64(screenHeight) / 2,
+		scale:        &SystemScale,
 	}
 }
 
 // SetSystem sets the system to display
 func (sv *SystemView) SetSystem(system *System) {
 	sv.system = system
+
+	// Calculate auto-scaling based on system size
+	maxDistance := GetSystemMaxOrbitDistance(system)
+	sv.scale = AutoScale(maxDistance, screenWidth, screenHeight)
+
 	sv.updateEntityPositions()
 	sv.registerClickables()
 }
@@ -63,13 +70,10 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Draw system center (star)
-	sv.drawSystemCenter(screen)
-
 	// Draw orbital paths
 	sv.drawOrbitalPaths(screen)
 
-	// Draw all entities (planets and stations)
+	// Draw all entities (star, planets and stations)
 	sv.drawEntities(screen)
 
 	// Highlight selected object
@@ -120,9 +124,12 @@ func (sv *SystemView) updateEntityPositions() {
 		orbitDistance := entity.GetOrbitDistance()
 		orbitAngle := entity.GetOrbitAngle()
 
-		// Calculate position based on orbit
-		x := sv.centerX + orbitDistance*math.Cos(orbitAngle)
-		y := sv.centerY + orbitDistance*math.Sin(orbitAngle)
+		// Scale the orbital distance
+		scaledDistance := sv.scale.ScaleOrbitDistance(orbitDistance)
+
+		// Calculate position based on scaled orbit
+		x := sv.centerX + scaledDistance*math.Cos(orbitAngle)
+		y := sv.centerY + scaledDistance*math.Sin(orbitAngle)
 
 		// Update absolute position using the SetAbsolutePosition method
 		entity.SetAbsolutePosition(x, y)
@@ -144,44 +151,51 @@ func (sv *SystemView) registerClickables() {
 	}
 }
 
-// drawSystemCenter draws the star at the center of the system
-func (sv *SystemView) drawSystemCenter(screen *ebiten.Image) {
-	starRadius := 15
-	starColor := color.RGBA{255, 255, 200, 255}
+// drawStar renders a star entity
+func (sv *SystemView) drawStar(screen *ebiten.Image, star *entities.Star) {
+	centerX := int(sv.centerX)
+	centerY := int(sv.centerY)
+	// Scale the star radius based on the view scale
+	radius := sv.scale.ScaleSize(float64(star.Radius))
 
 	// Create star image
-	starImg := ebiten.NewImage(starRadius*2, starRadius*2)
+	starImg := ebiten.NewImage(radius*2, radius*2)
 
 	// Draw a circle for the star
-	for py := 0; py < starRadius*2; py++ {
-		for px := 0; px < starRadius*2; px++ {
-			dx := float64(px - starRadius)
-			dy := float64(py - starRadius)
+	for py := 0; py < radius*2; py++ {
+		for px := 0; px < radius*2; px++ {
+			dx := float64(px - radius)
+			dy := float64(py - radius)
 			dist := dx*dx + dy*dy
 
-			if dist <= float64(starRadius*starRadius) {
-				starImg.Set(px, py, starColor)
+			if dist <= float64(radius*radius) {
+				starImg.Set(px, py, star.Color)
 			}
 		}
 	}
 
 	// Draw the star
 	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(sv.centerX-float64(starRadius), sv.centerY-float64(starRadius))
+	opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
 	screen.DrawImage(starImg, opts)
 
-	// Draw system name above star
-	DrawCenteredText(screen, sv.system.Name, int(sv.centerX), int(sv.centerY)-starRadius-20)
+	// Draw star name above star (adjust for scaled star sizes)
+	labelOffset := int(float64(radius) * 0.6)
+	DrawCenteredText(screen, star.Name, centerX, centerY-radius-labelOffset)
+
+	// Draw star type below star (adjust for scaled star sizes)
+	DrawCenteredText(screen, fmt.Sprintf("(%s)", star.StarType), centerX, centerY+radius+labelOffset)
 }
 
 // drawOrbitalPaths draws the orbital rings
 func (sv *SystemView) drawOrbitalPaths(screen *ebiten.Image) {
 	orbitColor := color.RGBA{40, 40, 60, 100}
 
-	// Get unique orbital distances
+	// Get unique orbital distances (scaled)
 	orbits := make(map[float64]bool)
 	for _, entity := range sv.system.Entities {
-		orbits[entity.GetOrbitDistance()] = true
+		scaledDistance := sv.scale.ScaleOrbitDistance(entity.GetOrbitDistance())
+		orbits[scaledDistance] = true
 	}
 
 	// Draw orbital rings
@@ -206,8 +220,15 @@ func (sv *SystemView) drawOrbitRing(screen *ebiten.Image, radius float64, c colo
 	}
 }
 
-// drawEntities draws all planets and stations
+// drawEntities draws all stars, planets and stations
 func (sv *SystemView) drawEntities(screen *ebiten.Image) {
+	// Draw star first (in the center)
+	for _, entity := range sv.system.GetEntitiesByType(entities.EntityTypeStar) {
+		if star, ok := entity.(*entities.Star); ok {
+			sv.drawStar(screen, star)
+		}
+	}
+
 	// Draw planets
 	for _, entity := range sv.system.GetEntitiesByType(entities.EntityTypePlanet) {
 		if planet, ok := entity.(*entities.Planet); ok {
@@ -228,6 +249,7 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 	x, y := planet.GetAbsolutePosition()
 	centerX := int(x)
 	centerY := int(y)
+	// Keep planet size consistent regardless of orbital scale
 	radius := planet.Size
 
 	// Create planet image
@@ -285,6 +307,7 @@ func (sv *SystemView) drawStation(screen *ebiten.Image, station *entities.Statio
 	x, y := station.GetAbsolutePosition()
 	centerX := int(x)
 	centerY := int(y)
+	// Keep station size consistent regardless of orbital scale
 	size := 8
 
 	// Draw station as a square/diamond
