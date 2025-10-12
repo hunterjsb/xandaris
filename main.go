@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/entities"
+	_ "github.com/hunterjsb/xandaris/entities/building"
 	_ "github.com/hunterjsb/xandaris/entities/planet"
 	_ "github.com/hunterjsb/xandaris/entities/resource"
 	_ "github.com/hunterjsb/xandaris/entities/star"
@@ -78,6 +81,9 @@ func NewGame() *Game {
 	// Initialize tickable systems
 	context := &GameSystemContext{game: g}
 	tickable.InitializeAllSystems(context)
+
+	// Register construction completion handler
+	g.registerConstructionHandler()
 
 	// Initialize view system
 	g.viewManager = NewViewManager(g)
@@ -178,4 +184,81 @@ func main() {
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// registerConstructionHandler sets up handler for completed constructions
+func (g *Game) registerConstructionHandler() {
+	constructionSystem := tickable.GetSystemByName("Construction")
+	if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+		cs.RegisterCompletionHandler(func(completion tickable.ConstructionCompletion) {
+			g.handleConstructionComplete(completion)
+		})
+	}
+}
+
+// handleConstructionComplete adds completed buildings to the game
+func (g *Game) handleConstructionComplete(completion tickable.ConstructionCompletion) {
+	// Find the planet or resource by ID
+	locationID := completion.Location
+
+	// Search all systems for the entity
+	for _, system := range g.systems {
+		for _, entity := range system.Entities {
+			// Check planets
+			if planet, ok := entity.(*entities.Planet); ok {
+				if fmt.Sprintf("%d", planet.GetID()) == locationID {
+					// Found the planet, add building
+					building := g.createBuildingFromCompletion(completion, planet)
+					if building != nil {
+						planet.Buildings = append(planet.Buildings, building)
+					}
+					return
+				}
+
+				// Check resources on this planet
+				for _, resource := range planet.Resources {
+					if fmt.Sprintf("%d", resource.GetID()) == locationID {
+						// Found the resource, add building
+						building := g.createBuildingFromCompletion(completion, resource)
+						if building != nil {
+							// Buildings on resources need to be tracked somewhere
+							// For now, we'll add to the parent planet
+							planet.Buildings = append(planet.Buildings, building)
+						}
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+// createBuildingFromCompletion creates a building entity from a completion
+func (g *Game) createBuildingFromCompletion(completion tickable.ConstructionCompletion, attachedTo entities.Entity) entities.Entity {
+	// Generate parameters for building
+	params := entities.GenerationParams{
+		SystemID:      0,
+		OrbitDistance: 20.0 + float64(len(g.systems))*5.0, // Position around planet
+		OrbitAngle:    float64(completion.Tick%628) / 100.0,
+		SystemSeed:    completion.Tick,
+	}
+
+	// Get the appropriate building generator based on item name
+	generators := entities.GetGeneratorsByType(entities.EntityTypeBuilding)
+	for _, gen := range generators {
+		if gen.GetSubType() == completion.Item.Type ||
+			gen.GetSubType()+" Complex" == completion.Item.Name ||
+			gen.GetSubType()+" Module" == completion.Item.Name ||
+			"Orbital "+gen.GetSubType() == completion.Item.Name ||
+			"Mining Complex" == completion.Item.Name && gen.GetSubType() == "Mine" {
+			building := gen.Generate(params)
+			if b, ok := building.(*entities.Building); ok {
+				b.Owner = completion.Owner
+				b.AttachedTo = completion.Location
+				return b
+			}
+		}
+	}
+
+	return nil
 }

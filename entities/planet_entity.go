@@ -12,6 +12,7 @@ type Planet struct {
 	PlanetType   string   // Subtype like "Terrestrial", "Gas Giant", etc.
 	Population   int64    // Number of inhabitants
 	Resources    []Entity // Resource entities on this planet
+	Buildings    []Entity // Building entities on this planet
 	Temperature  int      // Temperature in Celsius
 	Atmosphere   string   // Type of atmosphere
 	HasRings     bool     // Whether the planet has rings
@@ -37,6 +38,7 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 		Atmosphere:   "Thin",
 		Population:   0,
 		Resources:    []Entity{},
+		Buildings:    []Entity{},
 		HasRings:     false,
 		Habitability: 50,
 		Owner:        "", // Unowned by default
@@ -76,6 +78,10 @@ func (p *Planet) GetContextMenuItems() []string {
 		items = append(items, "") // Empty line
 		items = append(items, fmt.Sprintf("Resources: %d deposits", len(p.Resources)))
 		items = append(items, "View planet for details")
+	}
+
+	if len(p.Buildings) > 0 {
+		items = append(items, fmt.Sprintf("Buildings: %d", len(p.Buildings)))
 	}
 
 	if p.Owner != "" {

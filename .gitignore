@@ -1,2 +1,5 @@
 xandaris
 .env
+wasm_exec.js
+main.wasm
+index.html

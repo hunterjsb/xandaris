@@ -12,6 +12,7 @@ const (
 	EntityTypeAsteroid EntityType = "Asteroid"
 	EntityTypeStar     EntityType = "Star"
 	EntityTypeResource EntityType = "Resource"
+	EntityTypeBuilding EntityType = "Building"
 )
 
 // Entity is the core interface that all system entities must implement

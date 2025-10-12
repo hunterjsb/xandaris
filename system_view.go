@@ -12,25 +12,27 @@ import (
 
 // SystemView represents the detailed view of a single system
 type SystemView struct {
-	game          *Game
-	system        *System
-	clickHandler  *ClickHandler
-	centerX       float64
-	centerY       float64
-	scale         *ViewScale
-	lastClickX    int
-	lastClickY    int
-	lastClickTime int64
+	game              *Game
+	system            *System
+	clickHandler      *ClickHandler
+	centerX           float64
+	centerY           float64
+	scale             *ViewScale
+	lastClickX        int
+	lastClickY        int
+	lastClickTime     int64
+	constructionQueue *ConstructionQueueUI
 }
 
 // NewSystemView creates a new system view
 func NewSystemView(game *Game) *SystemView {
 	return &SystemView{
-		game:         game,
-		clickHandler: NewClickHandler(),
-		centerX:      float64(screenWidth) / 2,
-		centerY:      float64(screenHeight) / 2,
-		scale:        &SystemScale,
+		game:              game,
+		clickHandler:      NewClickHandler(),
+		centerX:           float64(screenWidth) / 2,
+		centerY:           float64(screenHeight) / 2,
+		scale:             &SystemScale,
+		constructionQueue: NewConstructionQueueUI(game),
 	}
 }
 
@@ -48,6 +50,9 @@ func (sv *SystemView) SetSystem(system *System) {
 
 // Update implements View interface
 func (sv *SystemView) Update() error {
+	// Update construction queue UI
+	sv.constructionQueue.Update()
+
 	// ESC to return to galaxy view
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		sv.game.viewManager.SwitchTo(ViewTypeGalaxy)
@@ -122,6 +127,9 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	title := fmt.Sprintf("System View: %s", sv.system.Name)
 	DrawText(screen, title, 10, 10, UITextPrimary)
 	DrawText(screen, "Press ESC to return to galaxy", 10, 25, UITextSecondary)
+
+	// Draw construction queue UI
+	sv.constructionQueue.Draw(screen)
 }
 
 // OnEnter implements View interface

@@ -24,7 +24,7 @@ type ConstructionItem struct {
 	RemainingTicks int    // Ticks remaining
 	Cost           int    // Credit cost
 	Started        int64  // Tick when started
-	mutex          sync.RWMutex
+	Mutex          sync.RWMutex
 }
 
 // ConstructionQueue manages construction for a single location
@@ -42,11 +42,15 @@ type ConstructionCompletion struct {
 	Tick     int64
 }
 
+// CompletionHandler is a function that handles construction completions
+type CompletionHandler func(completion ConstructionCompletion)
+
 // ConstructionSystem handles all construction queues
 type ConstructionSystem struct {
 	*BaseSystem
 	queues      *SafeMap[string, *ConstructionQueue]
 	completions chan ConstructionCompletion
+	handlers    []CompletionHandler
 	mutex       sync.RWMutex
 }
 
@@ -82,8 +86,8 @@ func (cs *ConstructionSystem) processQueue(queue *ConstructionQueue, tick int64)
 	}
 
 	item := queue.Items[0]
-	item.mutex.Lock()
-	defer item.mutex.Unlock()
+	item.Mutex.Lock()
+	defer item.Mutex.Unlock()
 
 	// Decrement remaining ticks
 	item.RemainingTicks--
@@ -130,14 +134,21 @@ func (cs *ConstructionSystem) processCompletions() {
 
 // handleCompletion handles a single completed construction
 func (cs *ConstructionSystem) handleCompletion(completion ConstructionCompletion) {
-	// This would trigger:
-	// 1. Add building to planet
-	// 2. Update planet stats
-	// 3. Notify player
-	// 4. Update UI
+	// Notify all registered handlers
+	cs.mutex.RLock()
+	handlers := cs.handlers
+	cs.mutex.RUnlock()
 
-	// For now, just a placeholder
-	// In full implementation, this would interact with game state
+	for _, handler := range handlers {
+		handler(completion)
+	}
+}
+
+// RegisterCompletionHandler registers a handler for construction completions
+func (cs *ConstructionSystem) RegisterCompletionHandler(handler CompletionHandler) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	cs.handlers = append(cs.handlers, handler)
 }
 
 // AddToQueue adds a construction item to a location's queue

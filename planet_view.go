@@ -11,21 +11,25 @@ import (
 
 // PlanetView represents the detailed view of a single planet
 type PlanetView struct {
-	game         *Game
-	system       *System
-	planet       *entities.Planet
-	clickHandler *ClickHandler
-	centerX      float64
-	centerY      float64
+	game              *Game
+	system            *System
+	planet            *entities.Planet
+	clickHandler      *ClickHandler
+	centerX           float64
+	centerY           float64
+	buildMenu         *BuildMenu
+	constructionQueue *ConstructionQueueUI
 }
 
 // NewPlanetView creates a new planet view
 func NewPlanetView(game *Game) *PlanetView {
 	return &PlanetView{
-		game:         game,
-		clickHandler: NewClickHandler(),
-		centerX:      float64(screenWidth) / 2,
-		centerY:      float64(screenHeight) / 2,
+		game:              game,
+		clickHandler:      NewClickHandler(),
+		centerX:           float64(screenWidth) / 2,
+		centerY:           float64(screenHeight) / 2,
+		buildMenu:         NewBuildMenu(game),
+		constructionQueue: NewConstructionQueueUI(game),
 	}
 }
 
@@ -43,15 +47,45 @@ func (pv *PlanetView) SetPlanet(system *System, planet *entities.Planet) {
 
 // Update implements View interface
 func (pv *PlanetView) Update() error {
+	// Update construction queue UI
+	pv.constructionQueue.Update()
+
+	// Update build menu first (it handles its own input)
+	if pv.buildMenu.IsOpen() {
+		pv.buildMenu.Update()
+		return nil
+	}
+
 	// ESC to return to system view
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		pv.game.viewManager.SwitchTo(ViewTypeSystem)
 		return nil
 	}
 
+	// B key to open build menu on planet
+	if inpututil.IsKeyJustPressed(ebiten.KeyB) && pv.planet != nil {
+		if pv.game.humanPlayer != nil && pv.planet.Owner == pv.game.humanPlayer.Name {
+			pv.buildMenu.Open(pv.planet, screenWidth/2, screenHeight/2)
+		}
+	}
+
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
+
+		// Check if clicking on a resource to build
+		if ebiten.IsKeyPressed(ebiten.KeyShift) {
+			// Shift+click on resource opens build menu for that resource
+			if selectedObj := pv.clickHandler.GetSelectedObject(); selectedObj != nil {
+				if resource, ok := selectedObj.(*entities.Resource); ok {
+					if pv.game.humanPlayer != nil && resource.Owner == pv.game.humanPlayer.Name {
+						pv.buildMenu.Open(resource, x, y)
+						return nil
+					}
+				}
+			}
+		}
+
 		pv.clickHandler.HandleClick(x, y)
 	}
 
@@ -74,6 +108,9 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	// Draw all resources (no orbital paths for resources)
 	pv.drawResources(screen)
 
+	// Draw all buildings
+	pv.drawBuildings(screen)
+
 	// Highlight selected object
 	if selectedObj := pv.clickHandler.GetSelectedObject(); selectedObj != nil {
 		x, y := selectedObj.GetPosition()
@@ -83,8 +120,8 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 			UIHighlight)
 	}
 
-	// Draw context menu if active
-	if pv.clickHandler.HasActiveMenu() {
+	// Draw context menu if active (but not if build menu is open)
+	if pv.clickHandler.HasActiveMenu() && !pv.buildMenu.IsOpen() {
 		pv.clickHandler.GetActiveMenu().Draw(screen)
 	}
 
@@ -93,7 +130,21 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	DrawText(screen, title, 10, 10, UITextPrimary)
 	DrawText(screen, fmt.Sprintf("Type: %s", pv.planet.PlanetType), 10, 25, UITextSecondary)
 	DrawText(screen, fmt.Sprintf("Resources: %d deposits", len(pv.planet.Resources)), 10, 40, UITextSecondary)
-	DrawText(screen, "Press ESC to return to system", 10, 55, UITextSecondary)
+	DrawText(screen, fmt.Sprintf("Buildings: %d", len(pv.planet.Buildings)), 10, 55, UITextSecondary)
+
+	// Show build hints if player owns this planet
+	if pv.game.humanPlayer != nil && pv.planet.Owner == pv.game.humanPlayer.Name {
+		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, 70, UITextSecondary)
+		DrawText(screen, "Press ESC to return to system", 10, 85, UITextSecondary)
+	} else {
+		DrawText(screen, "Press ESC to return to system", 10, 70, UITextSecondary)
+	}
+
+	// Draw construction queue UI
+	pv.constructionQueue.Draw(screen)
+
+	// Draw build menu on top of everything
+	pv.buildMenu.Draw(screen)
 }
 
 // OnEnter implements View interface
@@ -114,13 +165,13 @@ func (pv *PlanetView) GetType() ViewType {
 	return ViewTypePlanet
 }
 
-// updateResourcePositions positions resources at the planet's surface
+// updateResourcePositions positions resources and buildings at the planet's surface
 func (pv *PlanetView) updateResourcePositions() {
 	if pv.planet == nil {
 		return
 	}
 
-	// Resources are positioned at the planet's surface edge
+	// Resources and buildings are positioned at the planet's surface edge
 	planetRadius := float64(pv.planet.Size * 8) // Same scaling as in drawPlanet
 
 	for _, resource := range pv.planet.Resources {
@@ -133,6 +184,21 @@ func (pv *PlanetView) updateResourcePositions() {
 
 		// Update absolute position
 		resource.SetAbsolutePosition(x, y)
+	}
+
+	// Position buildings slightly further out from resources
+	buildingRadius := planetRadius + 15.0 // Buildings are offset from planet surface
+
+	for _, building := range pv.planet.Buildings {
+		// Use the orbit angle for positioning around the surface
+		orbitAngle := building.GetOrbitAngle()
+
+		// Position at building radius
+		x := pv.centerX + buildingRadius*math.Cos(orbitAngle)
+		y := pv.centerY + buildingRadius*math.Sin(orbitAngle)
+
+		// Update absolute position
+		building.SetAbsolutePosition(x, y)
 	}
 }
 
@@ -147,6 +213,13 @@ func (pv *PlanetView) registerClickables() {
 	// Register resources first so they have priority over the planet
 	for _, resource := range pv.planet.Resources {
 		if clickable, ok := resource.(Clickable); ok {
+			pv.clickHandler.AddClickable(clickable)
+		}
+	}
+
+	// Register buildings
+	for _, building := range pv.planet.Buildings {
+		if clickable, ok := building.(Clickable); ok {
 			pv.clickHandler.AddClickable(clickable)
 		}
 	}
@@ -237,4 +310,39 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	// Draw resource type label below
 	labelY := centerY + radius + 12
 	DrawCenteredText(screen, resource.ResourceType, centerX, labelY)
+}
+
+// drawBuildings draws all building entities
+func (pv *PlanetView) drawBuildings(screen *ebiten.Image) {
+	for _, building := range pv.planet.Buildings {
+		if bldg, ok := building.(*entities.Building); ok {
+			pv.drawBuilding(screen, bldg)
+		}
+	}
+}
+
+// drawBuilding renders a single building
+func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Building) {
+	x, y := building.GetAbsolutePosition()
+	centerX := int(x)
+	centerY := int(y)
+	size := building.Size
+
+	// Draw ownership indicator if owned by player
+	if building.Owner != "" && pv.game.humanPlayer != nil && building.Owner == pv.game.humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(size+2), pv.game.humanPlayer.Color)
+	}
+
+	// Create building image (square for buildings)
+	buildingImg := ebiten.NewImage(size*2, size*2)
+	buildingImg.Fill(building.Color)
+
+	// Draw the building
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(float64(centerX-size), float64(centerY-size))
+	screen.DrawImage(buildingImg, opts)
+
+	// Draw building type label below
+	labelY := centerY + size + 12
+	DrawCenteredText(screen, building.BuildingType, centerX, labelY)
 }
