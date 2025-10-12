@@ -4,9 +4,19 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/hajimehoshi/bitmapfont/v4"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
+
+var (
+	defaultFontFace *text.GoXFace
+)
+
+func init() {
+	// Initialize default font face using bitmap font
+	defaultFontFace = text.NewGoXFace(bitmapfont.Face)
+}
 
 // UIPanel represents a rectangular panel with border
 type UIPanel struct {
@@ -201,25 +211,107 @@ func (c *ContextMenu) Draw(screen *ebiten.Image) {
 
 	// Draw title
 	textY := c.Panel.Y + c.Padding
-	ebitenutil.DebugPrintAt(screen, c.Title, c.Panel.X+c.Padding, textY)
+	DrawText(screen, c.Title, c.Panel.X+c.Padding, textY, UITextPrimary)
 
 	// Draw separator
 	textY += 20
-	ebitenutil.DebugPrintAt(screen, "─────────────────", c.Panel.X+c.Padding, textY)
+	DrawText(screen, "─────────────────", c.Panel.X+c.Padding, textY, UITextSecondary)
 
 	// Draw items
 	textY += 20
 	for _, item := range c.Items {
-		ebitenutil.DebugPrintAt(screen, item, c.Panel.X+c.Padding, textY)
+		DrawColoredMenuItem(screen, item, c.Panel.X+c.Padding, textY)
 		textY += 15
 	}
 }
 
+// DrawText draws text in a specific color using text/v2
+func DrawText(screen *ebiten.Image, textStr string, x, y int, textColor color.RGBA) {
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(x), float64(y))
+	op.ColorScale.ScaleWithColor(textColor)
+	text.Draw(screen, textStr, defaultFontFace, op)
+}
+
 // DrawCenteredText draws text centered at the given position
-func DrawCenteredText(screen *ebiten.Image, text string, x, y int) {
+func DrawCenteredText(screen *ebiten.Image, textStr string, x, y int) {
 	// Approximate text width (each character is about 6 pixels wide)
-	textWidth := len(text) * 6
-	ebitenutil.DebugPrintAt(screen, text, x-textWidth/2, y)
+	textWidth := len(textStr) * 6
+	DrawText(screen, textStr, x-textWidth/2, y, UITextPrimary)
+}
+
+// DrawColoredMenuItem draws a menu item with special handling for planet/station types
+func DrawColoredMenuItem(screen *ebiten.Image, textStr string, x, y int) {
+	// Check if this is a type line for a planet
+	if len(textStr) > 6 && textStr[:5] == "Type:" {
+		// Extract the type (everything after "Type: ")
+		typeText := textStr[6:]
+
+		// Get color for the type
+		var typeColor color.RGBA
+		if planetColor := getPlanetTypeColor(typeText); planetColor != (color.RGBA{}) {
+			typeColor = planetColor
+		} else if stationColor := getStationTypeColor(typeText); stationColor != (color.RGBA{}) {
+			typeColor = stationColor
+		} else {
+			// Default to primary text color
+			typeColor = UITextPrimary
+		}
+
+		// Draw "Type: " in secondary color
+		DrawText(screen, "Type: ", x, y, UITextSecondary)
+
+		// Draw the type in its color
+		DrawText(screen, typeText, x+36, y, typeColor)
+	} else {
+		// Normal text in secondary color
+		DrawText(screen, textStr, x, y, UITextSecondary)
+	}
+}
+
+// getPlanetTypeColor returns the color for a planet type
+func getPlanetTypeColor(planetType string) color.RGBA {
+	switch planetType {
+	case "Terrestrial":
+		return PlanetTerrestrial
+	case "Gas Giant":
+		return PlanetGasGiant
+	case "Ice World":
+		return PlanetIce
+	case "Desert":
+		return PlanetDesert
+	case "Ocean":
+		return PlanetOcean
+	case "Lava":
+		return PlanetLava
+	default:
+		return color.RGBA{}
+	}
+}
+
+// getStationTypeColor returns the color for a station type
+func getStationTypeColor(stationType string) color.RGBA {
+	// Remove " Station" suffix if present
+	if len(stationType) > 8 && stationType[len(stationType)-8:] == " Station" {
+		stationType = stationType[:len(stationType)-8]
+	}
+
+	switch stationType {
+	case "Trading":
+		return ColorStationTrading
+	case "Military":
+		return ColorStationMilitary
+	case "Research":
+		return ColorStationResearch
+	case "Mining":
+		return ColorStationMining
+	case "Refinery":
+		return ColorStationRefinery
+	case "Shipyard":
+		return ColorStationShipyard
+	default:
+		return color.RGBA{}
+	}
 }
 
 // DrawHighlightCircle draws a highlight ring around a circular object
