@@ -6,18 +6,22 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/tickable"
 )
 
 // FleetInfoUI displays detailed information about a selected fleet
 type FleetInfoUI struct {
-	game         *Game
-	fleet        *Fleet
-	x            int
-	y            int
-	width        int
-	height       int
-	visible      bool
-	scrollOffset int
+	game                 *Game
+	fleet                *Fleet
+	x                    int
+	y                    int
+	width                int
+	height               int
+	visible              bool
+	scrollOffset         int
+	showMoveMenu         bool
+	connectedSystems     []int
+	moveMenuScrollOffset int
 }
 
 // NewFleetInfoUI creates a new fleet info UI
@@ -36,12 +40,15 @@ func (fui *FleetInfoUI) Show(fleet *Fleet) {
 	fui.fleet = fleet
 	fui.visible = true
 	fui.scrollOffset = 0
+	fui.showMoveMenu = false
+	fui.moveMenuScrollOffset = 0
 }
 
 // Hide closes the fleet info UI
 func (fui *FleetInfoUI) Hide() {
 	fui.visible = false
 	fui.fleet = nil
+	fui.showMoveMenu = false
 }
 
 // IsVisible returns whether the UI is visible
@@ -72,13 +79,88 @@ func (fui *FleetInfoUI) Update() {
 		}
 	}
 
-	// Handle close button click
+	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
+
+		// Close button
 		closeX := fui.x + fui.width - 30
 		closeY := fui.y + 10
 		if mx >= closeX && mx <= closeX+20 && my >= closeY && my <= closeY+20 {
 			fui.Hide()
+			return
+		}
+
+		// Move Fleet button
+		if !fui.showMoveMenu {
+			moveButtonX := fui.x + 10
+			moveButtonY := fui.y + fui.height - 40
+			moveButtonW := fui.width - 20
+			moveButtonH := 30
+			if mx >= moveButtonX && mx <= moveButtonX+moveButtonW &&
+				my >= moveButtonY && my <= moveButtonY+moveButtonH {
+				// Show move menu
+				fui.showMoveMenu = true
+				// Get connected systems
+				if len(fui.fleet.Ships) > 0 {
+					firstShip := fui.fleet.Ships[0]
+					helper := tickable.NewShipMovementHelper(fui.game.GetSystems(), fui.game.GetHyperlanes())
+					fui.connectedSystems = helper.GetConnectedSystems(firstShip.CurrentSystem)
+				}
+				return
+			}
+		}
+
+		// Handle move menu destination clicks
+		if fui.showMoveMenu {
+			// Back button
+			backButtonX := fui.x + 10
+			backButtonY := fui.y + fui.height - 40
+			backButtonW := 60
+			backButtonH := 30
+			if mx >= backButtonX && mx <= backButtonX+backButtonW &&
+				my >= backButtonY && my <= backButtonY+backButtonH {
+				fui.showMoveMenu = false
+				return
+			}
+
+			// System destination clicks
+			listStartY := fui.y + 110
+			itemHeight := 35
+			for i, systemID := range fui.connectedSystems {
+				itemY := listStartY + i*itemHeight - fui.moveMenuScrollOffset
+				if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
+					continue
+				}
+				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
+					my >= itemY && my <= itemY+itemHeight-5 {
+					// Move fleet to this system
+					fleetManager := NewFleetManager(fui.game)
+					success, _ := fleetManager.MoveFleet(fui.fleet, systemID)
+					if success > 0 {
+						fui.showMoveMenu = false
+					}
+					return
+				}
+			}
+		}
+	}
+
+	// Handle scroll for move menu
+	if fui.showMoveMenu {
+		_, dy := ebiten.Wheel()
+		if dy != 0 {
+			fui.moveMenuScrollOffset -= int(dy * 20)
+			maxScroll := len(fui.connectedSystems)*35 - (fui.height - 160)
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if fui.moveMenuScrollOffset < 0 {
+				fui.moveMenuScrollOffset = 0
+			}
+			if fui.moveMenuScrollOffset > maxScroll {
+				fui.moveMenuScrollOffset = maxScroll
+			}
 		}
 	}
 }
@@ -138,9 +220,134 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	// Scrollable ship list
 	fui.drawShipList(screen, listHeaderY+20)
 
-	// Scroll indicator
-	if len(fui.fleet.Ships) > 5 {
-		scrollHintY := fui.y + fui.height - 20
+	// Move menu or move button
+	if fui.showMoveMenu {
+		fui.drawMoveMenu(screen)
+	} else {
+		fui.drawMoveButton(screen)
+	}
+
+	// Scroll indicator (only for ship list, not in move menu)
+	if !fui.showMoveMenu && len(fui.fleet.Ships) > 5 {
+		scrollHintY := fui.y + fui.height - 50
+		DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
+	}
+}
+
+// drawMoveButton draws the "Move Fleet" button
+func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
+	buttonX := fui.x + 10
+	buttonY := fui.y + fui.height - 40
+	buttonW := fui.width - 20
+	buttonH := 30
+
+	// Check if fleet can move (has any ship with fuel)
+	canMove, lowFuel, noFuel := NewFleetManager(fui.game).GetFleetMovementStatus(fui.fleet)
+
+	buttonColor := UIButtonActive
+	buttonText := "Move Fleet"
+
+	if canMove == 0 {
+		buttonColor = UIButtonDisabled
+		if noFuel > 0 {
+			buttonText = "No Fuel"
+		} else {
+			buttonText = "Cannot Move"
+		}
+	} else if lowFuel > 0 || noFuel > 0 {
+		buttonText = fmt.Sprintf("Move Fleet (%d/%d ready)", canMove, len(fui.fleet.Ships))
+	}
+
+	// Button background
+	buttonPanel := &UIPanel{
+		X:           buttonX,
+		Y:           buttonY,
+		Width:       buttonW,
+		Height:      buttonH,
+		BgColor:     buttonColor,
+		BorderColor: UIHighlight,
+	}
+	buttonPanel.Draw(screen)
+
+	// Button text
+	textX := buttonX + buttonW/2
+	textY := buttonY + 10
+	DrawTextCentered(screen, buttonText, textX, textY, UITextPrimary, 1.0)
+}
+
+// drawMoveMenu draws the destination selection menu
+func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
+	// Title
+	menuTitleY := fui.y + 100
+	DrawText(screen, "Select Destination:", fui.x+10, menuTitleY, SystemLightBlue)
+
+	// Connected systems list
+	listStartY := menuTitleY + 10
+	itemHeight := 35
+
+	if len(fui.connectedSystems) == 0 {
+		DrawText(screen, "No connected systems", fui.x+20, listStartY+20, UITextSecondary)
+	}
+
+	systems := fui.game.GetSystems()
+	for i, systemID := range fui.connectedSystems {
+		itemY := listStartY + i*itemHeight - fui.moveMenuScrollOffset
+
+		// Skip if off screen
+		if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
+			continue
+		}
+
+		system := systems[systemID]
+		if system == nil {
+			continue
+		}
+
+		// Item background
+		itemPanel := &UIPanel{
+			X:           fui.x + 10,
+			Y:           itemY,
+			Width:       fui.width - 20,
+			Height:      itemHeight - 5,
+			BgColor:     UIPanelBg,
+			BorderColor: UIPanelBorder,
+		}
+		itemPanel.Draw(screen)
+
+		// System color indicator
+		colorSize := 6
+		colorX := fui.x + 20
+		colorY := itemY + itemHeight/2 - colorSize/2
+		for py := 0; py < colorSize; py++ {
+			for px := 0; px < colorSize; px++ {
+				screen.Set(colorX+px, colorY+py, system.Color)
+			}
+		}
+
+		// System name
+		DrawText(screen, system.Name, fui.x+35, itemY+10, UITextPrimary)
+	}
+
+	// Back button
+	backButtonX := fui.x + 10
+	backButtonY := fui.y + fui.height - 40
+	backButtonW := 60
+	backButtonH := 30
+
+	backPanel := &UIPanel{
+		X:           backButtonX,
+		Y:           backButtonY,
+		Width:       backButtonW,
+		Height:      backButtonH,
+		BgColor:     UIButtonActive,
+		BorderColor: UIHighlight,
+	}
+	backPanel.Draw(screen)
+	DrawTextCentered(screen, "Back", backButtonX+backButtonW/2, backButtonY+10, UITextPrimary, 1.0)
+
+	// Scroll hint
+	if len(fui.connectedSystems) > 5 {
+		scrollHintY := fui.y + fui.height - 50
 		DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
 	}
 }

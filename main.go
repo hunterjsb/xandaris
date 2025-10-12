@@ -267,6 +267,20 @@ func (g *Game) GetPlayers() []*entities.Player {
 	return g.players
 }
 
+// GetSystems returns a map of systems indexed by ID
+func (g *Game) GetSystems() map[int]*entities.System {
+	systemsMap := make(map[int]*entities.System)
+	for _, system := range g.systems {
+		systemsMap[system.ID] = system
+	}
+	return systemsMap
+}
+
+// GetHyperlanes returns all hyperlanes
+func (g *Game) GetHyperlanes() []entities.Hyperlane {
+	return g.hyperlanes
+}
+
 // Update updates the game state
 func (g *Game) Update() error {
 	// Handle global keyboard shortcuts

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/tickable"
 )
 
 // Fleet represents a group of ships at the same location
@@ -292,4 +293,60 @@ func (fm *FleetManager) GetFleetAtPosition(fleets []*Fleet, x, y int, radius flo
 		}
 	}
 	return nil
+}
+
+// MoveFleet orders all ships in a fleet to move to a target system
+func (fm *FleetManager) MoveFleet(fleet *Fleet, targetSystemID int) (successCount int, failCount int) {
+	if fleet == nil || len(fleet.Ships) == 0 {
+		return 0, 0
+	}
+
+	// Create ship movement helper
+	helper := tickable.NewShipMovementHelper(fm.game.GetSystems(), fm.game.GetHyperlanes())
+
+	// Attempt to move each ship in the fleet
+	for _, ship := range fleet.Ships {
+		if helper.StartJourney(ship, targetSystemID) {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+
+	return successCount, failCount
+}
+
+// CanFleetMove checks if the entire fleet can move to a target system
+func (fm *FleetManager) CanFleetMove(fleet *Fleet, targetSystemID int) bool {
+	if fleet == nil || len(fleet.Ships) == 0 {
+		return false
+	}
+
+	// Check if any ship in the fleet can make the jump
+	for _, ship := range fleet.Ships {
+		if ship.CanJump() {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetFleetMovementStatus returns a summary of fleet movement capability
+func (fm *FleetManager) GetFleetMovementStatus(fleet *Fleet) (canMove int, lowFuel int, noFuel int) {
+	if fleet == nil {
+		return 0, 0, 0
+	}
+
+	for _, ship := range fleet.Ships {
+		if ship.CanJump() {
+			canMove++
+		} else if ship.CurrentFuel > 0 {
+			lowFuel++
+		} else {
+			noFuel++
+		}
+	}
+
+	return canMove, lowFuel, noFuel
 }

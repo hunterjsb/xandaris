@@ -36,12 +36,14 @@ var (
 
 // UI Colors
 var (
-	UIBackground    = color.RGBA{5, 5, 15, 255}
-	UIPanelBg       = color.RGBA{20, 20, 40, 230}
-	UIPanelBorder   = color.RGBA{100, 100, 150, 255}
-	UIHighlight     = color.RGBA{255, 255, 100, 255}
-	UITextPrimary   = color.RGBA{255, 255, 255, 255}
-	UITextSecondary = color.RGBA{200, 200, 200, 255}
+	UIBackground     = color.RGBA{5, 5, 15, 255}
+	UIPanelBg        = color.RGBA{20, 20, 40, 230}
+	UIPanelBorder    = color.RGBA{100, 100, 150, 255}
+	UIHighlight      = color.RGBA{255, 255, 100, 255}
+	UITextPrimary    = color.RGBA{255, 255, 255, 255}
+	UITextSecondary  = color.RGBA{200, 200, 200, 255}
+	UIButtonActive   = color.RGBA{40, 80, 120, 230}
+	UIButtonDisabled = color.RGBA{60, 60, 60, 230}
 )
 
 // Hyperlane Colors
