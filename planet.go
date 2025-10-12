@@ -225,3 +225,31 @@ func (p *Planet) GetHabitabilityScore() int {
 
 	return score
 }
+
+// GetContextMenuTitle implements ContextMenuProvider
+func (p *Planet) GetContextMenuTitle() string {
+	return p.Name
+}
+
+// GetContextMenuItems implements ContextMenuProvider
+func (p *Planet) GetContextMenuItems() []string {
+	items := []string{}
+
+	items = append(items, fmt.Sprintf("Type: %s", p.PlanetType))
+	items = append(items, fmt.Sprintf("Temperature: %d°C", p.Temperature))
+	items = append(items, fmt.Sprintf("Atmosphere: %s", p.Atmosphere))
+	items = append(items, fmt.Sprintf("Population: %d", p.Population))
+	items = append(items, fmt.Sprintf("Habitability: %d%%", p.GetHabitabilityScore()))
+
+	if p.HasRings {
+		items = append(items, "Has planetary rings")
+	}
+
+	items = append(items, "") // Empty line
+	items = append(items, "Resources:")
+	for _, resource := range p.Resources {
+		items = append(items, fmt.Sprintf("  - %s", resource))
+	}
+
+	return items
+}

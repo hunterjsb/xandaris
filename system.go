@@ -151,3 +151,45 @@ func (g *Game) generateHyperlanes() {
 		}
 	}
 }
+
+// GetContextMenuTitle implements ContextMenuProvider
+func (s *System) GetContextMenuTitle() string {
+	return s.Name
+}
+
+// GetContextMenuItems implements ContextMenuProvider
+func (s *System) GetContextMenuItems() []string {
+	items := []string{}
+
+	// Add entity counts summary
+	planetCount := len(s.GetEntitiesByType("Planet"))
+	stationCount := len(s.GetEntitiesByType("Station"))
+
+	items = append(items, fmt.Sprintf("Planets: %d", planetCount))
+	if stationCount > 0 {
+		items = append(items, fmt.Sprintf("Stations: %d", stationCount))
+	}
+	items = append(items, "") // Empty line for spacing
+
+	// List planets
+	for _, entity := range s.GetEntitiesByType("Planet") {
+		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
+	}
+
+	// List stations
+	for _, entity := range s.GetEntitiesByType("Station") {
+		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
+	}
+
+	return items
+}
+
+// GetPosition implements Clickable interface
+func (s *System) GetPosition() (float64, float64) {
+	return s.X, s.Y
+}
+
+// GetClickRadius implements Clickable interface
+func (s *System) GetClickRadius() float64 {
+	return float64(circleRadius)
+}

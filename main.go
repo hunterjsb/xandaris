@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -17,21 +15,26 @@ const (
 
 // Game implements ebiten.Game interface
 type Game struct {
-	systems        []*System
-	hyperlanes     []Hyperlane
-	selectedSystem *System
-	contextMenu    *ContextMenu
+	systems      []*System
+	hyperlanes   []Hyperlane
+	clickHandler *ClickHandler
 }
 
 // NewGame creates a new game instance
 func NewGame() *Game {
 	g := &Game{
-		systems:    make([]*System, 0),
-		hyperlanes: make([]Hyperlane, 0),
+		systems:      make([]*System, 0),
+		hyperlanes:   make([]Hyperlane, 0),
+		clickHandler: NewClickHandler(),
 	}
 
 	g.generateSystems()
 	g.generateHyperlanes()
+
+	// Add all systems as clickable objects
+	for _, system := range g.systems {
+		g.clickHandler.AddClickable(system)
+	}
 
 	return g
 }
@@ -41,66 +44,9 @@ func (g *Game) Update() error {
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
-		g.handleClick(x, y)
+		g.clickHandler.HandleClick(x, y)
 	}
 	return nil
-}
-
-// handleClick checks if a system was clicked
-func (g *Game) handleClick(x, y int) {
-	// Check each system to see if the click was within its radius
-	for _, system := range g.systems {
-		dx := float64(x) - system.X
-		dy := float64(y) - system.Y
-		distance := math.Sqrt(dx*dx + dy*dy)
-
-		if distance <= float64(circleRadius) {
-			// Toggle selection - if already selected, deselect
-			if g.selectedSystem == system {
-				g.selectedSystem = nil
-				g.contextMenu = nil
-			} else {
-				g.selectedSystem = system
-				g.createContextMenuForSystem(system)
-			}
-			return
-		}
-	}
-	// If we didn't click on any system, deselect
-	g.selectedSystem = nil
-	g.contextMenu = nil
-}
-
-// createContextMenuForSystem creates and positions a context menu for the given system
-func (g *Game) createContextMenuForSystem(system *System) {
-	items := []string{}
-
-	// Add entity counts summary
-	planetCount := len(system.GetEntitiesByType("Planet"))
-	stationCount := len(system.GetEntitiesByType("Station"))
-
-	items = append(items, fmt.Sprintf("Planets: %d", planetCount))
-	if stationCount > 0 {
-		items = append(items, fmt.Sprintf("Stations: %d", stationCount))
-	}
-	items = append(items, "") // Empty line for spacing
-
-	// List planets
-	for _, entity := range system.GetEntitiesByType("Planet") {
-		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
-	}
-
-	// List stations
-	for _, entity := range system.GetEntitiesByType("Station") {
-		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
-	}
-
-	g.contextMenu = NewContextMenu(system.Name, items)
-	g.contextMenu.PositionNear(
-		int(system.X),
-		int(system.Y),
-		circleRadius+20,
-	)
 }
 
 // Draw draws the game screen
@@ -116,18 +62,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		g.drawSystem(screen, system)
 	}
 
-	// Highlight selected system
-	if g.selectedSystem != nil {
+	// Highlight selected object
+	if selectedObj := g.clickHandler.GetSelectedObject(); selectedObj != nil {
+		x, y := selectedObj.GetPosition()
 		DrawHighlightCircle(screen,
-			int(g.selectedSystem.X),
-			int(g.selectedSystem.Y),
-			circleRadius,
+			int(x), int(y),
+			int(selectedObj.GetClickRadius()),
 			UIHighlight)
 	}
 
-	// Draw context menu if a system is selected
-	if g.contextMenu != nil {
-		g.contextMenu.Draw(screen)
+	// Draw context menu if active
+	if g.clickHandler.HasActiveMenu() {
+		g.clickHandler.GetActiveMenu().Draw(screen)
 	}
 
 	// Draw UI info

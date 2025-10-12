@@ -281,3 +281,42 @@ func (s *SpaceStation) GetDockingFee() int {
 		return baseFee + rand.Intn(25)
 	}
 }
+
+// GetContextMenuTitle implements ContextMenuProvider
+func (s *SpaceStation) GetContextMenuTitle() string {
+	return s.Name
+}
+
+// GetContextMenuItems implements ContextMenuProvider
+func (s *SpaceStation) GetContextMenuItems() []string {
+	items := []string{}
+
+	items = append(items, fmt.Sprintf("Type: %s Station", s.StationType))
+	items = append(items, fmt.Sprintf("Owner: %s", s.Owner))
+	items = append(items, fmt.Sprintf("Capacity: %d", s.Capacity))
+	items = append(items, fmt.Sprintf("Population: %d/%d", s.CurrentPop, s.Capacity))
+	items = append(items, fmt.Sprintf("Defense Level: %d", s.DefenseLevel))
+	items = append(items, fmt.Sprintf("Docking Fee: %d credits", s.GetDockingFee()))
+
+	if s.CanDock() {
+		items = append(items, "Status: Accepting docking")
+	} else if s.IsHostile() {
+		items = append(items, "Status: Hostile")
+	} else {
+		items = append(items, "Status: At capacity")
+	}
+
+	items = append(items, "") // Empty line
+	items = append(items, "Services:")
+	for _, service := range s.Services {
+		items = append(items, fmt.Sprintf("  - %s", service))
+	}
+
+	items = append(items, "") // Empty line
+	items = append(items, "Trade Goods:")
+	for _, good := range s.TradeGoods {
+		items = append(items, fmt.Sprintf("  - %s", good))
+	}
+
+	return items
+}
