@@ -75,6 +75,9 @@ func GenerateSpaceStation(systemID int, orbitDistance float64) *SpaceStation {
 	stationType := stationTypes[rand.Intn(len(stationTypes))]
 	owner := owners[rand.Intn(len(owners))]
 
+	// Generate color based on station type
+	stationColor := getColorForStationType(stationType)
+
 	// Generate capacity based on station type
 	var baseCapacity int
 	switch stationType {
@@ -100,7 +103,7 @@ func GenerateSpaceStation(systemID int, orbitDistance float64) *SpaceStation {
 	station := &SpaceStation{
 		ID:            systemID*10000 + 999,
 		Name:          generateStationName(stationType),
-		Color:         GetStationColorByType(stationType),
+		Color:         stationColor,
 		OrbitDistance: orbitDistance,
 		OrbitAngle:    rand.Float64() * 6.28,
 		StationType:   stationType,
@@ -113,6 +116,26 @@ func GenerateSpaceStation(systemID int, orbitDistance float64) *SpaceStation {
 	}
 
 	return station
+}
+
+// getColorForStationType returns the appropriate color for a station type
+func getColorForStationType(stationType string) color.RGBA {
+	switch stationType {
+	case StationTypeTrading:
+		return ColorStationTrading
+	case StationTypeMilitary:
+		return ColorStationMilitary
+	case StationTypeResearch:
+		return ColorStationResearch
+	case StationTypeMining:
+		return ColorStationMining
+	case StationTypeRefinery:
+		return ColorStationRefinery
+	case StationTypeShipyard:
+		return ColorStationShipyard
+	default:
+		return ColorStationTrading
+	}
 }
 
 // generateStationName creates a name based on station type

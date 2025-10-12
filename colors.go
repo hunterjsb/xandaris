@@ -24,14 +24,14 @@ var (
 	PlanetLava        = color.RGBA{255, 100, 50, 255}  // Red
 )
 
-// Station Colors
+// Station Colors (available for use, but stations manage their own colors)
 var (
-	StationTrading  = color.RGBA{255, 100, 100, 255} // Red
-	StationMilitary = color.RGBA{100, 100, 255, 255} // Blue
-	StationResearch = color.RGBA{100, 255, 100, 255} // Green
-	StationMining   = color.RGBA{255, 255, 100, 255} // Yellow
-	StationRefinery = color.RGBA{255, 150, 100, 255} // Orange
-	StationShipyard = color.RGBA{150, 100, 255, 255} // Purple
+	ColorStationTrading  = color.RGBA{255, 100, 100, 255} // Red
+	ColorStationMilitary = color.RGBA{100, 100, 255, 255} // Blue
+	ColorStationResearch = color.RGBA{100, 255, 100, 255} // Green
+	ColorStationMining   = color.RGBA{255, 255, 100, 255} // Yellow
+	ColorStationRefinery = color.RGBA{255, 150, 100, 255} // Orange
+	ColorStationShipyard = color.RGBA{150, 100, 255, 255} // Purple
 )
 
 // UI Colors
@@ -73,25 +73,5 @@ func GetPlanetColors() []color.RGBA {
 		PlanetDesert,      // Index 3: Desert
 		PlanetOcean,       // Index 4: Ocean
 		PlanetLava,        // Index 5: Lava
-	}
-}
-
-// GetStationColorByType returns the color for a station type
-func GetStationColorByType(stationType string) color.RGBA {
-	switch stationType {
-	case "Trading":
-		return StationTrading
-	case "Military":
-		return StationMilitary
-	case "Research":
-		return StationResearch
-	case "Mining":
-		return StationMining
-	case "Refinery":
-		return StationRefinery
-	case "Shipyard":
-		return StationShipyard
-	default:
-		return StationTrading
 	}
 }
