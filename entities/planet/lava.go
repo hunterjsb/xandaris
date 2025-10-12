@@ -2,6 +2,7 @@ package planet
 
 import (
 	"fmt"
+	"image/color"
 	"math/rand"
 
 	"github.com/hunterjsb/xandaris/entities"
@@ -17,36 +18,55 @@ func (g *LavaGenerator) GetWeight() float64 {
 	return 5.0 // Lava planets are less common
 }
 
-func (g *LavaGenerator) GetEntityType() string {
-	return "Planet"
+func (g *LavaGenerator) GetEntityType() entities.EntityType {
+	return entities.EntityTypePlanet
 }
 
 func (g *LavaGenerator) GetSubType() string {
 	return "Lava"
 }
 
-func (g *LavaGenerator) Generate(params entities.GenerationParams) interface{} {
-	return struct {
-		ID            int
-		Name          string
-		Type          string
-		OrbitDistance float64
-		OrbitAngle    float64
-		Temperature   int
-		Atmosphere    string
-		Population    int64
-		Habitability  int
-		Size          int
-	}{
-		ID:            params.SystemID*1000 + rand.Intn(1000),
-		Name:          fmt.Sprintf("Planet %d", rand.Intn(100)),
-		Type:          "Lava",
-		OrbitDistance: params.OrbitDistance,
-		OrbitAngle:    params.OrbitAngle,
-		Temperature:   800 + rand.Intn(500), // 800-1300°C
-		Atmosphere:    "Corrosive",
-		Population:    0, // Uninhabitable
-		Habitability:  0,
-		Size:          4 + rand.Intn(3), // 4-6
+func (g *LavaGenerator) Generate(params entities.GenerationParams) entities.Entity {
+	// Generate ID
+	id := params.SystemID*1000 + rand.Intn(1000)
+
+	// Generate name
+	name := fmt.Sprintf("Inferno %d", rand.Intn(100)+1)
+
+	// Lava planet color (red/orange tones)
+	planetColor := color.RGBA{
+		R: uint8(200 + rand.Intn(55)),
+		G: uint8(50 + rand.Intn(100)),
+		B: uint8(20 + rand.Intn(50)),
+		A: 255,
 	}
+
+	// Create the planet
+	planet := entities.NewPlanet(
+		id,
+		name,
+		"Lava",
+		params.OrbitDistance,
+		params.OrbitAngle,
+		planetColor,
+	)
+
+	// Set lava-specific properties
+	planet.Size = 4 + rand.Intn(3)            // 4-6 pixels (smaller than terrestrial)
+	planet.Temperature = 800 + rand.Intn(500) // 800 to 1300°C - extremely hot
+	planet.Atmosphere = "Corrosive"           // Always corrosive
+	planet.Population = 0                     // Uninhabitable
+
+	// Resources typical for lava planets
+	resourcePool := []string{"Rare Metals", "Geothermal Energy", "Volcanic Glass", "Sulfur", "Magma Minerals"}
+	numResources := 2 + rand.Intn(2) // 2-3 resources
+	planet.Resources = selectRandomResources(resourcePool, numResources)
+
+	// Very low habitability
+	planet.Habitability = 0 // Completely uninhabitable
+
+	// 5% chance of rings (rare)
+	planet.HasRings = rand.Float32() < 0.05
+
+	return planet
 }

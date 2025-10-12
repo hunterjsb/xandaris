@@ -5,6 +5,8 @@ import (
 	"image/color"
 	"math"
 	"math/rand"
+
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 const (
@@ -24,7 +26,7 @@ type System struct {
 	Name        string
 	Color       color.RGBA
 	Connections []int // IDs of connected systems
-	Entities    []Entity
+	Entities    []entities.Entity
 }
 
 // Hyperlane represents a connection between two systems
@@ -71,17 +73,11 @@ func (g *Game) generateSystems() {
 
 		g.systems = append(g.systems, system)
 
-		// Generate entities for this system
-		planetCount := 2 + rand.Intn(5) // 2-6 planets
-		planets := GeneratePlanets(i, planetCount)
-		for _, planet := range planets {
-			system.AddEntity(planet)
-		}
-
-		// 40% chance of having a space station
-		if rand.Float32() < 0.4 {
-			station := GenerateSpaceStation(i, 70.0+rand.Float64()*30.0)
-			system.AddEntity(station)
+		// Generate entities for this system using the new entity generator system
+		seed := int64(i) + g.seed
+		generatedEntities := entities.GenerateEntitiesForSystem(i, seed)
+		for _, entity := range generatedEntities {
+			system.AddEntity(entity)
 		}
 	}
 }
@@ -162,8 +158,8 @@ func (s *System) GetContextMenuItems() []string {
 	items := []string{}
 
 	// Add entity counts summary
-	planetCount := len(s.GetEntitiesByType("Planet"))
-	stationCount := len(s.GetEntitiesByType("Station"))
+	planetCount := len(s.GetEntitiesByType(entities.EntityTypePlanet))
+	stationCount := len(s.GetEntitiesByType(entities.EntityTypeStation))
 
 	items = append(items, fmt.Sprintf("Planets: %d", planetCount))
 	if stationCount > 0 {
@@ -172,12 +168,12 @@ func (s *System) GetContextMenuItems() []string {
 	items = append(items, "") // Empty line for spacing
 
 	// List planets
-	for _, entity := range s.GetEntitiesByType("Planet") {
+	for _, entity := range s.GetEntitiesByType(entities.EntityTypePlanet) {
 		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
 	}
 
 	// List stations
-	for _, entity := range s.GetEntitiesByType("Station") {
+	for _, entity := range s.GetEntitiesByType(entities.EntityTypeStation) {
 		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
 	}
 

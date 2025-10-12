@@ -1,32 +1,20 @@
 package main
 
-import "image/color"
-
-// EntityType represents the type of entity as a string
-type EntityType string
-
-// Entity is the interface that all system entities must implement
-type Entity interface {
-	GetID() int
-	GetName() string
-	GetType() EntityType
-	GetOrbitDistance() float64 // Distance from system center (for orbital positioning)
-	GetOrbitAngle() float64    // Angle in radians for orbital positioning
-	GetColor() color.RGBA
-	GetDescription() string
-}
+import (
+	"github.com/hunterjsb/xandaris/entities"
+)
 
 // AddEntity adds an entity to a system
-func (s *System) AddEntity(entity Entity) {
+func (s *System) AddEntity(entity entities.Entity) {
 	if s.Entities == nil {
-		s.Entities = make([]Entity, 0)
+		s.Entities = make([]entities.Entity, 0)
 	}
 	s.Entities = append(s.Entities, entity)
 }
 
 // GetEntitiesByType returns all entities of a specific type
-func (s *System) GetEntitiesByType(entityType EntityType) []Entity {
-	result := make([]Entity, 0)
+func (s *System) GetEntitiesByType(entityType entities.EntityType) []entities.Entity {
+	result := make([]entities.Entity, 0)
 	for _, entity := range s.Entities {
 		if entity.GetType() == entityType {
 			result = append(result, entity)
@@ -36,7 +24,7 @@ func (s *System) GetEntitiesByType(entityType EntityType) []Entity {
 }
 
 // GetEntityByID finds an entity by its ID
-func (s *System) GetEntityByID(id int) Entity {
+func (s *System) GetEntityByID(id int) entities.Entity {
 	for _, entity := range s.Entities {
 		if entity.GetID() == id {
 			return entity
@@ -51,7 +39,7 @@ func (s *System) CountEntities() int {
 }
 
 // CountEntitiesByType returns the count of entities of a specific type
-func (s *System) CountEntitiesByType(entityType EntityType) int {
+func (s *System) CountEntitiesByType(entityType entities.EntityType) int {
 	count := 0
 	for _, entity := range s.Entities {
 		if entity.GetType() == entityType {
@@ -62,7 +50,7 @@ func (s *System) CountEntitiesByType(entityType EntityType) int {
 }
 
 // HasEntityType checks if the system contains any entities of the specified type
-func (s *System) HasEntityType(entityType EntityType) bool {
+func (s *System) HasEntityType(entityType entities.EntityType) bool {
 	return s.CountEntitiesByType(entityType) > 0
 }
 
@@ -79,8 +67,8 @@ func (s *System) RemoveEntity(entityID int) bool {
 }
 
 // GetEntitiesInOrbitRange returns entities within a certain orbital distance range
-func (s *System) GetEntitiesInOrbitRange(minDistance, maxDistance float64) []Entity {
-	result := make([]Entity, 0)
+func (s *System) GetEntitiesInOrbitRange(minDistance, maxDistance float64) []entities.Entity {
+	result := make([]entities.Entity, 0)
 	for _, entity := range s.Entities {
 		distance := entity.GetOrbitDistance()
 		if distance >= minDistance && distance <= maxDistance {

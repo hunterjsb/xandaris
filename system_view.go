@@ -7,6 +7,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 // SystemView represents the detailed view of a single system
@@ -123,15 +124,8 @@ func (sv *SystemView) updateEntityPositions() {
 		x := sv.centerX + orbitDistance*math.Cos(orbitAngle)
 		y := sv.centerY + orbitDistance*math.Sin(orbitAngle)
 
-		// Update absolute position based on entity type
-		switch e := entity.(type) {
-		case *Planet:
-			e.AbsoluteX = x
-			e.AbsoluteY = y
-		case *SpaceStation:
-			e.AbsoluteX = x
-			e.AbsoluteY = y
-		}
+		// Update absolute position using the SetAbsolutePosition method
+		entity.SetAbsolutePosition(x, y)
 	}
 }
 
@@ -215,24 +209,25 @@ func (sv *SystemView) drawOrbitRing(screen *ebiten.Image, radius float64, c colo
 // drawEntities draws all planets and stations
 func (sv *SystemView) drawEntities(screen *ebiten.Image) {
 	// Draw planets
-	for _, entity := range sv.system.GetEntitiesByType("Planet") {
-		if planet, ok := entity.(*Planet); ok {
+	for _, entity := range sv.system.GetEntitiesByType(entities.EntityTypePlanet) {
+		if planet, ok := entity.(*entities.Planet); ok {
 			sv.drawPlanet(screen, planet)
 		}
 	}
 
 	// Draw stations
-	for _, entity := range sv.system.GetEntitiesByType("Station") {
-		if station, ok := entity.(*SpaceStation); ok {
+	for _, entity := range sv.system.GetEntitiesByType(entities.EntityTypeStation) {
+		if station, ok := entity.(*entities.Station); ok {
 			sv.drawStation(screen, station)
 		}
 	}
 }
 
 // drawPlanet renders a single planet
-func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *Planet) {
-	centerX := int(planet.AbsoluteX)
-	centerY := int(planet.AbsoluteY)
+func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) {
+	x, y := planet.GetAbsolutePosition()
+	centerX := int(x)
+	centerY := int(y)
 	radius := planet.Size
 
 	// Create planet image
@@ -286,9 +281,10 @@ func (sv *SystemView) drawPlanetRings(screen *ebiten.Image, centerX, centerY, pl
 }
 
 // drawStation renders a single space station
-func (sv *SystemView) drawStation(screen *ebiten.Image, station *SpaceStation) {
-	centerX := int(station.AbsoluteX)
-	centerY := int(station.AbsoluteY)
+func (sv *SystemView) drawStation(screen *ebiten.Image, station *entities.Station) {
+	x, y := station.GetAbsolutePosition()
+	centerX := int(x)
+	centerY := int(y)
 	size := 8
 
 	// Draw station as a square/diamond

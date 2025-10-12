@@ -1,227 +1,346 @@
 # Entity System
 
-A flexible, extensible entity generation system for Xandaris II.
-
-## Overview
-
-This system allows you to add new entity types and subtypes with **zero boilerplate** and **no central coordination**. Just drop in a new file and it works!
+This directory contains the extensible entity system for Xandaris II. The entity system allows for easy creation and management of various objects within star systems (planets, stations, asteroids, fleets, etc.).
 
 ## Architecture
 
+The entity system uses a **generator registry pattern** that allows new entity types to be added without modifying any central registry code. Each entity type self-registers on initialization.
+
 ### Core Components
 
-- **`registry.go`** - Central registry that tracks all entity generators
-- **`EntityGenerator` interface** - What all entity generators must implement
-- **Auto-registration** - Each entity file registers itself via `init()`
+- **`types.go`**: Core interfaces and base types
+  - `Entity` interface: All entities must implement this
+  - `EntityType` enum: Categories of entities (Planet, Station, Fleet, etc.)
+  - `BaseEntity` struct: Common functionality for all entities
+
+- **`registry.go`**: Generator registry system
+  - `EntityGenerator` interface: All generators must implement this
+  - `RegisterGenerator()`: Auto-called by generators in `init()`
+  - `GenerateEntitiesForSystem()`: Main entry point for system generation
+
+- **`planet_entity.go`**: Planet entity implementation
+- **`station_entity.go`**: Station entity implementation
 
 ### Directory Structure
 
 ```
 entities/
-├── registry.go          # Core registry system
-├── example.go           # Usage examples
-├── planet/              # Planet entity types
-│   ├── terrestrial.go   # Terrestrial planet generator
-│   ├── lava.go          # Lava planet generator
-│   ├── ocean.go         # (add more...)
-│   └── ...
-├── station/             # Station entity types
-│   ├── military.go      # Military station generator
-│   ├── trading.go       # Trading station generator
-│   └── ...
-└── ship/                # (future) Ship entity types
-    └── ...
+├── README.md                 # This file
+├── types.go                  # Core types and interfaces
+├── registry.go               # Generator registry
+├── planet_entity.go          # Planet entity struct
+├── station_entity.go         # Station entity struct
+├── planet/                   # Planet generators
+│   ├── terrestrial.go        # Terrestrial planet generator
+│   ├── gas_giant.go          # Gas giant generator
+│   ├── ice.go                # Ice world generator
+│   ├── ocean.go              # Ocean world generator
+│   └── lava.go               # Lava planet generator
+└── station/                  # Station generators
+    ├── trading.go            # Trading station generator
+    ├── military.go           # Military station generator
+    └── research.go           # Research station generator
 ```
 
 ## How It Works
 
-### 1. EntityGenerator Interface
+### 1. Entity Interface
 
-Every entity generator implements this simple interface:
+All entities implement the `Entity` interface:
+
+```go
+type Entity interface {
+    GetID() int
+    GetName() string
+    GetType() EntityType
+    GetSubType() string
+    GetOrbitDistance() float64
+    GetOrbitAngle() float64
+    GetColor() color.RGBA
+    GetDescription() string
+    GetAbsolutePosition() (x, y float64)
+    SetAbsolutePosition(x, y float64)
+    GetClickRadius() float64
+}
+```
+
+### 2. Generator Interface
+
+Entity generators implement the `EntityGenerator` interface:
 
 ```go
 type EntityGenerator interface {
-    Generate(params GenerationParams) interface{}
-    GetWeight() float64      // Spawn probability (higher = more common)
-    GetEntityType() string   // "Planet", "Station", "Ship", etc.
-    GetSubType() string      // "Military", "Lava", "Trading", etc.
+    Generate(params GenerationParams) Entity
+    GetWeight() float64           // Spawn probability weight
+    GetEntityType() EntityType    // "Planet", "Station", etc.
+    GetSubType() string           // "Terrestrial", "Trading", etc.
 }
 ```
 
-### 2. Auto-Registration
+### 3. Auto-Registration
 
-Each entity file registers itself in `init()`:
+Each generator self-registers in its `init()` function:
 
 ```go
 func init() {
-    entities.RegisterGenerator(&MyEntityGenerator{})
+    entities.RegisterGenerator(&TerrestrialGenerator{})
 }
 ```
 
-### 3. Weighted Random Selection
+### 4. System Generation
 
-The registry uses weights to randomly select entity types:
-- Terrestrial planets: weight 15.0 (common)
-- Lava planets: weight 5.0 (rare)
-- Trading stations: weight 12.0 (very common)
-- Military stations: weight 8.0 (fairly common)
+When a system is created, the entity system:
+1. Gets all registered generators for each entity type
+2. Selects generators based on weights (probability)
+3. Generates entities with appropriate parameters
+4. Returns a slice of entities
 
-## Adding a New Entity
+## Adding New Entity Types
 
-### Example: Adding an Ocean Planet
+### Option 1: Add a New Generator for Existing Type
 
-**Step 1:** Create `entities/planet/ocean.go`
+To add a new planet type (e.g., Desert World):
+
+1. Create `entities/planet/desert.go`:
 
 ```go
 package planet
 
 import (
     "fmt"
+    "image/color"
     "math/rand"
     "github.com/hunterjsb/xandaris/entities"
 )
 
 func init() {
-    entities.RegisterGenerator(&OceanGenerator{})
+    entities.RegisterGenerator(&DesertGenerator{})
 }
 
-type OceanGenerator struct{}
+type DesertGenerator struct{}
 
-func (g *OceanGenerator) GetWeight() float64 {
-    return 10.0  // Moderately common
+func (g *DesertGenerator) GetWeight() float64 {
+    return 10.0 // Probability weight
 }
 
-func (g *OceanGenerator) GetEntityType() string {
-    return "Planet"
+func (g *DesertGenerator) GetEntityType() entities.EntityType {
+    return entities.EntityTypePlanet
 }
 
-func (g *OceanGenerator) GetSubType() string {
-    return "Ocean"
+func (g *DesertGenerator) GetSubType() string {
+    return "Desert"
 }
 
-func (g *OceanGenerator) Generate(params entities.GenerationParams) interface{} {
-    return struct {
-        ID            int
-        Name          string
-        Type          string
-        OrbitDistance float64
-        OrbitAngle    float64
-        Temperature   int
-        Atmosphere    string
-        Population    int64
-    }{
-        ID:            params.SystemID*1000 + rand.Intn(1000),
-        Name:          fmt.Sprintf("Planet %d", rand.Intn(100)),
-        Type:          "Ocean",
-        OrbitDistance: params.OrbitDistance,
-        OrbitAngle:    params.OrbitAngle,
-        Temperature:   0 + rand.Intn(40),
-        Atmosphere:    "Breathable",
-        Population:    int64(rand.Intn(3000000000)),
+func (g *DesertGenerator) Generate(params entities.GenerationParams) entities.Entity {
+    id := params.SystemID*1000 + rand.Intn(1000)
+    name := fmt.Sprintf("Dune %d", rand.Intn(100)+1)
+    
+    planetColor := color.RGBA{
+        R: uint8(220 + rand.Intn(35)),
+        G: uint8(200 + rand.Intn(35)),
+        B: uint8(120 + rand.Intn(50)),
+        A: 255,
+    }
+    
+    planet := entities.NewPlanet(
+        id, name, "Desert",
+        params.OrbitDistance,
+        params.OrbitAngle,
+        planetColor,
+    )
+    
+    planet.Size = 5 + rand.Intn(2)
+    planet.Temperature = 30 + rand.Intn(70) // 30-100°C
+    planet.Atmosphere = "Thin"
+    planet.Population = int64(rand.Intn(100000000))
+    planet.Resources = []string{"Silicon", "Sand", "Solar Energy"}
+    planet.Habitability = 20 + rand.Intn(40) // 20-60%
+    
+    return planet
+}
+```
+
+2. Import it in `main.go`:
+```go
+_ "github.com/hunterjsb/xandaris/entities/planet"
+```
+
+That's it! The new desert planet type will automatically appear in systems.
+
+### Option 2: Add a Completely New Entity Category
+
+To add a new entity category (e.g., Asteroids):
+
+1. Add the entity type to `types.go`:
+```go
+const (
+    EntityTypePlanet   EntityType = "Planet"
+    EntityTypeStation  EntityType = "Station"
+    EntityTypeFleet    EntityType = "Fleet"
+    EntityTypeAsteroid EntityType = "Asteroid"  // New!
+)
+```
+
+2. Create the entity struct in `entities/asteroid_entity.go`:
+```go
+package entities
+
+type Asteroid struct {
+    BaseEntity
+    Composition string
+    Size int
+    Value int
+}
+
+func NewAsteroid(id int, name string, orbitDistance, orbitAngle float64, c color.RGBA) *Asteroid {
+    return &Asteroid{
+        BaseEntity: BaseEntity{
+            ID: id,
+            Name: name,
+            Type: EntityTypeAsteroid,
+            SubType: "Asteroid",
+            Color: c,
+            OrbitDistance: orbitDistance,
+            OrbitAngle: orbitAngle,
+        },
+    }
+}
+
+// Implement required methods...
+```
+
+3. Create generators in `entities/asteroid/` directory
+
+4. Update `registry.go` to generate asteroids in `GenerateEntitiesForSystem()`
+
+5. Update rendering code in `system_view.go` to draw asteroids
+
+## Entity Properties
+
+### Planet Properties
+- **Size**: Visual radius (pixels)
+- **PlanetType**: Subtype (Terrestrial, Gas Giant, Ice, Ocean, Lava)
+- **Population**: Number of inhabitants
+- **Resources**: Available resources for mining/trading
+- **Temperature**: In Celsius
+- **Atmosphere**: Type (Breathable, Toxic, Thin, Dense, None, Corrosive)
+- **HasRings**: Boolean for planetary rings
+- **Habitability**: Score 0-100
+
+### Station Properties
+- **StationType**: Subtype (Trading, Military, Research)
+- **Capacity**: Maximum population
+- **CurrentPop**: Current population
+- **Services**: Available services
+- **Owner**: Owning faction
+- **TradeGoods**: Available trade items
+- **DefenseLevel**: Defense rating 0-10
+
+## Weight System
+
+Generators use a weight system for probability:
+
+- **15.0**: Very common (Terrestrial planets)
+- **12.0**: Common (Trading stations, Ocean worlds)
+- **10.0**: Fairly common (Gas giants)
+- **8.0**: Moderate (Ice worlds)
+- **7.0**: Less common (Research stations)
+- **6.0**: Uncommon (Military stations)
+- **5.0**: Rare (Lava planets)
+
+Higher weights = more likely to appear.
+
+## Context Menus
+
+Entities that implement `ContextMenuProvider` interface can display context menus:
+
+```go
+type ContextMenuProvider interface {
+    GetContextMenuTitle() string
+    GetContextMenuItems() []string
+}
+```
+
+Both Planet and Station implement this for right-click information panels.
+
+## Best Practices
+
+1. **Keep generators small**: One generator per subtype
+2. **Use meaningful weights**: Balance gameplay and realism
+3. **Random variation**: Add randomness to make each entity unique
+4. **Reasonable values**: Keep population, temperature, etc. realistic
+5. **Test thoroughly**: Ensure new entities work with existing UI
+
+## Future Enhancements
+
+Potential additions to the entity system:
+
+- **Fleets**: Mobile entities that can travel between systems
+- **Asteroids**: Mineable resources
+- **Anomalies**: Special locations (black holes, nebulae)
+- **Wormholes**: Fast travel points
+- **Derelicts**: Abandoned ships/stations
+- **Resources**: Harvestable materials in space
+
+## Examples
+
+### Viewing Entity Statistics
+
+```go
+// In system generation
+stats := entities.GetRegistryStats()
+for entityType, count := range stats {
+    fmt.Printf("%s generators: %d\n", entityType, count)
+}
+```
+
+### Filtering Entities
+
+```go
+// Get all planets in a system
+planets := system.GetEntitiesByType(entities.EntityTypePlanet)
+
+// Get all trading stations
+for _, entity := range system.Entities {
+    if entity.GetType() == entities.EntityTypeStation && 
+       entity.GetSubType() == "Trading" {
+        // Do something with trading station
     }
 }
 ```
 
-**Step 2:** That's it! The entity is now automatically:
-- Registered in the system
-- Available for generation
-- Weighted for spawn probability
-
-## Adding a New Entity Category
-
-Want to add Ships? Asteroids? Anomalies?
-
-**Step 1:** Create directory `entities/ship/`
-
-**Step 2:** Create `entities/ship/fighter.go`
+### Custom Generation Parameters
 
 ```go
-package ship
-
-import (
-    "github.com/hunterjsb/xandaris/entities"
-)
-
-func init() {
-    entities.RegisterGenerator(&FighterGenerator{})
-}
-
-type FighterGenerator struct{}
-
-func (g *FighterGenerator) GetWeight() float64 {
-    return 20.0  // Fighters are common
-}
-
-func (g *FighterGenerator) GetEntityType() string {
-    return "Ship"  // New entity type!
-}
-
-func (g *FighterGenerator) GetSubType() string {
-    return "Fighter"
-}
-
-func (g *FighterGenerator) Generate(params entities.GenerationParams) interface{} {
-    // Create fighter ship
-}
-```
-
-**Step 3:** Import the package to trigger registration:
-
-```go
-import (
-    _ "github.com/hunterjsb/xandaris/entities/ship"
-)
-```
-
-**Step 4:** (Optional) Add generation logic in `registry.go` if you want automatic spawning:
-
-```go
-// Generate ships (1-3 per system)
-shipCount := 1 + rand.Intn(3)
-shipGenerators := GetGeneratorsByType("Ship")
-// ... generate ships
-```
-
-## Usage
-
-```go
-import (
-    "github.com/hunterjsb/xandaris/entities"
-    
-    // Import to trigger auto-registration
-    _ "github.com/hunterjsb/xandaris/entities/planet"
-    _ "github.com/hunterjsb/xandaris/entities/station"
-)
-
-// Generate entities for a system
-entities := entities.GenerateEntitiesForSystem(systemID, seed)
-
-// Get all generators of a specific type
-planetGens := entities.GetGeneratorsByType("Planet")
-
-// Manual generation with custom parameters
+// Generate a specific planet at a specific location
 params := entities.GenerationParams{
     SystemID:      42,
     OrbitDistance: 100.0,
-    OrbitAngle:    3.14,
+    OrbitAngle:    1.57, // 90 degrees
     SystemSeed:    12345,
 }
-planet := planetGen.Generate(params)
+
+generator := &planet.TerrestrialGenerator{}
+planet := generator.Generate(params)
 ```
 
-## Benefits
+## Troubleshooting
 
-✅ **Zero boilerplate** - Just implement the interface and register  
-✅ **No central coordination** - Each entity is self-contained  
-✅ **Easy to extend** - Add new types without modifying existing code  
-✅ **Weighted spawning** - Control rarity/commonality per entity  
-✅ **Type-safe** - Uses Go interfaces  
-✅ **Flexible** - Works for any entity category (planets, stations, ships, etc.)  
+### New generator not appearing
+- Check `init()` function exists and calls `RegisterGenerator()`
+- Ensure package is imported in `main.go` with `_` prefix
+- Verify weight is > 0
 
-## Future Improvements
+### Entities not rendering
+- Check `GetAbsolutePosition()` is returning valid coordinates
+- Ensure entity color has alpha = 255
+- Verify `GetClickRadius()` returns a positive value
 
-- Add entity validation
-- Support for entity dependencies (e.g., "Guardian stations only spawn near military planets")
-- Entity tags/categories for filtering
-- Save/load entity definitions from JSON
-- Mod support (load entities from external files)
+### Context menu not showing
+- Implement `GetContextMenuTitle()` and `GetContextMenuItems()`
+- Ensure entity implements both `Entity` and `ContextMenuProvider`
+- Check click detection radius is reasonable
+
+## License
+
+Part of Xandaris II - Space Trading Game

@@ -2,8 +2,11 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	_ "github.com/hunterjsb/xandaris/entities/planet"
+	_ "github.com/hunterjsb/xandaris/entities/station"
 )
 
 const (
@@ -16,6 +19,7 @@ type Game struct {
 	systems     []*System
 	hyperlanes  []Hyperlane
 	viewManager *ViewManager
+	seed        int64
 }
 
 // NewGame creates a new game instance
@@ -23,6 +27,7 @@ func NewGame() *Game {
 	g := &Game{
 		systems:    make([]*System, 0),
 		hyperlanes: make([]Hyperlane, 0),
+		seed:       time.Now().UnixNano(),
 	}
 
 	// Generate galaxy data

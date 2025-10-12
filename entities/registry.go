@@ -15,13 +15,13 @@ type GenerationParams struct {
 // EntityGenerator is the interface that all entity generators must implement
 type EntityGenerator interface {
 	// Generate creates a new entity instance
-	Generate(params GenerationParams) interface{}
+	Generate(params GenerationParams) Entity
 
 	// GetWeight returns the spawn probability weight (higher = more common)
 	GetWeight() float64
 
 	// GetEntityType returns the type of entity this generates (e.g., "Planet", "Station")
-	GetEntityType() string
+	GetEntityType() EntityType
 
 	// GetSubType returns the subtype (e.g., "Military", "Lava", "Trading")
 	GetSubType() string
@@ -37,7 +37,7 @@ func RegisterGenerator(gen EntityGenerator) {
 }
 
 // GetGeneratorsByType returns all generators of a specific entity type
-func GetGeneratorsByType(entityType string) []EntityGenerator {
+func GetGeneratorsByType(entityType EntityType) []EntityGenerator {
 	var result []EntityGenerator
 	for _, gen := range registry {
 		if gen.GetEntityType() == entityType {
@@ -81,13 +81,13 @@ func SelectRandomGenerator(generators []EntityGenerator) EntityGenerator {
 }
 
 // GenerateEntitiesForSystem generates a collection of entities for a system
-func GenerateEntitiesForSystem(systemID int, seed int64) []interface{} {
+func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
 	rand.Seed(seed)
-	entities := make([]interface{}, 0)
+	entities := make([]Entity, 0)
 
 	// Generate planets (2-6 per system)
 	planetCount := 2 + rand.Intn(5)
-	planetGenerators := GetGeneratorsByType("Planet")
+	planetGenerators := GetGeneratorsByType(EntityTypePlanet)
 	if len(planetGenerators) > 0 {
 		for i := 0; i < planetCount; i++ {
 			gen := SelectRandomGenerator(planetGenerators)
@@ -104,7 +104,7 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []interface{} {
 
 	// Generate stations (0-1 per system, 40% chance)
 	if rand.Float32() < 0.4 {
-		stationGenerators := GetGeneratorsByType("Station")
+		stationGenerators := GetGeneratorsByType(EntityTypeStation)
 		if len(stationGenerators) > 0 {
 			gen := SelectRandomGenerator(stationGenerators)
 			params := GenerationParams{
@@ -119,4 +119,13 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []interface{} {
 	}
 
 	return entities
+}
+
+// GetRegistryStats returns statistics about registered generators
+func GetRegistryStats() map[EntityType]int {
+	stats := make(map[EntityType]int)
+	for _, gen := range registry {
+		stats[gen.GetEntityType()]++
+	}
+	return stats
 }
