@@ -63,6 +63,7 @@ func (g *OilGenerator) Generate(params entities.GenerationParams) entities.Entit
 	return resource
 }
 
+// TODO fuel should be a derivative of oil
 type FuelGenerator struct{}
 
 func (g *FuelGenerator) GetWeight() float64 {
