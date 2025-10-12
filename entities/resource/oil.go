@@ -66,7 +66,7 @@ func (g *OilGenerator) Generate(params entities.GenerationParams) entities.Entit
 type FuelGenerator struct{}
 
 func (g *FuelGenerator) GetWeight() float64 {
-	return 8.0 // Fuel is less common and valuable
+	return 0.0 // Fuel does not spawn naturally
 }
 
 func (g *FuelGenerator) GetEntityType() entities.EntityType {
