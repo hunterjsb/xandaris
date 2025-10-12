@@ -10,7 +10,7 @@ import (
 
 func init() {
 	entities.RegisterGenerator(&OilGenerator{})
-	entities.RegisterGenerator(&FuelGenerator{})
+	entities.RegisterGenerator(&FuelGenerator{}) // Fuel doesn't spawn naturally (weight 0.0) but needs to be registered
 }
 
 type OilGenerator struct{}
@@ -63,11 +63,12 @@ func (g *OilGenerator) Generate(params entities.GenerationParams) entities.Entit
 	return resource
 }
 
-// TODO fuel should be a derivative of oil
+// FuelGenerator defines Fuel as a resource type but it doesn't spawn naturally
+// Fuel is produced by refineries that convert Oil
 type FuelGenerator struct{}
 
 func (g *FuelGenerator) GetWeight() float64 {
-	return 0.0 // Fuel does not spawn naturally
+	return 0.0 // Fuel does not spawn naturally - only produced by refineries
 }
 
 func (g *FuelGenerator) GetEntityType() entities.EntityType {
@@ -79,21 +80,19 @@ func (g *FuelGenerator) GetSubType() string {
 }
 
 func (g *FuelGenerator) Generate(params entities.GenerationParams) entities.Entity {
-	// Generate ID
+	// This should never be called since weight is 0.0
+	// But we need it defined so "Fuel" is a valid resource type
 	id := params.SystemID*100000 + rand.Intn(10000)
-
-	// Generate name
-	name := fmt.Sprintf("Fuel Deposit %d", rand.Intn(100)+1)
+	name := "Fuel"
 
 	// Fuel color (orange/yellow)
 	resourceColor := color.RGBA{
-		R: uint8(200 + rand.Intn(55)),
-		G: uint8(150 + rand.Intn(80)),
-		B: uint8(40 + rand.Intn(60)),
+		R: 255,
+		G: 165,
+		B: 0,
 		A: 255,
 	}
 
-	// Create the resource
 	resource := entities.NewResource(
 		id,
 		name,
@@ -103,13 +102,12 @@ func (g *FuelGenerator) Generate(params entities.GenerationParams) entities.Enti
 		resourceColor,
 	)
 
-	// Set fuel-specific properties
-	resource.Abundance = 15 + rand.Intn(40)             // 15-55% abundance
-	resource.ExtractionRate = 0.4 + rand.Float64()*0.35 // 0.4-0.75 (harder to extract)
-	resource.Value = 150 + rand.Intn(150)               // 150-300 credits/unit (high value for propulsion)
-	resource.Rarity = "Rare"
-	resource.Size = 4 + rand.Intn(5)      // 4-8 pixels
-	resource.Quality = 55 + rand.Intn(40) // 55-95% quality
+	resource.Abundance = 100
+	resource.ExtractionRate = 1.0
+	resource.Value = 200 // High value - refined product
+	resource.Rarity = "Refined"
+	resource.Size = 5
+	resource.Quality = 100
 
 	return resource
 }

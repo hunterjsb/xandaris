@@ -419,6 +419,14 @@ func (g *Game) handleConstructionComplete(completion tickable.ConstructionComple
 					building := g.createBuildingFromCompletion(completion, planet)
 					if building != nil {
 						planet.Buildings = append(planet.Buildings, building)
+
+						// Initialize Fuel storage when a refinery is built
+						if b, ok := building.(*entities.Building); ok && b.BuildingType == "Refinery" {
+							// Ensure the planet has Fuel storage initialized
+							if _, exists := planet.StoredResources["Fuel"]; !exists {
+								planet.AddStoredResource("Fuel", 0) // Initialize with 0 fuel
+							}
+						}
 					}
 					// Refresh planet view if it's currently viewing this planet
 					g.refreshPlanetViewIfActive(planet)
@@ -545,6 +553,7 @@ func (g *Game) createBuildingFromCompletion(completion tickable.ConstructionComp
 			gen.GetSubType()+" Complex" == completion.Item.Name ||
 			gen.GetSubType()+" Module" == completion.Item.Name ||
 			"Orbital "+gen.GetSubType() == completion.Item.Name ||
+			"Oil "+gen.GetSubType() == completion.Item.Name ||
 			"Mining Complex" == completion.Item.Name && gen.GetSubType() == "Mine" {
 			building := gen.Generate(params)
 			if b, ok := building.(*entities.Building); ok {

@@ -125,6 +125,16 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		Color:          color.RGBA{150, 160, 180, 255},
 	})
 
+	// Refinery
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Refinery",
+		Name:           "Oil Refinery",
+		Description:    "Converts Oil into Fuel (10 Oil/s → 5 Fuel/s)",
+		Cost:           1500,
+		AttachmentType: "Planet",
+		Color:          ColorStationRefinery, // Orange color
+	})
+
 	// Future: Add more planet buildings here
 	// - Research Lab
 	// - Barracks

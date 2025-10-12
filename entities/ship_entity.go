@@ -368,31 +368,31 @@ func GetShipResourceRequirements(shipType ShipType) map[string]int {
 	switch shipType {
 	case ShipTypeScout:
 		requirements["Iron"] = 50
-		requirements["Oil"] = 20
+		requirements["Fuel"] = 20
 
 	case ShipTypeColony:
 		requirements["Iron"] = 100
-		requirements["Oil"] = 80
+		requirements["Fuel"] = 80
 		requirements["Rare Metals"] = 20
 
 	case ShipTypeCargo:
 		requirements["Iron"] = 80
-		requirements["Oil"] = 40
+		requirements["Fuel"] = 40
 
 	case ShipTypeFrigate:
 		requirements["Iron"] = 120
 		requirements["Rare Metals"] = 40
-		requirements["Oil"] = 50
+		requirements["Fuel"] = 50
 
 	case ShipTypeDestroyer:
 		requirements["Iron"] = 200
 		requirements["Rare Metals"] = 80
-		requirements["Oil"] = 100
+		requirements["Fuel"] = 100
 
 	case ShipTypeCruiser:
 		requirements["Iron"] = 300
 		requirements["Rare Metals"] = 150
-		requirements["Oil"] = 150
+		requirements["Fuel"] = 150
 		requirements["Helium-3"] = 50
 	}
 
