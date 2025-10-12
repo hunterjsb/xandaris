@@ -1,41 +1,18 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"math"
-	"math/rand"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 const (
-	screenWidth   = 1280
-	screenHeight  = 720
-	systemCount   = 25
-	circleRadius  = 12
-	maxHyperlanes = 3
-	minDistance   = 80.0
-	maxDistance   = 200.0
+	screenWidth  = 1280
+	screenHeight = 720
 )
-
-// System represents a star system
-type System struct {
-	ID          int
-	X           float64
-	Y           float64
-	Name        string
-	Color       color.RGBA
-	Connections []int // IDs of connected systems
-}
-
-// Hyperlane represents a connection between two systems
-type Hyperlane struct {
-	From int
-	To   int
-}
 
 // Game implements ebiten.Game interface
 type Game struct {
@@ -54,119 +31,6 @@ func NewGame() *Game {
 	g.generateHyperlanes()
 
 	return g
-}
-
-// generateSystems creates systems at random coordinates
-func (g *Game) generateSystems() {
-	colors := []color.RGBA{
-		{100, 100, 200, 255}, // Blue
-		{200, 100, 150, 255}, // Purple
-		{150, 200, 100, 255}, // Green
-		{200, 150, 100, 255}, // Orange
-		{200, 200, 100, 255}, // Yellow
-		{200, 100, 100, 255}, // Red
-	}
-
-	// Generate systems with random positions
-	for i := 0; i < systemCount; i++ {
-		var x, y float64
-		var validPosition bool
-		attempts := 0
-
-		// Keep trying until we find a position that's not too close to existing systems
-		for !validPosition && attempts < 100 {
-			x = 100 + rand.Float64()*(screenWidth-200)
-			y = 100 + rand.Float64()*(screenHeight-200)
-			validPosition = true
-
-			// Check distance to all existing systems
-			for _, existing := range g.systems {
-				distance := math.Sqrt(math.Pow(x-existing.X, 2) + math.Pow(y-existing.Y, 2))
-				if distance < 60 { // Minimum distance between systems
-					validPosition = false
-					break
-				}
-			}
-			attempts++
-		}
-
-		system := &System{
-			ID:          i,
-			X:           x,
-			Y:           y,
-			Name:        fmt.Sprintf("SYS-%d", i+1),
-			Color:       colors[rand.Intn(len(colors))],
-			Connections: make([]int, 0),
-		}
-
-		g.systems = append(g.systems, system)
-	}
-}
-
-// generateHyperlanes creates connections between systems
-func (g *Game) generateHyperlanes() {
-	for _, system := range g.systems {
-		// Find nearby systems for potential connections
-		var nearbySystemsWithDistance []struct {
-			system   *System
-			distance float64
-		}
-
-		for _, other := range g.systems {
-			if other.ID == system.ID {
-				continue
-			}
-
-			distance := math.Sqrt(math.Pow(system.X-other.X, 2) + math.Pow(system.Y-other.Y, 2))
-			if distance >= minDistance && distance <= maxDistance {
-				nearbySystemsWithDistance = append(nearbySystemsWithDistance, struct {
-					system   *System
-					distance float64
-				}{other, distance})
-			}
-		}
-
-		// Sort by distance (closest first)
-		for i := 0; i < len(nearbySystemsWithDistance)-1; i++ {
-			for j := i + 1; j < len(nearbySystemsWithDistance); j++ {
-				if nearbySystemsWithDistance[i].distance > nearbySystemsWithDistance[j].distance {
-					nearbySystemsWithDistance[i], nearbySystemsWithDistance[j] = nearbySystemsWithDistance[j], nearbySystemsWithDistance[i]
-				}
-			}
-		}
-
-		// Connect to closest systems (max 3 connections per system)
-		connectionsToMake := maxHyperlanes
-		if len(nearbySystemsWithDistance) < maxHyperlanes {
-			connectionsToMake = len(nearbySystemsWithDistance)
-		}
-
-		for i := 0; i < connectionsToMake; i++ {
-			other := nearbySystemsWithDistance[i].system
-
-			// Check if connection already exists
-			connectionExists := false
-			for _, hyperlane := range g.hyperlanes {
-				if (hyperlane.From == system.ID && hyperlane.To == other.ID) ||
-					(hyperlane.From == other.ID && hyperlane.To == system.ID) {
-					connectionExists = true
-					break
-				}
-			}
-
-			if !connectionExists {
-				// Add hyperlane
-				g.hyperlanes = append(g.hyperlanes, Hyperlane{
-					From: system.ID,
-					To:   other.ID,
-				})
-
-				// Add to both systems' connection lists
-				system.Connections = append(system.Connections, other.ID)
-				other.Connections = append(other.Connections, system.ID)
-			}
-		}
-	}
 }
 
 // Update updates the game state
