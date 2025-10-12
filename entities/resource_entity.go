@@ -15,6 +15,7 @@ type Resource struct {
 	Rarity         string  // "Common", "Uncommon", "Rare", "Very Rare"
 	Size           int     // Visual size in pixels
 	Quality        int     // Quality grade 0-100
+	Owner          string  // Name of the player/faction who owns/controls this resource
 }
 
 // NewResource creates a new resource entity
@@ -36,6 +37,7 @@ func NewResource(id int, name, resourceType string, orbitDistance, orbitAngle fl
 		Rarity:         "Common",
 		Size:           3,
 		Quality:        50,
+		Owner:          "", // Unowned by default
 	}
 }
 
@@ -64,6 +66,11 @@ func (r *Resource) GetContextMenuItems() []string {
 	items = append(items, fmt.Sprintf("Quality: %d%%", r.Quality))
 	items = append(items, fmt.Sprintf("Extraction Rate: %.1f%%", r.ExtractionRate*100))
 	items = append(items, fmt.Sprintf("Value: %d credits/unit", r.Value))
+
+	if r.Owner != "" {
+		items = append(items, "") // Empty line
+		items = append(items, fmt.Sprintf("Owner: %s", r.Owner))
+	}
 
 	items = append(items, "") // Empty line
 	items = append(items, "Status: Ready for extraction")

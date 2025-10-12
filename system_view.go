@@ -280,6 +280,11 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 	// Keep planet size consistent regardless of orbital scale
 	radius := planet.Size
 
+	// Draw ownership indicator if owned by player
+	if planet.Owner != "" && sv.game.humanPlayer != nil && planet.Owner == sv.game.humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(radius+3), sv.game.humanPlayer.Color)
+	}
+
 	// Create planet image
 	planetImg := ebiten.NewImage(radius*2, radius*2)
 

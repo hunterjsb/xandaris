@@ -16,6 +16,7 @@ type Planet struct {
 	Atmosphere   string   // Type of atmosphere
 	HasRings     bool     // Whether the planet has rings
 	Habitability int      // Habitability score 0-100
+	Owner        string   // Name of the player/faction who owns this planet
 }
 
 // NewPlanet creates a new planet entity
@@ -38,6 +39,7 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 		Resources:    []Entity{},
 		HasRings:     false,
 		Habitability: 50,
+		Owner:        "", // Unowned by default
 	}
 }
 
@@ -74,6 +76,11 @@ func (p *Planet) GetContextMenuItems() []string {
 		items = append(items, "") // Empty line
 		items = append(items, fmt.Sprintf("Resources: %d deposits", len(p.Resources)))
 		items = append(items, "View planet for details")
+	}
+
+	if p.Owner != "" {
+		items = append(items, "") // Empty line
+		items = append(items, fmt.Sprintf("Owner: %s", p.Owner))
 	}
 
 	return items

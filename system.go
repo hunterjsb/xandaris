@@ -197,3 +197,20 @@ func (s *System) GetPosition() (float64, float64) {
 func (s *System) GetClickRadius() float64 {
 	return float64(circleRadius)
 }
+
+// HasOwnershipByPlayer checks if the system contains any planets owned by the specified player
+func (s *System) HasOwnershipByPlayer(playerName string) bool {
+	for _, entity := range s.Entities {
+		if planet, ok := entity.(*entities.Planet); ok {
+			if planet.Owner == playerName {
+				return true
+			}
+		}
+		if station, ok := entity.(*entities.Station); ok {
+			if station.IsPlayerOwned() && station.Owner == playerName {
+				return true
+			}
+		}
+	}
+	return false
+}

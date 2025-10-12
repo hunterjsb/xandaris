@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image/color"
 	"log"
 	"time"
 
@@ -22,6 +23,8 @@ type Game struct {
 	hyperlanes  []Hyperlane
 	viewManager *ViewManager
 	seed        int64
+	players     []*Player
+	humanPlayer *Player
 }
 
 // NewGame creates a new game instance
@@ -30,11 +33,20 @@ func NewGame() *Game {
 		systems:    make([]*System, 0),
 		hyperlanes: make([]Hyperlane, 0),
 		seed:       time.Now().UnixNano(),
+		players:    make([]*Player, 0),
 	}
 
 	// Generate galaxy data
 	g.generateSystems()
 	g.generateHyperlanes()
+
+	// Create human player
+	playerColor := color.RGBA{100, 200, 100, 255} // Green for player
+	g.humanPlayer = NewPlayer(0, "Player", playerColor, PlayerTypeHuman)
+	g.players = append(g.players, g.humanPlayer)
+
+	// Initialize player with starting planet
+	g.InitializePlayer(g.humanPlayer)
 
 	// Initialize view system
 	g.viewManager = NewViewManager(g)

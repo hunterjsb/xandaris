@@ -208,6 +208,11 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	centerY := int(y)
 	radius := resource.Size
 
+	// Draw ownership indicator if owned by player
+	if resource.Owner != "" && pv.game.humanPlayer != nil && resource.Owner == pv.game.humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(radius+2), pv.game.humanPlayer.Color)
+	}
+
 	// Create resource image
 	resourceImg := ebiten.NewImage(radius*2, radius*2)
 

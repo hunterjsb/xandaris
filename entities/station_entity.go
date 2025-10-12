@@ -12,7 +12,7 @@ type Station struct {
 	Capacity     int      // Maximum population capacity
 	CurrentPop   int      // Current population
 	Services     []string // Available services
-	Owner        string   // Owner faction/organization
+	Owner        string   // Owner player name or NPC faction/organization
 	TradeGoods   []string // Available trade goods
 	DefenseLevel int      // Defense rating 0-10
 }
@@ -47,6 +47,23 @@ func (s *Station) GetDescription() string {
 // GetClickRadius returns the click detection radius
 func (s *Station) GetClickRadius() float64 {
 	return 6.0 // Fixed radius for station click detection
+}
+
+// IsPlayerOwned checks if this station is owned by a player (vs NPC faction)
+func (s *Station) IsPlayerOwned() bool {
+	// Player-owned stations won't have faction names like "Independent", "Trade Union", etc.
+	// This is a simple heuristic - can be improved later
+	npcFactions := []string{"Independent", "Trade Union", "Commerce Guild", "Merchant Alliance",
+		"Military Corp", "Defense Coalition", "Fleet Command", "Sector Defense Force",
+		"Research Guild", "Scientific Consortium", "Academy of Sciences", "Tech Institute",
+		"Mining Consortium", "Independent Miners", "Resource Corp", "Industrial Alliance"}
+
+	for _, faction := range npcFactions {
+		if s.Owner == faction {
+			return false
+		}
+	}
+	return s.Owner != ""
 }
 
 // GetContextMenuTitle implements ContextMenuProvider

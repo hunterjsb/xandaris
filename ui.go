@@ -152,9 +152,30 @@ func (c *ClickHandler) GetActiveMenu() *ContextMenu {
 	return c.activeMenu
 }
 
-// HasActiveMenu returns whether there's an active context menu
+// HasActiveMenu returns whether there is an active menu
 func (c *ClickHandler) HasActiveMenu() bool {
 	return c.activeMenu != nil
+}
+
+// DrawOwnershipRing draws a colored ring around an object to indicate ownership
+func DrawOwnershipRing(screen *ebiten.Image, centerX, centerY int, radius float64, ownerColor color.RGBA) {
+	// Make the ring semi-transparent
+	ringColor := ownerColor
+	ringColor.A = 180
+
+	// Draw the ring
+	segments := 32
+	for i := 0; i < segments; i++ {
+		angle1 := float64(i) * 2 * 3.14159 / float64(segments)
+		angle2 := float64(i+1) * 2 * 3.14159 / float64(segments)
+
+		x1 := centerX + int(radius*math.Cos(angle1))
+		y1 := centerY + int(radius*math.Sin(angle1))
+		x2 := centerX + int(radius*math.Cos(angle2))
+		y2 := centerY + int(radius*math.Sin(angle2))
+
+		DrawLine(screen, x1, y1, x2, y2, ringColor)
+	}
 }
 
 // ContextMenu represents a popup menu that appears near an entity
