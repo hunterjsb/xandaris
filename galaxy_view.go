@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
@@ -94,7 +93,9 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	ebitenutil.DebugPrint(screen, "Xandaris II - Galaxy Map\nDouble-click system to view\nPress ESC to quit")
+	DrawText(screen, "Xandaris II - Galaxy Map", 10, 10, UITextPrimary)
+	DrawText(screen, "Double-click system to view", 10, 25, UITextSecondary)
+	DrawText(screen, "Press ESC to quit", 10, 40, UITextSecondary)
 }
 
 // OnEnter implements View interface

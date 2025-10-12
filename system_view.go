@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
@@ -59,7 +58,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	screen.Fill(UIBackground)
 
 	if sv.system == nil {
-		ebitenutil.DebugPrint(screen, "No system selected")
+		DrawText(screen, "No system selected", 10, 10, UITextPrimary)
 		return
 	}
 
@@ -87,8 +86,9 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	title := fmt.Sprintf("System View: %s\nPress ESC to return to galaxy", sv.system.Name)
-	ebitenutil.DebugPrint(screen, title)
+	title := fmt.Sprintf("System View: %s", sv.system.Name)
+	DrawText(screen, title, 10, 10, UITextPrimary)
+	DrawText(screen, "Press ESC to return to galaxy", 10, 25, UITextSecondary)
 }
 
 // OnEnter implements View interface
