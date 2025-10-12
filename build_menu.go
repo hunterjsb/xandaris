@@ -25,18 +25,20 @@ type BuildMenuItem struct {
 
 // BuildMenu displays available buildings and handles construction
 type BuildMenu struct {
-	game           *Game
-	isOpen         bool
-	x              int
-	y              int
-	width          int
-	height         int
-	items          []*BuildMenuItem
-	attachedTo     entities.Entity // The planet or resource we're building on
-	attachmentID   string
-	attachmentType string
-	selectedIndex  int
-	scrollOffset   int
+	game              *Game
+	isOpen            bool
+	x                 int
+	y                 int
+	width             int
+	height            int
+	items             []*BuildMenuItem
+	attachedTo        entities.Entity // The planet or resource we're building on
+	attachmentID      string
+	attachmentType    string
+	selectedIndex     int
+	scrollOffset      int
+	notification      string
+	notificationTimer int
 }
 
 // NewBuildMenu creates a new build menu
@@ -156,6 +158,10 @@ func (bm *BuildMenu) Update() {
 		return
 	}
 
+	if bm.notificationTimer > 0 {
+		bm.notificationTimer--
+	}
+
 	// Close on ESC or right-click
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
 		bm.Close()
@@ -219,7 +225,8 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 
 	// Check if player has enough credits
 	if bm.game.humanPlayer.Credits < item.Cost {
-		// TODO: Show "Insufficient funds" message
+		bm.notification = "Insufficient funds"
+		bm.notificationTimer = 120 // 2 seconds at 60fps
 		return
 	}
 
@@ -337,6 +344,12 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		DrawText(screen, buildTimeText, nameX, buildTimeY, UITextSecondary)
 
 		itemY += itemHeight + itemPadding
+	}
+
+	// Draw notification message
+	if bm.notificationTimer > 0 {
+		notificationY := bm.y + bm.height - 45
+		DrawCenteredText(screen, bm.notification, bm.x+bm.width/2, notificationY)
 	}
 
 	// Draw instructions at bottom
