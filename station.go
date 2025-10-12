@@ -20,6 +20,9 @@ type SpaceStation struct {
 	Owner         string
 	TradeGoods    []string
 	DefenseLevel  int
+	// Absolute position (set by system view for rendering/clicking)
+	AbsoluteX float64
+	AbsoluteY float64
 }
 
 func (s *SpaceStation) GetID() int                { return s.ID }
@@ -319,4 +322,14 @@ func (s *SpaceStation) GetContextMenuItems() []string {
 	}
 
 	return items
+}
+
+// GetPosition implements Clickable interface
+func (s *SpaceStation) GetPosition() (float64, float64) {
+	return s.AbsoluteX, s.AbsoluteY
+}
+
+// GetClickRadius implements Clickable interface
+func (s *SpaceStation) GetClickRadius() float64 {
+	return 6.0 // Fixed radius for station click detection
 }

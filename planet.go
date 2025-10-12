@@ -20,6 +20,9 @@ type Planet struct {
 	Temperature   int // In Celsius
 	Atmosphere    string
 	HasRings      bool
+	// Absolute position (set by system view for rendering/clicking)
+	AbsoluteX float64
+	AbsoluteY float64
 }
 
 func (p *Planet) GetID() int                { return p.ID }
@@ -252,4 +255,14 @@ func (p *Planet) GetContextMenuItems() []string {
 	}
 
 	return items
+}
+
+// GetPosition implements Clickable interface
+func (p *Planet) GetPosition() (float64, float64) {
+	return p.AbsoluteX, p.AbsoluteY
+}
+
+// GetClickRadius implements Clickable interface
+func (p *Planet) GetClickRadius() float64 {
+	return float64(p.Size) + 2 // Planet size plus small margin
 }
