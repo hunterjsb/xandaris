@@ -99,6 +99,7 @@ func (p *Player) OnTick(tick int64) {
 	// Every 10 ticks (1 second at 1x speed), produce resources
 	if tick%10 == 0 {
 		p.produceResources()
+		p.accumulateResources()
 	}
 }
 
@@ -115,6 +116,43 @@ func (p *Player) produceResources() {
 
 		// Add production to player credits
 		p.Credits += production
+	}
+}
+
+// accumulateResources extracts and stores resources on planets
+func (p *Player) accumulateResources() {
+	for _, planet := range p.OwnedPlanets {
+		// Process each resource deposit on the planet
+		for _, resourceEntity := range planet.Resources {
+			if resource, ok := resourceEntity.(*entities.Resource); ok {
+				// Only accumulate from owned resources
+				if resource.Owner != p.Name {
+					continue
+				}
+
+				// Base extraction rate (1 unit per second)
+				extractionAmount := int(float64(1) * resource.ExtractionRate)
+
+				// Check for mines on this resource
+				mineBonus := 1.0
+				for _, buildingEntity := range planet.Buildings {
+					if building, ok := buildingEntity.(*entities.Building); ok {
+						if building.BuildingType == "Mine" && building.IsOperational {
+							mineBonus += building.ProductionBonus - 1.0 // Add the bonus portion
+						}
+					}
+				}
+
+				// Apply mine bonus
+				extractionAmount = int(float64(extractionAmount) * mineBonus)
+
+				// Try to add to planet storage
+				actualAmount := planet.AddStoredResource(resource.ResourceType, extractionAmount)
+
+				// If storage is full, actualAmount will be less than extractionAmount
+				_ = actualAmount // We could show a warning if storage is full
+			}
+		}
 	}
 }
 

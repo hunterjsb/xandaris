@@ -56,7 +56,7 @@ func (sv *SystemView) Update() error {
 
 	// Update orbit animation
 	if !sv.game.tickManager.IsPaused() {
-		sv.orbitOffset += 0.0005
+		sv.orbitOffset += 0.0005 * float64(sv.game.tickManager.GetSpeed())
 		if sv.orbitOffset > 6.28318 { // 2*PI
 			sv.orbitOffset -= 6.28318
 		}

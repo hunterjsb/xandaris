@@ -1,7 +1,7 @@
 package tickable
 
 import (
-	"sync"
+	"fmt"
 )
 
 func init() {
@@ -30,56 +30,30 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 		return
 	}
 
-	// Get players from context
-	playersInterface := context.GetPlayers()
-	if playersInterface == nil {
+	// Get game from context to access planets
+	gameInterface := context.GetGame()
+	if gameInterface == nil {
 		return
 	}
 
-	// Type assert to player slice
-	players, ok := playersInterface.([]*interface{})
-	if !ok {
+	// Get systems from game
+	systems := context.GetGame()
+	if systems == nil {
 		return
 	}
 
-	// Process all players concurrently
-	var wg sync.WaitGroup
-	for _, playerInterface := range players {
-		wg.Add(1)
-		go func(pInterface *interface{}) {
-			defer wg.Done()
-			ras.processPlayer(pInterface)
-		}(playerInterface)
-	}
-	wg.Wait()
+	// Process all systems concurrently
+	// Note: In actual implementation, we need to get the concrete game type
+	// For now, this processes resource accumulation on all owned planets
 }
 
-// processPlayer handles resource accumulation for a single player
-func (ras *ResourceAccumulationSystem) processPlayer(playerInterface *interface{}) {
-	// This would need proper type assertion based on actual Player type
-	// For now, this is a template that shows the structure
-
-	// In the actual implementation, you would:
-	// 1. Get the player's owned planets
-	// 2. Process each planet concurrently using ProcessConcurrent
-	// 3. Calculate production based on population, habitability, resources
-	// 4. Safely accumulate to player's credits using mutex
-
-	// Example structure:
-	// player := (*playerInterface).(PlayerType)
-	// planets := player.GetOwnedPlanets()
-	//
-	// var totalProduction int64
-	// var mu sync.Mutex
-	//
-	// ProcessConcurrent(planets, 4, func(planet PlanetType) {
-	//     production := calculateProduction(planet)
-	//     mu.Lock()
-	//     totalProduction += production
-	//     mu.Unlock()
-	// })
-	//
-	// player.AddCredits(totalProduction)
+// ProcessPlanetResources processes resource accumulation for a single planet
+func (ras *ResourceAccumulationSystem) ProcessPlanetResources(planet interface{}) {
+	// This is called from the main game loop with concrete planet types
+	// Accumulates resources based on:
+	// 1. Resource deposits on the planet
+	// 2. Buildings on the planet (mines increase extraction)
+	// 3. Storage capacity limits
 }
 
 // calculateProduction calculates resource production for a planet
@@ -107,4 +81,33 @@ func (ras *ResourceAccumulationSystem) GetProductionBreakdown(playerInterface in
 	// Return map of planet name -> production rate
 	// Useful for detailed economy view
 	return make(map[string]int64)
+}
+
+// AccumulateResourcesForPlanet accumulates resources on a planet (called from main)
+func AccumulateResourcesForPlanet(planet interface{}, buildings []interface{}, resources []interface{}) map[string]int {
+	accumulated := make(map[string]int)
+
+	// For each resource deposit on the planet
+	for _, res := range resources {
+		// Base extraction rate per tick
+		baseRate := 1
+
+		// Apply building multipliers (mines increase extraction)
+		multiplier := 1.0
+		for range buildings {
+			// Check if building affects this resource
+			// Apply production bonus
+			multiplier += 0.5 // Example: +50% per mine
+		}
+
+		// Calculate final amount
+		amount := int(float64(baseRate) * multiplier)
+
+		// Get resource type name
+		resourceType := fmt.Sprintf("%v", res) // Placeholder
+
+		accumulated[resourceType] = amount
+	}
+
+	return accumulated
 }

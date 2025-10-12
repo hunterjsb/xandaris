@@ -6,10 +6,10 @@ import "image/color"
 type EntityType string
 
 const (
-	EntityTypePlanet   EntityType = "Planet"
-	EntityTypeStation  EntityType = "Station"
-	EntityTypeFleet    EntityType = "Fleet"
-	EntityTypeAsteroid EntityType = "Asteroid"
+	EntityTypePlanet  EntityType = "Planet"
+	EntityTypeStation EntityType = "Station"
+	// EntityTypeFleet    EntityType = "Fleet"
+	// EntityTypeAsteroid EntityType = "Asteroid"
 	EntityTypeStar     EntityType = "Star"
 	EntityTypeResource EntityType = "Resource"
 	EntityTypeBuilding EntityType = "Building"

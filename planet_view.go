@@ -19,6 +19,7 @@ type PlanetView struct {
 	centerY           float64
 	buildMenu         *BuildMenu
 	constructionQueue *ConstructionQueueUI
+	resourceStorage   *ResourceStorageUI
 	orbitOffset       float64 // For animating orbits
 }
 
@@ -31,6 +32,7 @@ func NewPlanetView(game *Game) *PlanetView {
 		centerY:           float64(screenHeight) / 2,
 		buildMenu:         NewBuildMenu(game),
 		constructionQueue: NewConstructionQueueUI(game),
+		resourceStorage:   NewResourceStorageUI(game),
 	}
 }
 
@@ -42,6 +44,9 @@ func (pv *PlanetView) SetPlanet(system *System, planet *entities.Planet) {
 	// Set planet position to center for click detection
 	planet.SetAbsolutePosition(pv.centerX, pv.centerY)
 
+	// Set planet for resource storage UI
+	pv.resourceStorage.SetPlanet(planet)
+
 	pv.updateResourcePositions()
 	pv.registerClickables()
 }
@@ -51,9 +56,12 @@ func (pv *PlanetView) Update() error {
 	// Update construction queue UI
 	pv.constructionQueue.Update()
 
+	// Update resource storage UI
+	pv.resourceStorage.Update()
+
 	// Update orbit animation
 	if !pv.game.tickManager.IsPaused() {
-		pv.orbitOffset += 0.001
+		pv.orbitOffset += 0.001 * float64(pv.game.tickManager.GetSpeed())
 		if pv.orbitOffset > 6.28318 { // 2*PI
 			pv.orbitOffset -= 6.28318
 		}
@@ -154,6 +162,9 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 
 	// Draw construction queue UI
 	pv.constructionQueue.Draw(screen)
+
+	// Draw resource storage UI
+	pv.resourceStorage.Draw(screen)
 
 	// Draw build menu on top of everything
 	pv.buildMenu.Draw(screen)
