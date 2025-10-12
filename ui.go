@@ -25,8 +25,8 @@ func NewUIPanel(x, y, width, height int) *UIPanel {
 		Y:           y,
 		Width:       width,
 		Height:      height,
-		BgColor:     color.RGBA{20, 20, 40, 230},
-		BorderColor: color.RGBA{100, 100, 150, 255},
+		BgColor:     UIPanelBg,
+		BorderColor: UIPanelBorder,
 	}
 }
 

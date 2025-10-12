@@ -35,16 +35,7 @@ type Hyperlane struct {
 
 // generateSystems creates systems at random coordinates
 func (g *Game) generateSystems() {
-	colors := []color.RGBA{
-		{100, 100, 200, 255}, // Blue
-		{200, 100, 150, 255}, // Purple
-		{150, 200, 100, 255}, // Green
-		{200, 150, 100, 255}, // Orange
-		{200, 200, 100, 255}, // Yellow
-		{200, 100, 100, 255}, // Red
-		{150, 150, 200, 255}, // Light Blue
-		{180, 120, 180, 255}, // Pink
-	}
+	colors := GetSystemColors()
 
 	// Generate systems with random positions
 	for i := 0; i < systemCount; i++ {

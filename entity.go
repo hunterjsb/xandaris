@@ -125,14 +125,7 @@ func GeneratePlanets(systemID int, count int) []*Planet {
 	planets := make([]*Planet, 0)
 
 	planetTypes := []string{"Terrestrial", "Gas Giant", "Ice World", "Desert", "Ocean", "Lava"}
-	planetColors := []color.RGBA{
-		{100, 150, 100, 255}, // Green (Terrestrial)
-		{200, 180, 150, 255}, // Tan (Gas Giant)
-		{150, 200, 255, 255}, // Light Blue (Ice)
-		{200, 180, 100, 255}, // Yellow (Desert)
-		{50, 100, 200, 255},  // Blue (Ocean)
-		{255, 100, 50, 255},  // Red (Lava)
-	}
+	planetColors := GetPlanetColors()
 
 	for i := 0; i < count; i++ {
 		typeIdx := rand.Intn(len(planetTypes))
@@ -157,13 +150,14 @@ func GeneratePlanets(systemID int, count int) []*Planet {
 func GenerateSpaceStation(systemID int, orbitDistance float64) *SpaceStation {
 	stationTypes := []string{"Trading", "Military", "Research", "Mining"}
 
+	stationType := stationTypes[rand.Intn(len(stationTypes))]
 	return &SpaceStation{
 		ID:            systemID*10000 + 999, // Unique ID
 		Name:          "Station Alpha",
-		Color:         color.RGBA{255, 100, 100, 255},
+		Color:         GetStationColorByType(stationType),
 		OrbitDistance: orbitDistance,
 		OrbitAngle:    rand.Float64() * 6.28,
-		StationType:   stationTypes[rand.Intn(len(stationTypes))],
+		StationType:   stationType,
 		Capacity:      1000 + rand.Intn(9000),
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image/color"
 	"log"
 	"math"
 
@@ -107,7 +106,7 @@ func (g *Game) createContextMenuForSystem(system *System) {
 // Draw draws the game screen
 func (g *Game) Draw(screen *ebiten.Image) {
 	// Fill background
-	screen.Fill(color.RGBA{5, 5, 15, 255})
+	screen.Fill(UIBackground)
 
 	// Draw hyperlanes first (so they appear behind systems)
 	g.drawHyperlanes(screen)
@@ -123,7 +122,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			int(g.selectedSystem.X),
 			int(g.selectedSystem.Y),
 			circleRadius,
-			color.RGBA{255, 255, 100, 255})
+			UIHighlight)
 	}
 
 	// Draw context menu if a system is selected
@@ -137,7 +136,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 // drawHyperlanes draws connections between systems
 func (g *Game) drawHyperlanes(screen *ebiten.Image) {
-	hyperlaneColor := color.RGBA{40, 40, 80, 255}
+	hyperlaneColor := HyperlaneNormal
 
 	for _, hyperlane := range g.hyperlanes {
 		fromSystem := g.systems[hyperlane.From]
