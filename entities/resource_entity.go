@@ -16,6 +16,7 @@ type Resource struct {
 	Size           int     // Visual size in pixels
 	Quality        int     // Quality grade 0-100
 	Owner          string  // Name of the player/faction who owns/controls this resource
+	NodePosition   float64 // Fixed angle position on planet surface (0 to 2π radians)
 }
 
 // NewResource creates a new resource entity
@@ -37,7 +38,8 @@ func NewResource(id int, name, resourceType string, orbitDistance, orbitAngle fl
 		Rarity:         "Common",
 		Size:           3,
 		Quality:        50,
-		Owner:          "", // Unowned by default
+		Owner:          "",         // Unowned by default
+		NodePosition:   orbitAngle, // Use orbit angle as node position by default
 	}
 }
 

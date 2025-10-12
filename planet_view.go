@@ -290,8 +290,24 @@ func (pv *PlanetView) updateResourcePositions() {
 	// Buildings orbit slightly further out than resources
 	buildingRadius := planetRadius + 15.0
 	for _, building := range pv.planet.Buildings {
-		// Use the orbit angle for positioning around the surface, with animation
-		orbitAngle := building.GetOrbitAngle() + pv.orbitOffset
+		var orbitAngle float64
+
+		// If this is a mine, position it at the resource node
+		if bldg, ok := building.(*entities.Building); ok && bldg.BuildingType == "Mine" && bldg.ResourceNodeID != 0 {
+			// Find the associated resource node
+			for _, resource := range pv.planet.Resources {
+				if resource.GetID() == bldg.ResourceNodeID {
+					if res, ok := resource.(*entities.Resource); ok {
+						// Use the resource's node position (fixed)
+						orbitAngle = res.NodePosition + pv.orbitOffset
+					}
+					break
+				}
+			}
+		} else {
+			// Non-mine buildings use their own orbit angle with animation
+			orbitAngle = building.GetOrbitAngle() + pv.orbitOffset
+		}
 
 		// Position at building radius
 		x := pv.centerX + buildingRadius*math.Cos(orbitAngle)

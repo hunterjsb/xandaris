@@ -301,6 +301,25 @@ func (cs *ConstructionSystem) RemoveFromQueue(location string, itemID string) bo
 }
 
 // GetQueue returns the construction queue for a location
+// HasMineInQueue checks if there's a mine being constructed for a specific resource location
+func (cs *ConstructionSystem) HasMineInQueue(resourceLocation string) bool {
+	queue, exists := cs.queues.Get(resourceLocation)
+	if !exists {
+		return false
+	}
+
+	queue.mutex.RLock()
+	defer queue.mutex.RUnlock()
+
+	// Check if any item in the queue is a mine
+	for _, item := range queue.Items {
+		if item.Name == "Mining Complex" {
+			return true
+		}
+	}
+	return false
+}
+
 func (cs *ConstructionSystem) GetQueue(location string) []*ConstructionItem {
 	queue, exists := cs.queues.Get(location)
 	if !exists {

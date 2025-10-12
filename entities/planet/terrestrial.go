@@ -69,21 +69,7 @@ func (g *TerrestrialGenerator) Generate(params entities.GenerationParams) entiti
 	}
 
 	// Generate resource entities for terrestrial planets
-	resourceCount := 2 + rand.Intn(3) // 2-4 resource deposits
-	resourceGenerators := entities.GetGeneratorsByType(entities.EntityTypeResource)
-	if len(resourceGenerators) > 0 {
-		for i := 0; i < resourceCount; i++ {
-			gen := entities.SelectRandomGenerator(resourceGenerators)
-			resourceParams := entities.GenerationParams{
-				SystemID:      params.SystemID,
-				OrbitDistance: 10.0 + float64(i)*5.0 + rand.Float64()*5.0,
-				OrbitAngle:    rand.Float64() * 6.28,
-				SystemSeed:    params.SystemSeed,
-			}
-			resource := gen.Generate(resourceParams)
-			planet.Resources = append(planet.Resources, resource)
-		}
-	}
+	generatePlanetResources(planet, params, 2, 3) // 2-4 resource deposits
 
 	// Calculate habitability
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Terrestrial")
@@ -92,6 +78,35 @@ func (g *TerrestrialGenerator) Generate(params entities.GenerationParams) entiti
 	planet.HasRings = rand.Float32() < 0.10
 
 	return planet
+}
+
+// generatePlanetResources generates resource nodes for a planet with proper distribution
+func generatePlanetResources(planet *entities.Planet, params entities.GenerationParams, minResources, maxResourcesRange int) {
+	// Max 6 resource nodes per planet (to ensure space for mines and visual clarity)
+	maxResources := 6
+	resourceCount := minResources + rand.Intn(maxResourcesRange)
+	if resourceCount > maxResources {
+		resourceCount = maxResources
+	}
+
+	resourceGenerators := entities.GetGeneratorsByType(entities.EntityTypeResource)
+	if len(resourceGenerators) > 0 {
+		// Distribute resource nodes evenly around the planet
+		angleStep := 6.28318 / float64(maxResources) // 2π divided by max nodes
+		for i := 0; i < resourceCount; i++ {
+			gen := entities.SelectRandomGenerator(resourceGenerators)
+			// Assign evenly distributed angles for node positions
+			nodeAngle := float64(i)*angleStep + rand.Float64()*0.3 // Small random offset
+			resourceParams := entities.GenerationParams{
+				SystemID:      params.SystemID,
+				OrbitDistance: 10.0 + float64(i)*5.0 + rand.Float64()*5.0,
+				OrbitAngle:    nodeAngle, // This will become NodePosition
+				SystemSeed:    params.SystemSeed,
+			}
+			resource := gen.Generate(resourceParams)
+			planet.Resources = append(planet.Resources, resource)
+		}
+	}
 }
 
 // calculateHabitability calculates a habitability score 0-100

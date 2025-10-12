@@ -11,6 +11,7 @@ type Building struct {
 	BuildingType       string  // "Mine", "Extractor", "Shipyard", "Barracks", "Habitat", etc.
 	AttachedTo         string  // ID of planet or resource this is built on
 	AttachmentType     string  // "Planet" or "Resource"
+	ResourceNodeID     int     // ID of the resource node this mine is attached to (for mines only)
 	ProductionBonus    float64 // Multiplier for resource production (e.g., 1.5 = +50%)
 	PopulationCapacity int64   // Additional population capacity (for habitats)
 	BuildCost          int     // Cost in credits to build

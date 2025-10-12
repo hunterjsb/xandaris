@@ -147,10 +147,31 @@ func (bm *BuildMenu) loadResourceBuildings() {
 	bm.items = make([]*BuildMenuItem, 0)
 
 	// Mine
+	description := "Increases resource extraction (+50%)"
+
+	// Check if this resource node already has a mine or is building one
+	if resource, ok := bm.attachedTo.(*entities.Resource); ok {
+		resourceIDStr := fmt.Sprintf("%d", resource.GetID())
+
+		// Check construction queue first
+		constructionSystem := tickable.GetSystemByName("Construction")
+		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+			if cs.HasMineInQueue(resourceIDStr) {
+				description = "Mine already being built (1 per node max)"
+			}
+		}
+
+		// Check completed buildings
+		planet := bm.findParentPlanet(resource)
+		if planet != nil && bm.resourceHasMine(planet, resource.GetID()) {
+			description = "This node already has a mine (1 per node max)"
+		}
+	}
+
 	bm.items = append(bm.items, &BuildMenuItem{
 		BuildingType:   "Mine",
 		Name:           "Mining Complex",
-		Description:    "Increases resource extraction (+50%)",
+		Description:    description,
 		Cost:           500,
 		AttachmentType: "Resource",
 		Color:          color.RGBA{120, 110, 90, 255},
@@ -225,6 +246,35 @@ func (bm *BuildMenu) updateHover(mx, my int) {
 	}
 }
 
+// findParentPlanet finds the planet that contains a given resource
+func (bm *BuildMenu) findParentPlanet(resource *entities.Resource) *entities.Planet {
+	// Search through all systems to find the planet with this resource
+	for _, system := range bm.game.systems {
+		for _, entity := range system.Entities {
+			if planet, ok := entity.(*entities.Planet); ok {
+				for _, res := range planet.Resources {
+					if res.GetID() == resource.GetID() {
+						return planet
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// resourceHasMine checks if a resource node already has a mine built on it
+func (bm *BuildMenu) resourceHasMine(planet *entities.Planet, resourceID int) bool {
+	for _, building := range planet.Buildings {
+		if bldg, ok := building.(*entities.Building); ok {
+			if bldg.BuildingType == "Mine" && bldg.ResourceNodeID == resourceID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // startConstruction queues a building for construction
 func (bm *BuildMenu) startConstruction(itemIndex int) {
 	if itemIndex < 0 || itemIndex >= len(bm.items) {
@@ -232,6 +282,31 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 	}
 
 	item := bm.items[itemIndex]
+
+	// Check if building a mine on a resource node that already has a mine or is being built
+	if item.BuildingType == "Mine" && bm.attachmentType == "Resource" {
+		if resource, ok := bm.attachedTo.(*entities.Resource); ok {
+			resourceIDStr := fmt.Sprintf("%d", resource.GetID())
+
+			// Check if there's already a mine in the construction queue for this resource
+			constructionSystem := tickable.GetSystemByName("Construction")
+			if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+				if cs.HasMineInQueue(resourceIDStr) {
+					bm.notification = "Mine already being built on this node"
+					bm.notificationTimer = 120 // 2 seconds at 60fps
+					return
+				}
+			}
+
+			// Find the parent planet to check existing completed mines
+			planet := bm.findParentPlanet(resource)
+			if planet != nil && bm.resourceHasMine(planet, resource.GetID()) {
+				bm.notification = "This resource node already has a mine"
+				bm.notificationTimer = 120 // 2 seconds at 60fps
+				return
+			}
+		}
+	}
 
 	// Check if player has enough credits
 	if bm.game.humanPlayer.Credits < item.Cost {
@@ -310,9 +385,35 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		item.Bounds.Width = itemW
 		item.Bounds.Height = itemHeight
 
-		// Draw item background (highlight if selected)
+		// Check if this item can be built
+		canBuild := true
+		if item.BuildingType == "Mine" && bm.attachmentType == "Resource" {
+			if resource, ok := bm.attachedTo.(*entities.Resource); ok {
+				resourceIDStr := fmt.Sprintf("%d", resource.GetID())
+
+				// Check construction queue
+				constructionSystem := tickable.GetSystemByName("Construction")
+				if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+					if cs.HasMineInQueue(resourceIDStr) {
+						canBuild = false
+					}
+				}
+
+				// Check completed buildings
+				if canBuild {
+					planet := bm.findParentPlanet(resource)
+					if planet != nil && bm.resourceHasMine(planet, resource.GetID()) {
+						canBuild = false
+					}
+				}
+			}
+		}
+
+		// Draw item background (highlight if selected, gray out if can't build)
 		itemBg := UIPanelBg
-		if i == bm.selectedIndex {
+		if !canBuild {
+			itemBg = color.RGBA{30, 30, 30, 230} // Dark gray for disabled
+		} else if i == bm.selectedIndex {
 			itemBg = color.RGBA{40, 40, 80, 230}
 		}
 

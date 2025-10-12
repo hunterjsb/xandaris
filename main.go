@@ -559,6 +559,15 @@ func (g *Game) createBuildingFromCompletion(completion tickable.ConstructionComp
 			if b, ok := building.(*entities.Building); ok {
 				b.Owner = completion.Owner
 				b.AttachedTo = completion.Location
+
+				// If building a mine on a resource, link it to the resource node
+				if b.BuildingType == "Mine" {
+					if resource, ok := attachedTo.(*entities.Resource); ok {
+						b.ResourceNodeID = resource.GetID()
+						b.AttachmentType = "Resource"
+					}
+				}
+
 				return b
 			}
 		}
