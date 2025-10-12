@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -73,10 +74,26 @@ func (g *Game) handleClick(x, y int) {
 
 // createContextMenuForSystem creates and positions a context menu for the given system
 func (g *Game) createContextMenuForSystem(system *System) {
-	items := []string{
-		"Planets: Coming soon",
-		"Resources: TBD",
-		"Population: TBD",
+	items := []string{}
+
+	// Add entity counts summary
+	planetCount := len(system.GetEntitiesByType(EntityTypePlanet))
+	stationCount := len(system.GetEntitiesByType(EntityTypeStation))
+
+	items = append(items, fmt.Sprintf("Planets: %d", planetCount))
+	if stationCount > 0 {
+		items = append(items, fmt.Sprintf("Stations: %d", stationCount))
+	}
+	items = append(items, "") // Empty line for spacing
+
+	// List planets
+	for _, entity := range system.GetEntitiesByType(EntityTypePlanet) {
+		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
+	}
+
+	// List stations
+	for _, entity := range system.GetEntitiesByType(EntityTypeStation) {
+		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
 	}
 
 	g.contextMenu = NewContextMenu(system.Name, items)

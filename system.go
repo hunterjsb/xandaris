@@ -24,6 +24,7 @@ type System struct {
 	Name        string
 	Color       color.RGBA
 	Connections []int // IDs of connected systems
+	Entities    []Entity
 }
 
 // Hyperlane represents a connection between two systems
@@ -78,6 +79,19 @@ func (g *Game) generateSystems() {
 		}
 
 		g.systems = append(g.systems, system)
+
+		// Generate entities for this system
+		planetCount := 2 + rand.Intn(5) // 2-6 planets
+		planets := GeneratePlanets(i, planetCount)
+		for _, planet := range planets {
+			system.AddEntity(planet)
+		}
+
+		// 40% chance of having a space station
+		if rand.Float32() < 0.4 {
+			station := GenerateSpaceStation(i, 70.0+rand.Float64()*30.0)
+			system.AddEntity(station)
+		}
 	}
 }
 
