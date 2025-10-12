@@ -108,7 +108,10 @@ func (c *ClickHandler) ClearClickables() {
 
 // HandleClick processes a click at the given coordinates
 func (c *ClickHandler) HandleClick(x, y int) bool {
-	for _, clickable := range c.clickables {
+	// Check clickables in reverse order (last added = first checked)
+	// This gives priority to smaller objects added later
+	for i := len(c.clickables) - 1; i >= 0; i-- {
+		clickable := c.clickables[i]
 		objX, objY := clickable.GetPosition()
 		dx := float64(x) - objX
 		dy := float64(y) - objY

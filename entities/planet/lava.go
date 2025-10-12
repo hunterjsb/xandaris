@@ -57,10 +57,22 @@ func (g *LavaGenerator) Generate(params entities.GenerationParams) entities.Enti
 	planet.Atmosphere = "Corrosive"           // Always corrosive
 	planet.Population = 0                     // Uninhabitable
 
-	// Resources typical for lava planets
-	resourcePool := []string{"Rare Metals", "Geothermal Energy", "Volcanic Glass", "Sulfur", "Magma Minerals"}
-	numResources := 2 + rand.Intn(2) // 2-3 resources
-	planet.Resources = selectRandomResources(resourcePool, numResources)
+	// Generate resource entities for lava planets
+	resourceCount := 2 + rand.Intn(2) // 2-3 resource deposits
+	resourceGenerators := entities.GetGeneratorsByType(entities.EntityTypeResource)
+	if len(resourceGenerators) > 0 {
+		for i := 0; i < resourceCount; i++ {
+			gen := entities.SelectRandomGenerator(resourceGenerators)
+			resourceParams := entities.GenerationParams{
+				SystemID:      params.SystemID,
+				OrbitDistance: 10.0 + float64(i)*5.0 + rand.Float64()*5.0,
+				OrbitAngle:    rand.Float64() * 6.28,
+				SystemSeed:    params.SystemSeed,
+			}
+			resource := gen.Generate(resourceParams)
+			planet.Resources = append(planet.Resources, resource)
+		}
+	}
 
 	// Very low habitability
 	planet.Habitability = 0 // Completely uninhabitable

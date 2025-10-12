@@ -11,7 +11,7 @@ type Planet struct {
 	Size         int      // Radius in pixels
 	PlanetType   string   // Subtype like "Terrestrial", "Gas Giant", etc.
 	Population   int64    // Number of inhabitants
-	Resources    []string // Available resources
+	Resources    []Entity // Resource entities on this planet
 	Temperature  int      // Temperature in Celsius
 	Atmosphere   string   // Type of atmosphere
 	HasRings     bool     // Whether the planet has rings
@@ -35,7 +35,7 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 		Temperature:  20,
 		Atmosphere:   "Thin",
 		Population:   0,
-		Resources:    []string{},
+		Resources:    []Entity{},
 		HasRings:     false,
 		Habitability: 50,
 	}
@@ -48,7 +48,7 @@ func (p *Planet) GetDescription() string {
 
 // GetClickRadius returns the click detection radius
 func (p *Planet) GetClickRadius() float64 {
-	return float64(p.Size) + 2
+	return float64(p.Size) + 3 // Small margin for accurate clicking
 }
 
 // GetContextMenuTitle implements ContextMenuProvider
@@ -72,10 +72,8 @@ func (p *Planet) GetContextMenuItems() []string {
 
 	if len(p.Resources) > 0 {
 		items = append(items, "") // Empty line
-		items = append(items, "Resources:")
-		for _, resource := range p.Resources {
-			items = append(items, fmt.Sprintf("  - %s", resource))
-		}
+		items = append(items, fmt.Sprintf("Resources: %d deposits", len(p.Resources)))
+		items = append(items, "View planet for details")
 	}
 
 	return items

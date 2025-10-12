@@ -60,10 +60,22 @@ func (g *BarrenGenerator) Generate(params entities.GenerationParams) entities.En
 	atmospheres := []string{"Thin", "Thin", "Toxic"} // Higher chance of thin atmosphere
 	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
 
-	// Resources typical for desert worlds
-	resourcePool := []string{"Iron", "Lithium", "Bones"}
-	numResources := 1 + rand.Intn(2) // 1-2 resources
-	planet.Resources = selectRandomResources(resourcePool, numResources)
+	// Generate resource entities for barren worlds
+	resourceCount := 1 + rand.Intn(2) // 1-2 resource deposits
+	resourceGenerators := entities.GetGeneratorsByType(entities.EntityTypeResource)
+	if len(resourceGenerators) > 0 {
+		for i := 0; i < resourceCount; i++ {
+			gen := entities.SelectRandomGenerator(resourceGenerators)
+			resourceParams := entities.GenerationParams{
+				SystemID:      params.SystemID,
+				OrbitDistance: 10.0 + float64(i)*5.0 + rand.Float64()*5.0,
+				OrbitAngle:    rand.Float64() * 6.28,
+				SystemSeed:    params.SystemSeed,
+			}
+			resource := gen.Generate(resourceParams)
+			planet.Resources = append(planet.Resources, resource)
+		}
+	}
 
 	planet.Habitability = 0
 

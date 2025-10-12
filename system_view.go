@@ -12,12 +12,15 @@ import (
 
 // SystemView represents the detailed view of a single system
 type SystemView struct {
-	game         *Game
-	system       *System
-	clickHandler *ClickHandler
-	centerX      float64
-	centerY      float64
-	scale        *ViewScale
+	game          *Game
+	system        *System
+	clickHandler  *ClickHandler
+	centerX       float64
+	centerY       float64
+	scale         *ViewScale
+	lastClickX    int
+	lastClickY    int
+	lastClickTime int64
 }
 
 // NewSystemView creates a new system view
@@ -54,6 +57,31 @@ func (sv *SystemView) Update() error {
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
+
+		// Check for double-click with more forgiving tolerance
+		currentTime := ebiten.Tick()
+		dx := x - sv.lastClickX
+		dy := y - sv.lastClickY
+		distance := dx*dx + dy*dy // squared distance to avoid sqrt
+
+		// More forgiving double-click: 60 ticks (~1 second) and within 10 pixels
+		if distance <= 100 && currentTime-sv.lastClickTime < 60 {
+			// Double click detected - check if we clicked on a planet
+			if selectedObj := sv.clickHandler.GetSelectedObject(); selectedObj != nil {
+				if planet, ok := selectedObj.(*entities.Planet); ok {
+					// Switch to planet view
+					sv.game.viewManager.SwitchTo(ViewTypePlanet)
+					if planetView, ok := sv.game.viewManager.GetCurrentView().(*PlanetView); ok {
+						planetView.SetPlanet(sv.system, planet)
+					}
+				}
+			}
+		}
+
+		sv.lastClickX = x
+		sv.lastClickY = y
+		sv.lastClickTime = currentTime
+
 		sv.clickHandler.HandleClick(x, y)
 	}
 

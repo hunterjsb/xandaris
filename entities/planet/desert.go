@@ -67,10 +67,22 @@ func (g *DesertGenerator) Generate(params entities.GenerationParams) entities.En
 		planet.Population = int64(rand.Intn(100000000)) // Up to 100 million if toxic
 	}
 
-	// Resources typical for desert worlds
-	resourcePool := []string{"Silicon", "Rare Minerals", "Solar Energy", "Sand", "Precious Stones", "Metal Ores", "Geothermal Vents"}
-	numResources := 2 + rand.Intn(3) // 2-4 resources
-	planet.Resources = selectRandomResources(resourcePool, numResources)
+	// Generate resource entities for desert worlds
+	resourceCount := 2 + rand.Intn(3) // 2-4 resource deposits
+	resourceGenerators := entities.GetGeneratorsByType(entities.EntityTypeResource)
+	if len(resourceGenerators) > 0 {
+		for i := 0; i < resourceCount; i++ {
+			gen := entities.SelectRandomGenerator(resourceGenerators)
+			resourceParams := entities.GenerationParams{
+				SystemID:      params.SystemID,
+				OrbitDistance: 10.0 + float64(i)*5.0 + rand.Float64()*5.0,
+				OrbitAngle:    rand.Float64() * 6.28,
+				SystemSeed:    params.SystemSeed,
+			}
+			resource := gen.Generate(resourceParams)
+			planet.Resources = append(planet.Resources, resource)
+		}
+	}
 
 	// Low to moderate habitability
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Desert")

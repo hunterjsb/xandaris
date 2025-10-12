@@ -67,10 +67,22 @@ func (g *OceanGenerator) Generate(params entities.GenerationParams) entities.Ent
 		planet.Population = int64(rand.Intn(500000000)) // Smaller population if toxic
 	}
 
-	// Resources typical for ocean worlds
-	resourcePool := []string{"Water", "Food", "Algae", "Deep Sea Minerals", "Aquatic Life", "Coral", "Pearls"}
-	numResources := 3 + rand.Intn(3) // 3-5 resources (ocean worlds are resource-rich)
-	planet.Resources = selectRandomResources(resourcePool, numResources)
+	// Generate resource entities for ocean worlds
+	resourceCount := 3 + rand.Intn(3) // 3-5 resource deposits (ocean worlds are resource-rich)
+	resourceGenerators := entities.GetGeneratorsByType(entities.EntityTypeResource)
+	if len(resourceGenerators) > 0 {
+		for i := 0; i < resourceCount; i++ {
+			gen := entities.SelectRandomGenerator(resourceGenerators)
+			resourceParams := entities.GenerationParams{
+				SystemID:      params.SystemID,
+				OrbitDistance: 10.0 + float64(i)*5.0 + rand.Float64()*5.0,
+				OrbitAngle:    rand.Float64() * 6.28,
+				SystemSeed:    params.SystemSeed,
+			}
+			resource := gen.Generate(resourceParams)
+			planet.Resources = append(planet.Resources, resource)
+		}
+	}
 
 	// High habitability (water is life)
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Ocean")

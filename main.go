@@ -6,6 +6,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	_ "github.com/hunterjsb/xandaris/entities/planet"
+	_ "github.com/hunterjsb/xandaris/entities/resource"
 	_ "github.com/hunterjsb/xandaris/entities/star"
 	_ "github.com/hunterjsb/xandaris/entities/station"
 )
@@ -41,9 +42,11 @@ func NewGame() *Game {
 	// Create and register views
 	galaxyView := NewGalaxyView(g)
 	systemView := NewSystemView(g)
+	planetView := NewPlanetView(g)
 
 	g.viewManager.RegisterView(galaxyView)
 	g.viewManager.RegisterView(systemView)
+	g.viewManager.RegisterView(planetView)
 
 	// Start with galaxy view
 	g.viewManager.SwitchTo(ViewTypeGalaxy)

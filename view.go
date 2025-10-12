@@ -8,8 +8,9 @@ import (
 type ViewType string
 
 const (
-	ViewTypeGalaxy ViewType = "Galaxy"
-	ViewTypeSystem ViewType = "System"
+	ViewTypeGalaxy ViewType = "galaxy"
+	ViewTypeSystem ViewType = "system"
+	ViewTypePlanet ViewType = "planet"
 )
 
 // View interface that all game views must implement
