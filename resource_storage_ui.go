@@ -22,7 +22,7 @@ type ResourceStorageUI struct {
 func NewResourceStorageUI(game *Game) *ResourceStorageUI {
 	return &ResourceStorageUI{
 		game:   game,
-		x:      220, // Position on left side to avoid construction queue overlap
+		x:      220,
 		y:      screenHeight - 180,
 		width:  290,
 		height: 170,
@@ -34,6 +34,25 @@ func (rsu *ResourceStorageUI) SetPlanet(planet *entities.Planet) {
 	rsu.planet = planet
 }
 
+// getCurrentPlanet gets the actual current planet from game state
+// This ensures we always read from the live planet object, not a stale reference
+func (rsu *ResourceStorageUI) getCurrentPlanet() *entities.Planet {
+	if rsu.planet == nil || rsu.game.humanPlayer == nil {
+		return nil
+	}
+
+	// Find the matching planet in the player's owned planets by ID
+	planetID := rsu.planet.GetID()
+	for _, ownedPlanet := range rsu.game.humanPlayer.OwnedPlanets {
+		if ownedPlanet.GetID() == planetID {
+			return ownedPlanet
+		}
+	}
+
+	// If not found in owned planets, return the reference we have
+	return rsu.planet
+}
+
 // Update updates the resource storage UI
 func (rsu *ResourceStorageUI) Update() {
 	// No input handling needed for now
@@ -41,17 +60,18 @@ func (rsu *ResourceStorageUI) Update() {
 
 // Draw renders the resource storage panel
 func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
-	// Only show if planet is owned by player
-	if rsu.planet == nil || rsu.game.humanPlayer == nil {
+	// Get the current planet from game state
+	planet := rsu.getCurrentPlanet()
+	if planet == nil || rsu.game.humanPlayer == nil {
 		return
 	}
 
-	if rsu.planet.Owner != rsu.game.humanPlayer.Name {
+	if planet.Owner != rsu.game.humanPlayer.Name {
 		return
 	}
 
 	// Show the panel even with no resources to provide feedback
-	hasResources := len(rsu.planet.StoredResources) > 0
+	hasResources := len(planet.StoredResources) > 0
 
 	// Draw background panel
 	panel := NewUIPanel(rsu.x, rsu.y, rsu.width, rsu.height)
@@ -63,7 +83,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 
 	// Draw storage utilization bar
 	utilizationY := titleY + 20
-	rsu.drawStorageBar(screen, utilizationY)
+	rsu.drawStorageBarForPlanet(screen, utilizationY, planet)
 
 	// Draw separator
 	separatorY := utilizationY + 20
@@ -80,7 +100,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 		// Show debug info about owned resources on planet
 		debugY := resourceY + 20
 		ownedCount := 0
-		for _, resourceEntity := range rsu.planet.Resources {
+		for _, resourceEntity := range planet.Resources {
 			if resource, ok := resourceEntity.(*entities.Resource); ok {
 				if resource.Owner == rsu.game.humanPlayer.Name {
 					ownedCount++
@@ -101,7 +121,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 		storage      *entities.ResourceStorage
 	}
 
-	for resourceType, storage := range rsu.planet.StoredResources {
+	for resourceType, storage := range planet.StoredResources {
 		sortedResources = append(sortedResources, struct {
 			resourceType string
 			storage      *entities.ResourceStorage
@@ -124,18 +144,18 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	}
 
 	// Show "and X more" if there are more resources
-	if len(rsu.planet.StoredResources) > maxVisible {
+	if len(planet.StoredResources) > maxVisible {
 		moreY := resourceY + 3
-		moreText := fmt.Sprintf("...and %d more", len(rsu.planet.StoredResources)-maxVisible)
+		moreText := fmt.Sprintf("...and %d more", len(planet.StoredResources)-maxVisible)
 		DrawText(screen, moreText, rsu.x+10, moreY, UITextSecondary)
 	}
 }
 
-// drawStorageBar draws the overall storage utilization bar
-func (rsu *ResourceStorageUI) drawStorageBar(screen *ebiten.Image, y int) {
+// drawStorageBarForPlanet draws the overall storage utilization bar for a specific planet
+func (rsu *ResourceStorageUI) drawStorageBarForPlanet(screen *ebiten.Image, y int, planet *entities.Planet) {
 	// Calculate utilization
-	used := rsu.planet.GetTotalStorageUsed()
-	capacity := rsu.planet.StorageCapacity
+	used := planet.GetTotalStorageUsed()
+	capacity := planet.StorageCapacity
 	utilization := 0.0
 	if capacity > 0 {
 		utilization = float64(used) / float64(capacity)
@@ -158,9 +178,10 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 
 // IsVisible returns whether the UI should be visible
 func (rsu *ResourceStorageUI) IsVisible() bool {
-	if rsu.planet == nil || rsu.game.humanPlayer == nil {
+	planet := rsu.getCurrentPlanet()
+	if planet == nil || rsu.game.humanPlayer == nil {
 		return false
 	}
 	// Always show for owned planets to provide feedback
-	return rsu.planet.Owner == rsu.game.humanPlayer.Name
+	return planet.Owner == rsu.game.humanPlayer.Name
 }

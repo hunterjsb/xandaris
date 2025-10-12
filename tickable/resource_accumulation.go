@@ -41,6 +41,7 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 	}
 
 	for _, player := range players {
+		fmt.Printf("Processing player %s\n", player.Name)
 		for _, planet := range player.OwnedPlanets {
 			// Process each resource deposit on the planet
 			for _, resourceEntity := range planet.Resources {
@@ -67,57 +68,18 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 					extractionAmount = int(float64(extractionAmount) * mineBonus)
 
 					// Try to add to planet storage
-					planet.AddStoredResource(resource.ResourceType, extractionAmount)
-				}
-			}
-		}
-	}
-}
+					actualAmount := planet.AddStoredResource(resource.ResourceType, extractionAmount)
 
-// ProcessPlanetResources processes resource accumulation for a single planet
-func (ras *ResourceAccumulationSystem) ProcessPlanetResources(planetInterface interface{}) {
-	planet, ok := planetInterface.(*entities.Planet)
-	if !ok {
-		return
-	}
-
-	// Process each resource deposit on the planet
-	for _, resourceEntity := range planet.Resources {
-		if resource, ok := resourceEntity.(*entities.Resource); ok {
-			// Only accumulate from owned resources
-			if resource.Owner == "" || resource.Owner != planet.Owner {
-				continue
-			}
-
-			// Base extraction rate (10 units per tick at default rate, scaled by extraction rate)
-			extractionAmount := int(float64(10) * resource.ExtractionRate)
-
-			// Check for mines on this resource
-			mineBonus := 1.0
-			for _, buildingEntity := range planet.Buildings {
-				if building, ok := buildingEntity.(*entities.Building); ok {
-					if building.BuildingType == "Mine" &&
-						building.IsOperational &&
-						building.AttachedTo == fmt.Sprintf("%d", resource.GetID()) {
-						mineBonus += building.ProductionBonus - 1.0
-					}
-				}
-			}
-
-			// Apply mine bonus
-			extractionAmount = int(float64(extractionAmount) * mineBonus)
-
-			// Try to add to planet storage
-			actualAmount := planet.AddStoredResource(resource.ResourceType, extractionAmount)
-
-			// Update abundance based on extraction
-			if actualAmount > 0 && resource.Abundance > 0 {
-				// Reduce abundance by a small amount (resources deplete slowly)
-				depletionRate := 0.001 * float64(actualAmount)
-				if depletionRate > 0 {
-					resource.Abundance = int(float64(resource.Abundance) - depletionRate)
-					if resource.Abundance < 0 {
-						resource.Abundance = 0
+					// Update abundance based on extraction
+					if actualAmount > 0 && resource.Abundance > 0 {
+						// Reduce abundance by a small amount (resources deplete slowly)
+						depletionRate := 0.001 * float64(actualAmount)
+						if depletionRate > 0 {
+							resource.Abundance = int(float64(resource.Abundance) - depletionRate)
+							if resource.Abundance < 0 {
+								resource.Abundance = 0
+							}
+						}
 					}
 				}
 			}
