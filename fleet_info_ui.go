@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -11,17 +13,18 @@ import (
 
 // FleetInfoUI displays detailed information about a selected fleet
 type FleetInfoUI struct {
-	game                 *Game
-	fleet                *Fleet
-	x                    int
-	y                    int
-	width                int
-	height               int
-	visible              bool
-	scrollOffset         int
-	showMoveMenu         bool
-	connectedSystems     []int
-	moveMenuScrollOffset int
+	game                  *Game
+	fleet                 *Fleet
+	x                     int
+	y                     int
+	width                 int
+	height                int
+	visible               bool
+	scrollOffset          int
+	showMoveMenu          bool
+	connectedSystems      []int
+	currentSystemEntities []entities.Entity
+	moveMenuScrollOffset  int
 }
 
 // NewFleetInfoUI creates a new fleet info UI
@@ -101,11 +104,23 @@ func (fui *FleetInfoUI) Update() {
 				my >= moveButtonY && my <= moveButtonY+moveButtonH {
 				// Show move menu
 				fui.showMoveMenu = true
-				// Get connected systems
+				// Get connected systems and current system entities
 				if len(fui.fleet.Ships) > 0 {
 					firstShip := fui.fleet.Ships[0]
 					helper := tickable.NewShipMovementHelper(fui.game.GetSystems(), fui.game.GetHyperlanes())
 					fui.connectedSystems = helper.GetConnectedSystems(firstShip.CurrentSystem)
+
+					// Get current system entities (planets)
+					systems := fui.game.GetSystems()
+					currentSystem := systems[firstShip.CurrentSystem]
+					if currentSystem != nil {
+						fui.currentSystemEntities = make([]entities.Entity, 0)
+						for _, entity := range currentSystem.Entities {
+							if _, isPlanet := entity.(*entities.Planet); isPlanet {
+								fui.currentSystemEntities = append(fui.currentSystemEntities, entity)
+							}
+						}
+					}
 				}
 				return
 			}
@@ -124,9 +139,13 @@ func (fui *FleetInfoUI) Update() {
 				return
 			}
 
-			// System destination clicks
+			// Calculate starting positions for both sections
 			listStartY := fui.y + 110
 			itemHeight := 35
+
+			// Section 1: Adjacent Systems
+			systemSectionHeight := len(fui.connectedSystems) * itemHeight
+
 			for i, systemID := range fui.connectedSystems {
 				itemY := listStartY + i*itemHeight - fui.moveMenuScrollOffset
 				if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
@@ -134,12 +153,44 @@ func (fui *FleetInfoUI) Update() {
 				}
 				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
 					my >= itemY && my <= itemY+itemHeight-5 {
-					// Move fleet to this system
+					// Move fleet to this system (inter-system jump)
 					fleetManager := NewFleetManager(fui.game)
 					success, _ := fleetManager.MoveFleet(fui.fleet, systemID)
 					if success > 0 {
 						fui.showMoveMenu = false
 					}
+					return
+				}
+			}
+
+			// Section 2: Move to Star (if at planet)
+			currentOffset := systemSectionHeight + 45 // 45 for section header
+			if fui.isFleetAtPlanet() {
+				starItemY := listStartY + currentOffset + 20 - fui.moveMenuScrollOffset // 20 for header
+				if starItemY >= listStartY-itemHeight && starItemY <= fui.y+fui.height-60 {
+					if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
+						my >= starItemY && my <= starItemY+itemHeight-5 {
+						// Move fleet to star
+						fui.moveFleetToStar()
+						fui.showMoveMenu = false
+						return
+					}
+				}
+				currentOffset += itemHeight + 30 // item + header + spacing
+			}
+
+			// Section 3: Current System Entities (planets)
+			entitySectionStartY := listStartY + currentOffset
+			for i, entity := range fui.currentSystemEntities {
+				itemY := entitySectionStartY + i*itemHeight - fui.moveMenuScrollOffset
+				if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
+					continue
+				}
+				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
+					my >= itemY && my <= itemY+itemHeight-5 {
+					// Move fleet to this planet (intra-system movement)
+					fui.moveFleetToPlanet(entity)
+					fui.showMoveMenu = false
 					return
 				}
 			}
@@ -151,7 +202,13 @@ func (fui *FleetInfoUI) Update() {
 		_, dy := ebiten.Wheel()
 		if dy != 0 {
 			fui.moveMenuScrollOffset -= int(dy * 20)
-			maxScroll := len(fui.connectedSystems)*35 - (fui.height - 160)
+			// Calculate total content height (all sections + headers)
+			starItems := 0
+			if fui.isFleetAtPlanet() {
+				starItems = 1
+			}
+			totalContentHeight := (len(fui.connectedSystems)+starItems+len(fui.currentSystemEntities))*35 + 80 // 80 for section headers
+			maxScroll := totalContentHeight - (fui.height - 160)
 			if maxScroll < 0 {
 				maxScroll = 0
 			}
@@ -213,24 +270,25 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	separatorY := fuelY + 35
 	DrawLine(screen, fui.x+10, separatorY, fui.x+fui.width-10, separatorY, UIPanelBorder)
 
-	// Ship list header
-	listHeaderY := separatorY + 10
-	DrawText(screen, "Ships:", fui.x+10, listHeaderY, UITextPrimary)
-
-	// Scrollable ship list
-	fui.drawShipList(screen, listHeaderY+20)
-
-	// Move menu or move button
+	// Show either the ship list OR the move menu (not both)
 	if fui.showMoveMenu {
 		fui.drawMoveMenu(screen)
 	} else {
-		fui.drawMoveButton(screen)
-	}
+		// Ship list header
+		listHeaderY := separatorY + 10
+		DrawText(screen, "Ships:", fui.x+10, listHeaderY, UITextPrimary)
 
-	// Scroll indicator (only for ship list, not in move menu)
-	if !fui.showMoveMenu && len(fui.fleet.Ships) > 5 {
-		scrollHintY := fui.y + fui.height - 50
-		DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
+		// Scrollable ship list
+		fui.drawShipList(screen, listHeaderY+20)
+
+		// Move button
+		fui.drawMoveButton(screen)
+
+		// Scroll indicator for ship list
+		if len(fui.fleet.Ships) > 5 {
+			scrollHintY := fui.y + fui.height - 50
+			DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
+		}
 	}
 }
 
@@ -277,55 +335,106 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 
 // drawMoveMenu draws the destination selection menu
 func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
-	// Title
+	// Title (fixed, doesn't scroll)
 	menuTitleY := fui.y + 100
 	DrawText(screen, "Select Destination:", fui.x+10, menuTitleY, SystemLightBlue)
 
-	// Connected systems list
-	listStartY := menuTitleY + 10
+	// Create a scrollable content area
+	contentStartY := menuTitleY + 10
 	itemHeight := 35
+	headerHeight := 20
+
+	// Track current Y position for drawing (affected by scroll)
+	currentY := contentStartY - fui.moveMenuScrollOffset
+
+	// Define visible area bounds
+	visibleTop := contentStartY
+	visibleBottom := fui.y + fui.height - 60
+
+	// SECTION 1: Adjacent Systems
+	// Draw header
+	if currentY >= visibleTop-headerHeight && currentY <= visibleBottom {
+		DrawText(screen, "Jump to System:", fui.x+10, currentY, UITextPrimary)
+	}
+	currentY += headerHeight
 
 	if len(fui.connectedSystems) == 0 {
-		DrawText(screen, "No connected systems", fui.x+20, listStartY+20, UITextSecondary)
+		if currentY >= visibleTop-15 && currentY <= visibleBottom {
+			DrawText(screen, "  No adjacent systems", fui.x+20, currentY+5, UITextSecondary)
+		}
+		currentY += 15
 	}
 
 	systems := fui.game.GetSystems()
-	for i, systemID := range fui.connectedSystems {
-		itemY := listStartY + i*itemHeight - fui.moveMenuScrollOffset
+	for _, systemID := range fui.connectedSystems {
+		itemY := currentY
 
-		// Skip if off screen
-		if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
-			continue
-		}
-
-		system := systems[systemID]
-		if system == nil {
-			continue
-		}
-
-		// Item background
-		itemPanel := &UIPanel{
-			X:           fui.x + 10,
-			Y:           itemY,
-			Width:       fui.width - 20,
-			Height:      itemHeight - 5,
-			BgColor:     UIPanelBg,
-			BorderColor: UIPanelBorder,
-		}
-		itemPanel.Draw(screen)
-
-		// System color indicator
-		colorSize := 6
-		colorX := fui.x + 20
-		colorY := itemY + itemHeight/2 - colorSize/2
-		for py := 0; py < colorSize; py++ {
-			for px := 0; px < colorSize; px++ {
-				screen.Set(colorX+px, colorY+py, system.Color)
+		// Only draw if visible
+		if itemY >= visibleTop-itemHeight && itemY <= visibleBottom {
+			system := systems[systemID]
+			if system != nil {
+				fui.drawMenuItem(screen, itemY, itemHeight, system.Color, "⟫ "+system.Name)
 			}
 		}
+		currentY += itemHeight
+	}
 
-		// System name
-		DrawText(screen, system.Name, fui.x+35, itemY+10, UITextPrimary)
+	// Add spacing between sections
+	currentY += 10
+
+	// SECTION 2: Move to Star (if currently at planet)
+	if fui.isFleetAtPlanet() {
+		// Draw header
+		if currentY >= visibleTop-headerHeight && currentY <= visibleBottom {
+			DrawText(screen, "Move to Star:", fui.x+10, currentY, UITextPrimary)
+		}
+		currentY += headerHeight
+
+		itemY := currentY
+		if itemY >= visibleTop-itemHeight && itemY <= visibleBottom {
+			// Get star color from current system
+			if len(fui.fleet.Ships) > 0 {
+				firstShip := fui.fleet.Ships[0]
+				currentSystem := systems[firstShip.CurrentSystem]
+				if currentSystem != nil {
+					starEntities := currentSystem.GetEntitiesByType(entities.EntityTypeStar)
+					if len(starEntities) > 0 {
+						if star, ok := starEntities[0].(*entities.Star); ok {
+							fui.drawMenuItem(screen, itemY, itemHeight, star.Color, "★ "+star.Name)
+						}
+					}
+				}
+			}
+		}
+		currentY += itemHeight
+		currentY += 10
+	}
+
+	// SECTION 3: Current System Entities (planets)
+	// Draw header
+	if currentY >= visibleTop-headerHeight && currentY <= visibleBottom {
+		DrawText(screen, "Move to Planet:", fui.x+10, currentY, UITextPrimary)
+	}
+	currentY += headerHeight
+
+	if len(fui.currentSystemEntities) == 0 {
+		if currentY >= visibleTop-15 && currentY <= visibleBottom {
+			DrawText(screen, "  No planets in system", fui.x+20, currentY+5, UITextSecondary)
+		}
+		currentY += 15
+	}
+
+	for _, entity := range fui.currentSystemEntities {
+		itemY := currentY
+
+		// Only draw if visible
+		if itemY >= visibleTop-itemHeight && itemY <= visibleBottom {
+			planet, ok := entity.(*entities.Planet)
+			if ok {
+				fui.drawMenuItem(screen, itemY, itemHeight, planet.Color, "◉ "+planet.Name)
+			}
+		}
+		currentY += itemHeight
 	}
 
 	// Back button
@@ -346,7 +455,8 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	DrawTextCentered(screen, "Back", backButtonX+backButtonW/2, backButtonY+10, UITextPrimary, 1.0)
 
 	// Scroll hint
-	if len(fui.connectedSystems) > 5 {
+	totalItems := len(fui.connectedSystems) + len(fui.currentSystemEntities)
+	if totalItems > 5 {
 		scrollHintY := fui.y + fui.height - 50
 		DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
 	}
@@ -429,4 +539,85 @@ func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 // GetFleet returns the currently displayed fleet
 func (fui *FleetInfoUI) GetFleet() *Fleet {
 	return fui.fleet
+}
+
+// drawMenuItem draws a single menu item (helper function)
+func (fui *FleetInfoUI) drawMenuItem(screen *ebiten.Image, y int, height int, itemColor color.RGBA, text string) {
+	// Item background
+	itemPanel := &UIPanel{
+		X:           fui.x + 10,
+		Y:           y,
+		Width:       fui.width - 20,
+		Height:      height - 5,
+		BgColor:     UIPanelBg,
+		BorderColor: UIPanelBorder,
+	}
+	itemPanel.Draw(screen)
+
+	// Color indicator
+	colorSize := 6
+	colorX := fui.x + 20
+	colorY := y + height/2 - colorSize/2
+	for py := 0; py < colorSize; py++ {
+		for px := 0; px < colorSize; px++ {
+			screen.Set(colorX+px, colorY+py, itemColor)
+		}
+	}
+
+	// Text
+	DrawText(screen, text, fui.x+35, y+10, UITextPrimary)
+}
+
+// isFleetAtPlanet checks if the fleet is currently orbiting a planet
+func (fui *FleetInfoUI) isFleetAtPlanet() bool {
+	if fui.fleet == nil || len(fui.fleet.Ships) == 0 {
+		return false
+	}
+
+	// Check if any ship is at a planet's orbit distance
+	firstShip := fui.fleet.Ships[0]
+	systems := fui.game.GetSystems()
+	currentSystem := systems[firstShip.CurrentSystem]
+	if currentSystem == nil {
+		return false
+	}
+
+	// Check if ship orbit matches any planet orbit
+	for _, entity := range currentSystem.Entities {
+		if planet, ok := entity.(*entities.Planet); ok {
+			if math.Abs(firstShip.GetOrbitDistance()-planet.GetOrbitDistance()) < 1.0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// moveFleetToPlanet moves a fleet to orbit a planet in the current system
+func (fui *FleetInfoUI) moveFleetToPlanet(entity entities.Entity) {
+	planet, ok := entity.(*entities.Planet)
+	if !ok || fui.fleet == nil {
+		return
+	}
+
+	// Move all ships to the planet's orbit
+	for _, ship := range fui.fleet.Ships {
+		ship.OrbitDistance = planet.GetOrbitDistance()
+		ship.OrbitAngle = planet.GetOrbitAngle()
+		ship.Status = entities.ShipStatusOrbiting
+	}
+}
+
+// moveFleetToStar moves a fleet to orbit the star in the current system
+func (fui *FleetInfoUI) moveFleetToStar() {
+	if fui.fleet == nil || len(fui.fleet.Ships) == 0 {
+		return
+	}
+
+	// Move all ships to a mid-range star orbit
+	for _, ship := range fui.fleet.Ships {
+		ship.OrbitDistance = 150.0 // Standard star orbit distance
+		ship.OrbitAngle = 0.0
+		ship.Status = entities.ShipStatusOrbiting
+	}
 }

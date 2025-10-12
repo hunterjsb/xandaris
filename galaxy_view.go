@@ -15,6 +15,8 @@ type GalaxyView struct {
 	lastClickX    int
 	lastClickY    int
 	lastClickTime int64
+	fleetManager  *FleetManager
+	systemFleets  map[int][]*Fleet // Fleets per system ID
 }
 
 // NewGalaxyView creates a new galaxy view
@@ -22,6 +24,8 @@ func NewGalaxyView(game *Game) *GalaxyView {
 	gv := &GalaxyView{
 		game:         game,
 		clickHandler: NewClickHandler(),
+		fleetManager: NewFleetManager(game),
+		systemFleets: make(map[int][]*Fleet),
 	}
 
 	// Register all systems as clickable
@@ -34,6 +38,9 @@ func NewGalaxyView(game *Game) *GalaxyView {
 
 // Update implements View interface
 func (gv *GalaxyView) Update() error {
+	// Update fleet aggregation for each system
+	gv.updateFleets()
+
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
@@ -80,6 +87,9 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	for _, system := range gv.game.systems {
 		gv.drawSystem(screen, system)
 	}
+
+	// Draw fleets at their system locations
+	gv.drawFleets(screen)
 
 	// Highlight selected object
 	if selectedObj := gv.clickHandler.GetSelectedObject(); selectedObj != nil {
@@ -176,6 +186,147 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	// Draw centered label below the circle
 	labelY := centerY + circleRadius + 15
 	DrawCenteredText(screen, system.Name, centerX, labelY)
+}
+
+// updateFleets aggregates fleets for each system
+func (gv *GalaxyView) updateFleets() {
+	gv.systemFleets = make(map[int][]*Fleet)
+
+	for _, system := range gv.game.systems {
+		// Get fleets orbiting the star in this system (not planets)
+		fleets := gv.fleetManager.AggregateFleets(system)
+		if len(fleets) > 0 {
+			gv.systemFleets[system.ID] = fleets
+		}
+	}
+}
+
+// drawFleets draws fleet indicators at system locations
+func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
+	for systemID, fleets := range gv.systemFleets {
+		// Find the system
+		var system *entities.System
+		for _, sys := range gv.game.systems {
+			if sys.ID == systemID {
+				system = sys
+				break
+			}
+		}
+		if system == nil {
+			continue
+		}
+
+		// Draw fleet indicator near the system
+		centerX := int(system.X)
+		centerY := int(system.Y)
+
+		// Position fleet indicator above the system
+		fleetX := centerX
+		fleetY := centerY - circleRadius - 15
+
+		// Count total ships across all fleets
+		totalShips := 0
+		var ownerColor = UITextPrimary
+		for _, fleet := range fleets {
+			totalShips += fleet.Size()
+			// Use player color if owned by human player
+			if gv.game.humanPlayer != nil && fleet.Owner == gv.game.humanPlayer.Name {
+				ownerColor = gv.game.humanPlayer.Color
+			}
+		}
+
+		// Draw ship icon (small triangle)
+		size := 4
+		for py := 0; py < size*2; py++ {
+			for px := 0; px < size*2; px++ {
+				dx := float64(px - size)
+				dy := float64(py - size)
+				if dy > 0 && dx >= -dy/2 && dx <= dy/2 {
+					screen.Set(fleetX+px-size, fleetY+py-size, ownerColor)
+				}
+			}
+		}
+
+		// Draw ship count
+		if totalShips > 1 {
+			countText := fmt.Sprintf("%d", totalShips)
+			DrawText(screen, countText, fleetX+6, fleetY-4, ownerColor)
+		}
+	}
+
+	// Draw ships in transit along hyperlanes
+	gv.drawTransitShips(screen)
+}
+
+// drawTransitShips draws ships that are in transit between systems
+func (gv *GalaxyView) drawTransitShips(screen *ebiten.Image) {
+	// Find all moving ships across all systems
+	for _, system := range gv.game.systems {
+		for _, entity := range system.Entities {
+			if ship, ok := entity.(*entities.Ship); ok {
+				if ship.Status == entities.ShipStatusMoving && ship.TargetSystem != -1 {
+					gv.drawTransitShip(screen, ship)
+				}
+			}
+		}
+	}
+}
+
+// drawTransitShip draws a single ship in transit
+func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship) {
+	// Find source and target systems
+	var sourceSystem, targetSystem *entities.System
+	for _, sys := range gv.game.systems {
+		if sys.ID == ship.CurrentSystem {
+			sourceSystem = sys
+		}
+		if sys.ID == ship.TargetSystem {
+			targetSystem = sys
+		}
+	}
+
+	if sourceSystem == nil || targetSystem == nil {
+		return
+	}
+
+	// Calculate position along the hyperlane based on travel progress
+	progress := ship.TravelProgress
+	x := sourceSystem.X + (targetSystem.X-sourceSystem.X)*progress
+	y := sourceSystem.Y + (targetSystem.Y-sourceSystem.Y)*progress
+
+	// Determine color
+	shipColor := ship.Color
+	if gv.game.humanPlayer != nil && ship.Owner == gv.game.humanPlayer.Name {
+		shipColor = gv.game.humanPlayer.Color
+	}
+
+	// Draw ship as a small triangle
+	size := 4
+	shipX := int(x)
+	shipY := int(y)
+
+	for py := 0; py < size*2; py++ {
+		for px := 0; px < size*2; px++ {
+			dx := float64(px - size)
+			dy := float64(py - size)
+			if dy > 0 && dx >= -dy/2 && dx <= dy/2 {
+				screen.Set(shipX+px-size, shipY+py-size, shipColor)
+			}
+		}
+	}
+
+	// Draw a subtle travel indicator (pulsing dot)
+	// Use tick to create pulsing effect
+	pulseSize := 2
+	for py := 0; py < pulseSize*2; py++ {
+		for px := 0; px < pulseSize*2; px++ {
+			dx := float64(px - pulseSize)
+			dy := float64(py - pulseSize)
+			if dx*dx+dy*dy <= float64(pulseSize*pulseSize) {
+				screen.Set(shipX+px-pulseSize, shipY+py-pulseSize+8, SystemBlue)
+			}
+		}
+	}
 }
 
 // drawPlayerInfo draws player information panel
