@@ -84,7 +84,7 @@ func SelectRandomGenerator(generators []EntityGenerator) EntityGenerator {
 
 // GenerateEntitiesForSystem generates a collection of entities for a system
 func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
-	rand.Seed(seed)
+	rng := rand.New(rand.NewSource(seed))
 	entities := make([]Entity, 0)
 
 	// Generate exactly one star per system (always first)
@@ -102,7 +102,7 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
 	}
 
 	// Generate planets (2-6 per system)
-	planetCount := 2 + rand.Intn(5)
+	planetCount := 2 + rng.Intn(5)
 	planetGenerators := GetGeneratorsByType(EntityTypePlanet)
 	if len(planetGenerators) > 0 {
 		for i := 0; i < planetCount; i++ {
@@ -110,7 +110,7 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
 			params := GenerationParams{
 				SystemID:      systemID,
 				OrbitDistance: 50.0 + float64(i)*30.0,
-				OrbitAngle:    rand.Float64() * 6.28,
+				OrbitAngle:    rng.Float64() * 6.28,
 				SystemSeed:    seed,
 			}
 			entity := gen.Generate(params)
@@ -119,14 +119,14 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
 	}
 
 	// Generate stations (0-1 per system, 40% chance)
-	if rand.Float32() < 0.4 {
+	if rng.Float32() < 0.4 {
 		stationGenerators := GetGeneratorsByType(EntityTypeStation)
 		if len(stationGenerators) > 0 {
 			gen := SelectRandomGenerator(stationGenerators)
 			params := GenerationParams{
 				SystemID:      systemID,
-				OrbitDistance: 200.0 + rand.Float64()*100.0,
-				OrbitAngle:    rand.Float64() * 6.28,
+				OrbitDistance: 200.0 + rng.Float64()*100.0,
+				OrbitAngle:    rng.Float64() * 6.28,
 				SystemSeed:    seed,
 			}
 			entity := gen.Generate(params)
