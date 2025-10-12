@@ -20,6 +20,7 @@ type Game struct {
 	systems        []*System
 	hyperlanes     []Hyperlane
 	selectedSystem *System
+	contextMenu    *ContextMenu
 }
 
 // NewGame creates a new game instance
@@ -57,14 +58,33 @@ func (g *Game) handleClick(x, y int) {
 			// Toggle selection - if already selected, deselect
 			if g.selectedSystem == system {
 				g.selectedSystem = nil
+				g.contextMenu = nil
 			} else {
 				g.selectedSystem = system
+				g.createContextMenuForSystem(system)
 			}
 			return
 		}
 	}
 	// If we didn't click on any system, deselect
 	g.selectedSystem = nil
+	g.contextMenu = nil
+}
+
+// createContextMenuForSystem creates and positions a context menu for the given system
+func (g *Game) createContextMenuForSystem(system *System) {
+	items := []string{
+		"Planets: Coming soon",
+		"Resources: TBD",
+		"Population: TBD",
+	}
+
+	g.contextMenu = NewContextMenu(system.Name, items)
+	g.contextMenu.PositionNear(
+		int(system.X),
+		int(system.Y),
+		circleRadius+20,
+	)
 }
 
 // Draw draws the game screen
@@ -82,12 +102,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Highlight selected system
 	if g.selectedSystem != nil {
-		g.drawSystemHighlight(screen, g.selectedSystem)
+		DrawHighlightCircle(screen,
+			int(g.selectedSystem.X),
+			int(g.selectedSystem.Y),
+			circleRadius,
+			color.RGBA{255, 255, 100, 255})
 	}
 
 	// Draw context menu if a system is selected
-	if g.selectedSystem != nil {
-		g.drawContextMenu(screen, g.selectedSystem)
+	if g.contextMenu != nil {
+		g.contextMenu.Draw(screen)
 	}
 
 	// Draw UI info
@@ -103,42 +127,11 @@ func (g *Game) drawHyperlanes(screen *ebiten.Image) {
 		toSystem := g.systems[hyperlane.To]
 
 		// Draw line between systems
-		g.drawLine(screen,
+		DrawLine(screen,
 			int(fromSystem.X), int(fromSystem.Y),
 			int(toSystem.X), int(toSystem.Y),
 			hyperlaneColor)
 	}
-}
-
-// drawLine draws a simple line between two points
-func (g *Game) drawLine(screen *ebiten.Image, x1, y1, x2, y2 int, c color.RGBA) {
-	dx := x2 - x1
-	dy := y2 - y1
-
-	steps := int(math.Max(math.Abs(float64(dx)), math.Abs(float64(dy))))
-
-	if steps == 0 {
-		return
-	}
-
-	xStep := float64(dx) / float64(steps)
-	yStep := float64(dy) / float64(steps)
-
-	for i := 0; i <= steps; i++ {
-		x := x1 + int(float64(i)*xStep)
-		y := y1 + int(float64(i)*yStep)
-
-		if x >= 0 && x < screenWidth && y >= 0 && y < screenHeight {
-			screen.Set(x, y, c)
-		}
-	}
-}
-
-// drawCenteredText draws text centered at the given position
-func drawCenteredText(screen *ebiten.Image, text string, x, y int) {
-	// Approximate text width (each character is about 6 pixels wide)
-	textWidth := len(text) * 6
-	ebitenutil.DebugPrintAt(screen, text, x-textWidth/2, y)
 }
 
 // drawSystem renders a single system
@@ -171,80 +164,7 @@ func (g *Game) drawSystem(screen *ebiten.Image, system *System) {
 
 	// Draw centered label below the circle
 	labelY := centerY + circleRadius + 15
-	drawCenteredText(screen, system.Name, centerX, labelY)
-}
-
-// drawSystemHighlight draws a highlight ring around the selected system
-func (g *Game) drawSystemHighlight(screen *ebiten.Image, system *System) {
-	centerX := int(system.X)
-	centerY := int(system.Y)
-	highlightRadius := circleRadius + 4
-
-	// Draw a ring around the system
-	highlightColor := color.RGBA{255, 255, 100, 255}
-
-	for angle := 0.0; angle < 6.28; angle += 0.1 {
-		x := centerX + int(float64(highlightRadius)*math.Cos(angle))
-		y := centerY + int(float64(highlightRadius)*math.Sin(angle))
-		if x >= 0 && x < screenWidth && y >= 0 && y < screenHeight {
-			screen.Set(x, y, highlightColor)
-			screen.Set(x+1, y, highlightColor)
-			screen.Set(x, y+1, highlightColor)
-		}
-	}
-}
-
-// drawContextMenu draws a context menu near the selected system
-func (g *Game) drawContextMenu(screen *ebiten.Image, system *System) {
-	menuWidth := 200
-	menuHeight := 120
-	padding := 10
-
-	// Position menu to the right of the system, or left if too close to edge
-	menuX := int(system.X) + circleRadius + 20
-	menuY := int(system.Y) - menuHeight/2
-
-	// Keep menu on screen
-	if menuX+menuWidth > screenWidth-10 {
-		menuX = int(system.X) - circleRadius - menuWidth - 20
-	}
-	if menuY < 10 {
-		menuY = 10
-	}
-	if menuY+menuHeight > screenHeight-10 {
-		menuY = screenHeight - menuHeight - 10
-	}
-
-	// Draw menu background
-	menuImg := ebiten.NewImage(menuWidth, menuHeight)
-	menuImg.Fill(color.RGBA{20, 20, 40, 230})
-
-	// Draw border
-	borderColor := color.RGBA{100, 100, 150, 255}
-	for i := 0; i < menuWidth; i++ {
-		menuImg.Set(i, 0, borderColor)
-		menuImg.Set(i, menuHeight-1, borderColor)
-	}
-	for i := 0; i < menuHeight; i++ {
-		menuImg.Set(0, i, borderColor)
-		menuImg.Set(menuWidth-1, i, borderColor)
-	}
-
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(menuX), float64(menuY))
-	screen.DrawImage(menuImg, opts)
-
-	// Draw menu content
-	textY := menuY + padding
-	ebitenutil.DebugPrintAt(screen, system.Name, menuX+padding, textY)
-	textY += 20
-	ebitenutil.DebugPrintAt(screen, "─────────────────", menuX+padding, textY)
-	textY += 20
-	ebitenutil.DebugPrintAt(screen, "Planets: Coming soon", menuX+padding, textY)
-	textY += 15
-	ebitenutil.DebugPrintAt(screen, "Resources: TBD", menuX+padding, textY)
-	textY += 15
-	ebitenutil.DebugPrintAt(screen, "Population: TBD", menuX+padding, textY)
+	DrawCenteredText(screen, system.Name, centerX, labelY)
 }
 
 // Layout returns the game's screen size
