@@ -25,6 +25,7 @@ type Player struct {
 	// Owned entities
 	OwnedPlanets  []*Planet
 	OwnedStations []*Station
+	OwnedShips    []*Ship
 	OwnedFleets   []interface{} // For future fleet system
 }
 
@@ -38,6 +39,7 @@ func NewPlayer(id int, name string, playerColor color.RGBA, playerType PlayerTyp
 		Credits:       1000, // Starting credits
 		OwnedPlanets:  make([]*Planet, 0),
 		OwnedStations: make([]*Station, 0),
+		OwnedShips:    make([]*Ship, 0),
 		OwnedFleets:   make([]interface{}, 0),
 	}
 }
@@ -50,6 +52,21 @@ func (p *Player) AddOwnedPlanet(planet *Planet) {
 // AddOwnedStation adds a station to the player's ownership
 func (p *Player) AddOwnedStation(station *Station) {
 	p.OwnedStations = append(p.OwnedStations, station)
+}
+
+// AddOwnedShip adds a ship to the player's ownership
+func (p *Player) AddOwnedShip(ship *Ship) {
+	p.OwnedShips = append(p.OwnedShips, ship)
+}
+
+// RemoveOwnedShip removes a ship from the player's ownership
+func (p *Player) RemoveOwnedShip(ship *Ship) {
+	for i, owned := range p.OwnedShips {
+		if owned == ship {
+			p.OwnedShips = append(p.OwnedShips[:i], p.OwnedShips[i+1:]...)
+			break
+		}
+	}
 }
 
 // RemoveOwnedPlanet removes a planet from the player's ownership

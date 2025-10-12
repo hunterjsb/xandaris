@@ -41,7 +41,6 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 	}
 
 	for _, player := range players {
-		fmt.Printf("Processing player %s\n", player.Name)
 		for _, planet := range player.OwnedPlanets {
 			// Process each resource deposit on the planet
 			for _, resourceEntity := range planet.Resources {

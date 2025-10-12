@@ -33,6 +33,7 @@ func init() {
 	gob.Register(&entities.Resource{})
 	gob.Register(&entities.Building{})
 	gob.Register(&entities.Station{})
+	gob.Register(&entities.Ship{})
 	gob.Register(&entities.System{})
 	gob.Register(&entities.Player{})
 	gob.Register(&entities.Hyperlane{})

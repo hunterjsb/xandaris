@@ -383,8 +383,15 @@ func (g *Game) registerConstructionHandler() {
 	}
 }
 
-// handleConstructionComplete adds completed buildings to the game
+// handleConstructionComplete adds completed buildings/ships to the game
 func (g *Game) handleConstructionComplete(completion tickable.ConstructionCompletion) {
+	// Handle ship construction
+	if completion.Item.Type == "Ship" {
+		g.handleShipConstruction(completion)
+		return
+	}
+
+	// Handle building construction
 	// Find the planet or resource by ID
 	locationID := completion.Location
 
@@ -422,6 +429,78 @@ func (g *Game) handleConstructionComplete(completion tickable.ConstructionComple
 			}
 		}
 	}
+}
+
+// handleShipConstruction spawns a completed ship
+func (g *Game) handleShipConstruction(completion tickable.ConstructionCompletion) {
+	// Parse location to find planet (format: "planet_<ID>")
+	var planetID int
+	fmt.Sscanf(completion.Location, "planet_%d", &planetID)
+
+	// Find the planet and system
+	var targetPlanet *entities.Planet
+	var targetSystem *entities.System
+
+	for _, system := range g.systems {
+		for _, entity := range system.Entities {
+			if planet, ok := entity.(*entities.Planet); ok {
+				if planet.GetID() == planetID {
+					targetPlanet = planet
+					targetSystem = system
+					break
+				}
+			}
+		}
+		if targetPlanet != nil {
+			break
+		}
+	}
+
+	if targetPlanet == nil || targetSystem == nil {
+		fmt.Printf("[Game] ERROR: Could not find planet %d for ship construction\n", planetID)
+		return
+	}
+
+	// Parse ship type from completion name
+	shipType := entities.ShipType(completion.Item.Name)
+
+	// Generate unique ship ID
+	shipID := int(g.tickManager.GetCurrentTick())*1000 + rand.Intn(1000)
+
+	// Find owner player
+	var owner *entities.Player
+	for _, player := range g.players {
+		if player.Name == completion.Owner {
+			owner = player
+			break
+		}
+	}
+
+	if owner == nil {
+		fmt.Printf("[Game] ERROR: Could not find owner %s for ship\n", completion.Owner)
+		return
+	}
+
+	// Create the ship
+	shipName := fmt.Sprintf("%s %s-%d", owner.Name, shipType, len(owner.OwnedShips)+1)
+	ship := entities.NewShip(shipID, shipName, shipType, targetSystem.ID, owner.Name, owner.Color)
+
+	// Set ship position to orbit the PLANET, not the star
+	// OrbitDistance = 0 means it orbits the planet at the planet's location
+	// This makes it only visible in PlanetView, not SystemView
+	ship.OrbitDistance = targetPlanet.OrbitDistance                                      // Store which planet's orbit
+	ship.OrbitAngle = targetPlanet.OrbitAngle + 1.0 + float64(len(owner.OwnedShips))*0.3 // Spread ships around planet
+
+	// Add ship to system BEFORE adding to player (important for save/load)
+	targetSystem.AddEntity(ship)
+
+	// Add ship to player's owned ships
+	owner.AddOwnedShip(ship)
+
+	fmt.Printf("[Game] Ship constructed: %s (%s) for %s at %s\n",
+		shipName, shipType, owner.Name, targetPlanet.Name)
+	fmt.Printf("[Game] Ship orbit: distance=%.2f, angle=%.2f (planet: dist=%.2f, angle=%.2f)\n",
+		ship.OrbitDistance, ship.OrbitAngle, targetPlanet.OrbitDistance, targetPlanet.OrbitAngle)
 }
 
 // refreshPlanetViewIfActive refreshes planet view if the given planet is currently displayed

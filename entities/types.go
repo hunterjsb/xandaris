@@ -8,6 +8,7 @@ type EntityType string
 const (
 	EntityTypePlanet  EntityType = "Planet"
 	EntityTypeStation EntityType = "Station"
+	EntityTypeShip    EntityType = "Ship"
 	// EntityTypeFleet    EntityType = "Fleet"
 	// EntityTypeAsteroid EntityType = "Asteroid"
 	EntityTypeStar     EntityType = "Star"

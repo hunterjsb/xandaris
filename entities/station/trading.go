@@ -95,21 +95,3 @@ func (g *TradingGenerator) Generate(params entities.GenerationParams) entities.E
 }
 
 // selectRandomItems picks random items from a pool
-func selectRandomItems(pool []string, count int) []string {
-	if count > len(pool) {
-		count = len(pool)
-	}
-
-	result := make([]string, 0, count)
-	used := make(map[int]bool)
-
-	for len(result) < count {
-		idx := rand.Intn(len(pool))
-		if !used[idx] {
-			result = append(result, pool[idx])
-			used[idx] = true
-		}
-	}
-
-	return result
-}

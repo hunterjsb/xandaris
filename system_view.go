@@ -23,6 +23,9 @@ type SystemView struct {
 	lastClickTime     int64
 	constructionQueue *ConstructionQueueUI
 	orbitOffset       float64 // For animating orbits
+	fleetManager      *FleetManager
+	fleets            []*Fleet
+	fleetInfoUI       *FleetInfoUI
 }
 
 // NewSystemView creates a new system view
@@ -34,6 +37,8 @@ func NewSystemView(game *Game) *SystemView {
 		centerY:           float64(screenHeight) / 2,
 		scale:             &SystemScale,
 		constructionQueue: NewConstructionQueueUI(game),
+		fleetManager:      NewFleetManager(game),
+		fleetInfoUI:       NewFleetInfoUI(game),
 	}
 }
 
@@ -46,11 +51,15 @@ func (sv *SystemView) SetSystem(system *entities.System) {
 	sv.scale = AutoScale(maxDistance, screenWidth, screenHeight)
 
 	sv.updateEntityPositions()
+	sv.updateFleets()
 	sv.registerClickables()
 }
 
 // Update implements View interface
 func (sv *SystemView) Update() error {
+	// Update fleet info UI
+	sv.fleetInfoUI.Update()
+
 	// Update construction queue UI
 	sv.constructionQueue.Update()
 
@@ -65,10 +74,27 @@ func (sv *SystemView) Update() error {
 	// Update entity positions for animation
 	sv.updateEntityPositions()
 
-	// ESC to return to galaxy view
+	// Update fleet aggregation
+	sv.updateFleets()
+
+	// ESC to return to galaxy view or close fleet info
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		if sv.fleetInfoUI.IsVisible() {
+			sv.fleetInfoUI.Hide()
+			return nil
+		}
 		sv.game.viewManager.SwitchTo(ViewTypeGalaxy)
 		return nil
+	}
+
+	// Handle fleet clicks
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		mx, my := ebiten.CursorPosition()
+		clickedFleet := sv.fleetManager.GetFleetAtPosition(sv.fleets, mx, my, 15.0)
+		if clickedFleet != nil {
+			sv.fleetInfoUI.Show(clickedFleet)
+			return nil
+		}
 	}
 
 	// Handle mouse clicks
@@ -142,6 +168,65 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 
 	// Draw construction queue UI
 	sv.constructionQueue.Draw(screen)
+
+	// Draw fleet info UI on top
+	sv.fleetInfoUI.Draw(screen)
+}
+
+// updateFleets aggregates ships into fleets
+func (sv *SystemView) updateFleets() {
+	if sv.system == nil {
+		return
+	}
+	sv.fleets = sv.fleetManager.AggregateFleets(sv.system)
+}
+
+// drawShip renders a ship in the system view
+
+func (sv *SystemView) drawShip(screen *ebiten.Image, ship *entities.Ship) {
+	x, y := ship.GetAbsolutePosition()
+	centerX := int(x)
+	centerY := int(y)
+	size := 6
+
+	// Draw ownership indicator if owned by player
+	if ship.Owner != "" && sv.game.humanPlayer != nil && ship.Owner == sv.game.humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(size+2), sv.game.humanPlayer.Color)
+	}
+
+	// Draw ship as a triangle pointing in direction of movement
+	shipImg := ebiten.NewImage(size*2, size*2)
+
+	// Draw triangle
+	for py := 0; py < size*2; py++ {
+		for px := 0; px < size*2; px++ {
+			// Triangle pointing up
+			dx := float64(px - size)
+			dy := float64(py - size)
+			if dy > 0 && math.Abs(dx) < float64(size)-dy/2 {
+				shipImg.Set(px, py, ship.Color)
+			}
+		}
+	}
+
+	// Draw the ship
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
+	screen.DrawImage(shipImg, op)
+
+	// Draw ship name if selected or hovered
+	DrawText(screen, ship.Name, centerX-30, centerY+size+5, color.RGBA{200, 200, 200, 200})
+
+	// Draw fuel indicator
+	fuelPercent := ship.GetFuelPercentage()
+	fuelColor := color.RGBA{100, 255, 100, 255}
+	if fuelPercent < 25 {
+		fuelColor = color.RGBA{255, 100, 100, 255}
+	} else if fuelPercent < 50 {
+		fuelColor = color.RGBA{255, 200, 100, 255}
+	}
+	fuelText := fmt.Sprintf("Fuel: %.0f%%", fuelPercent)
+	DrawText(screen, fuelText, centerX-25, centerY+size+18, fuelColor)
 }
 
 // OnEnter implements View interface
@@ -293,6 +378,98 @@ func (sv *SystemView) drawEntities(screen *ebiten.Image) {
 			sv.drawStation(screen, station)
 		}
 	}
+
+	// Draw fleets (instead of individual ships)
+	sv.drawFleets(screen)
+}
+
+// drawFleets draws all fleets in the system
+func (sv *SystemView) drawFleets(screen *ebiten.Image) {
+	for _, fleet := range sv.fleets {
+		sv.drawFleet(screen, fleet)
+	}
+}
+
+// drawFleet draws a fleet of ships
+func (sv *SystemView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
+	if fleet == nil || len(fleet.Ships) == 0 {
+		return
+	}
+
+	// Use lead ship's position
+	x, y := fleet.GetPosition()
+	centerX := int(x)
+	centerY := int(y)
+	size := 6
+
+	// Draw ownership indicator if owned by player
+	if fleet.Owner != "" && sv.game.humanPlayer != nil && fleet.Owner == sv.game.humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(size+3), sv.game.humanPlayer.Color)
+	}
+
+	// Draw ship as a triangle
+	shipImg := ebiten.NewImage(size*2, size*2)
+	for py := 0; py < size*2; py++ {
+		for px := 0; px < size*2; px++ {
+			dx := float64(px - size)
+			dy := float64(py - size)
+			if dy > 0 && math.Abs(dx) < float64(size)-dy/2 {
+				shipImg.Set(px, py, fleet.LeadShip.Color)
+			}
+		}
+	}
+
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
+	screen.DrawImage(shipImg, op)
+
+	// If multiple ships, draw count badge
+	if fleet.Size() > 1 {
+		badge := fmt.Sprintf("%d", fleet.Size())
+		badgeX := centerX + size - 2
+		badgeY := centerY - size - 8
+
+		// Badge background
+		badgePanel := &UIPanel{
+			X:           badgeX - 2,
+			Y:           badgeY - 2,
+			Width:       12,
+			Height:      12,
+			BgColor:     UIPanelBg,
+			BorderColor: UIPanelBorder,
+		}
+		badgePanel.Draw(screen)
+
+		DrawText(screen, badge, badgeX, badgeY, UIHighlight)
+	}
+
+	// Draw fleet info
+	if fleet.Size() == 1 {
+		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, UITextSecondary)
+	} else {
+		typeCounts := fleet.GetShipTypeCounts()
+		fleetText := fmt.Sprintf("Fleet (%d ships)", fleet.Size())
+		DrawText(screen, fleetText, centerX-40, centerY+size+5, UITextSecondary)
+
+		// Show ship type breakdown
+		offsetY := 18
+		for shipType, count := range typeCounts {
+			typeText := fmt.Sprintf("%dx %s", count, shipType)
+			DrawText(screen, typeText, centerX-35, centerY+size+5+offsetY, UITextSecondary)
+			offsetY += 12
+		}
+	}
+
+	// Draw fuel indicator
+	fuelPercent := fleet.GetAverageFuelPercent()
+	fuelColor := ColorStationResearch // Green for good fuel
+	if fuelPercent < 25 {
+		fuelColor = SystemRed
+	} else if fuelPercent < 50 {
+		fuelColor = SystemOrange
+	}
+	fuelText := fmt.Sprintf("Fuel: %.0f%%", fuelPercent)
+	DrawText(screen, fuelText, centerX-25, centerY+size+5+12, fuelColor)
 }
 
 // drawPlanet renders a single planet

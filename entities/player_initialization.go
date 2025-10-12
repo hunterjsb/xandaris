@@ -6,14 +6,14 @@ import (
 
 // InitializePlayer sets up a new player with a starting planet
 func InitializePlayer(player *Player, systems []*System) {
-	// Find systems with habitable terrestrial planets
+	// Find systems with habitable terrestrial planets that have both Oil and Iron
 	validSystems := make([]*System, 0)
 
 	for _, system := range systems {
-		// Check if system has habitable terrestrial planets
+		// Check if system has habitable terrestrial planets with Oil and Iron
 		for _, entity := range system.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
-				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() {
+				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasOilResource(planet) && hasIronResource(planet) {
 					validSystems = append(validSystems, system)
 					break
 				}
@@ -21,7 +21,21 @@ func InitializePlayer(player *Player, systems []*System) {
 		}
 	}
 
-	// Fallback: use any system with a planet
+	// Fallback: Find any habitable terrestrial planet (without Oil requirement)
+	if len(validSystems) == 0 {
+		for _, system := range systems {
+			for _, entity := range system.GetEntities() {
+				if planet, ok := entity.(*Planet); ok {
+					if planet.PlanetType == "Terrestrial" && planet.IsHabitable() {
+						validSystems = append(validSystems, system)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Second fallback: use any system with a planet
 	if len(validSystems) == 0 {
 		for _, system := range systems {
 			if system.HasEntityType(EntityTypePlanet) {
@@ -38,15 +52,27 @@ func InitializePlayer(player *Player, systems []*System) {
 	homeSystem := validSystems[rand.Intn(len(validSystems))]
 	player.HomeSystem = homeSystem
 
-	// Find the best terrestrial planet in that system
+	// Find the best terrestrial planet with Oil and Iron in that system
 	var bestPlanet *Planet
 	bestHabitability := 0
 
 	for _, entity := range homeSystem.GetEntities() {
 		if planet, ok := entity.(*Planet); ok {
-			if planet.PlanetType == "Terrestrial" && planet.Habitability > bestHabitability {
+			if planet.PlanetType == "Terrestrial" && hasOilResource(planet) && hasIronResource(planet) && planet.Habitability > bestHabitability {
 				bestPlanet = planet
 				bestHabitability = planet.Habitability
+			}
+		}
+	}
+
+	// Fallback: Find best terrestrial planet without Oil requirement
+	if bestPlanet == nil {
+		for _, entity := range homeSystem.GetEntities() {
+			if planet, ok := entity.(*Planet); ok {
+				if planet.PlanetType == "Terrestrial" && planet.Habitability > bestHabitability {
+					bestPlanet = planet
+					bestHabitability = planet.Habitability
+				}
 			}
 		}
 	}
@@ -88,4 +114,28 @@ func InitializePlayer(player *Player, systems []*System) {
 
 		player.AddOwnedPlanet(bestPlanet)
 	}
+}
+
+// hasOilResource checks if a planet has an Oil resource deposit
+func hasOilResource(planet *Planet) bool {
+	for _, resourceEntity := range planet.Resources {
+		if resource, ok := resourceEntity.(*Resource); ok {
+			if resource.ResourceType == "Oil" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasIronResource checks if a planet has an Iron resource deposit
+func hasIronResource(planet *Planet) bool {
+	for _, resourceEntity := range planet.Resources {
+		if resource, ok := resourceEntity.(*Resource); ok {
+			if resource.ResourceType == "Iron" {
+				return true
+			}
+		}
+	}
+	return false
 }
