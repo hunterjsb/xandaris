@@ -1,6 +1,7 @@
 package entities
 
 import (
+	"fmt"
 	"math/rand"
 )
 
@@ -77,6 +78,7 @@ func SelectRandomGenerator(generators []EntityGenerator) EntityGenerator {
 	}
 
 	// Fallback to last generator (shouldn't happen)
+	fmt.Println("[WARNING] Fallback to last generator")
 	return generators[len(generators)-1]
 }
 
