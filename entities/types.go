@@ -97,3 +97,8 @@ func (b *BaseEntity) SetAbsolutePosition(x, y float64) {
 func (b *BaseEntity) GetPosition() (float64, float64) {
 	return b.AbsoluteX, b.AbsoluteY
 }
+
+// ColorFromRGBA creates a color.RGBA from individual components
+func ColorFromRGBA(r, g, b, a uint8) color.RGBA {
+	return color.RGBA{R: r, G: g, B: b, A: a}
+}

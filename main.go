@@ -20,6 +20,14 @@ import (
 	_ "github.com/hunterjsb/xandaris/tickable" // Import tickable systems for auto-registration
 )
 
+// StartMode represents how the game was started
+type StartMode int
+
+const (
+	StartModeMenu StartMode = iota
+	StartModeNewGame
+)
+
 const (
 	screenWidth      = 1280
 	screenHeight     = 720
@@ -97,13 +105,46 @@ func NewGame() *Game {
 	galaxyView := NewGalaxyView(g)
 	systemView := NewSystemView(g)
 	planetView := NewPlanetView(g)
+	mainMenuView := NewMainMenuView(g)
 
 	g.viewManager.RegisterView(galaxyView)
 	g.viewManager.RegisterView(systemView)
 	g.viewManager.RegisterView(planetView)
+	g.viewManager.RegisterView(mainMenuView)
 
 	// Start with galaxy view
 	g.viewManager.SwitchTo(ViewTypeGalaxy)
+
+	return g
+}
+
+// NewGameForMenu creates a minimal game instance for the main menu
+func NewGameForMenu() *Game {
+	g := &Game{
+		systems:    make([]*entities.System, 0),
+		hyperlanes: make([]entities.Hyperlane, 0),
+		players:    make([]*entities.Player, 0),
+	}
+
+	// Initialize tick manager for menu (though it won't really be used)
+	g.tickManager = NewTickManager(10.0)
+
+	// Initialize view system
+	g.viewManager = NewViewManager(g)
+
+	// Create and register all views
+	mainMenuView := NewMainMenuView(g)
+	galaxyView := NewGalaxyView(g)
+	systemView := NewSystemView(g)
+	planetView := NewPlanetView(g)
+
+	g.viewManager.RegisterView(mainMenuView)
+	g.viewManager.RegisterView(galaxyView)
+	g.viewManager.RegisterView(systemView)
+	g.viewManager.RegisterView(planetView)
+
+	// Start with main menu
+	g.viewManager.SwitchTo(ViewTypeMainMenu)
 
 	return g
 }
@@ -240,6 +281,11 @@ func (g *Game) Update() error {
 
 // handleGlobalInput handles keyboard input for game-wide controls
 func (g *Game) handleGlobalInput() {
+	// Don't handle game controls in main menu
+	if g.viewManager.GetCurrentView().GetType() == ViewTypeMainMenu {
+		return
+	}
+
 	// Space to toggle pause
 	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
 		g.tickManager.TogglePause()
@@ -263,6 +309,18 @@ func (g *Game) handleGlobalInput() {
 	if inpututil.IsKeyJustPressed(ebiten.KeyEqual) || inpututil.IsKeyJustPressed(ebiten.KeyKPAdd) {
 		g.tickManager.CycleSpeed()
 	}
+
+	// F5 to quick save
+	if inpututil.IsKeyJustPressed(ebiten.KeyF5) {
+		if g.humanPlayer != nil {
+			err := g.SaveGameToFile(g.humanPlayer.Name)
+			if err != nil {
+				fmt.Printf("Failed to save game: %v\n", err)
+			} else {
+				fmt.Println("Game saved successfully!")
+			}
+		}
+	}
 }
 
 // Draw draws the game screen
@@ -275,6 +333,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 // drawTickInfo draws tick information overlay
 func (g *Game) drawTickInfo(screen *ebiten.Image) {
+	// Don't draw in main menu
+	if g.viewManager.GetCurrentView().GetType() == ViewTypeMainMenu {
+		return
+	}
+
 	// Draw in bottom-left corner
 	x := 10
 	y := screenHeight - 60
@@ -290,7 +353,7 @@ func (g *Game) drawTickInfo(screen *ebiten.Image) {
 	speedStr := g.tickManager.GetSpeedString()
 	DrawText(screen, "Speed: "+speedStr, textX, textY, UITextPrimary)
 	DrawText(screen, g.tickManager.GetGameTimeFormatted(), textX, textY+15, UITextSecondary)
-	DrawText(screen, "[Space] Pause  [1-4] Speed", textX, textY+30, UITextSecondary)
+	DrawText(screen, "[Space] Pause  [F5] Save", textX, textY+30, UITextSecondary)
 }
 
 // Layout returns the game's screen size
@@ -302,7 +365,8 @@ func main() {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Xandaris II - Space Trading Game")
 
-	game := NewGame()
+	// Start with main menu
+	game := NewGameForMenu()
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)

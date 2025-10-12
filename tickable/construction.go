@@ -1,6 +1,8 @@
 package tickable
 
 import (
+	"bytes"
+	"encoding/gob"
 	"sync"
 )
 
@@ -17,14 +19,89 @@ type ConstructionItem struct {
 	ID             string
 	Type           string // "Building", "Station", "Ship", etc.
 	Name           string
-	Location       string // Planet/Station ID
-	Owner          string // Player name
-	Progress       int    // Current progress (0-100)
-	TotalTicks     int    // Ticks required to complete
-	RemainingTicks int    // Ticks remaining
-	Cost           int    // Credit cost
-	Started        int64  // Tick when started
-	Mutex          sync.RWMutex
+	Location       string       // Planet/Station ID
+	Owner          string       // Player name
+	Progress       int          // Current progress (0-100)
+	TotalTicks     int          // Ticks required to complete
+	RemainingTicks int          // Ticks remaining
+	Cost           int          // Credit cost
+	Started        int64        // Tick when started
+	Mutex          sync.RWMutex `gob:"-"` // Don't serialize mutex
+}
+
+// GobEncode implements gob.GobEncoder to exclude Mutex from serialization
+func (ci *ConstructionItem) GobEncode() ([]byte, error) {
+	// Create a temporary struct without the mutex
+	temp := struct {
+		ID             string
+		Type           string
+		Name           string
+		Location       string
+		Owner          string
+		Progress       int
+		TotalTicks     int
+		RemainingTicks int
+		Cost           int
+		Started        int64
+	}{
+		ID:             ci.ID,
+		Type:           ci.Type,
+		Name:           ci.Name,
+		Location:       ci.Location,
+		Owner:          ci.Owner,
+		Progress:       ci.Progress,
+		TotalTicks:     ci.TotalTicks,
+		RemainingTicks: ci.RemainingTicks,
+		Cost:           ci.Cost,
+		Started:        ci.Started,
+	}
+
+	// Use gob to encode the temp struct
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(&temp); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// GobDecode implements gob.GobDecoder to reconstruct without mutex serialization
+func (ci *ConstructionItem) GobDecode(data []byte) error {
+	// Create a temporary struct to decode into
+	temp := struct {
+		ID             string
+		Type           string
+		Name           string
+		Location       string
+		Owner          string
+		Progress       int
+		TotalTicks     int
+		RemainingTicks int
+		Cost           int
+		Started        int64
+	}{}
+
+	// Decode from gob
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	if err := dec.Decode(&temp); err != nil {
+		return err
+	}
+
+	// Copy fields to the actual struct
+	ci.ID = temp.ID
+	ci.Type = temp.Type
+	ci.Name = temp.Name
+	ci.Location = temp.Location
+	ci.Owner = temp.Owner
+	ci.Progress = temp.Progress
+	ci.TotalTicks = temp.TotalTicks
+	ci.RemainingTicks = temp.RemainingTicks
+	ci.Cost = temp.Cost
+	ci.Started = temp.Started
+	// Mutex is already initialized (zero value)
+
+	return nil
 }
 
 // ConstructionQueue manages construction for a single location
@@ -141,6 +218,43 @@ func (cs *ConstructionSystem) handleCompletion(completion ConstructionCompletion
 
 	for _, handler := range handlers {
 		handler(completion)
+	}
+}
+
+// GetAllQueues returns all construction queues for saving
+func (cs *ConstructionSystem) GetAllQueues() map[string][]*ConstructionItem {
+	result := make(map[string][]*ConstructionItem)
+
+	cs.queues.ForEach(func(location string, queue *ConstructionQueue) {
+		queue.mutex.RLock()
+		defer queue.mutex.RUnlock()
+
+		// Copy items
+		items := make([]*ConstructionItem, len(queue.Items))
+		copy(items, queue.Items)
+		result[location] = items
+	})
+
+	return result
+}
+
+// RestoreQueues restores construction queues from saved data
+func (cs *ConstructionSystem) RestoreQueues(savedQueues map[string][]*ConstructionItem) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+
+	// Clear existing queues
+	cs.queues = NewSafeMap[string, *ConstructionQueue]()
+
+	// Restore each queue
+	for location, items := range savedQueues {
+		if len(items) > 0 {
+			queue := &ConstructionQueue{
+				Location: location,
+				Items:    items,
+			}
+			cs.queues.Set(location, queue)
+		}
 	}
 }
 

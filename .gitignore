@@ -1,5 +1,15 @@
+# Application-specific files
 xandaris
+
+# Environment variables
 .env
+
+# WebAssembly and Build Output
 wasm_exec.js
 main.wasm
+
+# Static Site Files
 index.html
+
+# Savegame Data
+saves/*

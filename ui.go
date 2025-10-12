@@ -264,6 +264,22 @@ func DrawCenteredText(screen *ebiten.Image, textStr string, x, y int) {
 	DrawText(screen, textStr, x-textWidth/2, y, UITextPrimary)
 }
 
+// DrawTextCentered draws text centered at the given position with color and scale
+func DrawTextCentered(screen *ebiten.Image, textStr string, x, y int, textColor color.RGBA, scale float64) {
+	op := &text.DrawOptions{}
+
+	// Calculate text bounds for centering
+	bounds, _ := text.Measure(textStr, defaultFontFace, 0)
+	width := bounds * scale
+
+	// Apply scale and center
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(float64(x)-width/2, float64(y))
+	op.ColorScale.ScaleWithColor(textColor)
+
+	text.Draw(screen, textStr, defaultFontFace, op)
+}
+
 // DrawColoredMenuItem draws a menu item with special handling for planet/station types
 func DrawColoredMenuItem(screen *ebiten.Image, textStr string, x, y int) {
 	// Check if this is a type line for a planet
