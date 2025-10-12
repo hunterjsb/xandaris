@@ -1,38 +1,9 @@
 package main
 
-import (
-	"fmt"
-	"image/color"
-	"math/rand"
-)
+import "image/color"
 
-// EntityType represents the type of entity
-type EntityType int
-
-const (
-	EntityTypePlanet EntityType = iota
-	EntityTypeStation
-	EntityTypeFleet
-	EntityTypeAsteroid
-	EntityTypeStar
-)
-
-func (e EntityType) String() string {
-	switch e {
-	case EntityTypePlanet:
-		return "Planet"
-	case EntityTypeStation:
-		return "Station"
-	case EntityTypeFleet:
-		return "Fleet"
-	case EntityTypeAsteroid:
-		return "Asteroid"
-	case EntityTypeStar:
-		return "Star"
-	default:
-		return "Unknown"
-	}
-}
+// EntityType represents the type of entity as a string
+type EntityType string
 
 // Entity is the interface that all system entities must implement
 type Entity interface {
@@ -43,52 +14,6 @@ type Entity interface {
 	GetOrbitAngle() float64    // Angle in radians for orbital positioning
 	GetColor() color.RGBA
 	GetDescription() string
-}
-
-// Planet represents a planet entity
-type Planet struct {
-	ID            int
-	Name          string
-	Color         color.RGBA
-	OrbitDistance float64
-	OrbitAngle    float64
-	Size          int // Radius in pixels
-	PlanetType    string
-	Population    int64
-	Resources     []string
-}
-
-func (p *Planet) GetID() int                { return p.ID }
-func (p *Planet) GetName() string           { return p.Name }
-func (p *Planet) GetType() EntityType       { return EntityTypePlanet }
-func (p *Planet) GetOrbitDistance() float64 { return p.OrbitDistance }
-func (p *Planet) GetOrbitAngle() float64    { return p.OrbitAngle }
-func (p *Planet) GetColor() color.RGBA      { return p.Color }
-
-func (p *Planet) GetDescription() string {
-	return fmt.Sprintf("%s (%s)", p.Name, p.PlanetType)
-}
-
-// SpaceStation represents a space station entity
-type SpaceStation struct {
-	ID            int
-	Name          string
-	Color         color.RGBA
-	OrbitDistance float64
-	OrbitAngle    float64
-	StationType   string
-	Capacity      int
-}
-
-func (s *SpaceStation) GetID() int                { return s.ID }
-func (s *SpaceStation) GetName() string           { return s.Name }
-func (s *SpaceStation) GetType() EntityType       { return EntityTypeStation }
-func (s *SpaceStation) GetOrbitDistance() float64 { return s.OrbitDistance }
-func (s *SpaceStation) GetOrbitAngle() float64    { return s.OrbitAngle }
-func (s *SpaceStation) GetColor() color.RGBA      { return s.Color }
-
-func (s *SpaceStation) GetDescription() string {
-	return fmt.Sprintf("%s Station", s.StationType)
 }
 
 // AddEntity adds an entity to a system
@@ -120,44 +45,47 @@ func (s *System) GetEntityByID(id int) Entity {
 	return nil
 }
 
-// GeneratePlanets creates random planets for a system
-func GeneratePlanets(systemID int, count int) []*Planet {
-	planets := make([]*Planet, 0)
-
-	planetTypes := []string{"Terrestrial", "Gas Giant", "Ice World", "Desert", "Ocean", "Lava"}
-	planetColors := GetPlanetColors()
-
-	for i := 0; i < count; i++ {
-		typeIdx := rand.Intn(len(planetTypes))
-		planet := &Planet{
-			ID:            systemID*1000 + i, // Unique ID based on system
-			Name:          fmt.Sprintf("Planet %d", i+1),
-			Color:         planetColors[typeIdx],
-			OrbitDistance: 30.0 + float64(i)*20.0, // Orbital rings
-			OrbitAngle:    rand.Float64() * 6.28,  // Random starting position
-			Size:          4 + rand.Intn(4),       // 4-7 pixels
-			PlanetType:    planetTypes[typeIdx],
-			Population:    int64(rand.Intn(1000000000)),
-			Resources:     []string{"TBD"},
-		}
-		planets = append(planets, planet)
-	}
-
-	return planets
+// CountEntities returns the total number of entities in the system
+func (s *System) CountEntities() int {
+	return len(s.Entities)
 }
 
-// GenerateSpaceStation creates a random space station
-func GenerateSpaceStation(systemID int, orbitDistance float64) *SpaceStation {
-	stationTypes := []string{"Trading", "Military", "Research", "Mining"}
-
-	stationType := stationTypes[rand.Intn(len(stationTypes))]
-	return &SpaceStation{
-		ID:            systemID*10000 + 999, // Unique ID
-		Name:          "Station Alpha",
-		Color:         GetStationColorByType(stationType),
-		OrbitDistance: orbitDistance,
-		OrbitAngle:    rand.Float64() * 6.28,
-		StationType:   stationType,
-		Capacity:      1000 + rand.Intn(9000),
+// CountEntitiesByType returns the count of entities of a specific type
+func (s *System) CountEntitiesByType(entityType EntityType) int {
+	count := 0
+	for _, entity := range s.Entities {
+		if entity.GetType() == entityType {
+			count++
+		}
 	}
+	return count
+}
+
+// HasEntityType checks if the system contains any entities of the specified type
+func (s *System) HasEntityType(entityType EntityType) bool {
+	return s.CountEntitiesByType(entityType) > 0
+}
+
+// RemoveEntity removes an entity from the system by ID
+func (s *System) RemoveEntity(entityID int) bool {
+	for i, entity := range s.Entities {
+		if entity.GetID() == entityID {
+			// Remove entity by slicing
+			s.Entities = append(s.Entities[:i], s.Entities[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// GetEntitiesInOrbitRange returns entities within a certain orbital distance range
+func (s *System) GetEntitiesInOrbitRange(minDistance, maxDistance float64) []Entity {
+	result := make([]Entity, 0)
+	for _, entity := range s.Entities {
+		distance := entity.GetOrbitDistance()
+		if distance >= minDistance && distance <= maxDistance {
+			result = append(result, entity)
+		}
+	}
+	return result
 }

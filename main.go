@@ -76,8 +76,8 @@ func (g *Game) createContextMenuForSystem(system *System) {
 	items := []string{}
 
 	// Add entity counts summary
-	planetCount := len(system.GetEntitiesByType(EntityTypePlanet))
-	stationCount := len(system.GetEntitiesByType(EntityTypeStation))
+	planetCount := len(system.GetEntitiesByType("Planet"))
+	stationCount := len(system.GetEntitiesByType("Station"))
 
 	items = append(items, fmt.Sprintf("Planets: %d", planetCount))
 	if stationCount > 0 {
@@ -86,12 +86,12 @@ func (g *Game) createContextMenuForSystem(system *System) {
 	items = append(items, "") // Empty line for spacing
 
 	// List planets
-	for _, entity := range system.GetEntitiesByType(EntityTypePlanet) {
+	for _, entity := range system.GetEntitiesByType("Planet") {
 		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
 	}
 
 	// List stations
-	for _, entity := range system.GetEntitiesByType(EntityTypeStation) {
+	for _, entity := range system.GetEntitiesByType("Station") {
 		items = append(items, fmt.Sprintf("  - %s", entity.GetDescription()))
 	}
 

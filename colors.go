@@ -30,6 +30,8 @@ var (
 	StationMilitary = color.RGBA{100, 100, 255, 255} // Blue
 	StationResearch = color.RGBA{100, 255, 100, 255} // Green
 	StationMining   = color.RGBA{255, 255, 100, 255} // Yellow
+	StationRefinery = color.RGBA{255, 150, 100, 255} // Orange
+	StationShipyard = color.RGBA{150, 100, 255, 255} // Purple
 )
 
 // UI Colors
@@ -85,6 +87,10 @@ func GetStationColorByType(stationType string) color.RGBA {
 		return StationResearch
 	case "Mining":
 		return StationMining
+	case "Refinery":
+		return StationRefinery
+	case "Shipyard":
+		return StationShipyard
 	default:
 		return StationTrading
 	}
