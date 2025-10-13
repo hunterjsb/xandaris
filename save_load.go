@@ -9,6 +9,7 @@ import (
 
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/views"
 )
 
 const (
@@ -90,7 +91,7 @@ func (g *Game) SaveGameToFile(playerName string) error {
 		GameTime:           g.tickManager.GetGameTimeFormatted(),
 		Tick:               g.tickManager.GetCurrentTick(),
 		Seed:               g.seed,
-		TickSpeed:          g.tickManager.GetSpeed(),
+		TickSpeed:          g.tickManager.GetSpeed().(TickSpeed),
 		Systems:            g.systems,
 		Hyperlanes:         g.hyperlanes,
 		Players:            g.players,
@@ -198,15 +199,18 @@ func LoadGameFromFile(filename string) (*Game, error) {
 
 	g.registerConstructionHandler()
 
+	// Initialize fleet manager
+	g.fleetManager = NewFleetManager(g)
+
 	// Initialize view system
-	g.viewManager = NewViewManager(g)
+	g.viewManager = views.NewViewManager()
 
 	// Create and register views
-	mainMenuView := NewMainMenuView(g)
-	galaxyView := NewGalaxyView(g)
-	systemView := NewSystemView(g)
-	planetView := NewPlanetView(g)
-	settingsView := NewSettingsView(g)
+	mainMenuView := views.NewMainMenuView(g)
+	galaxyView := views.NewGalaxyView(g)
+	systemView := views.NewSystemView(g)
+	planetView := views.NewPlanetView(g)
+	settingsView := views.NewSettingsView(g)
 
 	g.viewManager.RegisterView(mainMenuView)
 	g.viewManager.RegisterView(galaxyView)
@@ -215,7 +219,7 @@ func LoadGameFromFile(filename string) (*Game, error) {
 	g.viewManager.RegisterView(settingsView)
 
 	// Start with galaxy view
-	g.viewManager.SwitchTo(ViewTypeGalaxy)
+	g.viewManager.SwitchTo(views.ViewTypeGalaxy)
 
 	fmt.Printf("[SaveSystem] Game successfully loaded: %d systems, %d players, tick %d\n",
 		len(g.systems), len(g.players), g.tickManager.GetCurrentTick())

@@ -1,4 +1,4 @@
-package main
+package views
 
 import (
 	"fmt"
@@ -11,48 +11,48 @@ import (
 
 // PlanetView represents the detailed view of a single planet
 type PlanetView struct {
-	game              *Game
-	system            *entities.System
-	planet            *entities.Planet
-	clickHandler      *ClickHandler
-	centerX           float64
-	centerY           float64
-	buildMenu         *BuildMenu
-	constructionQueue *ConstructionQueueUI
-	resourceStorage   *ResourceStorageUI
-	shipyardUI        *ShipyardUI
-	fleetInfoUI       *FleetInfoUI
-	orbitOffset       float64 // For animating orbits
-	fleetManager      *FleetManager
-	fleets            []*Fleet
+	ctx          GameContext
+	system       *entities.System
+	planet       *entities.Planet
+	clickHandler *ClickHandler
+	centerX      float64
+	centerY      float64
+	orbitOffset  float64 // For animating orbits
+	fleets       []*Fleet
 }
 
 // NewPlanetView creates a new planet view
-func NewPlanetView(game *Game) *PlanetView {
+func NewPlanetView(ctx GameContext) *PlanetView {
 	return &PlanetView{
-		game:              game,
-		clickHandler:      NewClickHandler(),
-		centerX:           float64(screenWidth) / 2,
-		centerY:           float64(screenHeight) / 2,
-		buildMenu:         NewBuildMenu(game),
-		constructionQueue: NewConstructionQueueUI(game),
-		resourceStorage:   NewResourceStorageUI(game),
-		shipyardUI:        NewShipyardUI(game),
-		fleetInfoUI:       NewFleetInfoUI(game),
-		fleetManager:      NewFleetManager(game),
+		ctx:          ctx,
+		clickHandler: NewClickHandler(),
+		centerX:      float64(ScreenWidth) / 2,
+		centerY:      float64(ScreenHeight) / 2,
 	}
 }
 
 // SetPlanet sets the planet to display
-func (pv *PlanetView) SetPlanet(system *entities.System, planet *entities.Planet) {
-	pv.system = system
+func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 	pv.planet = planet
 
-	// Set planet position to center for click detection
-	planet.SetAbsolutePosition(pv.centerX, pv.centerY)
+	// Find the system that contains this planet
+	pv.system = nil
+	for _, sys := range pv.ctx.GetSystems() {
+		for _, entity := range sys.Entities {
+			if p, ok := entity.(*entities.Planet); ok && p == planet {
+				pv.system = sys
+				break
+			}
+		}
+		if pv.system != nil {
+			break
+		}
+	}
 
-	// Set planet for resource storage UI
-	pv.resourceStorage.SetPlanet(planet)
+	// Set planet position to center for click detection
+	if planet != nil {
+		planet.SetAbsolutePosition(pv.centerX, pv.centerY)
+	}
 
 	pv.updateResourcePositions()
 	pv.updateFleets()
@@ -61,23 +61,21 @@ func (pv *PlanetView) SetPlanet(system *entities.System, planet *entities.Planet
 
 // Update implements View interface
 func (pv *PlanetView) Update() error {
-	// Update shipyard UI
-	pv.shipyardUI.Update()
+	if pv.planet == nil {
+		return nil
+	}
 
-	// Update fleet info UI
-	pv.fleetInfoUI.Update()
-
-	// Update construction queue UI
-	pv.constructionQueue.Update()
-
-	// Update resource storage UI
-	pv.resourceStorage.Update()
+	kb := pv.ctx.GetKeyBindings()
+	vm := pv.ctx.GetViewManager()
+	tm := pv.ctx.GetTickManager()
 
 	// Update orbit animation (very slow for planetary rotation effect)
-	if !pv.game.tickManager.IsPaused() {
-		pv.orbitOffset += 0.0001 * float64(pv.game.tickManager.GetSpeed()) // 10x slower for rotation feel
-		if pv.orbitOffset > 6.28318 {                                      // 2*PI
-			pv.orbitOffset -= 6.28318
+	if !tm.IsPaused() {
+		if speed, ok := tm.GetSpeed().(float64); ok {
+			pv.orbitOffset += 0.0001 * speed // 10x slower for rotation feel
+			if pv.orbitOffset > 6.28318 {    // 2*PI
+				pv.orbitOffset -= 6.28318
+			}
 		}
 	}
 
@@ -87,33 +85,10 @@ func (pv *PlanetView) Update() error {
 	// Update fleet aggregation
 	pv.updateFleets()
 
-	// Update build menu first (it handles its own input)
-	if pv.buildMenu.IsOpen() {
-		pv.buildMenu.Update()
-		return nil
-	}
-
 	// Handle escape key
-	if pv.game.keyBindings.IsActionJustPressed(ActionEscape) {
-		// Close fleet info UI if open
-		if pv.fleetInfoUI.IsVisible() {
-			pv.fleetInfoUI.Hide()
-			return nil
-		}
-		// Close shipyard UI if open
-		if pv.shipyardUI.IsVisible() {
-			pv.shipyardUI.Hide()
-			return nil
-		}
-		pv.game.viewManager.SwitchTo(ViewTypeSystem)
+	if kb.IsActionJustPressed(ActionEscape) {
+		vm.SwitchTo(ViewTypeSystem)
 		return nil
-	}
-
-	// Open build menu on planet
-	if pv.game.keyBindings.IsActionJustPressed(ActionOpenBuildMenu) && pv.planet != nil {
-		if pv.game.humanPlayer != nil && pv.planet.Owner == pv.game.humanPlayer.Name {
-			pv.buildMenu.Open(pv.planet, screenWidth/2, screenHeight/2)
-		}
 	}
 
 	// Handle mouse clicks
@@ -121,14 +96,14 @@ func (pv *PlanetView) Update() error {
 		x, y := ebiten.CursorPosition()
 
 		// Check if clicking on a fleet
-		clickedFleet := pv.fleetManager.GetFleetAtPosition(pv.fleets, x, y, 15.0)
+		fm := pv.ctx.GetFleetManager()
+		clickedFleet := fm.GetFleetAtPosition(pv.fleets, x, y, 15.0)
 		if clickedFleet != nil {
-			pv.shipyardUI.Hide() // Close shipyard if open
-			pv.fleetInfoUI.Show(clickedFleet)
+			// TODO: Show fleet info when we port FleetInfoUI
 			return nil
 		}
 
-		// Check if clicking on a building (shipyard)
+		// Check if clicking on a building
 		for _, buildingEntity := range pv.planet.Buildings {
 			if building, ok := buildingEntity.(*entities.Building); ok {
 				bx, by := building.GetAbsolutePosition()
@@ -138,26 +113,9 @@ func (pv *PlanetView) Update() error {
 				clickRadius := building.GetClickRadius()
 
 				if distance <= clickRadius*clickRadius {
-					// Clicked on a building
-					if building.BuildingType == "Shipyard" && building.IsOperational {
-						if pv.game.humanPlayer != nil && building.Owner == pv.game.humanPlayer.Name {
-							pv.shipyardUI.Show(pv.planet, building)
-							return nil
-						}
-					}
-				}
-			}
-		}
-
-		// Check if clicking on a resource to build
-		if ebiten.IsKeyPressed(ebiten.KeyShift) {
-			// Shift+click on resource opens build menu for that resource
-			if selectedObj := pv.clickHandler.GetSelectedObject(); selectedObj != nil {
-				if resource, ok := selectedObj.(*entities.Resource); ok {
-					if pv.game.humanPlayer != nil && resource.Owner == pv.game.humanPlayer.Name {
-						pv.buildMenu.Open(resource, x, y)
-						return nil
-					}
+					// Clicked on a building - handle shipyard, etc.
+					// TODO: Implement when we port ShipyardUI
+					return nil
 				}
 			}
 		}
@@ -181,7 +139,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	// Draw planet at center
 	pv.drawPlanet(screen)
 
-	// Draw all resources (no orbital paths for resources)
+	// Draw all resources
 	pv.drawResources(screen)
 
 	// Draw all buildings
@@ -199,8 +157,8 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 			UIHighlight)
 	}
 
-	// Draw context menu if active (but not if build menu is open)
-	if pv.clickHandler.HasActiveMenu() && !pv.buildMenu.IsOpen() {
+	// Draw context menu if active
+	if pv.clickHandler.HasActiveMenu() {
 		pv.clickHandler.GetActiveMenu().Draw(screen)
 	}
 
@@ -210,42 +168,11 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	DrawText(screen, fmt.Sprintf("Type: %s", pv.planet.PlanetType), 10, 25, UITextSecondary)
 	DrawText(screen, fmt.Sprintf("Resources: %d deposits", len(pv.planet.Resources)), 10, 40, UITextSecondary)
 	DrawText(screen, fmt.Sprintf("Buildings: %d", len(pv.planet.Buildings)), 10, 55, UITextSecondary)
-
-	// Show build hints if player owns this planet
-	if pv.game.humanPlayer != nil && pv.planet.Owner == pv.game.humanPlayer.Name {
-		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, 70, UITextSecondary)
-		DrawText(screen, "[Click Shipyard] Build ships  [ESC] Return to system", 10, 85, UITextSecondary)
-	} else {
-		DrawText(screen, "Press ESC to return to system", 10, 70, UITextSecondary)
-	}
-
-	// Draw construction queue UI
-	pv.constructionQueue.Draw(screen)
-
-	// Draw resource storage UI
-	pv.resourceStorage.Draw(screen)
-
-	// Draw build menu if visible
-	pv.buildMenu.Draw(screen)
-
-	// Draw shipyard UI if visible
-	pv.shipyardUI.Draw(screen)
-
-	// Draw fleet info UI if visible
-	pv.fleetInfoUI.Draw(screen)
+	DrawText(screen, "Press ESC to return to system", 10, 70, UITextSecondary)
 }
 
 // OnEnter implements View interface
 func (pv *PlanetView) OnEnter() {
-	if pv.planet != nil {
-		pv.updateResourcePositions()
-		pv.updateFleets()
-		pv.registerClickables()
-	}
-}
-
-// RefreshPlanet refreshes the planet view (called when construction completes)
-func (pv *PlanetView) RefreshPlanet() {
 	if pv.planet != nil {
 		pv.updateResourcePositions()
 		pv.updateFleets()
@@ -323,7 +250,6 @@ func (pv *PlanetView) updateResourcePositions() {
 		for _, entity := range pv.system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
 				// Only show ships that are orbiting THIS specific planet
-				// Ships orbit planets if their OrbitDistance matches the planet's orbit distance
 				planetOrbit := pv.planet.GetOrbitDistance()
 				shipOrbit := ship.GetOrbitDistance()
 
@@ -424,8 +350,9 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	radius := resource.Size
 
 	// Draw ownership indicator if owned by player
-	if resource.Owner != "" && pv.game.humanPlayer != nil && resource.Owner == pv.game.humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(radius+2), pv.game.humanPlayer.Color)
+	humanPlayer := pv.ctx.GetHumanPlayer()
+	if resource.Owner != "" && humanPlayer != nil && resource.Owner == humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(radius+2), humanPlayer.Color)
 	}
 
 	// Create resource image
@@ -469,7 +396,8 @@ func (pv *PlanetView) updateFleets() {
 		return
 	}
 	// Only aggregate ships that are actually at this planet's orbital distance
-	pv.fleets = pv.fleetManager.AggregateFleetsAtPlanet(pv.system, pv.planet)
+	fm := pv.ctx.GetFleetManager()
+	pv.fleets = fm.AggregateFleetsAtPlanet(pv.system, pv.planet)
 }
 
 // drawFleets draws all fleets orbiting this planet
@@ -485,15 +413,16 @@ func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 		return
 	}
 
-	// Use lead ship's position (already updated by updateResourcePositions)
+	// Use lead ship's position
 	x, y := fleet.GetPosition()
 	centerX := int(x)
 	centerY := int(y)
 	size := 6
 
 	// Draw ownership indicator if owned by player
-	if fleet.Owner != "" && pv.game.humanPlayer != nil && fleet.Owner == pv.game.humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(size+3), pv.game.humanPlayer.Color)
+	humanPlayer := pv.ctx.GetHumanPlayer()
+	if fleet.Owner != "" && humanPlayer != nil && fleet.Owner == humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(size+3), humanPlayer.Color)
 	}
 
 	// Draw ship as a triangle
@@ -549,8 +478,9 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	size := building.Size
 
 	// Draw ownership indicator if owned by player
-	if building.Owner != "" && pv.game.humanPlayer != nil && building.Owner == pv.game.humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(size+2), pv.game.humanPlayer.Color)
+	humanPlayer := pv.ctx.GetHumanPlayer()
+	if building.Owner != "" && humanPlayer != nil && building.Owner == humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(size+2), humanPlayer.Color)
 	}
 
 	// Create building image (square for buildings)

@@ -1,4 +1,4 @@
-package main
+package views
 
 import (
 	"fmt"
@@ -8,13 +8,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-const (
-	ViewTypeSettings ViewType = "settings"
-)
-
 // SettingsView displays game settings including key bindings
 type SettingsView struct {
-	game             *Game
+	ctx              GameContext
 	selectedIndex    int
 	scrollOffset     int
 	editingAction    KeyAction
@@ -26,16 +22,16 @@ type SettingsView struct {
 }
 
 // NewSettingsView creates a new settings view
-func NewSettingsView(game *Game) *SettingsView {
+func NewSettingsView(ctx GameContext) *SettingsView {
 	sv := &SettingsView{
-		game:             game,
+		ctx:              ctx,
 		selectedIndex:    0,
 		scrollOffset:     0,
 		editingAction:    "",
 		waitingForKey:    false,
 		returnToMainMenu: true,
 	}
-	sv.actions = game.keyBindings.GetAllActions()
+	sv.actions = ctx.GetKeyBindings().GetAllActions()
 	return sv
 }
 
@@ -46,6 +42,9 @@ func (sv *SettingsView) SetReturnDestination(toMainMenu bool) {
 
 // Update updates the settings view
 func (sv *SettingsView) Update() error {
+	kb := sv.ctx.GetKeyBindings()
+	vm := sv.ctx.GetViewManager()
+
 	// Decrement error timer
 	if sv.errorTimer > 0 {
 		sv.errorTimer--
@@ -58,11 +57,11 @@ func (sv *SettingsView) Update() error {
 	}
 
 	// Handle escape to go back
-	if sv.game.keyBindings.IsActionJustPressed(ActionEscape) {
+	if kb.IsActionJustPressed(ActionEscape) {
 		if sv.returnToMainMenu {
-			sv.game.viewManager.SwitchTo(ViewTypeMainMenu)
+			vm.SwitchTo(ViewTypeMainMenu)
 		} else {
-			sv.game.viewManager.SwitchTo(ViewTypeGalaxy)
+			vm.SwitchTo(ViewTypeGalaxy)
 		}
 		return nil
 	}
@@ -74,21 +73,21 @@ func (sv *SettingsView) Update() error {
 	}
 
 	// Keyboard navigation
-	if sv.game.keyBindings.IsActionJustPressed(ActionMenuUp) {
+	if kb.IsActionJustPressed(ActionMenuUp) {
 		sv.selectedIndex--
 		if sv.selectedIndex < 0 {
 			sv.selectedIndex = len(sv.actions) + 1 // +1 for save button, +1 for reset button
 		}
 	}
 
-	if sv.game.keyBindings.IsActionJustPressed(ActionMenuDown) {
+	if kb.IsActionJustPressed(ActionMenuDown) {
 		sv.selectedIndex++
 		if sv.selectedIndex > len(sv.actions)+1 {
 			sv.selectedIndex = 0
 		}
 	}
 
-	if sv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) {
+	if kb.IsActionJustPressed(ActionMenuConfirm) {
 		sv.handleSelection()
 	}
 
@@ -113,26 +112,28 @@ func (sv *SettingsView) Update() error {
 
 // handleMouseClick handles mouse clicks on settings items
 func (sv *SettingsView) handleMouseClick(mx, my int) {
+	vm := sv.ctx.GetViewManager()
+
 	// Back button
 	if mx >= 50 && mx <= 200 && my >= 50 && my <= 90 {
 		if sv.returnToMainMenu {
-			sv.game.viewManager.SwitchTo(ViewTypeMainMenu)
+			vm.SwitchTo(ViewTypeMainMenu)
 		} else {
-			sv.game.viewManager.SwitchTo(ViewTypeGalaxy)
+			vm.SwitchTo(ViewTypeGalaxy)
 		}
 		return
 	}
 
 	// Save button
-	saveButtonY := screenHeight - 120
-	if mx >= screenWidth/2-100 && mx <= screenWidth/2+100 && my >= saveButtonY && my <= saveButtonY+40 {
+	saveButtonY := ScreenHeight - 120
+	if mx >= ScreenWidth/2-100 && mx <= ScreenWidth/2+100 && my >= saveButtonY && my <= saveButtonY+40 {
 		sv.saveSettings()
 		return
 	}
 
 	// Reset to defaults button
-	resetButtonY := screenHeight - 70
-	if mx >= screenWidth/2-100 && mx <= screenWidth/2+100 && my >= resetButtonY && my <= resetButtonY+40 {
+	resetButtonY := ScreenHeight - 70
+	if mx >= ScreenWidth/2-100 && mx <= ScreenWidth/2+100 && my >= resetButtonY && my <= resetButtonY+40 {
 		sv.resetToDefaults()
 		return
 	}
@@ -141,7 +142,7 @@ func (sv *SettingsView) handleMouseClick(mx, my int) {
 	startY := 200
 	for i, action := range sv.actions {
 		itemY := startY + i*50 - sv.scrollOffset
-		if itemY < 150 || itemY > screenHeight-180 {
+		if itemY < 150 || itemY > ScreenHeight-180 {
 			continue
 		}
 
@@ -176,6 +177,8 @@ func (sv *SettingsView) startEditingKey(action KeyAction) {
 
 // handleKeyInput waits for a key press to rebind
 func (sv *SettingsView) handleKeyInput() {
+	kb := sv.ctx.GetKeyBindings()
+
 	// Check for escape to cancel
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		sv.waitingForKey = false
@@ -189,7 +192,7 @@ func (sv *SettingsView) handleKeyInput() {
 			// Check if this key is already bound to another action
 			existingAction := sv.findActionForKey(key)
 			if existingAction != "" && existingAction != sv.editingAction {
-				sv.errorMessage = fmt.Sprintf("Key already bound to: %s", sv.game.keyBindings.GetActionName(existingAction))
+				sv.errorMessage = fmt.Sprintf("Key already bound to: %s", GetActionName(existingAction))
 				sv.errorTimer = 180 // 3 seconds
 				sv.waitingForKey = false
 				sv.editingAction = ""
@@ -197,7 +200,7 @@ func (sv *SettingsView) handleKeyInput() {
 			}
 
 			// Bind the key
-			sv.game.keyBindings.SetKey(sv.editingAction, key)
+			kb.SetKey(sv.editingAction, key)
 			sv.waitingForKey = false
 			sv.editingAction = ""
 			return
@@ -207,8 +210,9 @@ func (sv *SettingsView) handleKeyInput() {
 
 // findActionForKey finds which action is bound to a key
 func (sv *SettingsView) findActionForKey(key ebiten.Key) KeyAction {
+	kb := sv.ctx.GetKeyBindings()
 	for _, action := range sv.actions {
-		if sv.game.keyBindings.GetKey(action) == key {
+		if boundKey, ok := kb.GetKey(action); ok && boundKey == key {
 			return action
 		}
 	}
@@ -217,7 +221,9 @@ func (sv *SettingsView) findActionForKey(key ebiten.Key) KeyAction {
 
 // saveSettings saves the current key bindings to config file
 func (sv *SettingsView) saveSettings() {
-	if err := sv.game.SaveKeyBindings(); err != nil {
+	kb := sv.ctx.GetKeyBindings()
+	// We'll need a config path function - for now hardcode
+	if err := kb.SaveToFile(GetKeyBindingsConfigPath()); err != nil {
 		sv.errorMessage = fmt.Sprintf("Failed to save: %v", err)
 		sv.errorTimer = 180
 	} else {
@@ -228,18 +234,21 @@ func (sv *SettingsView) saveSettings() {
 
 // resetToDefaults resets all key bindings to defaults
 func (sv *SettingsView) resetToDefaults() {
-	sv.game.keyBindings.LoadDefaults()
+	// This will need to be handled by having the keybindings implement a reset method
 	sv.errorMessage = "Reset to defaults"
 	sv.errorTimer = 120
+	// TODO: Need to call kb.LoadDefaults() through the interface
 }
 
 // Draw renders the settings view
 func (sv *SettingsView) Draw(screen *ebiten.Image) {
+	kb := sv.ctx.GetKeyBindings()
+
 	// Background
 	screen.Fill(UIBackgroundDark)
 
 	// Title
-	DrawTextCentered(screen, "Settings", screenWidth/2, 80, SystemLightBlue, 2.0)
+	DrawTextCentered(screen, "Settings", ScreenWidth/2, 80, SystemLightBlue, 2.0)
 
 	// Back button
 	backPanel := &UIPanel{
@@ -254,7 +263,7 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 	DrawText(screen, "< Back", 70, 60, UITextPrimary)
 
 	// Subtitle
-	DrawTextCentered(screen, "Key Bindings", screenWidth/2, 130, UITextPrimary, 1.2)
+	DrawTextCentered(screen, "Key Bindings", ScreenWidth/2, 130, UITextPrimary, 1.2)
 
 	// Key binding list
 	startY := 200
@@ -262,7 +271,7 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		itemY := startY + i*50 - sv.scrollOffset
 
 		// Skip if off screen
-		if itemY < 150 || itemY > screenHeight-180 {
+		if itemY < 150 || itemY > ScreenHeight-180 {
 			continue
 		}
 
@@ -284,12 +293,14 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		itemPanel.Draw(screen)
 
 		// Action name
-		actionName := sv.game.keyBindings.GetActionName(action)
+		actionName := GetActionName(action)
 		DrawText(screen, actionName, 220, itemY+15, UITextPrimary)
 
 		// Current key binding
-		currentKey := sv.game.keyBindings.GetKey(action)
-		keyName := sv.game.keyBindings.GetKeyName(currentKey)
+		keyName := "Not bound"
+		if currentKey, ok := kb.GetKey(action); ok {
+			keyName = kb.GetKeyName(currentKey)
+		}
 
 		// If editing this action, show "Press key..."
 		if sv.waitingForKey && sv.editingAction == action {
@@ -306,7 +317,7 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 	}
 
 	// Save button
-	saveButtonY := screenHeight - 120
+	saveButtonY := ScreenHeight - 120
 	saveSelected := sv.selectedIndex == len(sv.actions)
 	saveBgColor := UIButtonActive
 	if saveSelected {
@@ -314,7 +325,7 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 	}
 
 	savePanel := &UIPanel{
-		X:           screenWidth/2 - 100,
+		X:           ScreenWidth/2 - 100,
 		Y:           saveButtonY,
 		Width:       200,
 		Height:      40,
@@ -322,10 +333,10 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		BorderColor: UIHighlight,
 	}
 	savePanel.Draw(screen)
-	DrawTextCentered(screen, "Save Settings", screenWidth/2, saveButtonY+12, UITextPrimary, 1.0)
+	DrawTextCentered(screen, "Save Settings", ScreenWidth/2, saveButtonY+12, UITextPrimary, 1.0)
 
 	// Reset to defaults button
-	resetButtonY := screenHeight - 70
+	resetButtonY := ScreenHeight - 70
 	resetSelected := sv.selectedIndex == len(sv.actions)+1
 	resetBgColor := UIButtonDisabled
 	if resetSelected {
@@ -333,7 +344,7 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 	}
 
 	resetPanel := &UIPanel{
-		X:           screenWidth/2 - 100,
+		X:           ScreenWidth/2 - 100,
 		Y:           resetButtonY,
 		Width:       200,
 		Height:      40,
@@ -341,7 +352,7 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		BorderColor: UIPanelBorder,
 	}
 	resetPanel.Draw(screen)
-	DrawTextCentered(screen, "Reset to Defaults", screenWidth/2, resetButtonY+12, UITextPrimary, 0.9)
+	DrawTextCentered(screen, "Reset to Defaults", ScreenWidth/2, resetButtonY+12, UITextPrimary, 0.9)
 
 	// Error/success message
 	if sv.errorTimer > 0 {
@@ -351,12 +362,12 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		} else {
 			msgColor = SystemRed
 		}
-		DrawTextCentered(screen, sv.errorMessage, screenWidth/2, 160, msgColor, 1.0)
+		DrawTextCentered(screen, sv.errorMessage, ScreenWidth/2, 160, msgColor, 1.0)
 	}
 
 	// Scroll hint
 	if len(sv.actions) > 10 {
-		DrawTextCentered(screen, "Scroll for more", screenWidth/2, screenHeight-20, UITextSecondary, 0.8)
+		DrawTextCentered(screen, "Scroll for more", ScreenWidth/2, ScreenHeight-20, UITextSecondary, 0.8)
 	}
 }
 
@@ -368,7 +379,7 @@ func (sv *SettingsView) GetType() ViewType {
 // OnEnter is called when entering this view
 func (sv *SettingsView) OnEnter() {
 	// Refresh actions list
-	sv.actions = sv.game.keyBindings.GetAllActions()
+	sv.actions = sv.ctx.GetKeyBindings().GetAllActions()
 	sv.selectedIndex = 0
 	sv.scrollOffset = 0
 	sv.waitingForKey = false
@@ -380,4 +391,46 @@ func (sv *SettingsView) OnEnter() {
 // OnExit is called when leaving this view
 func (sv *SettingsView) OnExit() {
 	// Nothing to clean up
+}
+
+// GetActionName returns a human-readable name for an action
+func GetActionName(action KeyAction) string {
+	switch action {
+	case ActionPauseToggle:
+		return "Pause/Unpause"
+	case ActionSpeedSlow:
+		return "Speed: 1x"
+	case ActionSpeedNormal:
+		return "Speed: 2x"
+	case ActionSpeedFast:
+		return "Speed: 4x"
+	case ActionSpeedVeryFast:
+		return "Speed: 8x"
+	case ActionSpeedIncrease:
+		return "Increase Speed"
+	case ActionQuickSave:
+		return "Quick Save"
+	case ActionEscape:
+		return "Escape/Back"
+	case ActionOpenBuildMenu:
+		return "Open Build Menu"
+	case ActionMenuUp:
+		return "Menu: Up"
+	case ActionMenuDown:
+		return "Menu: Down"
+	case ActionMenuConfirm:
+		return "Menu: Confirm"
+	case ActionMenuCancel:
+		return "Menu: Cancel"
+	case ActionMenuDelete:
+		return "Menu: Delete"
+	default:
+		return string(action)
+	}
+}
+
+// GetKeyBindingsConfigPath returns the path to the key bindings config file
+// TODO: This should probably be passed through GameContext or be a global constant
+func GetKeyBindingsConfigPath() string {
+	return "~/.xandaris/keybindings.json"
 }

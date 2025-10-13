@@ -1,128 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/views"
 )
 
-// Fleet represents a group of ships at the same location
-type Fleet struct {
-	Ships         []*entities.Ship
-	LeadShip      *entities.Ship // First ship in fleet, used for positioning
-	SystemID      int
-	OrbitDistance float64
-	OrbitAngle    float64
-	Owner         string
-	IsSelected    bool
-}
-
-// NewFleet creates a new fleet from a list of ships
-func NewFleet(ships []*entities.Ship) *Fleet {
-	if len(ships) == 0 {
-		return nil
-	}
-
-	fleet := &Fleet{
-		Ships:         ships,
-		LeadShip:      ships[0],
-		SystemID:      ships[0].CurrentSystem,
-		OrbitDistance: ships[0].GetOrbitDistance(),
-		OrbitAngle:    ships[0].GetOrbitAngle(),
-		Owner:         ships[0].Owner,
-		IsSelected:    false,
-	}
-
-	return fleet
-}
-
-// AddShip adds a ship to the fleet
-func (f *Fleet) AddShip(ship *entities.Ship) {
-	f.Ships = append(f.Ships, ship)
-}
-
-// RemoveShip removes a ship from the fleet
-func (f *Fleet) RemoveShip(ship *entities.Ship) {
-	for i, s := range f.Ships {
-		if s == ship {
-			f.Ships = append(f.Ships[:i], f.Ships[i+1:]...)
-			break
-		}
-	}
-
-	// Update lead ship if necessary
-	if f.LeadShip == ship && len(f.Ships) > 0 {
-		f.LeadShip = f.Ships[0]
-	}
-}
-
-// Size returns the number of ships in the fleet
-func (f *Fleet) Size() int {
-	return len(f.Ships)
-}
-
-// GetPosition returns the fleet's position (from lead ship)
-func (f *Fleet) GetPosition() (float64, float64) {
-	if f.LeadShip != nil {
-		return f.LeadShip.GetAbsolutePosition()
-	}
-	return 0, 0
-}
-
-// GetTotalFuel returns the total fuel across all ships
-func (f *Fleet) GetTotalFuel() int {
-	total := 0
-	for _, ship := range f.Ships {
-		total += ship.CurrentFuel
-	}
-	return total
-}
-
-// GetTotalMaxFuel returns the total max fuel capacity
-func (f *Fleet) GetTotalMaxFuel() int {
-	total := 0
-	for _, ship := range f.Ships {
-		total += ship.MaxFuel
-	}
-	return total
-}
-
-// GetAverageFuelPercent returns the average fuel percentage
-func (f *Fleet) GetAverageFuelPercent() float64 {
-	if len(f.Ships) == 0 {
-		return 0
-	}
-	total := 0.0
-	for _, ship := range f.Ships {
-		total += ship.GetFuelPercentage()
-	}
-	return total / float64(len(f.Ships))
-}
-
-// GetShipTypeCounts returns a map of ship type to count
-func (f *Fleet) GetShipTypeCounts() map[entities.ShipType]int {
-	counts := make(map[entities.ShipType]int)
-	for _, ship := range f.Ships {
-		counts[ship.ShipType]++
-	}
-	return counts
-}
-
-// GetDescription returns a description of the fleet
-func (f *Fleet) GetDescription() string {
-	if len(f.Ships) == 1 {
-		return f.Ships[0].GetDescription()
-	}
-
-	typeCounts := f.GetShipTypeCounts()
-	desc := fmt.Sprintf("Fleet (%d ships)", len(f.Ships))
-	for shipType, count := range typeCounts {
-		desc += fmt.Sprintf("\n  %dx %s", count, shipType)
-	}
-	return desc
-}
+// Fleet type is now in views package - import and use views.Fleet
 
 // FleetManager handles fleet aggregation and management
 type FleetManager struct {
@@ -138,7 +24,7 @@ func NewFleetManager(game *Game) *FleetManager {
 
 // AggregateFleets groups ships into fleets based on location
 // Only shows ships that are orbiting the STAR (not orbiting planets)
-func (fm *FleetManager) AggregateFleets(system *entities.System) []*Fleet {
+func (fm *FleetManager) AggregateFleets(system *entities.System) []*views.Fleet {
 	if system == nil {
 		return nil
 	}
@@ -175,7 +61,7 @@ func (fm *FleetManager) AggregateFleets(system *entities.System) []*Fleet {
 	}
 
 	// Group ships into fleets
-	var fleets []*Fleet
+	var fleets []*views.Fleet
 	used := make(map[*entities.Ship]bool)
 
 	for _, ship := range ships {
@@ -205,7 +91,7 @@ func (fm *FleetManager) AggregateFleets(system *entities.System) []*Fleet {
 		}
 
 		// Create fleet (even for single ships)
-		fleet := NewFleet(fleetShips)
+		fleet := views.NewFleet(fleetShips)
 		if fleet != nil {
 			fleets = append(fleets, fleet)
 		}
@@ -215,7 +101,7 @@ func (fm *FleetManager) AggregateFleets(system *entities.System) []*Fleet {
 }
 
 // AggregateFleetsAtPlanet groups ships orbiting a specific planet
-func (fm *FleetManager) AggregateFleetsAtPlanet(system *entities.System, planet *entities.Planet) []*Fleet {
+func (fm *FleetManager) AggregateFleetsAtPlanet(system *entities.System, planet *entities.Planet) []*views.Fleet {
 	if system == nil || planet == nil {
 		return nil
 	}
@@ -238,7 +124,7 @@ func (fm *FleetManager) AggregateFleetsAtPlanet(system *entities.System, planet 
 	// Group ships by their relative angle to planet
 	const angleThreshold = 0.3 // Radians
 
-	var fleets []*Fleet
+	var fleets []*views.Fleet
 	used := make(map[*entities.Ship]bool)
 
 	for _, ship := range nearbyShips {
@@ -271,7 +157,7 @@ func (fm *FleetManager) AggregateFleetsAtPlanet(system *entities.System, planet 
 			}
 		}
 
-		fleet := NewFleet(fleetShips)
+		fleet := views.NewFleet(fleetShips)
 		if fleet != nil {
 			fleets = append(fleets, fleet)
 		}
@@ -281,7 +167,7 @@ func (fm *FleetManager) AggregateFleetsAtPlanet(system *entities.System, planet 
 }
 
 // GetFleetAtPosition finds a fleet at a specific position
-func (fm *FleetManager) GetFleetAtPosition(fleets []*Fleet, x, y int, radius float64) *Fleet {
+func (fm *FleetManager) GetFleetAtPosition(fleets []*views.Fleet, x, y int, radius float64) *views.Fleet {
 	for _, fleet := range fleets {
 		fx, fy := fleet.GetPosition()
 		dx := float64(x) - fx
@@ -296,13 +182,13 @@ func (fm *FleetManager) GetFleetAtPosition(fleets []*Fleet, x, y int, radius flo
 }
 
 // MoveFleet orders all ships in a fleet to move to a target system
-func (fm *FleetManager) MoveFleet(fleet *Fleet, targetSystemID int) (successCount int, failCount int) {
+func (fm *FleetManager) MoveFleet(fleet *views.Fleet, targetSystemID int) (successCount int, failCount int) {
 	if fleet == nil || len(fleet.Ships) == 0 {
 		return 0, 0
 	}
 
 	// Create ship movement helper
-	helper := tickable.NewShipMovementHelper(fm.game.GetSystems(), fm.game.GetHyperlanes())
+	helper := tickable.NewShipMovementHelper(fm.game.GetSystemsMap(), fm.game.GetHyperlanes())
 
 	// Attempt to move each ship in the fleet
 	for _, ship := range fleet.Ships {
@@ -317,7 +203,7 @@ func (fm *FleetManager) MoveFleet(fleet *Fleet, targetSystemID int) (successCoun
 }
 
 // CanFleetMove checks if the entire fleet can move to a target system
-func (fm *FleetManager) CanFleetMove(fleet *Fleet, targetSystemID int) bool {
+func (fm *FleetManager) CanFleetMove(fleet *views.Fleet, targetSystemID int) bool {
 	if fleet == nil || len(fleet.Ships) == 0 {
 		return false
 	}
@@ -333,7 +219,7 @@ func (fm *FleetManager) CanFleetMove(fleet *Fleet, targetSystemID int) bool {
 }
 
 // GetFleetMovementStatus returns a summary of fleet movement capability
-func (fm *FleetManager) GetFleetMovementStatus(fleet *Fleet) (canMove int, lowFuel int, noFuel int) {
+func (fm *FleetManager) GetFleetMovementStatus(fleet *views.Fleet) (canMove int, lowFuel int, noFuel int) {
 	if fleet == nil {
 		return 0, 0, 0
 	}
@@ -349,4 +235,13 @@ func (fm *FleetManager) GetFleetMovementStatus(fleet *Fleet) (canMove int, lowFu
 	}
 
 	return canMove, lowFuel, noFuel
+}
+
+// GetAllFleetsInSystem returns all fleets in a specific system
+func (fm *FleetManager) GetAllFleetsInSystem(systemID int) []*views.Fleet {
+	system := fm.game.GetSystemsMap()[systemID]
+	if system == nil {
+		return nil
+	}
+	return fm.AggregateFleets(system)
 }

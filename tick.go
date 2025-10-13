@@ -107,7 +107,7 @@ func (tm *TickManager) IsPaused() bool {
 }
 
 // GetSpeed returns the current game speed
-func (tm *TickManager) GetSpeed() TickSpeed {
+func (tm *TickManager) GetSpeed() interface{} {
 	return tm.speed
 }
 
@@ -132,12 +132,14 @@ func (tm *TickManager) TogglePause() {
 }
 
 // SetSpeed sets the game speed
-func (tm *TickManager) SetSpeed(speed TickSpeed) {
-	tm.speed = speed
-	if speed == TickSpeedPaused {
-		tm.isPaused = true
-	} else if tm.isPaused {
-		tm.Resume()
+func (tm *TickManager) SetSpeed(speed interface{}) {
+	if ts, ok := speed.(TickSpeed); ok {
+		tm.speed = ts
+		if ts == TickSpeedPaused {
+			tm.isPaused = true
+		} else if tm.isPaused {
+			tm.Resume()
+		}
 	}
 }
 

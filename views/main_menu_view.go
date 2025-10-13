@@ -1,4 +1,4 @@
-package main
+package views
 
 import (
 	"fmt"
@@ -7,21 +7,11 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hunterjsb/xandaris/entities"
-	"github.com/hunterjsb/xandaris/tickable"
-)
-
-const (
-	ViewTypeMainMenu ViewType = "mainmenu"
-)
-
-var (
-	UIBackgroundDark = color.RGBA{15, 15, 25, 255}
 )
 
 // MainMenuView displays the main menu for starting or loading games
 type MainMenuView struct {
-	game           *Game
+	ctx            GameContext
 	playerName     string
 	selectedOption int // 0 = New Game, 1 = Load Game, 2 = Settings, 3 = Quit
 	saveFiles      []SaveFileInfo
@@ -33,9 +23,9 @@ type MainMenuView struct {
 }
 
 // NewMainMenuView creates a new main menu view
-func NewMainMenuView(game *Game) *MainMenuView {
+func NewMainMenuView(ctx GameContext) *MainMenuView {
 	return &MainMenuView{
-		game:           game,
+		ctx:            ctx,
 		playerName:     "Player",
 		selectedOption: 0,
 		selectedSave:   0,
@@ -73,6 +63,8 @@ func (mmv *MainMenuView) Update() error {
 
 // handleTextInput processes keyboard input for player name
 func (mmv *MainMenuView) handleTextInput() {
+	kb := mmv.ctx.GetKeyBindings()
+
 	// Handle character input
 	for _, r := range ebiten.AppendInputChars(nil) {
 		if len(mmv.playerName) < 20 { // Max 20 characters
@@ -81,25 +73,27 @@ func (mmv *MainMenuView) handleTextInput() {
 	}
 
 	// Handle backspace
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuDelete) {
+	if kb.IsActionJustPressed(ActionMenuDelete) {
 		if len(mmv.playerName) > 0 {
 			mmv.playerName = mmv.playerName[:len(mmv.playerName)-1]
 		}
 	}
 
 	// Handle enter to confirm input
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) {
+	if kb.IsActionJustPressed(ActionMenuConfirm) {
 		mmv.inputActive = false
 	}
 
 	// Handle escape to cancel input
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuCancel) {
+	if kb.IsActionJustPressed(ActionMenuCancel) {
 		mmv.inputActive = false
 	}
 }
 
 // handleMainMenuInput handles keyboard input for main menu navigation
 func (mmv *MainMenuView) handleMainMenuInput() error {
+	kb := mmv.ctx.GetKeyBindings()
+
 	// Click on name field to activate input
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
@@ -134,21 +128,21 @@ func (mmv *MainMenuView) handleMainMenuInput() error {
 	}
 
 	// Keyboard navigation
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuUp) {
+	if kb.IsActionJustPressed(ActionMenuUp) {
 		mmv.selectedOption--
 		if mmv.selectedOption < 0 {
 			mmv.selectedOption = 3
 		}
 	}
 
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuDown) {
+	if kb.IsActionJustPressed(ActionMenuDown) {
 		mmv.selectedOption++
 		if mmv.selectedOption > 3 {
 			mmv.selectedOption = 0
 		}
 	}
 
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) && !mmv.inputActive {
+	if kb.IsActionJustPressed(ActionMenuConfirm) && !mmv.inputActive {
 		switch mmv.selectedOption {
 		case 0:
 			mmv.startNewGame()
@@ -167,6 +161,8 @@ func (mmv *MainMenuView) handleMainMenuInput() error {
 
 // handleLoadMenuInput handles keyboard input for load game menu
 func (mmv *MainMenuView) handleLoadMenuInput() {
+	kb := mmv.ctx.GetKeyBindings()
+
 	// Handle mouse clicks on save files
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
@@ -189,25 +185,25 @@ func (mmv *MainMenuView) handleLoadMenuInput() {
 	}
 
 	// Keyboard navigation
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuUp) {
+	if kb.IsActionJustPressed(ActionMenuUp) {
 		mmv.selectedSave--
 		if mmv.selectedSave < 0 {
 			mmv.selectedSave = len(mmv.saveFiles) - 1
 		}
 	}
 
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuDown) {
+	if kb.IsActionJustPressed(ActionMenuDown) {
 		mmv.selectedSave++
 		if mmv.selectedSave >= len(mmv.saveFiles) {
 			mmv.selectedSave = 0
 		}
 	}
 
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) && len(mmv.saveFiles) > 0 {
+	if kb.IsActionJustPressed(ActionMenuConfirm) && len(mmv.saveFiles) > 0 {
 		mmv.loadSelectedGame()
 	}
 
-	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuCancel) {
+	if kb.IsActionJustPressed(ActionMenuCancel) {
 		mmv.showLoadMenu = false
 	}
 }
@@ -219,53 +215,31 @@ func (mmv *MainMenuView) startNewGame() {
 		return
 	}
 
-	// Create a new game (this creates a temporary game with all the data we need)
-	newGame := NewGame()
-	newGame.humanPlayer.Name = mmv.playerName
-
-	// Update all owned entities to use the new player name
-	for _, planet := range newGame.humanPlayer.OwnedPlanets {
-		planet.Owner = mmv.playerName
-		// Update resources owned by the player
-		for _, resourceEntity := range planet.Resources {
-			if resource, ok := resourceEntity.(*entities.Resource); ok {
-				if resource.Owner == "Player" {
-					resource.Owner = mmv.playerName
-				}
-			}
-		}
+	// Use the game context to initialize a new game
+	if err := mmv.ctx.InitializeNewGame(mmv.playerName); err != nil {
+		mmv.showError(fmt.Sprintf("Error creating game: %v", err))
+		return
 	}
 
-	// Update the current game's data (but keep the ViewManager!)
-	mmv.game.systems = newGame.systems
-	mmv.game.hyperlanes = newGame.hyperlanes
-	mmv.game.seed = newGame.seed
-	mmv.game.players = newGame.players
-	mmv.game.humanPlayer = newGame.humanPlayer
-	mmv.game.tickManager = newGame.tickManager
-
-	// Re-initialize tickable systems with the new game context
-	context := &GameSystemContext{game: mmv.game}
-	tickable.InitializeAllSystems(context)
-
-	// Re-register construction completion handler
-	mmv.game.registerConstructionHandler()
-
-	// Switch to galaxy view (using the existing ViewManager)
-	mmv.game.viewManager.SwitchTo(ViewTypeGalaxy)
+	// Switch to galaxy view
+	mmv.ctx.GetViewManager().SwitchTo(ViewTypeGalaxy)
 }
 
-// showLoadGameMenu displays the load game menu
+// showSettings displays the settings menu
 func (mmv *MainMenuView) showSettings() {
-	mmv.game.viewManager.SwitchTo(ViewTypeSettings)
+	vm := mmv.ctx.GetViewManager()
+	vm.SwitchTo(ViewTypeSettings)
+
 	// Set settings view to return to main menu
-	if settingsView, ok := mmv.game.viewManager.views[ViewTypeSettings].(*SettingsView); ok {
+	if settingsView, ok := vm.GetView(ViewTypeSettings).(*SettingsView); ok {
 		settingsView.SetReturnDestination(true) // true = return to main menu
 	}
 }
 
+// showLoadGameMenu displays the load game menu
 func (mmv *MainMenuView) showLoadGameMenu() {
-	saveFiles, err := ListSaveFiles()
+	saveLoad := mmv.ctx.GetSaveLoad()
+	saveFiles, err := saveLoad.ListSaveFiles()
 	if err != nil {
 		mmv.showError(fmt.Sprintf("Error loading saves: %v", err))
 		return
@@ -293,22 +267,13 @@ func (mmv *MainMenuView) loadSelectedGame() {
 	}
 
 	saveFile := mmv.saveFiles[mmv.selectedSave]
-	loadedGame, err := LoadGameFromFile(saveFile.Path)
-	if err != nil {
+	if err := mmv.ctx.LoadGameFromPath(saveFile.Path); err != nil {
 		mmv.showError(fmt.Sprintf("Error loading game: %v", err))
 		return
 	}
 
-	// Replace the current game with the loaded one
-	*mmv.game = *loadedGame
-
-	// Re-initialize tickable systems with the new game context
-	// This is crucial because the systems were initialized with the old menu game
-	context := &GameSystemContext{game: mmv.game}
-	tickable.InitializeAllSystems(context)
-
 	// Switch to galaxy view
-	mmv.game.viewManager.SwitchTo(ViewTypeGalaxy)
+	mmv.ctx.GetViewManager().SwitchTo(ViewTypeGalaxy)
 }
 
 // showError displays an error message
@@ -336,7 +301,8 @@ func (mmv *MainMenuView) Draw(screen *ebiten.Image) {
 
 // drawMainMenu draws the main menu screen
 func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
-	centerX := screenWidth / 2
+	tm := mmv.ctx.GetTickManager()
+	centerX := ScreenWidth / 2
 
 	// Title
 	DrawTextCentered(screen, "XANDARIS II", centerX, 100, color.RGBA{100, 200, 255, 255}, 3.0)
@@ -361,7 +327,7 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 	panel.Draw(screen)
 
 	nameText := mmv.playerName
-	if mmv.inputActive && (mmv.game.tickManager.GetCurrentTick()/30)%2 == 0 {
+	if mmv.inputActive && (tm.GetCurrentTick()/30)%2 == 0 {
 		nameText += "_"
 	}
 	DrawTextCentered(screen, nameText, centerX, 265, UITextPrimary, 1.0)
@@ -373,13 +339,13 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 	mmv.drawButton(screen, "Quit", centerX, 620, mmv.selectedOption == 3)
 
 	// Controls hint
-	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Select | Click to Interact", centerX, screenHeight-30, UITextSecondary, 0.8)
+	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Select | Click to Interact", centerX, ScreenHeight-30, UITextSecondary, 0.8)
 }
 
 // drawLoadMenu draws the load game menu
 func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 	// Title
-	DrawTextCentered(screen, "Load Game", screenWidth/2, 80, color.RGBA{100, 200, 255, 255}, 2.0)
+	DrawTextCentered(screen, "Load Game", ScreenWidth/2, 80, color.RGBA{100, 200, 255, 255}, 2.0)
 
 	// Back button
 	backPanel := &UIPanel{
@@ -395,7 +361,7 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 
 	// Save files list
 	if len(mmv.saveFiles) == 0 {
-		DrawTextCentered(screen, "No save files found", screenWidth/2, screenHeight/2, UITextSecondary, 1.0)
+		DrawTextCentered(screen, "No save files found", ScreenWidth/2, ScreenHeight/2, UITextSecondary, 1.0)
 		return
 	}
 
@@ -404,7 +370,7 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 		y := startY + i*80
 
 		// Don't draw off screen
-		if y > screenHeight-100 {
+		if y > ScreenHeight-100 {
 			break
 		}
 
@@ -431,7 +397,7 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 	}
 
 	// Controls hint
-	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Load | Escape to Go Back", screenWidth/2, screenHeight-30, UITextSecondary, 0.8)
+	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Load | Escape to Go Back", ScreenWidth/2, ScreenHeight-30, UITextSecondary, 0.8)
 }
 
 // drawButton draws a menu button
@@ -459,8 +425,8 @@ func (mmv *MainMenuView) drawButton(screen *ebiten.Image, text string, centerX, 
 
 // drawError draws an error message
 func (mmv *MainMenuView) drawError(screen *ebiten.Image) {
-	centerX := screenWidth / 2
-	centerY := screenHeight - 100
+	centerX := ScreenWidth / 2
+	centerY := ScreenHeight - 100
 
 	panel := &UIPanel{
 		X:           centerX - 250,

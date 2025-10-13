@@ -9,12 +9,13 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/views"
 )
 
 // FleetInfoUI displays detailed information about a selected fleet
 type FleetInfoUI struct {
 	game                  *Game
-	fleet                 *Fleet
+	fleet                 *views.Fleet
 	x                     int
 	y                     int
 	width                 int
@@ -39,7 +40,7 @@ func NewFleetInfoUI(game *Game) *FleetInfoUI {
 }
 
 // Show displays the fleet info for a specific fleet
-func (fui *FleetInfoUI) Show(fleet *Fleet) {
+func (fui *FleetInfoUI) Show(fleet *views.Fleet) {
 	fui.fleet = fleet
 	fui.visible = true
 	fui.scrollOffset = 0
@@ -107,11 +108,11 @@ func (fui *FleetInfoUI) Update() {
 				// Get connected systems and current system entities
 				if len(fui.fleet.Ships) > 0 {
 					firstShip := fui.fleet.Ships[0]
-					helper := tickable.NewShipMovementHelper(fui.game.GetSystems(), fui.game.GetHyperlanes())
+					helper := tickable.NewShipMovementHelper(fui.game.GetSystemsMap(), fui.game.GetHyperlanes())
 					fui.connectedSystems = helper.GetConnectedSystems(firstShip.CurrentSystem)
 
 					// Get current system entities (planets)
-					systems := fui.game.GetSystems()
+					systems := fui.game.GetSystemsMap()
 					currentSystem := systems[firstShip.CurrentSystem]
 					if currentSystem != nil {
 						fui.currentSystemEntities = make([]entities.Entity, 0)
@@ -365,7 +366,7 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 		currentY += 15
 	}
 
-	systems := fui.game.GetSystems()
+	systems := fui.game.GetSystemsMap()
 	for _, systemID := range fui.connectedSystems {
 		itemY := currentY
 
@@ -537,7 +538,7 @@ func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 }
 
 // GetFleet returns the currently displayed fleet
-func (fui *FleetInfoUI) GetFleet() *Fleet {
+func (fui *FleetInfoUI) GetFleet() *views.Fleet {
 	return fui.fleet
 }
 
@@ -576,7 +577,7 @@ func (fui *FleetInfoUI) isFleetAtPlanet() bool {
 
 	// Check if any ship is at a planet's orbit distance
 	firstShip := fui.fleet.Ships[0]
-	systems := fui.game.GetSystems()
+	systems := fui.game.GetSystemsMap()
 	currentSystem := systems[firstShip.CurrentSystem]
 	if currentSystem == nil {
 		return false

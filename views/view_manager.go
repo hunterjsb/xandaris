@@ -25,17 +25,17 @@ type View interface {
 }
 
 // ViewManager manages switching between different views
+// Note: The concrete implementation lives in main package
+// This just defines the structure views can interact with
 type ViewManager struct {
 	currentView View
 	views       map[ViewType]View
-	context     GameContext
 }
 
 // NewViewManager creates a new view manager
-func NewViewManager(context GameContext) *ViewManager {
+func NewViewManager() *ViewManager {
 	vm := &ViewManager{
-		views:   make(map[ViewType]View),
-		context: context,
+		views: make(map[ViewType]View),
 	}
 	return vm
 }

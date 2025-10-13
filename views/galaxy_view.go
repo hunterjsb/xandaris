@@ -1,4 +1,4 @@
-package main
+package views
 
 import (
 	"fmt"
@@ -8,28 +8,30 @@ import (
 	"github.com/hunterjsb/xandaris/entities"
 )
 
+const (
+	circleRadius = 8
+)
+
 // GalaxyView represents the galaxy map view
 type GalaxyView struct {
-	game          *Game
+	ctx           GameContext
 	clickHandler  *ClickHandler
 	lastClickX    int
 	lastClickY    int
 	lastClickTime int64
-	fleetManager  *FleetManager
 	systemFleets  map[int][]*Fleet // Fleets per system ID
 }
 
 // NewGalaxyView creates a new galaxy view
-func NewGalaxyView(game *Game) *GalaxyView {
+func NewGalaxyView(ctx GameContext) *GalaxyView {
 	gv := &GalaxyView{
-		game:         game,
+		ctx:          ctx,
 		clickHandler: NewClickHandler(),
-		fleetManager: NewFleetManager(game),
 		systemFleets: make(map[int][]*Fleet),
 	}
 
 	// Register all systems as clickable
-	for _, system := range game.systems {
+	for _, system := range ctx.GetSystems() {
 		gv.clickHandler.AddClickable(system)
 	}
 
@@ -38,12 +40,15 @@ func NewGalaxyView(game *Game) *GalaxyView {
 
 // Update implements View interface
 func (gv *GalaxyView) Update() error {
+	kb := gv.ctx.GetKeyBindings()
+	vm := gv.ctx.GetViewManager()
+
 	// Update fleet aggregation for each system
 	gv.updateFleets()
 
 	// Handle escape to return to main menu
-	if gv.game.keyBindings.IsActionJustPressed(ActionEscape) {
-		gv.game.viewManager.SwitchTo(ViewTypeMainMenu)
+	if kb.IsActionJustPressed(ActionEscape) {
+		vm.SwitchTo(ViewTypeMainMenu)
 		return nil
 	}
 
@@ -63,8 +68,8 @@ func (gv *GalaxyView) Update() error {
 			if selectedObj := gv.clickHandler.GetSelectedObject(); selectedObj != nil {
 				if system, ok := selectedObj.(*entities.System); ok {
 					// Switch to system view
-					gv.game.viewManager.SwitchTo(ViewTypeSystem)
-					if systemView, ok := gv.game.viewManager.GetCurrentView().(*SystemView); ok {
+					vm.SwitchTo(ViewTypeSystem)
+					if systemView, ok := vm.GetView(ViewTypeSystem).(*SystemView); ok {
 						systemView.SetSystem(system)
 					}
 				}
@@ -90,7 +95,7 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	gv.drawHyperlanes(screen)
 
 	// Draw all systems
-	for _, system := range gv.game.systems {
+	for _, system := range gv.ctx.GetSystems() {
 		gv.drawSystem(screen, system)
 	}
 
@@ -124,7 +129,7 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 func (gv *GalaxyView) OnEnter() {
 	// Re-register clickables when entering view
 	gv.clickHandler.ClearClickables()
-	for _, system := range gv.game.systems {
+	for _, system := range gv.ctx.GetSystems() {
 		gv.clickHandler.AddClickable(system)
 	}
 }
@@ -144,9 +149,10 @@ func (gv *GalaxyView) GetType() ViewType {
 func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
 	hyperlaneColor := HyperlaneNormal
 
-	for _, hyperlane := range gv.game.hyperlanes {
-		fromSystem := gv.game.systems[hyperlane.From]
-		toSystem := gv.game.systems[hyperlane.To]
+	for _, hyperlane := range gv.ctx.GetHyperlanes() {
+		systems := gv.ctx.GetSystems()
+		fromSystem := systems[hyperlane.From]
+		toSystem := systems[hyperlane.To]
 
 		// Draw line between systems
 		DrawLine(screen,
@@ -158,12 +164,13 @@ func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
 
 // drawSystem renders a single system
 func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) {
+	humanPlayer := gv.ctx.GetHumanPlayer()
 	centerX := int(system.X)
 	centerY := int(system.Y)
 
 	// Draw ownership indicator if system has player-owned planets
-	if gv.game.humanPlayer != nil && system.HasOwnershipByPlayer(gv.game.humanPlayer.Name) {
-		DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), gv.game.humanPlayer.Color)
+	if humanPlayer != nil && system.HasOwnershipByPlayer(humanPlayer.Name) {
+		DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), humanPlayer.Color)
 	}
 
 	// Create a circular image for the system
@@ -196,11 +203,12 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 
 // updateFleets aggregates fleets for each system
 func (gv *GalaxyView) updateFleets() {
+	fm := gv.ctx.GetFleetManager()
 	gv.systemFleets = make(map[int][]*Fleet)
 
-	for _, system := range gv.game.systems {
+	for _, system := range gv.ctx.GetSystems() {
 		// Get fleets orbiting the star in this system (not planets)
-		fleets := gv.fleetManager.AggregateFleets(system)
+		fleets := fm.AggregateFleets(system)
 		if len(fleets) > 0 {
 			gv.systemFleets[system.ID] = fleets
 		}
@@ -209,10 +217,12 @@ func (gv *GalaxyView) updateFleets() {
 
 // drawFleets draws fleet indicators at system locations
 func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
+	humanPlayer := gv.ctx.GetHumanPlayer()
+
 	for systemID, fleets := range gv.systemFleets {
 		// Find the system
 		var system *entities.System
-		for _, sys := range gv.game.systems {
+		for _, sys := range gv.ctx.GetSystems() {
 			if sys.ID == systemID {
 				system = sys
 				break
@@ -232,12 +242,12 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 
 		// Count total ships across all fleets
 		totalShips := 0
-		var ownerColor = UITextPrimary
+		ownerColor := UITextPrimary
 		for _, fleet := range fleets {
 			totalShips += fleet.Size()
 			// Use player color if owned by human player
-			if gv.game.humanPlayer != nil && fleet.Owner == gv.game.humanPlayer.Name {
-				ownerColor = gv.game.humanPlayer.Color
+			if humanPlayer != nil && fleet.Owner == humanPlayer.Name {
+				ownerColor = humanPlayer.Color
 			}
 		}
 
@@ -266,12 +276,14 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 
 // drawTransitShips draws ships that are in transit between systems
 func (gv *GalaxyView) drawTransitShips(screen *ebiten.Image) {
+	humanPlayer := gv.ctx.GetHumanPlayer()
+
 	// Find all moving ships across all systems
-	for _, system := range gv.game.systems {
+	for _, system := range gv.ctx.GetSystems() {
 		for _, entity := range system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
 				if ship.Status == entities.ShipStatusMoving && ship.TargetSystem != -1 {
-					gv.drawTransitShip(screen, ship)
+					gv.drawTransitShip(screen, ship, humanPlayer)
 				}
 			}
 		}
@@ -279,10 +291,10 @@ func (gv *GalaxyView) drawTransitShips(screen *ebiten.Image) {
 }
 
 // drawTransitShip draws a single ship in transit
-func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship) {
+func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship, humanPlayer *entities.Player) {
 	// Find source and target systems
 	var sourceSystem, targetSystem *entities.System
-	for _, sys := range gv.game.systems {
+	for _, sys := range gv.ctx.GetSystems() {
 		if sys.ID == ship.CurrentSystem {
 			sourceSystem = sys
 		}
@@ -302,8 +314,8 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship)
 
 	// Determine color
 	shipColor := ship.Color
-	if gv.game.humanPlayer != nil && ship.Owner == gv.game.humanPlayer.Name {
-		shipColor = gv.game.humanPlayer.Color
+	if humanPlayer != nil && ship.Owner == humanPlayer.Name {
+		shipColor = humanPlayer.Color
 	}
 
 	// Draw ship as a small triangle
@@ -322,7 +334,6 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship)
 	}
 
 	// Draw a subtle travel indicator (pulsing dot)
-	// Use tick to create pulsing effect
 	pulseSize := 2
 	for py := 0; py < pulseSize*2; py++ {
 		for px := 0; px < pulseSize*2; px++ {
@@ -337,14 +348,13 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship)
 
 // drawPlayerInfo draws player information panel
 func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
-	if gv.game.humanPlayer == nil {
+	humanPlayer := gv.ctx.GetHumanPlayer()
+	if humanPlayer == nil {
 		return
 	}
 
-	player := gv.game.humanPlayer
-
 	// Draw panel in top-right corner
-	panelX := screenWidth - 250
+	panelX := ScreenWidth - 250
 	panelY := 10
 	panelWidth := 240
 	panelHeight := 100
@@ -357,12 +367,12 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	textX := panelX + 10
 	textY := panelY + 15
 
-	DrawText(screen, player.Name, textX, textY, player.Color)
-	DrawText(screen, fmt.Sprintf("Credits: %d", player.Credits), textX, textY+15, UITextPrimary)
-	DrawText(screen, fmt.Sprintf("Planets: %d", len(player.OwnedPlanets)), textX, textY+30, UITextPrimary)
-	DrawText(screen, fmt.Sprintf("Population: %d", player.GetTotalPopulation()), textX, textY+45, UITextPrimary)
+	DrawText(screen, humanPlayer.Name, textX, textY, humanPlayer.Color)
+	DrawText(screen, fmt.Sprintf("Credits: %d", humanPlayer.Credits), textX, textY+15, UITextPrimary)
+	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+30, UITextPrimary)
+	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+45, UITextPrimary)
 
-	if player.HomeSystem != nil {
-		DrawText(screen, fmt.Sprintf("Home: %s", player.HomeSystem.Name), textX, textY+60, UITextSecondary)
+	if humanPlayer.HomeSystem != nil {
+		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+60, UITextSecondary)
 	}
 }

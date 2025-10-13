@@ -8,42 +8,36 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/views"
 )
 
-// KeyAction represents a named action that can be bound to a key
-type KeyAction string
-
+// Import key action constants from views package
 const (
-	// Global actions
-	ActionPauseToggle   KeyAction = "pause_toggle"
-	ActionSpeedSlow     KeyAction = "speed_slow"
-	ActionSpeedNormal   KeyAction = "speed_normal"
-	ActionSpeedFast     KeyAction = "speed_fast"
-	ActionSpeedVeryFast KeyAction = "speed_very_fast"
-	ActionSpeedIncrease KeyAction = "speed_increase"
-	ActionQuickSave     KeyAction = "quick_save"
-
-	// View navigation
-	ActionEscape        KeyAction = "escape"
-	ActionOpenBuildMenu KeyAction = "open_build_menu"
-
-	// Menu navigation
-	ActionMenuUp      KeyAction = "menu_up"
-	ActionMenuDown    KeyAction = "menu_down"
-	ActionMenuConfirm KeyAction = "menu_confirm"
-	ActionMenuCancel  KeyAction = "menu_cancel"
-	ActionMenuDelete  KeyAction = "menu_delete"
+	ActionPauseToggle   = views.ActionPauseToggle
+	ActionSpeedSlow     = views.ActionSpeedSlow
+	ActionSpeedNormal   = views.ActionSpeedNormal
+	ActionSpeedFast     = views.ActionSpeedFast
+	ActionSpeedVeryFast = views.ActionSpeedVeryFast
+	ActionSpeedIncrease = views.ActionSpeedIncrease
+	ActionQuickSave     = views.ActionQuickSave
+	ActionEscape        = views.ActionEscape
+	ActionOpenBuildMenu = views.ActionOpenBuildMenu
+	ActionMenuUp        = views.ActionMenuUp
+	ActionMenuDown      = views.ActionMenuDown
+	ActionMenuConfirm   = views.ActionMenuConfirm
+	ActionMenuCancel    = views.ActionMenuCancel
+	ActionMenuDelete    = views.ActionMenuDelete
 )
 
 // KeyBindings manages all key bindings for the game
 type KeyBindings struct {
-	bindings map[KeyAction]ebiten.Key
+	bindings map[views.KeyAction]ebiten.Key
 }
 
 // NewKeyBindings creates a new key bindings manager with default bindings
 func NewKeyBindings() *KeyBindings {
 	kb := &KeyBindings{
-		bindings: make(map[KeyAction]ebiten.Key),
+		bindings: make(map[views.KeyAction]ebiten.Key),
 	}
 	kb.LoadDefaults()
 	return kb
@@ -73,7 +67,7 @@ func (kb *KeyBindings) LoadDefaults() {
 }
 
 // IsActionJustPressed checks if the key bound to an action was just pressed
-func (kb *KeyBindings) IsActionJustPressed(action KeyAction) bool {
+func (kb *KeyBindings) IsActionJustPressed(action views.KeyAction) bool {
 	key, exists := kb.bindings[action]
 	if !exists {
 		return false
@@ -81,23 +75,20 @@ func (kb *KeyBindings) IsActionJustPressed(action KeyAction) bool {
 	return inpututil.IsKeyJustPressed(key)
 }
 
-// GetKey returns the key bound to an action
-func (kb *KeyBindings) GetKey(action KeyAction) ebiten.Key {
+// GetKey returns the key bound to an action (implements KeyBindingsInterface)
+func (kb *KeyBindings) GetKey(action views.KeyAction) (ebiten.Key, bool) {
 	key, exists := kb.bindings[action]
-	if !exists {
-		return ebiten.KeyMax // Invalid key
-	}
-	return key
+	return key, exists
 }
 
 // SetKey sets the key binding for an action
-func (kb *KeyBindings) SetKey(action KeyAction, key ebiten.Key) {
+func (kb *KeyBindings) SetKey(action views.KeyAction, key ebiten.Key) {
 	kb.bindings[action] = key
 }
 
 // GetActionName returns a human-readable name for an action
-func (kb *KeyBindings) GetActionName(action KeyAction) string {
-	names := map[KeyAction]string{
+func (kb *KeyBindings) GetActionName(action views.KeyAction) string {
+	names := map[views.KeyAction]string{
 		ActionPauseToggle:   "Pause/Resume",
 		ActionSpeedSlow:     "Speed: Slow",
 		ActionSpeedNormal:   "Speed: Normal",
@@ -172,8 +163,8 @@ func (kb *KeyBindings) GetKeyName(key ebiten.Key) string {
 }
 
 // GetAllActions returns all available actions
-func (kb *KeyBindings) GetAllActions() []KeyAction {
-	return []KeyAction{
+func (kb *KeyBindings) GetAllActions() []views.KeyAction {
+	return []views.KeyAction{
 		ActionPauseToggle,
 		ActionSpeedSlow,
 		ActionSpeedNormal,
@@ -234,9 +225,9 @@ func (kb *KeyBindings) LoadFromFile(filename string) error {
 		return fmt.Errorf("failed to unmarshal key bindings: %w", err)
 	}
 
-	// Convert back to KeyAction -> ebiten.Key
+	// Convert back to views.KeyAction -> ebiten.Key
 	for actionStr, keyInt := range rawData {
-		action := KeyAction(actionStr)
+		action := views.KeyAction(actionStr)
 		key := ebiten.Key(keyInt)
 		kb.bindings[action] = key
 	}

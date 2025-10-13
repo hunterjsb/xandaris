@@ -1,4 +1,4 @@
-package main
+package views
 
 import (
 	"fmt"
@@ -12,33 +12,27 @@ import (
 
 // SystemView represents the detailed view of a single system
 type SystemView struct {
-	game              *Game
-	system            *entities.System
-	clickHandler      *ClickHandler
-	centerX           float64
-	centerY           float64
-	scale             *ViewScale
-	lastClickX        int
-	lastClickY        int
-	lastClickTime     int64
-	constructionQueue *ConstructionQueueUI
-	orbitOffset       float64 // For animating orbits
-	fleetManager      *FleetManager
-	fleets            []*Fleet
-	fleetInfoUI       *FleetInfoUI
+	ctx           GameContext
+	system        *entities.System
+	clickHandler  *ClickHandler
+	centerX       float64
+	centerY       float64
+	scale         *ViewScale
+	lastClickX    int
+	lastClickY    int
+	lastClickTime int64
+	orbitOffset   float64 // For animating orbits
+	fleets        []*Fleet
 }
 
 // NewSystemView creates a new system view
-func NewSystemView(game *Game) *SystemView {
+func NewSystemView(ctx GameContext) *SystemView {
 	return &SystemView{
-		game:              game,
-		clickHandler:      NewClickHandler(),
-		centerX:           float64(screenWidth) / 2,
-		centerY:           float64(screenHeight) / 2,
-		scale:             &SystemScale,
-		constructionQueue: NewConstructionQueueUI(game),
-		fleetManager:      NewFleetManager(game),
-		fleetInfoUI:       NewFleetInfoUI(game),
+		ctx:          ctx,
+		clickHandler: NewClickHandler(),
+		centerX:      float64(ScreenWidth) / 2,
+		centerY:      float64(ScreenHeight) / 2,
+		scale:        &SystemScale,
 	}
 }
 
@@ -48,7 +42,7 @@ func (sv *SystemView) SetSystem(system *entities.System) {
 
 	// Calculate auto-scaling based on system size
 	maxDistance := GetSystemMaxOrbitDistance(system)
-	sv.scale = AutoScale(maxDistance, screenWidth, screenHeight)
+	sv.scale = AutoScale(maxDistance, ScreenWidth, ScreenHeight)
 
 	sv.updateEntityPositions()
 	sv.updateFleets()
@@ -57,17 +51,21 @@ func (sv *SystemView) SetSystem(system *entities.System) {
 
 // Update implements View interface
 func (sv *SystemView) Update() error {
-	// Update fleet info UI
-	sv.fleetInfoUI.Update()
+	if sv.system == nil {
+		return nil
+	}
 
-	// Update construction queue UI
-	sv.constructionQueue.Update()
+	kb := sv.ctx.GetKeyBindings()
+	vm := sv.ctx.GetViewManager()
+	tm := sv.ctx.GetTickManager()
 
 	// Update orbit animation
-	if !sv.game.tickManager.IsPaused() {
-		sv.orbitOffset += 0.0005 * float64(sv.game.tickManager.GetSpeed())
-		if sv.orbitOffset > 6.28318 { // 2*PI
-			sv.orbitOffset -= 6.28318
+	if !tm.IsPaused() {
+		if speed, ok := tm.GetSpeed().(float64); ok {
+			sv.orbitOffset += 0.0005 * speed
+			if sv.orbitOffset > 6.28318 { // 2*PI
+				sv.orbitOffset -= 6.28318
+			}
 		}
 	}
 
@@ -77,24 +75,10 @@ func (sv *SystemView) Update() error {
 	// Update fleet aggregation
 	sv.updateFleets()
 
-	// Escape to return to galaxy view or close fleet info
-	if sv.game.keyBindings.IsActionJustPressed(ActionEscape) {
-		if sv.fleetInfoUI.IsVisible() {
-			sv.fleetInfoUI.Hide()
-			return nil
-		}
-		sv.game.viewManager.SwitchTo(ViewTypeGalaxy)
+	// Escape to return to galaxy view
+	if kb.IsActionJustPressed(ActionEscape) {
+		vm.SwitchTo(ViewTypeGalaxy)
 		return nil
-	}
-
-	// Handle fleet clicks
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		mx, my := ebiten.CursorPosition()
-		clickedFleet := sv.fleetManager.GetFleetAtPosition(sv.fleets, mx, my, 15.0)
-		if clickedFleet != nil {
-			sv.fleetInfoUI.Show(clickedFleet)
-			return nil
-		}
 	}
 
 	// Handle mouse clicks
@@ -113,9 +97,9 @@ func (sv *SystemView) Update() error {
 			if selectedObj := sv.clickHandler.GetSelectedObject(); selectedObj != nil {
 				if planet, ok := selectedObj.(*entities.Planet); ok {
 					// Switch to planet view
-					sv.game.viewManager.SwitchTo(ViewTypePlanet)
-					if planetView, ok := sv.game.viewManager.GetCurrentView().(*PlanetView); ok {
-						planetView.SetPlanet(sv.system, planet)
+					vm.SwitchTo(ViewTypePlanet)
+					if planetView, ok := vm.GetView(ViewTypePlanet).(*PlanetView); ok {
+						planetView.SetPlanet(planet)
 					}
 				}
 			}
@@ -165,12 +149,6 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	title := fmt.Sprintf("System View: %s", sv.system.Name)
 	DrawText(screen, title, 10, 10, UITextPrimary)
 	DrawText(screen, "Press ESC to return to galaxy", 10, 25, UITextSecondary)
-
-	// Draw construction queue UI
-	sv.constructionQueue.Draw(screen)
-
-	// Draw fleet info UI on top
-	sv.fleetInfoUI.Draw(screen)
 }
 
 // updateFleets aggregates ships into fleets
@@ -178,55 +156,8 @@ func (sv *SystemView) updateFleets() {
 	if sv.system == nil {
 		return
 	}
-	sv.fleets = sv.fleetManager.AggregateFleets(sv.system)
-}
-
-// drawShip renders a ship in the system view
-
-func (sv *SystemView) drawShip(screen *ebiten.Image, ship *entities.Ship) {
-	x, y := ship.GetAbsolutePosition()
-	centerX := int(x)
-	centerY := int(y)
-	size := 6
-
-	// Draw ownership indicator if owned by player
-	if ship.Owner != "" && sv.game.humanPlayer != nil && ship.Owner == sv.game.humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(size+2), sv.game.humanPlayer.Color)
-	}
-
-	// Draw ship as a triangle pointing in direction of movement
-	shipImg := ebiten.NewImage(size*2, size*2)
-
-	// Draw triangle
-	for py := 0; py < size*2; py++ {
-		for px := 0; px < size*2; px++ {
-			// Triangle pointing up
-			dx := float64(px - size)
-			dy := float64(py - size)
-			if dy > 0 && math.Abs(dx) < float64(size)-dy/2 {
-				shipImg.Set(px, py, ship.Color)
-			}
-		}
-	}
-
-	// Draw the ship
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
-	screen.DrawImage(shipImg, op)
-
-	// Draw ship name if selected or hovered
-	DrawText(screen, ship.Name, centerX-30, centerY+size+5, color.RGBA{200, 200, 200, 200})
-
-	// Draw fuel indicator
-	fuelPercent := ship.GetFuelPercentage()
-	fuelColor := color.RGBA{100, 255, 100, 255}
-	if fuelPercent < 25 {
-		fuelColor = color.RGBA{255, 100, 100, 255}
-	} else if fuelPercent < 50 {
-		fuelColor = color.RGBA{255, 200, 100, 255}
-	}
-	fuelText := fmt.Sprintf("Fuel: %.0f%%", fuelPercent)
-	DrawText(screen, fuelText, centerX-25, centerY+size+18, fuelColor)
+	fm := sv.ctx.GetFleetManager()
+	sv.fleets = fm.AggregateFleets(sv.system)
 }
 
 // OnEnter implements View interface
@@ -379,7 +310,7 @@ func (sv *SystemView) drawEntities(screen *ebiten.Image) {
 		}
 	}
 
-	// Draw fleets (instead of individual ships)
+	// Draw fleets
 	sv.drawFleets(screen)
 }
 
@@ -401,11 +332,6 @@ func (sv *SystemView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 	centerX := int(x)
 	centerY := int(y)
 	size := 6
-
-	// Draw ownership indicator if owned by player
-	if fleet.Owner != "" && sv.game.humanPlayer != nil && fleet.Owner == sv.game.humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(size+3), sv.game.humanPlayer.Color)
-	}
 
 	// Draw ship as a triangle
 	shipImg := ebiten.NewImage(size*2, size*2)
@@ -481,8 +407,9 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 	radius := planet.Size
 
 	// Draw ownership indicator if owned by player
-	if planet.Owner != "" && sv.game.humanPlayer != nil && planet.Owner == sv.game.humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(radius+3), sv.game.humanPlayer.Color)
+	humanPlayer := sv.ctx.GetHumanPlayer()
+	if planet.Owner != "" && humanPlayer != nil && planet.Owner == humanPlayer.Name {
+		DrawOwnershipRing(screen, centerX, centerY, float64(radius+3), humanPlayer.Color)
 	}
 
 	// Create planet image

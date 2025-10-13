@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"image/color"
 	"log"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,6 +19,7 @@ import (
 	_ "github.com/hunterjsb/xandaris/entities/station"
 	"github.com/hunterjsb/xandaris/tickable"
 	_ "github.com/hunterjsb/xandaris/tickable" // Import tickable systems for auto-registration
+	"github.com/hunterjsb/xandaris/views"
 )
 
 // StartMode represents how the game was started
@@ -55,16 +58,17 @@ func (gsc *GameSystemContext) GetTick() int64 {
 	return gsc.game.tickManager.GetCurrentTick()
 }
 
-// Game implements ebiten.Game interface
+// Game implements ebiten.Game interface and views.GameContext
 type Game struct {
-	systems     []*entities.System
-	hyperlanes  []entities.Hyperlane
-	viewManager *ViewManager
-	seed        int64
-	players     []*entities.Player
-	humanPlayer *entities.Player
-	tickManager *TickManager
-	keyBindings *KeyBindings
+	systems      []*entities.System
+	hyperlanes   []entities.Hyperlane
+	viewManager  *views.ViewManager
+	seed         int64
+	players      []*entities.Player
+	humanPlayer  *entities.Player
+	tickManager  *TickManager
+	keyBindings  *KeyBindings
+	fleetManager *FleetManager
 }
 
 // NewGame creates a new game instance
@@ -106,15 +110,18 @@ func NewGame() *Game {
 	// Register construction completion handler
 	g.registerConstructionHandler()
 
-	// Initialize view system
-	g.viewManager = NewViewManager(g)
+	// Initialize fleet manager
+	g.fleetManager = NewFleetManager(g)
 
-	// Create and register views
-	galaxyView := NewGalaxyView(g)
-	systemView := NewSystemView(g)
-	planetView := NewPlanetView(g)
-	mainMenuView := NewMainMenuView(g)
-	settingsView := NewSettingsView(g)
+	// Initialize view system
+	g.viewManager = views.NewViewManager()
+
+	// Create and register views (pass Game as GameContext)
+	galaxyView := views.NewGalaxyView(g)
+	systemView := views.NewSystemView(g)
+	planetView := views.NewPlanetView(g)
+	mainMenuView := views.NewMainMenuView(g)
+	settingsView := views.NewSettingsView(g)
 
 	g.viewManager.RegisterView(galaxyView)
 	g.viewManager.RegisterView(systemView)
@@ -123,7 +130,7 @@ func NewGame() *Game {
 	g.viewManager.RegisterView(settingsView)
 
 	// Start with galaxy view
-	g.viewManager.SwitchTo(ViewTypeGalaxy)
+	g.viewManager.SwitchTo(views.ViewTypeGalaxy)
 
 	return g
 }
@@ -147,15 +154,18 @@ func NewGameForMenu() *Game {
 	// Initialize tick manager for menu (though it won't really be used)
 	g.tickManager = NewTickManager(10.0)
 
+	// Initialize fleet manager (empty for menu)
+	g.fleetManager = NewFleetManager(g)
+
 	// Initialize view system
-	g.viewManager = NewViewManager(g)
+	g.viewManager = views.NewViewManager()
 
 	// Create and register all views
-	mainMenuView := NewMainMenuView(g)
-	galaxyView := NewGalaxyView(g)
-	systemView := NewSystemView(g)
-	planetView := NewPlanetView(g)
-	settingsView := NewSettingsView(g)
+	mainMenuView := views.NewMainMenuView(g)
+	galaxyView := views.NewGalaxyView(g)
+	systemView := views.NewSystemView(g)
+	planetView := views.NewPlanetView(g)
+	settingsView := views.NewSettingsView(g)
 
 	g.viewManager.RegisterView(mainMenuView)
 	g.viewManager.RegisterView(galaxyView)
@@ -164,7 +174,7 @@ func NewGameForMenu() *Game {
 	g.viewManager.RegisterView(settingsView)
 
 	// Start with main menu
-	g.viewManager.SwitchTo(ViewTypeMainMenu)
+	g.viewManager.SwitchTo(views.ViewTypeMainMenu)
 
 	return g
 }
@@ -287,8 +297,8 @@ func (g *Game) GetPlayers() []*entities.Player {
 	return g.players
 }
 
-// GetSystems returns a map of systems indexed by ID
-func (g *Game) GetSystems() map[int]*entities.System {
+// GetSystemsMap returns a map of systems indexed by ID (internal use)
+func (g *Game) GetSystemsMap() map[int]*entities.System {
 	systemsMap := make(map[int]*entities.System)
 	for _, system := range g.systems {
 		systemsMap[system.ID] = system
@@ -299,6 +309,209 @@ func (g *Game) GetSystems() map[int]*entities.System {
 // GetHyperlanes returns all hyperlanes
 func (g *Game) GetHyperlanes() []entities.Hyperlane {
 	return g.hyperlanes
+}
+
+// GameContext interface implementation
+
+// GetSystems returns the game's systems (implements GameContext)
+func (g *Game) GetSystems() []*entities.System {
+	return g.systems
+}
+
+// GetHumanPlayer returns the human player
+func (g *Game) GetHumanPlayer() *entities.Player {
+	return g.humanPlayer
+}
+
+// GetSeed returns the game seed
+func (g *Game) GetSeed() int64 {
+	return g.seed
+}
+
+// GetViewManager returns the view manager interface
+func (g *Game) GetViewManager() views.ViewManagerInterface {
+	return g.viewManager
+}
+
+// GetTickManager returns the tick manager interface
+func (g *Game) GetTickManager() views.TickManagerInterface {
+	return g.tickManager
+}
+
+// GetKeyBindings returns the key bindings interface
+func (g *Game) GetKeyBindings() views.KeyBindingsInterface {
+	return g.keyBindings
+}
+
+// GetSaveLoad returns the save/load interface
+func (g *Game) GetSaveLoad() views.SaveLoadInterface {
+	return g // Game itself implements SaveLoadInterface
+}
+
+// GetFleetManager returns the fleet manager interface
+func (g *Game) GetFleetManager() views.FleetManagerInterface {
+	return g.fleetManager
+}
+
+// InitializeNewGame initializes a new game with the given player name
+func (g *Game) InitializeNewGame(playerName string) error {
+	// Reset game state
+	g.systems = make([]*entities.System, 0)
+	g.hyperlanes = make([]entities.Hyperlane, 0)
+	g.seed = time.Now().UnixNano()
+	g.players = make([]*entities.Player, 0)
+
+	// Reset tick manager
+	g.tickManager.Reset()
+
+	// Generate galaxy data
+	g.generateSystems()
+	g.generateHyperlanes()
+
+	// Create human player
+	playerColor := color.RGBA{100, 200, 100, 255} // Green for player
+	g.humanPlayer = entities.NewPlayer(0, playerName, playerColor, entities.PlayerTypeHuman)
+	g.players = append(g.players, g.humanPlayer)
+
+	// Initialize player with starting planet
+	entities.InitializePlayer(g.humanPlayer, g.systems)
+
+	// Initialize tickable systems
+	context := &GameSystemContext{game: g}
+	tickable.InitializeAllSystems(context)
+
+	// Register construction completion handler
+	g.registerConstructionHandler()
+
+	return nil
+}
+
+// LoadGameFromPath loads a game from the given path
+func (g *Game) LoadGameFromPath(path string) error {
+	fmt.Printf("[SaveSystem] Loading game from: %s\n", path)
+
+	// Open file
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open save file: %w", err)
+	}
+	defer file.Close()
+
+	// Get file info for debugging
+	fileInfo, _ := file.Stat()
+	fmt.Printf("[SaveSystem] Reading %d bytes from save file\n", fileInfo.Size())
+
+	// Create gob decoder
+	decoder := gob.NewDecoder(file)
+
+	// Decode save data
+	var saveData struct {
+		Version            string
+		SavedAt            time.Time
+		PlayerName         string
+		GameTime           string
+		Tick               int64
+		Seed               int64
+		TickSpeed          TickSpeed
+		Systems            []*entities.System
+		Hyperlanes         []entities.Hyperlane
+		Players            []*entities.Player
+		ConstructionQueues map[string][]*tickable.ConstructionItem
+	}
+
+	if err := decoder.Decode(&saveData); err != nil {
+		return fmt.Errorf("failed to decode save data: %w", err)
+	}
+
+	fmt.Printf("[SaveSystem] Decoded save data: version=%s, player=%s, systems=%d\n",
+		saveData.Version, saveData.PlayerName, len(saveData.Systems))
+
+	// Update game state
+	g.systems = saveData.Systems
+	g.hyperlanes = saveData.Hyperlanes
+	g.seed = saveData.Seed
+	g.players = saveData.Players
+
+	// Update tick manager with saved state
+	g.tickManager.SetSpeed(saveData.TickSpeed)
+	g.tickManager.currentTick = saveData.Tick
+
+	// Find human player
+	g.humanPlayer = nil
+	for _, player := range g.players {
+		if player.Type == entities.PlayerTypeHuman {
+			g.humanPlayer = player
+			break
+		}
+	}
+
+	// Rebuild planet owner references
+	for _, player := range g.players {
+		for _, planet := range player.OwnedPlanets {
+			planet.Owner = player.Name
+		}
+	}
+
+	// Initialize tickable systems
+	context := &GameSystemContext{game: g}
+	tickable.InitializeAllSystems(context)
+
+	// Restore construction queues
+	if saveData.ConstructionQueues != nil && len(saveData.ConstructionQueues) > 0 {
+		if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
+			if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+				cs.RestoreQueues(saveData.ConstructionQueues)
+				fmt.Printf("[SaveSystem] Restored %d construction queues\n", len(saveData.ConstructionQueues))
+			}
+		}
+	}
+
+	g.registerConstructionHandler()
+
+	fmt.Printf("[SaveSystem] Game loaded successfully\n")
+	return nil
+}
+
+// SaveLoadInterface implementation
+
+// ListSaveFiles returns all save files
+func (g *Game) ListSaveFiles() ([]views.SaveFileInfo, error) {
+	files, err := ListSaveFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert from main.SaveFileInfo to views.SaveFileInfo
+	viewFiles := make([]views.SaveFileInfo, len(files))
+	for i, f := range files {
+		viewFiles[i] = views.SaveFileInfo{
+			Filename:   f.Filename,
+			Path:       f.Path,
+			PlayerName: f.PlayerName,
+			GameTime:   f.GameTime,
+			SavedAt:    f.SavedAt,
+			ModTime:    f.ModTime,
+		}
+	}
+	return viewFiles, nil
+}
+
+// GetSaveFileInfo gets info about a specific save file
+func (g *Game) GetSaveFileInfo(path string) (views.SaveFileInfo, error) {
+	info, err := GetSaveFileInfo(path)
+	if err != nil {
+		return views.SaveFileInfo{}, err
+	}
+
+	// Convert from main.SaveFileInfo to views.SaveFileInfo
+	return views.SaveFileInfo{
+		Filename:   info.Filename,
+		Path:       info.Path,
+		PlayerName: info.PlayerName,
+		GameTime:   info.GameTime,
+		SavedAt:    info.SavedAt,
+		ModTime:    info.ModTime,
+	}, nil
 }
 
 // Update updates the game state
@@ -316,7 +529,7 @@ func (g *Game) Update() error {
 // handleGlobalInput handles keyboard input for game-wide controls
 func (g *Game) handleGlobalInput() {
 	// Don't handle game controls in main menu
-	if g.viewManager.GetCurrentView().GetType() == ViewTypeMainMenu {
+	if g.viewManager.GetCurrentView().GetType() == views.ViewTypeMainMenu {
 		return
 	}
 
@@ -368,7 +581,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 // drawTickInfo draws tick information overlay
 func (g *Game) drawTickInfo(screen *ebiten.Image) {
 	// Don't draw in main menu
-	if g.viewManager.GetCurrentView().GetType() == ViewTypeMainMenu {
+	if g.viewManager.GetCurrentView().GetType() == views.ViewTypeMainMenu {
 		return
 	}
 
@@ -555,13 +768,14 @@ func (g *Game) handleShipConstruction(completion tickable.ConstructionCompletion
 
 // refreshPlanetViewIfActive refreshes planet view if the given planet is currently displayed
 func (g *Game) refreshPlanetViewIfActive(planet *entities.Planet) {
-	if g.viewManager.GetCurrentView().GetType() == ViewTypePlanet {
-		if planetView, ok := g.viewManager.GetCurrentView().(*PlanetView); ok {
-			if planetView.planet == planet {
-				planetView.RefreshPlanet()
-			}
-		}
-	}
+	// TODO: Re-implement once PlanetView is fully ported
+	// if g.viewManager.GetCurrentView().GetType() == views.ViewTypePlanet {
+	// 	if planetView, ok := g.viewManager.GetCurrentView().(*views.PlanetView); ok {
+	// 		if planetView.planet == planet {
+	// 			planetView.RefreshPlanet()
+	// 		}
+	// 	}
+	// }
 }
 
 // createBuildingFromCompletion creates a building entity from a completion
