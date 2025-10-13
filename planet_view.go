@@ -93,9 +93,8 @@ func (pv *PlanetView) Update() error {
 		return nil
 	}
 
-	// ESC to return to system view
 	// Handle escape key
-	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+	if pv.game.keyBindings.IsActionJustPressed(ActionEscape) {
 		// Close fleet info UI if open
 		if pv.fleetInfoUI.IsVisible() {
 			pv.fleetInfoUI.Hide()
@@ -110,8 +109,8 @@ func (pv *PlanetView) Update() error {
 		return nil
 	}
 
-	// B key to open build menu on planet
-	if inpututil.IsKeyJustPressed(ebiten.KeyB) && pv.planet != nil {
+	// Open build menu on planet
+	if pv.game.keyBindings.IsActionJustPressed(ActionOpenBuildMenu) && pv.planet != nil {
 		if pv.game.humanPlayer != nil && pv.planet.Owner == pv.game.humanPlayer.Name {
 			pv.buildMenu.Open(pv.planet, screenWidth/2, screenHeight/2)
 		}

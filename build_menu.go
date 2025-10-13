@@ -193,8 +193,8 @@ func (bm *BuildMenu) Update() {
 		bm.notificationTimer--
 	}
 
-	// Close on ESC or right-click
-	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+	// Close on Escape or right-click
+	if bm.game.keyBindings.IsActionJustPressed(ActionEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
 		bm.Close()
 		return
 	}

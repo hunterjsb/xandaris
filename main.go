@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	_ "github.com/hunterjsb/xandaris/entities/building"
 	_ "github.com/hunterjsb/xandaris/entities/planet"
@@ -65,6 +64,7 @@ type Game struct {
 	players     []*entities.Player
 	humanPlayer *entities.Player
 	tickManager *TickManager
+	keyBindings *KeyBindings
 }
 
 // NewGame creates a new game instance
@@ -74,6 +74,14 @@ func NewGame() *Game {
 		hyperlanes: make([]entities.Hyperlane, 0),
 		seed:       time.Now().UnixNano(),
 		players:    make([]*entities.Player, 0),
+	}
+
+	// Initialize key bindings
+	g.keyBindings = NewKeyBindings()
+	// Try to load custom key bindings from config
+	if err := g.keyBindings.LoadFromFile(GetKeyBindingsConfigPath()); err != nil {
+		fmt.Printf("Warning: Could not load key bindings: %v\n", err)
+		fmt.Println("Using default key bindings")
 	}
 
 	// Initialize tick system (10 ticks per second at 1x speed)
@@ -106,11 +114,13 @@ func NewGame() *Game {
 	systemView := NewSystemView(g)
 	planetView := NewPlanetView(g)
 	mainMenuView := NewMainMenuView(g)
+	settingsView := NewSettingsView(g)
 
 	g.viewManager.RegisterView(galaxyView)
 	g.viewManager.RegisterView(systemView)
 	g.viewManager.RegisterView(planetView)
 	g.viewManager.RegisterView(mainMenuView)
+	g.viewManager.RegisterView(settingsView)
 
 	// Start with galaxy view
 	g.viewManager.SwitchTo(ViewTypeGalaxy)
@@ -126,6 +136,14 @@ func NewGameForMenu() *Game {
 		players:    make([]*entities.Player, 0),
 	}
 
+	// Initialize key bindings (needed for menu navigation)
+	g.keyBindings = NewKeyBindings()
+	// Try to load custom key bindings from config
+	if err := g.keyBindings.LoadFromFile(GetKeyBindingsConfigPath()); err != nil {
+		// Silently use defaults if config doesn't exist
+		// (Don't print warnings in menu since game hasn't started yet)
+	}
+
 	// Initialize tick manager for menu (though it won't really be used)
 	g.tickManager = NewTickManager(10.0)
 
@@ -137,11 +155,13 @@ func NewGameForMenu() *Game {
 	galaxyView := NewGalaxyView(g)
 	systemView := NewSystemView(g)
 	planetView := NewPlanetView(g)
+	settingsView := NewSettingsView(g)
 
 	g.viewManager.RegisterView(mainMenuView)
 	g.viewManager.RegisterView(galaxyView)
 	g.viewManager.RegisterView(systemView)
 	g.viewManager.RegisterView(planetView)
+	g.viewManager.RegisterView(settingsView)
 
 	// Start with main menu
 	g.viewManager.SwitchTo(ViewTypeMainMenu)
@@ -300,32 +320,32 @@ func (g *Game) handleGlobalInput() {
 		return
 	}
 
-	// Space to toggle pause
-	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+	// Toggle pause
+	if g.keyBindings.IsActionJustPressed(ActionPauseToggle) {
 		g.tickManager.TogglePause()
 	}
 
-	// Number keys for speed control
-	if inpututil.IsKeyJustPressed(ebiten.Key1) {
+	// Speed control
+	if g.keyBindings.IsActionJustPressed(ActionSpeedSlow) {
 		g.tickManager.SetSpeed(TickSpeed1x)
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key2) {
+	if g.keyBindings.IsActionJustPressed(ActionSpeedNormal) {
 		g.tickManager.SetSpeed(TickSpeed2x)
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key3) {
+	if g.keyBindings.IsActionJustPressed(ActionSpeedFast) {
 		g.tickManager.SetSpeed(TickSpeed4x)
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key4) {
+	if g.keyBindings.IsActionJustPressed(ActionSpeedVeryFast) {
 		g.tickManager.SetSpeed(TickSpeed8x)
 	}
 
-	// Plus/Minus to cycle speed
-	if inpututil.IsKeyJustPressed(ebiten.KeyEqual) || inpututil.IsKeyJustPressed(ebiten.KeyKPAdd) {
+	// Cycle speed
+	if g.keyBindings.IsActionJustPressed(ActionSpeedIncrease) {
 		g.tickManager.CycleSpeed()
 	}
 
-	// F5 to quick save
-	if inpututil.IsKeyJustPressed(ebiten.KeyF5) {
+	// Quick save
+	if g.keyBindings.IsActionJustPressed(ActionQuickSave) {
 		if g.humanPlayer != nil {
 			err := g.SaveGameToFile(g.humanPlayer.Name)
 			if err != nil {
@@ -373,6 +393,14 @@ func (g *Game) drawTickInfo(screen *ebiten.Image) {
 // Layout returns the game's screen size
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return screenWidth, screenHeight
+}
+
+// SaveKeyBindings saves the current key bindings to config file
+func (g *Game) SaveKeyBindings() error {
+	if g.keyBindings == nil {
+		return fmt.Errorf("key bindings not initialized")
+	}
+	return g.keyBindings.SaveToFile(GetKeyBindingsConfigPath())
 }
 
 func main() {

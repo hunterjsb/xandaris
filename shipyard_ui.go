@@ -84,7 +84,7 @@ func (sui *ShipyardUI) Update() {
 	}
 
 	// Handle escape key to close
-	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+	if sui.game.keyBindings.IsActionJustPressed(ActionEscape) {
 		sui.Hide()
 		return
 	}

@@ -155,6 +155,13 @@ func LoadGameFromFile(filename string) (*Game, error) {
 		players:    saveData.Players,
 	}
 
+	// Initialize key bindings
+	g.keyBindings = NewKeyBindings()
+	// Try to load custom key bindings from config
+	if err := g.keyBindings.LoadFromFile(GetKeyBindingsConfigPath()); err != nil {
+		// Silently use defaults if config doesn't exist
+	}
+
 	// Initialize tick manager with saved state
 	g.tickManager = NewTickManager(10.0)
 	g.tickManager.SetSpeed(saveData.TickSpeed)
@@ -199,11 +206,13 @@ func LoadGameFromFile(filename string) (*Game, error) {
 	galaxyView := NewGalaxyView(g)
 	systemView := NewSystemView(g)
 	planetView := NewPlanetView(g)
+	settingsView := NewSettingsView(g)
 
 	g.viewManager.RegisterView(mainMenuView)
 	g.viewManager.RegisterView(galaxyView)
 	g.viewManager.RegisterView(systemView)
 	g.viewManager.RegisterView(planetView)
+	g.viewManager.RegisterView(settingsView)
 
 	// Start with galaxy view
 	g.viewManager.SwitchTo(ViewTypeGalaxy)

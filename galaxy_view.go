@@ -41,6 +41,12 @@ func (gv *GalaxyView) Update() error {
 	// Update fleet aggregation for each system
 	gv.updateFleets()
 
+	// Handle escape to return to main menu
+	if gv.game.keyBindings.IsActionJustPressed(ActionEscape) {
+		gv.game.viewManager.SwitchTo(ViewTypeMainMenu)
+		return nil
+	}
+
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()

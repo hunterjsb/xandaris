@@ -23,7 +23,7 @@ var (
 type MainMenuView struct {
 	game           *Game
 	playerName     string
-	selectedOption int // 0 = New Game, 1 = Load Game
+	selectedOption int // 0 = New Game, 1 = Load Game, 2 = Settings, 3 = Quit
 	saveFiles      []SaveFileInfo
 	selectedSave   int
 	showLoadMenu   bool
@@ -61,7 +61,9 @@ func (mmv *MainMenuView) Update() error {
 
 	// Handle menu navigation
 	if !mmv.showLoadMenu {
-		mmv.handleMainMenuInput()
+		if err := mmv.handleMainMenuInput(); err != nil {
+			return err
+		}
 	} else {
 		mmv.handleLoadMenuInput()
 	}
@@ -79,78 +81,88 @@ func (mmv *MainMenuView) handleTextInput() {
 	}
 
 	// Handle backspace
-	if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuDelete) {
 		if len(mmv.playerName) > 0 {
 			mmv.playerName = mmv.playerName[:len(mmv.playerName)-1]
 		}
 	}
 
 	// Handle enter to confirm input
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) {
 		mmv.inputActive = false
 	}
 
 	// Handle escape to cancel input
-	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuCancel) {
 		mmv.inputActive = false
 	}
 }
 
 // handleMainMenuInput handles keyboard input for main menu navigation
-func (mmv *MainMenuView) handleMainMenuInput() {
+func (mmv *MainMenuView) handleMainMenuInput() error {
 	// Click on name field to activate input
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
 		// Check if clicking on name input box (roughly center of screen)
 		if x >= 440 && x <= 840 && y >= 250 && y <= 290 {
 			mmv.inputActive = true
-			return
+			return nil
 		}
 
 		// Check if clicking on New Game button
 		if x >= 490 && x <= 790 && y >= 350 && y <= 410 {
 			mmv.startNewGame()
-			return
+			return nil
 		}
 
 		// Check if clicking on Load Game button
 		if x >= 490 && x <= 790 && y >= 430 && y <= 490 {
 			mmv.showLoadGameMenu()
-			return
+			return nil
+		}
+
+		// Check if clicking on Settings button
+		if x >= 490 && x <= 790 && y >= 510 && y <= 570 {
+			mmv.showSettings()
+			return nil
 		}
 
 		// Check if clicking on Quit button
-		if x >= 490 && x <= 790 && y >= 510 && y <= 570 {
-			// Could add quit functionality here
-			return
+		if x >= 490 && x <= 790 && y >= 590 && y <= 650 {
+			return fmt.Errorf("user quit")
 		}
 	}
 
 	// Keyboard navigation
-	if inpututil.IsKeyJustPressed(ebiten.KeyUp) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuUp) {
 		mmv.selectedOption--
 		if mmv.selectedOption < 0 {
-			mmv.selectedOption = 2
+			mmv.selectedOption = 3
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuDown) {
 		mmv.selectedOption++
-		if mmv.selectedOption > 2 {
+		if mmv.selectedOption > 3 {
 			mmv.selectedOption = 0
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && !mmv.inputActive {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) && !mmv.inputActive {
 		switch mmv.selectedOption {
 		case 0:
 			mmv.startNewGame()
 		case 1:
 			mmv.showLoadGameMenu()
 		case 2:
-			// Quit
+			mmv.showSettings()
+		case 3:
+			// Quit - return error to stop the game
+			return fmt.Errorf("user quit")
 		}
 	}
+
+	return nil
 }
 
 // handleLoadMenuInput handles keyboard input for load game menu
@@ -177,25 +189,25 @@ func (mmv *MainMenuView) handleLoadMenuInput() {
 	}
 
 	// Keyboard navigation
-	if inpututil.IsKeyJustPressed(ebiten.KeyUp) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuUp) {
 		mmv.selectedSave--
 		if mmv.selectedSave < 0 {
 			mmv.selectedSave = len(mmv.saveFiles) - 1
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuDown) {
 		mmv.selectedSave++
 		if mmv.selectedSave >= len(mmv.saveFiles) {
 			mmv.selectedSave = 0
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) && len(mmv.saveFiles) > 0 {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuConfirm) && len(mmv.saveFiles) > 0 {
 		mmv.loadSelectedGame()
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+	if mmv.game.keyBindings.IsActionJustPressed(ActionMenuCancel) {
 		mmv.showLoadMenu = false
 	}
 }
@@ -207,7 +219,7 @@ func (mmv *MainMenuView) startNewGame() {
 		return
 	}
 
-	// Create a new game
+	// Create a new game (this creates a temporary game with all the data we need)
 	newGame := NewGame()
 	newGame.humanPlayer.Name = mmv.playerName
 
@@ -224,18 +236,34 @@ func (mmv *MainMenuView) startNewGame() {
 		}
 	}
 
-	// Replace the current game with the new one
-	*mmv.game = *newGame
+	// Update the current game's data (but keep the ViewManager!)
+	mmv.game.systems = newGame.systems
+	mmv.game.hyperlanes = newGame.hyperlanes
+	mmv.game.seed = newGame.seed
+	mmv.game.players = newGame.players
+	mmv.game.humanPlayer = newGame.humanPlayer
+	mmv.game.tickManager = newGame.tickManager
 
 	// Re-initialize tickable systems with the new game context
 	context := &GameSystemContext{game: mmv.game}
 	tickable.InitializeAllSystems(context)
 
-	// Switch to galaxy view
+	// Re-register construction completion handler
+	mmv.game.registerConstructionHandler()
+
+	// Switch to galaxy view (using the existing ViewManager)
 	mmv.game.viewManager.SwitchTo(ViewTypeGalaxy)
 }
 
 // showLoadGameMenu displays the load game menu
+func (mmv *MainMenuView) showSettings() {
+	mmv.game.viewManager.SwitchTo(ViewTypeSettings)
+	// Set settings view to return to main menu
+	if settingsView, ok := mmv.game.viewManager.views[ViewTypeSettings].(*SettingsView); ok {
+		settingsView.SetReturnDestination(true) // true = return to main menu
+	}
+}
+
 func (mmv *MainMenuView) showLoadGameMenu() {
 	saveFiles, err := ListSaveFiles()
 	if err != nil {
@@ -341,7 +369,8 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 	// Menu buttons
 	mmv.drawButton(screen, "New Game", centerX, 380, mmv.selectedOption == 0)
 	mmv.drawButton(screen, "Load Game", centerX, 460, mmv.selectedOption == 1)
-	mmv.drawButton(screen, "Quit", centerX, 540, mmv.selectedOption == 2)
+	mmv.drawButton(screen, "Settings", centerX, 540, mmv.selectedOption == 2)
+	mmv.drawButton(screen, "Quit", centerX, 620, mmv.selectedOption == 3)
 
 	// Controls hint
 	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Select | Click to Interact", centerX, screenHeight-30, UITextSecondary, 0.8)

@@ -77,8 +77,8 @@ func (sv *SystemView) Update() error {
 	// Update fleet aggregation
 	sv.updateFleets()
 
-	// ESC to return to galaxy view or close fleet info
-	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+	// Escape to return to galaxy view or close fleet info
+	if sv.game.keyBindings.IsActionJustPressed(ActionEscape) {
 		if sv.fleetInfoUI.IsVisible() {
 			sv.fleetInfoUI.Hide()
 			return nil
