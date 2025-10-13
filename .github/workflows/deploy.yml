@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build
+        run: |
+          mkdir dist
+          GOOS=js GOARCH=wasm go build -o dist/main.wasm .
+          cp $(go env GOROOT)/misc/wasm/wasm_exec.js dist/
+          cp -r assets dist/
+          cat > dist/index.html <<EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+          <meta charset="utf-8">
+          <title>Go Wasm</title>
+          </head>
+          <body>
+          <script src="wasm_exec.js"></script>
+          <script>
+          if (!WebAssembly.instantiateStreaming) { // polyfill
+              WebAssembly.instantiateStreaming = async (resp, importObject) => {
+                  const source = await (await resp).arrayBuffer();
+                  return await WebAssembly.instantiate(source, importObject);
+              };
+          }
+          const go = new Go();
+          WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+              go.run(result.instance);
+          });
+          </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: './dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v3
