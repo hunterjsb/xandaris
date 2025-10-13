@@ -6,14 +6,14 @@ import "image/color"
 type EntityType string
 
 const (
-	EntityTypePlanet  EntityType = "Planet"
-	EntityTypeStation EntityType = "Station"
-	EntityTypeShip    EntityType = "Ship"
-	// EntityTypeFleet    EntityType = "Fleet"
-	// EntityTypeAsteroid EntityType = "Asteroid"
+	EntityTypePlanet   EntityType = "Planet"
+	EntityTypeStation  EntityType = "Station"
+	EntityTypeShip     EntityType = "Ship"
+	EntityTypeFleet    EntityType = "Fleet"
 	EntityTypeStar     EntityType = "Star"
 	EntityTypeResource EntityType = "Resource"
 	EntityTypeBuilding EntityType = "Building"
+	// EntityTypeAsteroid EntityType = "Asteroid"
 )
 
 // Entity is the core interface that all system entities must implement
@@ -33,6 +33,10 @@ type Entity interface {
 
 	// Click detection
 	GetClickRadius() float64
+
+	// Universal attributes (with sensible defaults)
+	GetOwner() string          // Empty string = unowned/neutral
+	GetHP() (current, max int) // Return 0,0 if entity has no HP system
 }
 
 // BaseEntity provides common entity functionality
@@ -97,6 +101,16 @@ func (b *BaseEntity) SetAbsolutePosition(x, y float64) {
 // GetPosition returns position for Clickable interface
 func (b *BaseEntity) GetPosition() (float64, float64) {
 	return b.AbsoluteX, b.AbsoluteY
+}
+
+// GetOwner returns empty string (unowned) by default
+func (b *BaseEntity) GetOwner() string {
+	return ""
+}
+
+// GetHP returns 0,0 (no HP system) by default
+func (b *BaseEntity) GetHP() (int, int) {
+	return 0, 0
 }
 
 // ColorFromRGBA creates a color.RGBA from individual components

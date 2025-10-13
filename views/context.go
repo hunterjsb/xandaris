@@ -32,6 +32,9 @@ type GameContext interface {
 	// Fleet management interface
 	GetFleetManager() FleetManagerInterface
 
+	// Fleet command interface - for issuing commands to fleets
+	GetFleetCommander() FleetCommandInterface
+
 	// Game lifecycle methods (primarily for main menu)
 	// These update the current game state in-place rather than replacing it
 	InitializeNewGame(playerName string) error
@@ -48,7 +51,8 @@ type ViewManagerInterface interface {
 type TickManagerInterface interface {
 	GetCurrentTick() int64
 	GetGameTimeFormatted() string
-	GetSpeed() interface{} // Returns TickSpeed type from main package
+	GetSpeed() interface{}  // Returns TickSpeed type from main package
+	GetSpeedFloat() float64 // Returns speed as float64 for animation calculations
 	SetSpeed(speed interface{})
 	TogglePause()
 	IsPaused() bool

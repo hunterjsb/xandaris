@@ -116,10 +116,17 @@ func NewGame() *Game {
 	// Initialize view system
 	g.viewManager = views.NewViewManager()
 
+	// Create UI components (stay in main package)
+	buildMenu := NewBuildMenu(g)
+	constructionQueue := NewConstructionQueueUI(g)
+	resourceStorage := NewResourceStorageUI(g)
+	shipyardUI := NewShipyardUI(g)
+	fleetInfoUI := NewFleetInfoUI(g)
+
 	// Create and register views (pass Game as GameContext)
 	galaxyView := views.NewGalaxyView(g)
-	systemView := views.NewSystemView(g)
-	planetView := views.NewPlanetView(g)
+	systemView := views.NewSystemView(g, fleetInfoUI)
+	planetView := views.NewPlanetView(g, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
 	mainMenuView := views.NewMainMenuView(g)
 	settingsView := views.NewSettingsView(g)
 
@@ -160,11 +167,18 @@ func NewGameForMenu() *Game {
 	// Initialize view system
 	g.viewManager = views.NewViewManager()
 
+	// Create UI components (stay in main package)
+	buildMenu := NewBuildMenu(g)
+	constructionQueue := NewConstructionQueueUI(g)
+	resourceStorage := NewResourceStorageUI(g)
+	shipyardUI := NewShipyardUI(g)
+	fleetInfoUI := NewFleetInfoUI(g)
+
 	// Create and register all views
 	mainMenuView := views.NewMainMenuView(g)
 	galaxyView := views.NewGalaxyView(g)
-	systemView := views.NewSystemView(g)
-	planetView := views.NewPlanetView(g)
+	systemView := views.NewSystemView(g, fleetInfoUI)
+	planetView := views.NewPlanetView(g, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
 	settingsView := views.NewSettingsView(g)
 
 	g.viewManager.RegisterView(mainMenuView)

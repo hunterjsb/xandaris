@@ -66,6 +66,11 @@ func (p *Planet) GetClickRadius() float64 {
 	return float64(p.Size) + 3 // Small margin for accurate clicking
 }
 
+// GetOwner returns the owner of this planet
+func (p *Planet) GetOwner() string {
+	return p.Owner
+}
+
 // GetContextMenuTitle implements ContextMenuProvider
 func (p *Planet) GetContextMenuTitle() string {
 	return p.Name

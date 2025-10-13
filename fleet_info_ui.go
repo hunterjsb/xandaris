@@ -39,13 +39,20 @@ func NewFleetInfoUI(game *Game) *FleetInfoUI {
 	}
 }
 
-// Show displays the fleet info for a specific fleet
-func (fui *FleetInfoUI) Show(fleet *views.Fleet) {
+// ShowFleet displays the fleet info for a specific fleet
+func (fui *FleetInfoUI) ShowFleet(fleet *views.Fleet) {
 	fui.fleet = fleet
 	fui.visible = true
 	fui.scrollOffset = 0
 	fui.showMoveMenu = false
 	fui.moveMenuScrollOffset = 0
+}
+
+// ShowShip displays the fleet info for a single ship (wrapped as a fleet)
+func (fui *FleetInfoUI) ShowShip(ship *entities.Ship) {
+	// Create a single-ship fleet for display
+	fleet := views.NewFleet([]*entities.Ship{ship})
+	fui.ShowFleet(fleet)
 }
 
 // Hide closes the fleet info UI

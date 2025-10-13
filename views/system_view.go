@@ -23,16 +23,18 @@ type SystemView struct {
 	lastClickTime int64
 	orbitOffset   float64 // For animating orbits
 	fleets        []*Fleet
+	fleetInfoUI   FleetInfoUIInterface
 }
 
 // NewSystemView creates a new system view
-func NewSystemView(ctx GameContext) *SystemView {
+func NewSystemView(ctx GameContext, fleetInfoUI FleetInfoUIInterface) *SystemView {
 	return &SystemView{
 		ctx:          ctx,
 		clickHandler: NewClickHandler(),
 		centerX:      float64(ScreenWidth) / 2,
 		centerY:      float64(ScreenHeight) / 2,
 		scale:        &SystemScale,
+		fleetInfoUI:  fleetInfoUI,
 	}
 }
 
@@ -61,11 +63,10 @@ func (sv *SystemView) Update() error {
 
 	// Update orbit animation
 	if !tm.IsPaused() {
-		if speed, ok := tm.GetSpeed().(float64); ok {
-			sv.orbitOffset += 0.0005 * speed
-			if sv.orbitOffset > 6.28318 { // 2*PI
-				sv.orbitOffset -= 6.28318
-			}
+		speedVal := tm.GetSpeedFloat()
+		sv.orbitOffset += 0.0005 * speedVal
+		if sv.orbitOffset > 6.28318 { // 2*PI
+			sv.orbitOffset -= 6.28318
 		}
 	}
 
@@ -75,8 +76,17 @@ func (sv *SystemView) Update() error {
 	// Update fleet aggregation
 	sv.updateFleets()
 
-	// Escape to return to galaxy view
+	// Update fleet info UI if it exists
+	if sv.fleetInfoUI != nil && sv.fleetInfoUI.IsVisible() {
+		sv.fleetInfoUI.Update()
+	}
+
+	// Escape handling - close fleet info UI first, then return to galaxy view
 	if kb.IsActionJustPressed(ActionEscape) {
+		if sv.fleetInfoUI != nil && sv.fleetInfoUI.IsVisible() {
+			sv.fleetInfoUI.Hide()
+			return nil
+		}
 		vm.SwitchTo(ViewTypeGalaxy)
 		return nil
 	}
@@ -102,6 +112,12 @@ func (sv *SystemView) Update() error {
 						planetView.SetPlanet(planet)
 					}
 				}
+			}
+		} else {
+			// Single click - check if clicking on a fleet
+			clickedFleet := sv.getFleetAtPosition(x, y)
+			if clickedFleet != nil && sv.fleetInfoUI != nil {
+				sv.fleetInfoUI.ShowFleet(clickedFleet)
 			}
 		}
 
@@ -143,6 +159,11 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	// Draw context menu if active
 	if sv.clickHandler.HasActiveMenu() {
 		sv.clickHandler.GetActiveMenu().Draw(screen)
+	}
+
+	// Draw fleet info UI if visible
+	if sv.fleetInfoUI != nil && sv.fleetInfoUI.IsVisible() {
+		sv.fleetInfoUI.Draw(screen)
 	}
 
 	// Draw UI info
@@ -486,4 +507,22 @@ func (sv *SystemView) drawStation(screen *ebiten.Image, station *entities.Statio
 	// Draw station name below
 	labelY := centerY + size + 12
 	DrawCenteredText(screen, station.Name, centerX, labelY)
+}
+
+// getFleetAtPosition returns the fleet at the given screen position, or nil if none
+func (sv *SystemView) getFleetAtPosition(x, y int) *Fleet {
+	clickRadius := 15.0 // Click radius for fleets
+
+	for _, fleet := range sv.fleets {
+		fx, fy := fleet.GetPosition()
+		dx := float64(x) - fx
+		dy := float64(y) - fy
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		if distance <= clickRadius {
+			return fleet
+		}
+	}
+
+	return nil
 }

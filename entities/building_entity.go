@@ -65,6 +65,11 @@ func (b *Building) GetClickRadius() float64 {
 	return float64(b.Size) + 1
 }
 
+// GetOwner returns the owner of this building
+func (b *Building) GetOwner() string {
+	return b.Owner
+}
+
 // GetContextMenuTitle implements ContextMenuProvider
 func (b *Building) GetContextMenuTitle() string {
 	return b.Name

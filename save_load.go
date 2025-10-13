@@ -205,11 +205,18 @@ func LoadGameFromFile(filename string) (*Game, error) {
 	// Initialize view system
 	g.viewManager = views.NewViewManager()
 
+	// Create UI components (stay in main package)
+	buildMenu := NewBuildMenu(g)
+	constructionQueue := NewConstructionQueueUI(g)
+	resourceStorage := NewResourceStorageUI(g)
+	shipyardUI := NewShipyardUI(g)
+	fleetInfoUI := NewFleetInfoUI(g)
+
 	// Create and register views
 	mainMenuView := views.NewMainMenuView(g)
 	galaxyView := views.NewGalaxyView(g)
-	systemView := views.NewSystemView(g)
-	planetView := views.NewPlanetView(g)
+	systemView := views.NewSystemView(g, fleetInfoUI)
+	planetView := views.NewPlanetView(g, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
 	settingsView := views.NewSettingsView(g)
 
 	g.viewManager.RegisterView(mainMenuView)

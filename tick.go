@@ -111,6 +111,11 @@ func (tm *TickManager) GetSpeed() interface{} {
 	return tm.speed
 }
 
+// GetSpeedFloat returns the current game speed as float64 for views
+func (tm *TickManager) GetSpeedFloat() float64 {
+	return float64(tm.speed)
+}
+
 // Pause pauses the game
 func (tm *TickManager) Pause() {
 	tm.isPaused = true

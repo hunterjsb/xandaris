@@ -53,6 +53,11 @@ func (r *Resource) GetClickRadius() float64 {
 	return float64(r.Size) + 1
 }
 
+// GetOwner returns the owner of this resource
+func (r *Resource) GetOwner() string {
+	return r.Owner
+}
+
 // GetContextMenuTitle implements ContextMenuProvider
 func (r *Resource) GetContextMenuTitle() string {
 	return r.Name

@@ -159,6 +159,16 @@ func (s *Ship) GetClickRadius() float64 {
 	return 8.0
 }
 
+// GetOwner returns the owner of this ship
+func (s *Ship) GetOwner() string {
+	return s.Owner
+}
+
+// GetHP returns current and max hull points for this ship
+func (s *Ship) GetHP() (int, int) {
+	return s.CurrentHealth, s.MaxHealth
+}
+
 // CanJump checks if the ship has enough fuel to make a jump
 func (s *Ship) CanJump() bool {
 	return s.CurrentFuel >= s.FuelPerJump && s.Status != ShipStatusMoving

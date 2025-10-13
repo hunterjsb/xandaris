@@ -49,6 +49,11 @@ func (s *Station) GetClickRadius() float64 {
 	return 6.0 // Fixed radius for station click detection
 }
 
+// GetOwner returns the owner of this station
+func (s *Station) GetOwner() string {
+	return s.Owner
+}
+
 // IsPlayerOwned checks if this station is owned by a player (vs NPC faction)
 func (s *Station) IsPlayerOwned() bool {
 	// Player-owned stations won't have faction names like "Independent", "Trade Union", etc.
