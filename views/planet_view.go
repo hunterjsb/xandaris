@@ -2,12 +2,13 @@ package views
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // BuildMenuInterface defines the interface for build menu operations
@@ -522,10 +523,10 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	centerY := int(y)
 	radius := resource.Size
 
-	// Draw ownership indicator if owned by player
-	humanPlayer := pv.ctx.GetHumanPlayer()
-	if resource.Owner != "" && humanPlayer != nil && resource.Owner == humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(radius+2), humanPlayer.Color)
+	if resource.Owner != "" {
+		if ownerColor, ok := pv.getOwnerColor(resource.Owner); ok {
+			DrawOwnershipRing(screen, centerX, centerY, float64(radius+2), ownerColor)
+		}
 	}
 
 	// Create resource image
@@ -592,10 +593,10 @@ func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 	centerY := int(y)
 	size := 6
 
-	// Draw ownership indicator if owned by player
-	humanPlayer := pv.ctx.GetHumanPlayer()
-	if fleet.Owner != "" && humanPlayer != nil && fleet.Owner == humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(size+3), humanPlayer.Color)
+	if fleet.Owner != "" {
+		if ownerColor, ok := pv.getOwnerColor(fleet.Owner); ok {
+			DrawOwnershipRing(screen, centerX, centerY, float64(size+3), ownerColor)
+		}
 	}
 
 	// Draw ship as a triangle
@@ -650,10 +651,10 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	centerY := int(y)
 	size := building.Size
 
-	// Draw ownership indicator if owned by player
-	humanPlayer := pv.ctx.GetHumanPlayer()
-	if building.Owner != "" && humanPlayer != nil && building.Owner == humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(size+2), humanPlayer.Color)
+	if building.Owner != "" {
+		if ownerColor, ok := pv.getOwnerColor(building.Owner); ok {
+			DrawOwnershipRing(screen, centerX, centerY, float64(size+2), ownerColor)
+		}
 	}
 
 	// Create building image (square for buildings)
@@ -668,4 +669,18 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	// Draw building type label below
 	labelY := centerY + size + 12
 	DrawCenteredText(screen, building.BuildingType, centerX, labelY)
+}
+
+func (pv *PlanetView) getOwnerColor(owner string) (color.RGBA, bool) {
+	if owner == "" {
+		return color.RGBA{}, false
+	}
+
+	for _, player := range pv.ctx.GetPlayers() {
+		if player != nil && player.Name == owner {
+			return player.Color, true
+		}
+	}
+
+	return color.RGBA{}, false
 }

@@ -3,7 +3,12 @@ package utils
 import "image/color"
 
 var (
-	PlayerGreen = color.RGBA{180, 230, 130, 255}
+	PlayerGreen  = color.RGBA{180, 230, 130, 255}
+	PlayerBlue   = color.RGBA{130, 180, 255, 255}
+	PlayerRed    = color.RGBA{255, 160, 160, 255}
+	PlayerOrange = color.RGBA{255, 190, 120, 255}
+	PlayerPurple = color.RGBA{190, 150, 255, 255}
+	PlayerTeal   = color.RGBA{140, 220, 210, 255}
 )
 
 // System Colors - used for star system visualization
@@ -125,5 +130,16 @@ func GetStationTypeColor(stationType string) color.RGBA {
 		return StationShipyard
 	default:
 		return StationTrading // Default fallback
+	}
+}
+
+// GetAIPlayerColors returns a palette of colors for AI factions
+func GetAIPlayerColors() []color.RGBA {
+	return []color.RGBA{
+		PlayerBlue,
+		PlayerRed,
+		PlayerOrange,
+		PlayerPurple,
+		PlayerTeal,
 	}
 }

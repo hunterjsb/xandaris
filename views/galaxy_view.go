@@ -6,9 +6,9 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 const (
@@ -178,15 +178,17 @@ func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
 
 // drawSystem renders a single system
 func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) {
-	humanPlayer := gv.ctx.GetHumanPlayer()
 	centerX := int(system.X)
 	centerY := int(system.Y)
 
-	// Draw ownership indicator if system has player-owned planets
+	owners := gv.getSystemOwners(system)
 	var ownershipColor color.RGBA
-	if humanPlayer != nil && system.HasOwnershipByPlayer(humanPlayer.Name) {
-		ownershipColor = humanPlayer.Color
-		// DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), humanPlayer.Color)
+	if len(owners) > 0 {
+		ownershipColor = owners[0]
+		for i, ownerColor := range owners {
+			radius := float64(circleRadius + 4 + i*3)
+			DrawOwnershipRing(screen, centerX, centerY, radius, ownerColor)
+		}
 	}
 
 	// Get the star and planets from the system
@@ -255,6 +257,24 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	// Draw centered label below the circle
 	labelY := centerY + circleRadius + 15
 	DrawCenteredText(screen, system.Name, centerX, labelY)
+}
+
+func (gv *GalaxyView) getSystemOwners(system *entities.System) []color.RGBA {
+	players := gv.ctx.GetPlayers()
+	if len(players) == 0 {
+		return nil
+	}
+
+	owners := make([]color.RGBA, 0)
+	for _, player := range players {
+		if player == nil {
+			continue
+		}
+		if system.HasOwnershipByPlayer(player.Name) {
+			owners = append(owners, player.Color)
+		}
+	}
+	return owners
 }
 
 // updateFleets aggregates fleets for each system
@@ -409,11 +429,54 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		return
 	}
 
+	players := gv.ctx.GetPlayers()
+	aiSummaries := make([]struct {
+		name         string
+		color        color.RGBA
+		planets      int
+		tradingPosts int
+		totalStorage int
+	}, 0)
+
+	for _, player := range players {
+		if player == nil || player == humanPlayer || !player.IsAI() {
+			continue
+		}
+
+		tradingPosts := countTradingPosts(player.OwnedPlanets)
+		if tradingPosts == 0 {
+			continue
+		}
+
+		aiSummaries = append(aiSummaries, struct {
+			name         string
+			color        color.RGBA
+			planets      int
+			tradingPosts int
+			totalStorage int
+		}{
+			name:         player.Name,
+			color:        player.Color,
+			planets:      len(player.OwnedPlanets),
+			tradingPosts: tradingPosts,
+			totalStorage: totalStoredResources(player.OwnedPlanets),
+		})
+	}
+
+	baseHeight := 100
+	extraHeight := len(aiSummaries) * 24
+	panelHeight := baseHeight + extraHeight
+	if panelHeight > ScreenHeight-20 {
+		panelHeight = ScreenHeight - 20
+	}
+	if panelHeight < baseHeight {
+		panelHeight = baseHeight
+	}
+
 	// Draw panel in top-right corner
 	panelX := ScreenWidth - 250
 	panelY := 10
 	panelWidth := 240
-	panelHeight := 100
 
 	// Draw panel background
 	panel := NewUIPanel(panelX, panelY, panelWidth, panelHeight)
@@ -431,4 +494,48 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	if humanPlayer.HomeSystem != nil {
 		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+60, utils.TextSecondary)
 	}
+
+	if len(aiSummaries) > 0 {
+		separatorY := textY + 75
+		DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.PanelBorder)
+		listY := separatorY + 10
+		DrawText(screen, "NPC Traders:", textX, listY, utils.TextSecondary)
+		listY += 15
+		maxListY := panelY + panelHeight - 20
+
+		for _, summary := range aiSummaries {
+			if listY+18 > maxListY {
+				DrawText(screen, "...more traders active", textX, maxListY, utils.TextSecondary)
+				break
+			}
+			DrawText(screen, summary.name, textX, listY, summary.color)
+			info := fmt.Sprintf("P:%d  Posts:%d  Stock:%d", summary.planets, summary.tradingPosts, summary.totalStorage)
+			DrawText(screen, info, textX, listY+12, utils.TextSecondary)
+			listY += 24
+		}
+	}
+}
+
+func countTradingPosts(planets []*entities.Planet) int {
+	count := 0
+	for _, planet := range planets {
+		for _, buildingEntity := range planet.Buildings {
+			if building, ok := buildingEntity.(*entities.Building); ok && building.BuildingType == "Trading Post" {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func totalStoredResources(planets []*entities.Planet) int {
+	total := 0
+	for _, planet := range planets {
+		for _, storage := range planet.StoredResources {
+			if storage != nil {
+				total += storage.Amount
+			}
+		}
+	}
+	return total
 }

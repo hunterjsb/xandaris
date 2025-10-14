@@ -12,8 +12,10 @@ import (
 )
 
 type marketContribution struct {
-	planet string
-	amount int
+	planet  string
+	amount  int
+	owner   string
+	isHuman bool
 }
 
 type marketResourceRow struct {
@@ -29,6 +31,8 @@ type MarketView struct {
 	scrollOffset      int
 	maxVisibleRows    int
 	tradingPostCount  int
+	humanTradingPosts int
+	aiTradingPosts    int
 	returnTo          ViewType
 	backgroundPanel   *UIPanel
 	headerPanel       *UIPanel
@@ -81,6 +85,8 @@ func NewMarketView(ctx GameContext) *MarketView {
 		scrollOffset:      0,
 		maxVisibleRows:    12,
 		tradingPostCount:  0,
+		humanTradingPosts: 0,
+		aiTradingPosts:    0,
 		returnTo:          ViewTypeGalaxy,
 		backgroundPanel:   background,
 		headerPanel:       header,
@@ -143,7 +149,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	titleY := mv.headerPanel.Y + 22
 	DrawTextCentered(screen, "Market Overview", mv.headerPanel.X+mv.headerPanel.Width/2, titleY, color.RGBA{225, 230, 255, 255}, 1.8)
 
-	subtitle := fmt.Sprintf("Trading Posts Online: %d", mv.tradingPostCount)
+	subtitle := fmt.Sprintf("Trading Posts Online: %d (You: %d | NPC: %d)", mv.tradingPostCount, mv.humanTradingPosts, mv.aiTradingPosts)
 	DrawTextCentered(screen, subtitle, mv.headerPanel.X+mv.headerPanel.Width/2, titleY+40, utils.TextSecondary, 1.2)
 
 	// Table header
@@ -188,7 +194,11 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 			if i > 0 {
 				builder.WriteString(", ")
 			}
-			builder.WriteString(fmt.Sprintf("%s (%d)", contribution.planet, contribution.amount))
+			ownerLabel := contribution.owner
+			if contribution.isHuman {
+				ownerLabel = "You"
+			}
+			builder.WriteString(fmt.Sprintf("%s (%s: %d)", contribution.planet, ownerLabel, contribution.amount))
 		}
 		DrawText(screen, builder.String(), mv.tablePanel.X+360, y, utils.TextSecondary)
 
@@ -204,54 +214,75 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 
 	// Instructions
 	instrY := mv.instructionsPanel.Y + 20
-	DrawCenteredText(screen, "Use the mouse wheel to scroll, [Esc] to return. Trading Posts automatically list stored resources here.",
+	DrawCenteredText(screen, "Use the mouse wheel to scroll, [Esc] to return. Trading Posts automatically list stored resources for all factions.",
 		mv.instructionsPanel.X+mv.instructionsPanel.Width/2, instrY)
 }
 
 func (mv *MarketView) refreshData() {
 	mv.rows = mv.rows[:0]
 	mv.tradingPostCount = 0
-
-	player := mv.ctx.GetHumanPlayer()
-	if player == nil {
-		return
-	}
+	mv.humanTradingPosts = 0
+	mv.aiTradingPosts = 0
 
 	resourceMap := make(map[string]*marketResourceRow)
 
-	for _, planet := range player.OwnedPlanets {
-		if !mv.planetHasTradingPost(planet) {
+	players := mv.ctx.GetPlayers()
+	if len(players) == 0 {
+		return
+	}
+
+	for _, player := range players {
+		if player == nil {
 			continue
 		}
-		mv.tradingPostCount++
-
-		for resourceType, storage := range planet.StoredResources {
-			if storage == nil || storage.Amount <= 0 {
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil || planet.Owner != player.Name {
+				continue
+			}
+			if !mv.planetHasTradingPost(planet) {
 				continue
 			}
 
-			row, exists := resourceMap[resourceType]
-			if !exists {
-				row = &marketResourceRow{
-					resource:      resourceType,
-					totalAmount:   0,
-					contributions: make([]marketContribution, 0),
-				}
-				resourceMap[resourceType] = row
+			mv.tradingPostCount++
+			if player.IsHuman() {
+				mv.humanTradingPosts++
+			} else {
+				mv.aiTradingPosts++
 			}
 
-			row.totalAmount += storage.Amount
-			row.contributions = append(row.contributions, marketContribution{
-				planet: planet.Name,
-				amount: storage.Amount,
-			})
+			for resourceType, storage := range planet.StoredResources {
+				if storage == nil || storage.Amount <= 0 {
+					continue
+				}
+
+				row, exists := resourceMap[resourceType]
+				if !exists {
+					row = &marketResourceRow{
+						resource:      resourceType,
+						totalAmount:   0,
+						contributions: make([]marketContribution, 0),
+					}
+					resourceMap[resourceType] = row
+				}
+
+				row.totalAmount += storage.Amount
+				row.contributions = append(row.contributions, marketContribution{
+					planet:  planet.Name,
+					owner:   player.Name,
+					amount:  storage.Amount,
+					isHuman: player.IsHuman(),
+				})
+			}
 		}
 	}
 
 	for _, row := range resourceMap {
 		sort.Slice(row.contributions, func(i, j int) bool {
 			if row.contributions[i].amount == row.contributions[j].amount {
-				return row.contributions[i].planet < row.contributions[j].planet
+				if row.contributions[i].owner == row.contributions[j].owner {
+					return row.contributions[i].planet < row.contributions[j].planet
+				}
+				return row.contributions[i].owner < row.contributions[j].owner
 			}
 			return row.contributions[i].amount > row.contributions[j].amount
 		})

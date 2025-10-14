@@ -6,9 +6,9 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // SystemView represents the detailed view of a single system
@@ -428,10 +428,10 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 	// Keep planet size consistent regardless of orbital scale
 	radius := planet.Size
 
-	// Draw ownership indicator if owned by player
-	humanPlayer := sv.ctx.GetHumanPlayer()
-	if planet.Owner != "" && humanPlayer != nil && planet.Owner == humanPlayer.Name {
-		DrawOwnershipRing(screen, centerX, centerY, float64(radius+3), humanPlayer.Color)
+	if planet.Owner != "" {
+		if ownerColor, ok := sv.getOwnerColor(planet.Owner); ok {
+			DrawOwnershipRing(screen, centerX, centerY, float64(radius+3), ownerColor)
+		}
 	}
 
 	// Create planet image
@@ -508,6 +508,21 @@ func (sv *SystemView) drawStation(screen *ebiten.Image, station *entities.Statio
 	// Draw station name below
 	labelY := centerY + size + 12
 	DrawCenteredText(screen, station.Name, centerX, labelY)
+}
+
+func (sv *SystemView) getOwnerColor(owner string) (color.RGBA, bool) {
+	if owner == "" {
+		return color.RGBA{}, false
+	}
+
+	players := sv.ctx.GetPlayers()
+	for _, player := range players {
+		if player != nil && player.Name == owner {
+			return player.Color, true
+		}
+	}
+
+	return color.RGBA{}, false
 }
 
 // getFleetAtPosition returns the fleet at the given screen position, or nil if none

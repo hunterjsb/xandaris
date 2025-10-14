@@ -98,6 +98,9 @@ func (a *App) InitializeNewGame(playerName string) error {
 	// Initialize player with starting planet
 	entities.InitializePlayer(a.state.HumanPlayer, a.state.Systems)
 
+	// Seed AI factions to populate the market
+	a.initializeAIPlayers()
+
 	// Initialize tickable systems
 	context := &GameSystemContext{app: a}
 	tickable.InitializeAllSystems(context)

@@ -13,6 +13,9 @@ func InitializePlayer(player *Player, systems []*System) {
 		// Check if system has habitable terrestrial planets with Oil and Iron
 		for _, entity := range system.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
+				if planet.Owner != "" {
+					continue
+				}
 				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasOilResource(planet) && hasIronResource(planet) {
 					validSystems = append(validSystems, system)
 					break
@@ -26,6 +29,9 @@ func InitializePlayer(player *Player, systems []*System) {
 		for _, system := range systems {
 			for _, entity := range system.GetEntities() {
 				if planet, ok := entity.(*Planet); ok {
+					if planet.Owner != "" {
+						continue
+					}
 					if planet.PlanetType == "Terrestrial" && planet.IsHabitable() {
 						validSystems = append(validSystems, system)
 						break
@@ -38,8 +44,14 @@ func InitializePlayer(player *Player, systems []*System) {
 	// Second fallback: use any system with a planet
 	if len(validSystems) == 0 {
 		for _, system := range systems {
-			if system.HasEntityType(EntityTypePlanet) {
-				validSystems = append(validSystems, system)
+			for _, entity := range system.GetEntitiesByType(EntityTypePlanet) {
+				if planet, ok := entity.(*Planet); ok {
+					if planet.Owner != "" {
+						continue
+					}
+					validSystems = append(validSystems, system)
+					break
+				}
 			}
 		}
 	}
@@ -58,6 +70,9 @@ func InitializePlayer(player *Player, systems []*System) {
 
 	for _, entity := range homeSystem.GetEntities() {
 		if planet, ok := entity.(*Planet); ok {
+			if planet.Owner != "" {
+				continue
+			}
 			if planet.PlanetType == "Terrestrial" && hasOilResource(planet) && hasIronResource(planet) && planet.Habitability > bestHabitability {
 				bestPlanet = planet
 				bestHabitability = planet.Habitability
@@ -69,6 +84,9 @@ func InitializePlayer(player *Player, systems []*System) {
 	if bestPlanet == nil {
 		for _, entity := range homeSystem.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
+				if planet.Owner != "" {
+					continue
+				}
 				if planet.PlanetType == "Terrestrial" && planet.Habitability > bestHabitability {
 					bestPlanet = planet
 					bestHabitability = planet.Habitability
@@ -81,6 +99,9 @@ func InitializePlayer(player *Player, systems []*System) {
 	if bestPlanet == nil {
 		for _, entity := range homeSystem.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
+				if planet.Owner != "" {
+					continue
+				}
 				if planet.IsHabitable() {
 					bestPlanet = planet
 					break
@@ -93,6 +114,9 @@ func InitializePlayer(player *Player, systems []*System) {
 	if bestPlanet == nil {
 		for _, entity := range homeSystem.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
+				if planet.Owner != "" {
+					continue
+				}
 				bestPlanet = planet
 				break
 			}
