@@ -181,16 +181,6 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	centerX := int(system.X)
 	centerY := int(system.Y)
 
-	owners := gv.getSystemOwners(system)
-	var ownershipColor color.RGBA
-	if len(owners) > 0 {
-		ownershipColor = owners[0]
-		for i, ownerColor := range owners {
-			radius := float64(circleRadius + 4 + i*3)
-			DrawOwnershipRing(screen, centerX, centerY, radius, ownerColor)
-		}
-	}
-
 	// Get the star and planets from the system
 	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
 	planets := system.GetEntitiesByType(entities.EntityTypePlanet)
@@ -213,12 +203,14 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	screen.DrawImage(starImg, opts)
 
 	// Draw the correct number of orbits
-	orbitColor := color.RGBA{R: 100, G: 100, B: 100, A: 100}
-	if ownershipColor.A != 0 {
-		orbitColor = ownershipColor
-	}
-
 	for i, planet := range planets {
+		orbitColor := color.RGBA{R: 100, G: 100, B: 100, A: 100}
+		if p, ok := planet.(*entities.Planet); ok {
+			if ownerColor, ok := gv.getOwnerColor(p.Owner); ok {
+				orbitColor = ownerColor
+			}
+		}
+
 		orbitRadius := float64(starRadius + (i+1)*4)
 		segments := 20
 		for j := 0; j < segments; j++ {
@@ -259,22 +251,18 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	DrawCenteredText(screen, system.Name, centerX, labelY)
 }
 
-func (gv *GalaxyView) getSystemOwners(system *entities.System) []color.RGBA {
-	players := gv.ctx.GetPlayers()
-	if len(players) == 0 {
-		return nil
+func (gv *GalaxyView) getOwnerColor(owner string) (color.RGBA, bool) {
+	if owner == "" {
+		return color.RGBA{}, false
 	}
 
-	owners := make([]color.RGBA, 0)
-	for _, player := range players {
-		if player == nil {
-			continue
-		}
-		if system.HasOwnershipByPlayer(player.Name) {
-			owners = append(owners, player.Color)
+	for _, player := range gv.ctx.GetPlayers() {
+		if player != nil && player.Name == owner {
+			return player.Color, true
 		}
 	}
-	return owners
+
+	return color.RGBA{}, false
 }
 
 // updateFleets aggregates fleets for each system
