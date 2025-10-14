@@ -18,14 +18,6 @@ func init() {
 	DefaultFontFace = text.NewGoXFace(bitmapfont.Face)
 }
 
-// UI Color constants
-var (
-	UITextPrimary   = color.RGBA{200, 200, 220, 255}
-	UITextSecondary = color.RGBA{150, 150, 170, 255}
-	UIPanelBg       = color.RGBA{20, 20, 35, 255}
-	UIPanelBorder   = color.RGBA{60, 60, 80, 255}
-)
-
 // UIPanel represents a rectangular panel with border
 type UIPanel struct {
 	X           int
