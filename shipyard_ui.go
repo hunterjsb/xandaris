@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/views"
 )
 
 // ShipyardUI displays the ship construction interface
@@ -84,7 +85,7 @@ func (sui *ShipyardUI) Update() {
 	}
 
 	// Handle escape key to close
-	if sui.game.keyBindings.IsActionJustPressed(ActionEscape) {
+	if sui.game.keyBindings.IsActionJustPressed(views.ActionEscape) {
 		sui.Hide()
 		return
 	}

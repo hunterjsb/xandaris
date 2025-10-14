@@ -1,4 +1,4 @@
-package main
+package systems
 
 import (
 	"encoding/json"
@@ -9,24 +9,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/views"
-)
-
-// Import key action constants from views package
-const (
-	ActionPauseToggle   = views.ActionPauseToggle
-	ActionSpeedSlow     = views.ActionSpeedSlow
-	ActionSpeedNormal   = views.ActionSpeedNormal
-	ActionSpeedFast     = views.ActionSpeedFast
-	ActionSpeedVeryFast = views.ActionSpeedVeryFast
-	ActionSpeedIncrease = views.ActionSpeedIncrease
-	ActionQuickSave     = views.ActionQuickSave
-	ActionEscape        = views.ActionEscape
-	ActionOpenBuildMenu = views.ActionOpenBuildMenu
-	ActionMenuUp        = views.ActionMenuUp
-	ActionMenuDown      = views.ActionMenuDown
-	ActionMenuConfirm   = views.ActionMenuConfirm
-	ActionMenuCancel    = views.ActionMenuCancel
-	ActionMenuDelete    = views.ActionMenuDelete
 )
 
 // KeyBindings manages all key bindings for the game
@@ -46,24 +28,24 @@ func NewKeyBindings() *KeyBindings {
 // LoadDefaults loads the default key bindings
 func (kb *KeyBindings) LoadDefaults() {
 	// Global actions
-	kb.bindings[ActionPauseToggle] = ebiten.KeySpace
-	kb.bindings[ActionSpeedSlow] = ebiten.Key1
-	kb.bindings[ActionSpeedNormal] = ebiten.Key2
-	kb.bindings[ActionSpeedFast] = ebiten.Key3
-	kb.bindings[ActionSpeedVeryFast] = ebiten.Key4
-	kb.bindings[ActionSpeedIncrease] = ebiten.KeyEqual
-	kb.bindings[ActionQuickSave] = ebiten.KeyF5
+	kb.bindings[views.ActionPauseToggle] = ebiten.KeySpace
+	kb.bindings[views.ActionSpeedSlow] = ebiten.Key1
+	kb.bindings[views.ActionSpeedNormal] = ebiten.Key2
+	kb.bindings[views.ActionSpeedFast] = ebiten.Key3
+	kb.bindings[views.ActionSpeedVeryFast] = ebiten.Key4
+	kb.bindings[views.ActionSpeedIncrease] = ebiten.KeyEqual
+	kb.bindings[views.ActionQuickSave] = ebiten.KeyF5
 
 	// View navigation
-	kb.bindings[ActionEscape] = ebiten.KeyEscape
-	kb.bindings[ActionOpenBuildMenu] = ebiten.KeyB
+	kb.bindings[views.ActionEscape] = ebiten.KeyEscape
+	kb.bindings[views.ActionOpenBuildMenu] = ebiten.KeyB
 
 	// Menu navigation
-	kb.bindings[ActionMenuUp] = ebiten.KeyUp
-	kb.bindings[ActionMenuDown] = ebiten.KeyDown
-	kb.bindings[ActionMenuConfirm] = ebiten.KeyEnter
-	kb.bindings[ActionMenuCancel] = ebiten.KeyEscape
-	kb.bindings[ActionMenuDelete] = ebiten.KeyBackspace
+	kb.bindings[views.ActionMenuUp] = ebiten.KeyUp
+	kb.bindings[views.ActionMenuDown] = ebiten.KeyDown
+	kb.bindings[views.ActionMenuConfirm] = ebiten.KeyEnter
+	kb.bindings[views.ActionMenuCancel] = ebiten.KeyEscape
+	kb.bindings[views.ActionMenuDelete] = ebiten.KeyBackspace
 }
 
 // IsActionJustPressed checks if the key bound to an action was just pressed
@@ -89,20 +71,20 @@ func (kb *KeyBindings) SetKey(action views.KeyAction, key ebiten.Key) {
 // GetActionName returns a human-readable name for an action
 func (kb *KeyBindings) GetActionName(action views.KeyAction) string {
 	names := map[views.KeyAction]string{
-		ActionPauseToggle:   "Pause/Resume",
-		ActionSpeedSlow:     "Speed: Slow",
-		ActionSpeedNormal:   "Speed: Normal",
-		ActionSpeedFast:     "Speed: Fast",
-		ActionSpeedVeryFast: "Speed: Very Fast",
-		ActionSpeedIncrease: "Speed: Increase",
-		ActionQuickSave:     "Quick Save",
-		ActionEscape:        "Escape/Back",
-		ActionOpenBuildMenu: "Open Build Menu",
-		ActionMenuUp:        "Menu: Up",
-		ActionMenuDown:      "Menu: Down",
-		ActionMenuConfirm:   "Menu: Confirm",
-		ActionMenuCancel:    "Menu: Cancel",
-		ActionMenuDelete:    "Menu: Delete",
+		views.ActionPauseToggle:   "Pause/Resume",
+		views.ActionSpeedSlow:     "Speed: Slow",
+		views.ActionSpeedNormal:   "Speed: Normal",
+		views.ActionSpeedFast:     "Speed: Fast",
+		views.ActionSpeedVeryFast: "Speed: Very Fast",
+		views.ActionSpeedIncrease: "Speed: Increase",
+		views.ActionQuickSave:     "Quick Save",
+		views.ActionEscape:        "Escape/Back",
+		views.ActionOpenBuildMenu: "Open Build Menu",
+		views.ActionMenuUp:        "Menu: Up",
+		views.ActionMenuDown:      "Menu: Down",
+		views.ActionMenuConfirm:   "Menu: Confirm",
+		views.ActionMenuCancel:    "Menu: Cancel",
+		views.ActionMenuDelete:    "Menu: Delete",
 	}
 
 	name, exists := names[action]
@@ -165,20 +147,20 @@ func (kb *KeyBindings) GetKeyName(key ebiten.Key) string {
 // GetAllActions returns all available actions
 func (kb *KeyBindings) GetAllActions() []views.KeyAction {
 	return []views.KeyAction{
-		ActionPauseToggle,
-		ActionSpeedSlow,
-		ActionSpeedNormal,
-		ActionSpeedFast,
-		ActionSpeedVeryFast,
-		ActionSpeedIncrease,
-		ActionQuickSave,
-		ActionEscape,
-		ActionOpenBuildMenu,
-		ActionMenuUp,
-		ActionMenuDown,
-		ActionMenuConfirm,
-		ActionMenuCancel,
-		ActionMenuDelete,
+		views.ActionPauseToggle,
+		views.ActionSpeedSlow,
+		views.ActionSpeedNormal,
+		views.ActionSpeedFast,
+		views.ActionSpeedVeryFast,
+		views.ActionSpeedIncrease,
+		views.ActionQuickSave,
+		views.ActionEscape,
+		views.ActionOpenBuildMenu,
+		views.ActionMenuUp,
+		views.ActionMenuDown,
+		views.ActionMenuConfirm,
+		views.ActionMenuCancel,
+		views.ActionMenuDelete,
 	}
 }
 
@@ -235,7 +217,7 @@ func (kb *KeyBindings) LoadFromFile(filename string) error {
 	return nil
 }
 
-// GetConfigPath returns the default config file path
+// GetKeyBindingsConfigPath returns the default config file path
 func GetKeyBindingsConfigPath() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

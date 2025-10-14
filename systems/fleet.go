@@ -1,4 +1,4 @@
-package main
+package systems
 
 import (
 	"math"
@@ -8,17 +8,21 @@ import (
 	"github.com/hunterjsb/xandaris/views"
 )
 
-// Fleet type is now in views package - import and use views.Fleet
+// GameDataProvider defines the interface for accessing game data needed by fleet manager
+type GameDataProvider interface {
+	GetSystemsMap() map[int]*entities.System
+	GetHyperlanes() []entities.Hyperlane
+}
 
 // FleetManager handles fleet aggregation and management
 type FleetManager struct {
-	game *Game
+	gameData GameDataProvider
 }
 
 // NewFleetManager creates a new fleet manager
-func NewFleetManager(game *Game) *FleetManager {
+func NewFleetManager(gameData GameDataProvider) *FleetManager {
 	return &FleetManager{
-		game: game,
+		gameData: gameData,
 	}
 }
 
@@ -188,7 +192,7 @@ func (fm *FleetManager) MoveFleet(fleet *views.Fleet, targetSystemID int) (succe
 	}
 
 	// Create ship movement helper
-	helper := tickable.NewShipMovementHelper(fm.game.GetSystemsMap(), fm.game.GetHyperlanes())
+	helper := tickable.NewShipMovementHelper(fm.gameData.GetSystemsMap(), fm.gameData.GetHyperlanes())
 
 	// Attempt to move each ship in the fleet
 	for _, ship := range fleet.Ships {
@@ -239,7 +243,7 @@ func (fm *FleetManager) GetFleetMovementStatus(fleet *views.Fleet) (canMove int,
 
 // GetAllFleetsInSystem returns all fleets in a specific system
 func (fm *FleetManager) GetAllFleetsInSystem(systemID int) []*views.Fleet {
-	system := fm.game.GetSystemsMap()[systemID]
+	system := fm.gameData.GetSystemsMap()[systemID]
 	if system == nil {
 		return nil
 	}

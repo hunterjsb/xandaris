@@ -1,4 +1,4 @@
-package main
+package systems
 
 import (
 	"time"
@@ -99,6 +99,11 @@ func (tm *TickManager) processTick() {
 // GetCurrentTick returns the current tick number
 func (tm *TickManager) GetCurrentTick() int64 {
 	return tm.currentTick
+}
+
+// SetCurrentTick sets the current tick number (used for loading saves)
+func (tm *TickManager) SetCurrentTick(tick int64) {
+	tm.currentTick = tick
 }
 
 // IsPaused returns whether the game is paused

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -79,7 +80,7 @@ func (g *Game) SaveGameToFile(playerName string) error {
 		GameTime           string
 		Tick               int64
 		Seed               int64
-		TickSpeed          TickSpeed
+		TickSpeed          systems.TickSpeed
 		Systems            []*entities.System
 		Hyperlanes         []entities.Hyperlane
 		Players            []*entities.Player
@@ -91,7 +92,7 @@ func (g *Game) SaveGameToFile(playerName string) error {
 		GameTime:           g.tickManager.GetGameTimeFormatted(),
 		Tick:               g.tickManager.GetCurrentTick(),
 		Seed:               g.seed,
-		TickSpeed:          g.tickManager.GetSpeed().(TickSpeed),
+		TickSpeed:          g.tickManager.GetSpeed().(systems.TickSpeed),
 		Systems:            g.systems,
 		Hyperlanes:         g.hyperlanes,
 		Players:            g.players,
@@ -134,7 +135,7 @@ func LoadGameFromFile(filename string) (*Game, error) {
 		GameTime           string
 		Tick               int64
 		Seed               int64
-		TickSpeed          TickSpeed
+		TickSpeed          systems.TickSpeed
 		Systems            []*entities.System
 		Hyperlanes         []entities.Hyperlane
 		Players            []*entities.Player
@@ -157,16 +158,16 @@ func LoadGameFromFile(filename string) (*Game, error) {
 	}
 
 	// Initialize key bindings
-	g.keyBindings = NewKeyBindings()
+	g.keyBindings = systems.NewKeyBindings()
 	// Try to load custom key bindings from config
-	if err := g.keyBindings.LoadFromFile(GetKeyBindingsConfigPath()); err != nil {
+	if err := g.keyBindings.LoadFromFile(systems.GetKeyBindingsConfigPath()); err != nil {
 		// Silently use defaults if config doesn't exist
 	}
 
 	// Initialize tick manager with saved state
-	g.tickManager = NewTickManager(10.0)
+	g.tickManager = systems.NewTickManager(10.0)
 	g.tickManager.SetSpeed(saveData.TickSpeed)
-	g.tickManager.currentTick = saveData.Tick
+	g.tickManager.SetCurrentTick(saveData.Tick)
 
 	// Find human player
 	for _, player := range g.players {
@@ -200,7 +201,7 @@ func LoadGameFromFile(filename string) (*Game, error) {
 	g.registerConstructionHandler()
 
 	// Initialize fleet manager
-	g.fleetManager = NewFleetManager(g)
+	g.fleetManager = systems.NewFleetManager(g)
 
 	// Initialize view system
 	g.viewManager = views.NewViewManager()
@@ -305,7 +306,7 @@ func GetSaveFileInfo(filepath string) (SaveFileInfo, error) {
 		GameTime           string
 		Tick               int64
 		Seed               int64
-		TickSpeed          TickSpeed
+		TickSpeed          systems.TickSpeed
 		Systems            []*entities.System
 		Hyperlanes         []entities.Hyperlane
 		Players            []*entities.Player

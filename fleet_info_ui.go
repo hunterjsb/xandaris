@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -162,7 +163,7 @@ func (fui *FleetInfoUI) Update() {
 				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
 					my >= itemY && my <= itemY+itemHeight-5 {
 					// Move fleet to this system (inter-system jump)
-					fleetManager := NewFleetManager(fui.game)
+					fleetManager := systems.NewFleetManager(fui.game)
 					success, _ := fleetManager.MoveFleet(fui.fleet, systemID)
 					if success > 0 {
 						fui.showMoveMenu = false
@@ -308,7 +309,7 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 	buttonH := 30
 
 	// Check if fleet can move (has any ship with fuel)
-	canMove, lowFuel, noFuel := NewFleetManager(fui.game).GetFleetMovementStatus(fui.fleet)
+	canMove, lowFuel, noFuel := systems.NewFleetManager(fui.game).GetFleetMovementStatus(fui.fleet)
 
 	buttonColor := UIButtonActive
 	buttonText := "Move Fleet"

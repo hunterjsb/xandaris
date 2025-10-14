@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/views"
 )
 
 // BuildMenuItem represents a single building option in the menu
@@ -194,7 +195,7 @@ func (bm *BuildMenu) Update() {
 	}
 
 	// Close on Escape or right-click
-	if bm.game.keyBindings.IsActionJustPressed(ActionEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+	if bm.game.keyBindings.IsActionJustPressed(views.ActionEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
 		bm.Close()
 		return
 	}
