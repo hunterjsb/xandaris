@@ -5,8 +5,12 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/utils"
+)
+
+const (
+	keyBindingsConfigPath = "~/.xandaris/keybindings.json"
 )
 
 // SettingsView displays game settings including key bindings
@@ -223,8 +227,7 @@ func (sv *SettingsView) findActionForKey(key ebiten.Key) KeyAction {
 // saveSettings saves the current key bindings to config file
 func (sv *SettingsView) saveSettings() {
 	kb := sv.ctx.GetKeyBindings()
-	// We'll need a config path function - for now hardcode
-	if err := kb.SaveToFile(GetKeyBindingsConfigPath()); err != nil {
+	if err := kb.SaveToFile(keyBindingsConfigPath); err != nil {
 		sv.errorMessage = fmt.Sprintf("Failed to save: %v", err)
 		sv.errorTimer = 180
 	} else {
@@ -235,10 +238,10 @@ func (sv *SettingsView) saveSettings() {
 
 // resetToDefaults resets all key bindings to defaults
 func (sv *SettingsView) resetToDefaults() {
-	// This will need to be handled by having the keybindings implement a reset method
+	kb := sv.ctx.GetKeyBindings()
+	kb.LoadDefaults()
 	sv.errorMessage = "Reset to defaults"
 	sv.errorTimer = 120
-	// TODO: Need to call kb.LoadDefaults() through the interface
 }
 
 // Draw renders the settings view
@@ -430,8 +433,3 @@ func GetActionName(action KeyAction) string {
 	}
 }
 
-// GetKeyBindingsConfigPath returns the path to the key bindings config file
-// TODO: This should probably be passed through GameContext or be a global constant
-func GetKeyBindingsConfigPath() string {
-	return "~/.xandaris/keybindings.json"
-}

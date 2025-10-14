@@ -106,21 +106,10 @@ func (a *App) InitializeNewGame(playerName string) error {
 
 // registerConstructionHandler sets up handler for completed constructions
 func (a *App) registerConstructionHandler() {
-	handler := game.NewConstructionHandler(a.state.Systems, a.state.Players, a.tickManager, a)
+	handler := game.NewConstructionHandler(a.state.Systems, a.state.Players, a.tickManager)
 	constructionSystem := tickable.GetSystemByName("Construction")
 	if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
 		cs.RegisterCompletionHandler(handler.HandleConstructionComplete)
 	}
 }
 
-// RefreshPlanetViewIfActive refreshes planet view if the given planet is currently displayed
-func (a *App) RefreshPlanetViewIfActive(planet *entities.Planet) {
-	// TODO: Re-implement once PlanetView is fully ported
-	// if a.viewManager.GetCurrentView().GetType() == views.ViewTypePlanet {
-	// 	if planetView, ok := a.viewManager.GetCurrentView().(*views.PlanetView); ok {
-	// 		if planetView.planet == planet {
-	// 			planetView.RefreshPlanet()
-	// 		}
-	// 	}
-	// }
-}

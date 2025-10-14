@@ -70,6 +70,7 @@ type KeyBindingsInterface interface {
 	GetKeyName(key ebiten.Key) string
 	SaveToFile(filename string) error
 	LoadFromFile(filename string) error
+	LoadDefaults() // Reset all bindings to defaults
 }
 
 // KeyAction represents a bindable action (views need to reference these)

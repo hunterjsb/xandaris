@@ -13,7 +13,6 @@ type ConstructionHandler struct {
 	systems      []*entities.System
 	players      []*entities.Player
 	tickManager  TickManagerInterface
-	viewRefresher PlanetViewRefresher
 }
 
 // TickManagerInterface provides access to tick information
@@ -21,18 +20,12 @@ type TickManagerInterface interface {
 	GetCurrentTick() int64
 }
 
-// PlanetViewRefresher allows refreshing the planet view when needed
-type PlanetViewRefresher interface {
-	RefreshPlanetViewIfActive(planet *entities.Planet)
-}
-
 // NewConstructionHandler creates a new construction handler
-func NewConstructionHandler(systems []*entities.System, players []*entities.Player, tickManager TickManagerInterface, viewRefresher PlanetViewRefresher) *ConstructionHandler {
+func NewConstructionHandler(systems []*entities.System, players []*entities.Player, tickManager TickManagerInterface) *ConstructionHandler {
 	return &ConstructionHandler{
 		systems:      systems,
 		players:      players,
 		tickManager:  tickManager,
-		viewRefresher: viewRefresher,
 	}
 }
 
@@ -67,8 +60,6 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 							}
 						}
 					}
-					// Refresh planet view if it's currently viewing this planet
-					ch.viewRefresher.RefreshPlanetViewIfActive(planet)
 					return
 				}
 
@@ -82,9 +73,6 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 							// For now, we'll add to the parent planet
 							planet.Buildings = append(planet.Buildings, building)
 						}
-						// Refresh planet view if it's currently viewing this planet
-						ch.viewRefresher.RefreshPlanetViewIfActive(planet)
-						return
 					}
 				}
 			}
