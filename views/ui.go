@@ -156,3 +156,19 @@ func DrawOwnershipRing(screen *ebiten.Image, centerX, centerY int, radius float6
 		DrawLine(screen, x1, y1, x2, y2, ringColor)
 	}
 }
+
+// DrawGlow draws a glow effect around a point
+func DrawGlow(screen *ebiten.Image, centerX, centerY int, radius float64, glowColor color.RGBA) {
+	segments := 32
+	for i := 0; i < segments; i++ {
+		angle1 := float64(i) * 2 * 3.14159 / float64(segments)
+		angle2 := float64(i+1) * 2 * 3.14159 / float64(segments)
+
+		x1 := centerX + int(radius*math.Cos(angle1))
+		y1 := centerY + int(radius*math.Sin(angle1))
+		x2 := centerX + int(radius*math.Cos(angle2))
+		y2 := centerY + int(radius*math.Sin(angle2))
+
+		DrawLine(screen, x1, y1, x2, y2, glowColor)
+	}
+}

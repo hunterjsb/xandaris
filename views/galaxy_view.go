@@ -174,6 +174,9 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 		DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), humanPlayer.Color)
 	}
 
+	// Get the star from the system
+	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
+
 	// Create a circular image for the system
 	circleImg := ebiten.NewImage(circleRadius*2, circleRadius*2)
 
@@ -187,7 +190,7 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 
 			// If within radius, set pixel to system color
 			if dist <= float64(circleRadius*circleRadius) {
-				circleImg.Set(px, py, system.Color)
+				circleImg.Set(px, py, star.Color)
 			}
 		}
 	}
