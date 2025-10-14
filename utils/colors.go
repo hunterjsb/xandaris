@@ -2,6 +2,10 @@ package utils
 
 import "image/color"
 
+var (
+	PlayerGreen = color.RGBA{180, 230, 130, 255}
+)
+
 // System Colors - used for star system visualization
 var (
 	SystemBlue      = color.RGBA{100, 100, 200, 255}

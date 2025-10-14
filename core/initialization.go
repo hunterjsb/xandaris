@@ -1,7 +1,6 @@
 package core
 
 import (
-	"image/color"
 	"time"
 
 	"github.com/hunterjsb/xandaris/entities"
@@ -9,6 +8,7 @@ import (
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/ui"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
 
@@ -81,7 +81,7 @@ func (a *App) InitializeNewGame(playerName string) error {
 	a.state.Hyperlanes = galaxyGen.GenerateHyperlanes(a.state.Systems)
 
 	// Create human player
-	playerColor := color.RGBA{100, 200, 100, 255} // Green for player
+	playerColor := utils.PlayerGreen
 	a.state.HumanPlayer = entities.NewPlayer(0, playerName, playerColor, entities.PlayerTypeHuman)
 	a.state.Players = append(a.state.Players, a.state.HumanPlayer)
 
@@ -112,4 +112,3 @@ func (a *App) registerConstructionHandler() {
 		cs.RegisterCompletionHandler(handler.HandleConstructionComplete)
 	}
 }
-
