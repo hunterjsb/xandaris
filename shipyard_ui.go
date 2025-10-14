@@ -9,6 +9,7 @@ import (
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // ShipyardUI displays the ship construction interface
@@ -266,7 +267,7 @@ func (sui *ShipyardUI) Draw(screen *ebiten.Image) {
 	}
 
 	// Background panel
-	panel := &UIPanel{
+	panel := &views.UIPanel{
 		X:           sui.x,
 		Y:           sui.y,
 		Width:       sui.width,
@@ -278,16 +279,16 @@ func (sui *ShipyardUI) Draw(screen *ebiten.Image) {
 
 	// Title
 	titleText := fmt.Sprintf("Shipyard - %s", sui.planet.Name)
-	DrawTextCentered(screen, titleText, sui.x+sui.width/2, sui.y+20, color.RGBA{150, 200, 255, 255}, 1.5)
+	views.DrawTextCentered(screen, titleText, sui.x+sui.width/2, sui.y+20, color.RGBA{150, 200, 255, 255}, 1.5)
 
 	// Close button
 	closeX := sui.x + sui.width - 30
 	closeY := sui.y + 10
-	DrawText(screen, "[X]", closeX, closeY, color.RGBA{255, 100, 100, 255})
+	views.DrawText(screen, "[X]", closeX, closeY, color.RGBA{255, 100, 100, 255})
 
 	// Player credits
 	creditsY := sui.y + 45
-	DrawText(screen, fmt.Sprintf("Credits: %d", sui.game.humanPlayer.Credits), sui.x+20, creditsY, UITextPrimary)
+	views.DrawText(screen, fmt.Sprintf("Credits: %d", sui.game.humanPlayer.Credits), sui.x+20, creditsY, utils.TextPrimary)
 
 	// Ship list
 	sui.drawShipList(screen)
@@ -312,13 +313,13 @@ func (sui *ShipyardUI) drawShipList(screen *ebiten.Image) {
 	itemHeight := 70
 
 	// List background
-	listPanel := &UIPanel{
+	listPanel := &views.UIPanel{
 		X:           sui.x + 10,
 		Y:           sui.y + 70,
 		Width:       sui.width - 20,
 		Height:      sui.height - 150,
 		BgColor:     color.RGBA{5, 5, 10, 200},
-		BorderColor: UIPanelBorder,
+		BorderColor: utils.PanelBorder,
 	}
 	listPanel.Draw(screen)
 
@@ -340,37 +341,37 @@ func (sui *ShipyardUI) drawShipList(screen *ebiten.Image) {
 			bgColor = color.RGBA{30, 40, 60, 200}
 		}
 
-		itemPanel := &UIPanel{
+		itemPanel := &views.UIPanel{
 			X:           sui.x + 20,
 			Y:           itemY,
 			Width:       sui.width - 40,
 			Height:      itemHeight - 10,
 			BgColor:     bgColor,
-			BorderColor: UIPanelBorder,
+			BorderColor: utils.PanelBorder,
 		}
 		itemPanel.Draw(screen)
 
 		// Ship name
-		DrawText(screen, string(shipType), sui.x+30, itemY+10, UITextPrimary)
+		views.DrawText(screen, string(shipType), sui.x+30, itemY+10, utils.TextPrimary)
 
 		// Cost
 		cost := entities.GetShipBuildCost(shipType)
-		costColor := UITextPrimary
+		costColor := utils.TextPrimary
 		if sui.game.humanPlayer.Credits < cost {
 			costColor = color.RGBA{255, 100, 100, 255}
 		}
-		DrawText(screen, fmt.Sprintf("Cost: %d credits", cost), sui.x+30, itemY+30, costColor)
+		views.DrawText(screen, fmt.Sprintf("Cost: %d credits", cost), sui.x+30, itemY+30, costColor)
 
 		// Build time
 		buildTime := entities.GetShipBuildTime(shipType)
 		timeStr := fmt.Sprintf("Time: %d ticks (%.1fs)", buildTime, float64(buildTime)/10.0)
-		DrawText(screen, timeStr, sui.x+30, itemY+50, UITextSecondary)
+		views.DrawText(screen, timeStr, sui.x+30, itemY+50, utils.TextSecondary)
 	}
 
 	// Draw scroll indicator if there are more items
 	if len(sui.shipTypes) > visibleCount && visibleCount > 0 {
 		scrollHintY := sui.y + sui.height - 155
-		DrawTextCentered(screen, "↓ Scroll for more ↓", sui.x+sui.width/2, scrollHintY, UITextSecondary, 0.8)
+		views.DrawTextCentered(screen, "↓ Scroll for more ↓", sui.x+sui.width/2, scrollHintY, utils.TextSecondary, 0.8)
 	}
 }
 
@@ -381,7 +382,7 @@ func (sui *ShipyardUI) drawShipDetails(screen *ebiten.Image) {
 	// Resources required
 	requirements := entities.GetShipResourceRequirements(sui.selectedShip)
 	if len(requirements) > 0 {
-		DrawText(screen, "Resources Required:", sui.x+20, detailsY, UITextPrimary)
+		views.DrawText(screen, "Resources Required:", sui.x+20, detailsY, utils.TextPrimary)
 		reqY := detailsY + 20
 
 		// Sort resources by name to prevent flickering
@@ -404,12 +405,12 @@ func (sui *ShipyardUI) drawShipDetails(screen *ebiten.Image) {
 
 		for _, req := range sortedReqs {
 			available := sui.planet.GetStoredAmount(req.name)
-			reqColor := UITextPrimary
+			reqColor := utils.TextPrimary
 			if available < req.amount {
 				reqColor = color.RGBA{255, 100, 100, 255}
 			}
 			reqText := fmt.Sprintf("  %s: %d / %d", req.name, available, req.amount)
-			DrawText(screen, reqText, sui.x+30, reqY, reqColor)
+			views.DrawText(screen, reqText, sui.x+30, reqY, reqColor)
 			reqY += 15
 		}
 	}
@@ -421,20 +422,20 @@ func (sui *ShipyardUI) drawBuildButton(screen *ebiten.Image) {
 
 	canBuild := sui.selectedShip != "" && sui.canAffordShip(sui.selectedShip)
 	buttonColor := color.RGBA{40, 40, 60, 220}
-	textColor := UITextSecondary
+	textColor := utils.TextSecondary
 
 	if canBuild {
 		buttonColor = color.RGBA{50, 100, 150, 220}
-		textColor = UITextPrimary
+		textColor = utils.TextPrimary
 	}
 
-	buttonPanel := &UIPanel{
+	buttonPanel := &views.UIPanel{
 		X:           sui.x + sui.width/2 - 100,
 		Y:           buildButtonY,
 		Width:       200,
 		Height:      40,
 		BgColor:     buttonColor,
-		BorderColor: UIPanelBorder,
+		BorderColor: utils.PanelBorder,
 	}
 	buttonPanel.Draw(screen)
 
@@ -445,13 +446,13 @@ func (sui *ShipyardUI) drawBuildButton(screen *ebiten.Image) {
 		buttonText = "Cannot afford"
 	}
 
-	DrawTextCentered(screen, buttonText, sui.x+sui.width/2, buildButtonY+15, textColor, 1.0)
+	views.DrawTextCentered(screen, buttonText, sui.x+sui.width/2, buildButtonY+15, textColor, 1.0)
 }
 
 // drawError draws an error/notification message
 func (sui *ShipyardUI) drawError(screen *ebiten.Image) {
 	errorY := sui.y + sui.height - 110
-	errorPanel := &UIPanel{
+	errorPanel := &views.UIPanel{
 		X:           sui.x + 50,
 		Y:           errorY,
 		Width:       sui.width - 100,
@@ -461,7 +462,7 @@ func (sui *ShipyardUI) drawError(screen *ebiten.Image) {
 	}
 	errorPanel.Draw(screen)
 
-	DrawTextCentered(screen, sui.errorMessage, sui.x+sui.width/2, errorY+10, color.RGBA{255, 200, 200, 255}, 0.9)
+	views.DrawTextCentered(screen, sui.errorMessage, sui.x+sui.width/2, errorY+10, color.RGBA{255, 200, 200, 255}, 0.9)
 }
 
 // canAffordShip checks if the player can afford to build a ship

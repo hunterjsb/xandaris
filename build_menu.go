@@ -9,6 +9,7 @@ import (
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // BuildMenuItem represents a single building option in the menu
@@ -133,7 +134,7 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		Description:    "Converts Oil into Fuel (10 Oil/s → 5 Fuel/s)",
 		Cost:           1500,
 		AttachmentType: "Planet",
-		Color:          ColorStationRefinery, // Orange color
+		Color:          utils.StationRefinery, // Orange color
 	})
 
 	// Future: Add more planet buildings here
@@ -350,26 +351,26 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw background panel
-	panel := NewUIPanel(bm.x, bm.y, bm.width, bm.height)
+	panel := views.NewUIPanel(bm.x, bm.y, bm.width, bm.height)
 	panel.Draw(screen)
 
 	// Draw title
 	titleY := bm.y + 15
-	DrawCenteredText(screen, "Build Menu", bm.x+bm.width/2, titleY)
+	views.DrawCenteredText(screen, "Build Menu", bm.x+bm.width/2, titleY)
 
 	// Draw subtitle based on attachment type
 	subtitleY := titleY + 20
 	subtitle := fmt.Sprintf("Building on: %s", bm.attachmentType)
-	DrawCenteredText(screen, subtitle, bm.x+bm.width/2, subtitleY)
+	views.DrawCenteredText(screen, subtitle, bm.x+bm.width/2, subtitleY)
 
 	// Draw player credits
 	creditsY := subtitleY + 20
 	creditsText := fmt.Sprintf("Credits: %d", bm.game.humanPlayer.Credits)
-	DrawCenteredText(screen, creditsText, bm.x+bm.width/2, creditsY)
+	views.DrawCenteredText(screen, creditsText, bm.x+bm.width/2, creditsY)
 
 	// Draw separator line
 	lineY := creditsY + 15
-	DrawLine(screen, bm.x+10, lineY, bm.x+bm.width-10, lineY, UIPanelBorder)
+	views.DrawLine(screen, bm.x+10, lineY, bm.x+bm.width-10, lineY, utils.PanelBorder)
 
 	// Draw building items
 	itemY := lineY + 10
@@ -411,14 +412,14 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		}
 
 		// Draw item background (highlight if selected, gray out if can't build)
-		itemBg := UIPanelBg
+		itemBg := utils.PanelBg
 		if !canBuild {
 			itemBg = color.RGBA{30, 30, 30, 230} // Dark gray for disabled
 		} else if i == bm.selectedIndex {
 			itemBg = color.RGBA{40, 40, 80, 230}
 		}
 
-		itemPanel := NewUIPanel(itemX, itemY, itemW, itemHeight)
+		itemPanel := views.NewUIPanel(itemX, itemY, itemW, itemHeight)
 		itemPanel.BgColor = itemBg
 		itemPanel.Draw(screen)
 
@@ -435,25 +436,25 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		// Draw building name
 		nameX := colorBoxX + colorBoxSize + 10
 		nameY := itemY + 12
-		DrawText(screen, item.Name, nameX, nameY, UITextPrimary)
+		views.DrawText(screen, item.Name, nameX, nameY, utils.TextPrimary)
 
 		// Draw cost
 		costText := fmt.Sprintf("Cost: %d credits", item.Cost)
 		costY := nameY + 15
-		costColor := UITextSecondary
+		costColor := utils.TextSecondary
 		if bm.game.humanPlayer.Credits < item.Cost {
 			costColor = color.RGBA{200, 100, 100, 255} // Red if can't afford
 		}
-		DrawText(screen, costText, nameX, costY, costColor)
+		views.DrawText(screen, costText, nameX, costY, costColor)
 
 		// Draw description
 		descY := costY + 15
-		DrawText(screen, item.Description, nameX, descY, UITextSecondary)
+		views.DrawText(screen, item.Description, nameX, descY, utils.TextSecondary)
 
 		// Draw build time
 		buildTimeText := "Build time: 60s"
 		buildTimeY := descY + 15
-		DrawText(screen, buildTimeText, nameX, buildTimeY, UITextSecondary)
+		views.DrawText(screen, buildTimeText, nameX, buildTimeY, utils.TextSecondary)
 
 		itemY += itemHeight + itemPadding
 	}
@@ -461,10 +462,10 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 	// Draw notification message
 	if bm.notificationTimer > 0 {
 		notificationY := bm.y + bm.height - 45
-		DrawCenteredText(screen, bm.notification, bm.x+bm.width/2, notificationY)
+		views.DrawCenteredText(screen, bm.notification, bm.x+bm.width/2, notificationY)
 	}
 
 	// Draw instructions at bottom
 	instructionsY := bm.y + bm.height - 25
-	DrawCenteredText(screen, "Click to build  |  ESC to cancel", bm.x+bm.width/2, instructionsY)
+	views.DrawCenteredText(screen, "Click to build  |  ESC to cancel", bm.x+bm.width/2, instructionsY)
 }

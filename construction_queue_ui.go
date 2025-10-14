@@ -8,6 +8,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // ConstructionQueueUI displays all active construction items
@@ -72,12 +74,12 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 	panelHeight := 50 + (visibleCount * (cq.itemHeight + 5))
 
 	// Draw background panel
-	panel := NewUIPanel(cq.x, cq.y, cq.width, panelHeight)
+	panel := views.NewUIPanel(cq.x, cq.y, cq.width, panelHeight)
 	panel.Draw(screen)
 
 	// Draw title
 	titleY := cq.y + 15
-	DrawCenteredText(screen, "Construction Queue", cq.x+cq.width/2, titleY)
+	views.DrawCenteredText(screen, "Construction Queue", cq.x+cq.width/2, titleY)
 
 	// Draw total count
 	countY := titleY + 15
@@ -85,11 +87,11 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 	if len(constructions) > 1 {
 		countText = fmt.Sprintf("%d buildings", len(constructions))
 	}
-	DrawCenteredText(screen, countText, cq.x+cq.width/2, countY)
+	views.DrawCenteredText(screen, countText, cq.x+cq.width/2, countY)
 
 	// Draw separator
 	separatorY := countY + 10
-	DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, UIPanelBorder)
+	views.DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, utils.PanelBorder)
 
 	// Draw construction items
 	itemY := separatorY + 10
@@ -107,7 +109,7 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 		scrollText := fmt.Sprintf("(%d more...)", len(constructions)-cq.scrollOffset-cq.maxVisible)
 		if len(constructions)-cq.scrollOffset-cq.maxVisible > 0 {
 			scrollY := cq.y + panelHeight - 15
-			DrawCenteredText(screen, scrollText, cq.x+cq.width/2, scrollY)
+			views.DrawCenteredText(screen, scrollText, cq.x+cq.width/2, scrollY)
 		}
 	}
 }
@@ -118,18 +120,18 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *
 	itemW := cq.width - 20
 
 	// Draw item background
-	itemPanel := NewUIPanel(itemX, y, itemW, cq.itemHeight)
+	itemPanel := views.NewUIPanel(itemX, y, itemW, cq.itemHeight)
 	itemPanel.BgColor = color.RGBA{25, 25, 50, 230}
 	itemPanel.Draw(screen)
 
 	// Draw construction name
 	nameY := y + 10
-	DrawText(screen, item.Name, itemX+5, nameY, UITextPrimary)
+	views.DrawText(screen, item.Name, itemX+5, nameY, utils.TextPrimary)
 
 	// Draw location
 	locationY := nameY + 15
 	locationText := fmt.Sprintf("Location: %s", cq.getLocationName(item.Location))
-	DrawText(screen, locationText, itemX+5, locationY, UITextSecondary)
+	views.DrawText(screen, locationText, itemX+5, locationY, utils.TextSecondary)
 
 	// Calculate progress
 	item.Mutex.RLock()
@@ -143,9 +145,9 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *
 	progressBarHeight := 8
 
 	// Background bar
-	progressBg := NewUIPanel(itemX+5, progressY, progressBarWidth, progressBarHeight)
+	progressBg := views.NewUIPanel(itemX+5, progressY, progressBarWidth, progressBarHeight)
 	progressBg.BgColor = color.RGBA{20, 20, 40, 255}
-	progressBg.BorderColor = UIPanelBorder
+	progressBg.BorderColor = utils.PanelBorder
 	progressBg.Draw(screen)
 
 	// Progress fill
@@ -162,13 +164,13 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *
 	progressTextY := progressY + progressBarHeight + 12
 	timeRemaining := cq.formatTimeRemaining(remainingTicks)
 	progressText := fmt.Sprintf("%d%% - %s remaining", progress, timeRemaining)
-	DrawText(screen, progressText, itemX+5, progressTextY, UITextSecondary)
+	views.DrawText(screen, progressText, itemX+5, progressTextY, utils.TextSecondary)
 
 	// Draw cancel hint on hover
 	mx, my := ebiten.CursorPosition()
 	if mx >= itemX && mx < itemX+itemW && my >= y && my < y+cq.itemHeight {
 		cancelY := y + cq.itemHeight - 12
-		DrawText(screen, "[Right-click to cancel]", itemX+5, cancelY, color.RGBA{200, 200, 100, 255})
+		views.DrawText(screen, "[Right-click to cancel]", itemX+5, cancelY, color.RGBA{200, 200, 100, 255})
 	}
 }
 

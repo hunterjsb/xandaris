@@ -11,6 +11,7 @@ import (
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // FleetInfoUI displays detailed information about a selected fleet
@@ -238,46 +239,46 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	}
 
 	// Background panel
-	panel := &UIPanel{
+	panel := &views.UIPanel{
 		X:           fui.x,
 		Y:           fui.y,
 		Width:       fui.width,
 		Height:      fui.height,
-		BgColor:     UIBackground,
-		BorderColor: UIPanelBorder,
+		BgColor:     utils.Background,
+		BorderColor: utils.PanelBorder,
 	}
 	panel.Draw(screen)
 
 	// Title
 	titleText := fmt.Sprintf("Fleet Details")
-	DrawText(screen, titleText, fui.x+10, fui.y+15, SystemLightBlue)
+	views.DrawText(screen, titleText, fui.x+10, fui.y+15, utils.SystemLightBlue)
 
 	// Close button
 	closeX := fui.x + fui.width - 30
 	closeY := fui.y + 10
-	DrawText(screen, "[X]", closeX, closeY, SystemRed)
+	views.DrawText(screen, "[X]", closeX, closeY, utils.SystemRed)
 
 	// Fleet summary
 	summaryY := fui.y + 40
-	DrawText(screen, fmt.Sprintf("Ships: %d", fui.fleet.Size()), fui.x+10, summaryY, UITextPrimary)
-	DrawText(screen, fmt.Sprintf("Owner: %s", fui.fleet.Owner), fui.x+10, summaryY+15, UITextSecondary)
+	views.DrawText(screen, fmt.Sprintf("Ships: %d", fui.fleet.Size()), fui.x+10, summaryY, utils.TextPrimary)
+	views.DrawText(screen, fmt.Sprintf("Owner: %s", fui.fleet.Owner), fui.x+10, summaryY+15, utils.TextSecondary)
 
 	// Fuel stats
 	fuelY := summaryY + 35
 	avgFuel := fui.fleet.GetAverageFuelPercent()
-	fuelColor := ColorStationResearch // Green for good fuel
+	fuelColor := utils.StationResearch // Green for good fuel
 	if avgFuel < 25 {
-		fuelColor = SystemRed // Red for low fuel
+		fuelColor = utils.SystemRed // Red for low fuel
 	} else if avgFuel < 50 {
-		fuelColor = SystemOrange // Orange for medium fuel
+		fuelColor = utils.SystemOrange // Orange for medium fuel
 	}
-	DrawText(screen, fmt.Sprintf("Avg Fuel: %.0f%%", avgFuel), fui.x+10, fuelY, fuelColor)
-	DrawText(screen, fmt.Sprintf("Total: %d/%d", fui.fleet.GetTotalFuel(), fui.fleet.GetTotalMaxFuel()),
-		fui.x+10, fuelY+15, UITextSecondary)
+	views.DrawText(screen, fmt.Sprintf("Avg Fuel: %.0f%%", avgFuel), fui.x+10, fuelY, fuelColor)
+	views.DrawText(screen, fmt.Sprintf("Total: %d/%d", fui.fleet.GetTotalFuel(), fui.fleet.GetTotalMaxFuel()),
+		fui.x+10, fuelY+15, utils.TextSecondary)
 
 	// Separator
 	separatorY := fuelY + 35
-	DrawLine(screen, fui.x+10, separatorY, fui.x+fui.width-10, separatorY, UIPanelBorder)
+	views.DrawLine(screen, fui.x+10, separatorY, fui.x+fui.width-10, separatorY, utils.PanelBorder)
 
 	// Show either the ship list OR the move menu (not both)
 	if fui.showMoveMenu {
@@ -285,7 +286,7 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	} else {
 		// Ship list header
 		listHeaderY := separatorY + 10
-		DrawText(screen, "Ships:", fui.x+10, listHeaderY, UITextPrimary)
+		views.DrawText(screen, "Ships:", fui.x+10, listHeaderY, utils.TextPrimary)
 
 		// Scrollable ship list
 		fui.drawShipList(screen, listHeaderY+20)
@@ -296,7 +297,7 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 		// Scroll indicator for ship list
 		if len(fui.fleet.Ships) > 5 {
 			scrollHintY := fui.y + fui.height - 50
-			DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
+			views.DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, utils.TextSecondary, 0.7)
 		}
 	}
 }
@@ -311,11 +312,11 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 	// Check if fleet can move (has any ship with fuel)
 	canMove, lowFuel, noFuel := systems.NewFleetManager(fui.game).GetFleetMovementStatus(fui.fleet)
 
-	buttonColor := UIButtonActive
+	buttonColor := utils.ButtonActive
 	buttonText := "Move Fleet"
 
 	if canMove == 0 {
-		buttonColor = UIButtonDisabled
+		buttonColor = utils.ButtonDisabled
 		if noFuel > 0 {
 			buttonText = "No Fuel"
 		} else {
@@ -326,27 +327,27 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 	}
 
 	// Button background
-	buttonPanel := &UIPanel{
+	buttonPanel := &views.UIPanel{
 		X:           buttonX,
 		Y:           buttonY,
 		Width:       buttonW,
 		Height:      buttonH,
 		BgColor:     buttonColor,
-		BorderColor: UIHighlight,
+		BorderColor: utils.Highlight,
 	}
 	buttonPanel.Draw(screen)
 
 	// Button text
 	textX := buttonX + buttonW/2
 	textY := buttonY + 10
-	DrawTextCentered(screen, buttonText, textX, textY, UITextPrimary, 1.0)
+	views.DrawTextCentered(screen, buttonText, textX, textY, utils.TextPrimary, 1.0)
 }
 
 // drawMoveMenu draws the destination selection menu
 func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	// Title (fixed, doesn't scroll)
 	menuTitleY := fui.y + 100
-	DrawText(screen, "Select Destination:", fui.x+10, menuTitleY, SystemLightBlue)
+	views.DrawText(screen, "Select Destination:", fui.x+10, menuTitleY, utils.SystemLightBlue)
 
 	// Create a scrollable content area
 	contentStartY := menuTitleY + 10
@@ -363,13 +364,13 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	// SECTION 1: Adjacent Systems
 	// Draw header
 	if currentY >= visibleTop-headerHeight && currentY <= visibleBottom {
-		DrawText(screen, "Jump to System:", fui.x+10, currentY, UITextPrimary)
+		views.DrawText(screen, "Jump to System:", fui.x+10, currentY, utils.TextPrimary)
 	}
 	currentY += headerHeight
 
 	if len(fui.connectedSystems) == 0 {
 		if currentY >= visibleTop-15 && currentY <= visibleBottom {
-			DrawText(screen, "  No adjacent systems", fui.x+20, currentY+5, UITextSecondary)
+			views.DrawText(screen, "  No adjacent systems", fui.x+20, currentY+5, utils.TextSecondary)
 		}
 		currentY += 15
 	}
@@ -395,7 +396,7 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	if fui.isFleetAtPlanet() {
 		// Draw header
 		if currentY >= visibleTop-headerHeight && currentY <= visibleBottom {
-			DrawText(screen, "Move to Star:", fui.x+10, currentY, UITextPrimary)
+			views.DrawText(screen, "Move to Star:", fui.x+10, currentY, utils.TextPrimary)
 		}
 		currentY += headerHeight
 
@@ -422,13 +423,13 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	// SECTION 3: Current System Entities (planets)
 	// Draw header
 	if currentY >= visibleTop-headerHeight && currentY <= visibleBottom {
-		DrawText(screen, "Move to Planet:", fui.x+10, currentY, UITextPrimary)
+		views.DrawText(screen, "Move to Planet:", fui.x+10, currentY, utils.TextPrimary)
 	}
 	currentY += headerHeight
 
 	if len(fui.currentSystemEntities) == 0 {
 		if currentY >= visibleTop-15 && currentY <= visibleBottom {
-			DrawText(screen, "  No planets in system", fui.x+20, currentY+5, UITextSecondary)
+			views.DrawText(screen, "  No planets in system", fui.x+20, currentY+5, utils.TextSecondary)
 		}
 		currentY += 15
 	}
@@ -452,22 +453,22 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	backButtonW := 60
 	backButtonH := 30
 
-	backPanel := &UIPanel{
+	backPanel := &views.UIPanel{
 		X:           backButtonX,
 		Y:           backButtonY,
 		Width:       backButtonW,
 		Height:      backButtonH,
-		BgColor:     UIButtonActive,
-		BorderColor: UIHighlight,
+		BgColor:     utils.ButtonActive,
+		BorderColor: utils.Highlight,
 	}
 	backPanel.Draw(screen)
-	DrawTextCentered(screen, "Back", backButtonX+backButtonW/2, backButtonY+10, UITextPrimary, 1.0)
+	views.DrawTextCentered(screen, "Back", backButtonX+backButtonW/2, backButtonY+10, utils.TextPrimary, 1.0)
 
 	// Scroll hint
 	totalItems := len(fui.connectedSystems) + len(fui.currentSystemEntities)
 	if totalItems > 5 {
 		scrollHintY := fui.y + fui.height - 50
-		DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, UITextSecondary, 0.7)
+		views.DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, utils.TextSecondary, 0.7)
 	}
 }
 
@@ -484,13 +485,13 @@ func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 		}
 
 		// Ship item background
-		itemPanel := &UIPanel{
+		itemPanel := &views.UIPanel{
 			X:           fui.x + 10,
 			Y:           itemY,
 			Width:       fui.width - 20,
 			Height:      itemHeight - 5,
-			BgColor:     UIPanelBg,
-			BorderColor: UIPanelBorder,
+			BgColor:     utils.PanelBg,
+			BorderColor: utils.PanelBorder,
 		}
 		itemPanel.Draw(screen)
 
@@ -510,38 +511,38 @@ func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 
 		// Ship name and type
 		nameX := fui.x + 35
-		DrawText(screen, ship.Name, nameX, itemY+8, UITextPrimary)
-		DrawText(screen, string(ship.ShipType), nameX, itemY+23, UITextSecondary)
+		views.DrawText(screen, ship.Name, nameX, itemY+8, utils.TextPrimary)
+		views.DrawText(screen, string(ship.ShipType), nameX, itemY+23, utils.TextSecondary)
 
 		// Ship stats
 		statsY := itemY + 38
 		fuelPercent := ship.GetFuelPercentage()
-		fuelColor := UITextPrimary
+		fuelColor := utils.TextPrimary
 		if fuelPercent < 25 {
-			fuelColor = SystemRed
+			fuelColor = utils.SystemRed
 		} else if fuelPercent < 50 {
-			fuelColor = SystemOrange
+			fuelColor = utils.SystemOrange
 		}
 
-		DrawText(screen, fmt.Sprintf("Fuel: %.0f%%", fuelPercent), nameX, statsY, fuelColor)
+		views.DrawText(screen, fmt.Sprintf("Fuel: %.0f%%", fuelPercent), nameX, statsY, fuelColor)
 		healthPercent := ship.GetHealthPercentage()
-		healthColor := UITextPrimary
+		healthColor := utils.TextPrimary
 		if healthPercent < 50 {
-			healthColor = SystemOrange
+			healthColor = utils.SystemOrange
 		}
 		if healthPercent < 25 {
-			healthColor = SystemRed
+			healthColor = utils.SystemRed
 		}
-		DrawText(screen, fmt.Sprintf("HP: %.0f%%", healthPercent), nameX+90, statsY, healthColor)
+		views.DrawText(screen, fmt.Sprintf("HP: %.0f%%", healthPercent), nameX+90, statsY, healthColor)
 
 		// Status indicator
 		statusX := fui.x + fui.width - 80
 		statusText := string(ship.Status)
-		statusColor := UITextSecondary
+		statusColor := utils.TextSecondary
 		if ship.Status == entities.ShipStatusMoving {
-			statusColor = SystemBlue
+			statusColor = utils.SystemBlue
 		}
-		DrawText(screen, statusText, statusX, itemY+8, statusColor)
+		views.DrawText(screen, statusText, statusX, itemY+8, statusColor)
 	}
 }
 
@@ -553,13 +554,13 @@ func (fui *FleetInfoUI) GetFleet() *views.Fleet {
 // drawMenuItem draws a single menu item (helper function)
 func (fui *FleetInfoUI) drawMenuItem(screen *ebiten.Image, y int, height int, itemColor color.RGBA, text string) {
 	// Item background
-	itemPanel := &UIPanel{
+	itemPanel := &views.UIPanel{
 		X:           fui.x + 10,
 		Y:           y,
 		Width:       fui.width - 20,
 		Height:      height - 5,
-		BgColor:     UIPanelBg,
-		BorderColor: UIPanelBorder,
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
 	}
 	itemPanel.Draw(screen)
 
@@ -574,7 +575,7 @@ func (fui *FleetInfoUI) drawMenuItem(screen *ebiten.Image, y int, height int, it
 	}
 
 	// Text
-	DrawText(screen, text, fui.x+35, y+10, UITextPrimary)
+	views.DrawText(screen, text, fui.x+35, y+10, utils.TextPrimary)
 }
 
 // isFleetAtPlanet checks if the fleet is currently orbiting a planet

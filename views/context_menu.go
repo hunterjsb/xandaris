@@ -2,6 +2,7 @@ package views
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // ContextMenu represents a popup menu that appears near an entity
@@ -61,11 +62,11 @@ func (c *ContextMenu) Draw(screen *ebiten.Image) {
 
 	// Draw title
 	textY := c.Panel.Y + c.Padding
-	DrawText(screen, c.Title, c.Panel.X+c.Padding, textY, UITextPrimary)
+	DrawText(screen, c.Title, c.Panel.X+c.Padding, textY, utils.TextPrimary)
 
 	// Draw separator
 	textY += 20
-	DrawText(screen, "─────────────────", c.Panel.X+c.Padding, textY, UITextSecondary)
+	DrawText(screen, "─────────────────", c.Panel.X+c.Padding, textY, utils.TextSecondary)
 
 	// Draw items
 	textY += 20
@@ -83,15 +84,15 @@ func DrawColoredMenuItem(screen *ebiten.Image, textStr string, x, y int) {
 		typeText := textStr[6:]
 
 		// Get color for the type
-		var typeColor = UITextPrimary
-		if planetColor := GetPlanetTypeColor(typeText); planetColor.A > 0 {
+		var typeColor = utils.TextPrimary
+		if planetColor := utils.GetPlanetTypeColor(typeText); planetColor.A > 0 {
 			typeColor = planetColor
-		} else if stationColor := GetStationTypeColor(typeText); stationColor.A > 0 {
+		} else if stationColor := utils.GetStationTypeColor(typeText); stationColor.A > 0 {
 			typeColor = stationColor
 		}
 
 		// Draw "Type: " in secondary color
-		DrawText(screen, "Type: ", x, y, UITextSecondary)
+		DrawText(screen, "Type: ", x, y, utils.TextSecondary)
 
 		// Draw the type in its color
 		DrawText(screen, typeText, x+36, y, typeColor)
@@ -116,28 +117,28 @@ func DrawColoredMenuItem(screen *ebiten.Image, textStr string, x, y int) {
 			afterType := textStr[closeParen:]
 
 			// Get color for the type
-			var typeColor = UITextSecondary
-			if planetColor := GetPlanetTypeColor(typeText); planetColor.A > 0 {
+			var typeColor = utils.TextSecondary
+			if planetColor := utils.GetPlanetTypeColor(typeText); planetColor.A > 0 {
 				typeColor = planetColor
-			} else if stationColor := GetStationTypeColor(typeText); stationColor.A > 0 {
+			} else if stationColor := utils.GetStationTypeColor(typeText); stationColor.A > 0 {
 				typeColor = stationColor
 			}
 
 			// Draw everything before the type
-			DrawText(screen, beforeType+"(", x, y, UITextSecondary)
+			DrawText(screen, beforeType+"(", x, y, utils.TextSecondary)
 			// Calculate offset for the type text
 			beforeWidth := len(beforeType+"(") * 6
 			// Draw the type in color
 			DrawText(screen, typeText, x+beforeWidth, y, typeColor)
 			// Draw closing paren and anything after
 			typeWidth := len(typeText) * 6
-			DrawText(screen, afterType, x+beforeWidth+typeWidth, y, UITextSecondary)
+			DrawText(screen, afterType, x+beforeWidth+typeWidth, y, utils.TextSecondary)
 		} else {
 			// No parentheses, just draw normally
-			DrawText(screen, textStr, x, y, UITextSecondary)
+			DrawText(screen, textStr, x, y, utils.TextSecondary)
 		}
 	} else {
 		// Normal text in secondary color
-		DrawText(screen, textStr, x, y, UITextSecondary)
+		DrawText(screen, textStr, x, y, utils.TextSecondary)
 	}
 }

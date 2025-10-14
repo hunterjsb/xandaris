@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
@@ -306,13 +307,13 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 
 	// Title
 	DrawTextCentered(screen, "XANDARIS II", centerX, 100, color.RGBA{100, 200, 255, 255}, 3.0)
-	DrawTextCentered(screen, "A Space Trading Game", centerX, 150, UITextSecondary, 1.0)
+	DrawTextCentered(screen, "A Space Trading Game", centerX, 150, utils.TextSecondary, 1.0)
 
 	// Player name input
-	DrawTextCentered(screen, "Player Name:", centerX, 230, UITextPrimary, 1.0)
+	DrawTextCentered(screen, "Player Name:", centerX, 230, utils.TextPrimary, 1.0)
 
 	// Name input box
-	nameBoxColor := UIBackgroundDark
+	nameBoxColor := utils.BackgroundDark
 	if mmv.inputActive {
 		nameBoxColor = color.RGBA{40, 40, 60, 255}
 	}
@@ -322,7 +323,7 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 		Width:       400,
 		Height:      40,
 		BgColor:     nameBoxColor,
-		BorderColor: UIPanelBorder,
+		BorderColor: utils.PanelBorder,
 	}
 	panel.Draw(screen)
 
@@ -330,7 +331,7 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 	if mmv.inputActive && (tm.GetCurrentTick()/30)%2 == 0 {
 		nameText += "_"
 	}
-	DrawTextCentered(screen, nameText, centerX, 265, UITextPrimary, 1.0)
+	DrawTextCentered(screen, nameText, centerX, 265, utils.TextPrimary, 1.0)
 
 	// Menu buttons
 	mmv.drawButton(screen, "New Game", centerX, 380, mmv.selectedOption == 0)
@@ -339,7 +340,7 @@ func (mmv *MainMenuView) drawMainMenu(screen *ebiten.Image) {
 	mmv.drawButton(screen, "Quit", centerX, 620, mmv.selectedOption == 3)
 
 	// Controls hint
-	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Select | Click to Interact", centerX, ScreenHeight-30, UITextSecondary, 0.8)
+	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Select | Click to Interact", centerX, ScreenHeight-30, utils.TextSecondary, 0.8)
 }
 
 // drawLoadMenu draws the load game menu
@@ -353,15 +354,15 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 		Y:           50,
 		Width:       150,
 		Height:      40,
-		BgColor:     UIPanelBg,
-		BorderColor: UIPanelBorder,
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
 	}
 	backPanel.Draw(screen)
-	DrawText(screen, "← Back", 70, 65, UITextPrimary)
+	DrawText(screen, "← Back", 70, 65, utils.TextPrimary)
 
 	// Save files list
 	if len(mmv.saveFiles) == 0 {
-		DrawTextCentered(screen, "No save files found", ScreenWidth/2, ScreenHeight/2, UITextSecondary, 1.0)
+		DrawTextCentered(screen, "No save files found", ScreenWidth/2, ScreenHeight/2, utils.TextSecondary, 1.0)
 		return
 	}
 
@@ -375,7 +376,7 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 		}
 
 		// Save file panel
-		panelColor := UIBackgroundDark
+		panelColor := utils.BackgroundDark
 		if i == mmv.selectedSave {
 			panelColor = color.RGBA{40, 40, 60, 255}
 		}
@@ -386,24 +387,24 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 			Width:       880,
 			Height:      70,
 			BgColor:     panelColor,
-			BorderColor: UIPanelBorder,
+			BorderColor: utils.PanelBorder,
 		}
 		panel.Draw(screen)
 
 		// Save file info
-		DrawText(screen, saveFile.PlayerName, 220, y+15, UITextPrimary)
-		DrawText(screen, fmt.Sprintf("Game Time: %s", saveFile.GameTime), 220, y+35, UITextSecondary)
-		DrawText(screen, fmt.Sprintf("Saved: %s", saveFile.SavedAt.Format("2006-01-02 15:04:05")), 220, y+52, UITextSecondary)
+		DrawText(screen, saveFile.PlayerName, 220, y+15, utils.TextPrimary)
+		DrawText(screen, fmt.Sprintf("Game Time: %s", saveFile.GameTime), 220, y+35, utils.TextSecondary)
+		DrawText(screen, fmt.Sprintf("Saved: %s", saveFile.SavedAt.Format("2006-01-02 15:04:05")), 220, y+52, utils.TextSecondary)
 	}
 
 	// Controls hint
-	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Load | Escape to Go Back", ScreenWidth/2, ScreenHeight-30, UITextSecondary, 0.8)
+	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Load | Escape to Go Back", ScreenWidth/2, ScreenHeight-30, utils.TextSecondary, 0.8)
 }
 
 // drawButton draws a menu button
 func (mmv *MainMenuView) drawButton(screen *ebiten.Image, text string, centerX, centerY int, selected bool) {
-	buttonColor := UIBackgroundDark
-	textColor := UITextPrimary
+	buttonColor := utils.BackgroundDark
+	textColor := utils.TextPrimary
 
 	if selected {
 		buttonColor = color.RGBA{50, 50, 80, 255}
@@ -416,7 +417,7 @@ func (mmv *MainMenuView) drawButton(screen *ebiten.Image, text string, centerX, 
 		Width:       300,
 		Height:      60,
 		BgColor:     buttonColor,
-		BorderColor: UIPanelBorder,
+		BorderColor: utils.PanelBorder,
 	}
 	panel.Draw(screen)
 

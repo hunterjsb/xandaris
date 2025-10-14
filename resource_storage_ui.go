@@ -6,6 +6,8 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // ResourceStorageUI displays stored resources on a planet
@@ -74,12 +76,12 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	hasResources := len(planet.StoredResources) > 0
 
 	// Draw background panel
-	panel := NewUIPanel(rsu.x, rsu.y, rsu.width, rsu.height)
+	panel := views.NewUIPanel(rsu.x, rsu.y, rsu.width, rsu.height)
 	panel.Draw(screen)
 
 	// Draw title
 	titleY := rsu.y + 15
-	DrawText(screen, "Resource Storage", rsu.x+10, titleY, UITextPrimary)
+	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, utils.TextPrimary)
 
 	// Draw storage utilization bar
 	utilizationY := titleY + 20
@@ -87,7 +89,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 
 	// Draw separator
 	separatorY := utilizationY + 20
-	DrawLine(screen, rsu.x+10, separatorY, rsu.x+rsu.width-10, separatorY, UIPanelBorder)
+	views.DrawLine(screen, rsu.x+10, separatorY, rsu.x+rsu.width-10, separatorY, utils.PanelBorder)
 
 	// Draw stored resources or empty message
 	resourceY := separatorY + 8
@@ -95,7 +97,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	if !hasResources {
 		// Show message when no resources are stored
 		emptyText := "No resources stored"
-		DrawText(screen, emptyText, rsu.x+10, resourceY, UITextSecondary)
+		views.DrawText(screen, emptyText, rsu.x+10, resourceY, utils.TextSecondary)
 
 		// Show debug info about owned resources on planet
 		debugY := resourceY + 20
@@ -108,7 +110,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 			}
 		}
 		debugText := fmt.Sprintf("Owned resources: %d", ownedCount)
-		DrawText(screen, debugText, rsu.x+10, debugY, UITextSecondary)
+		views.DrawText(screen, debugText, rsu.x+10, debugY, utils.TextSecondary)
 		return
 	}
 
@@ -147,7 +149,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	if len(planet.StoredResources) > maxVisible {
 		moreY := resourceY + 3
 		moreText := fmt.Sprintf("...and %d more", len(planet.StoredResources)-maxVisible)
-		DrawText(screen, moreText, rsu.x+10, moreY, UITextSecondary)
+		views.DrawText(screen, moreText, rsu.x+10, moreY, utils.TextSecondary)
 	}
 }
 
@@ -164,7 +166,7 @@ func (rsu *ResourceStorageUI) drawStorageBarForPlanet(screen *ebiten.Image, y in
 	// Draw text showing usage (simplified - no bar for now)
 	textY := y + 5
 	usageText := fmt.Sprintf("Storage: %d / %d (%.0f%%)", used, capacity, utilization*100)
-	DrawText(screen, usageText, rsu.x+10, textY, UITextPrimary)
+	views.DrawText(screen, usageText, rsu.x+10, textY, utils.TextPrimary)
 }
 
 // drawResourceEntry draws a single resource entry
@@ -173,7 +175,7 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 
 	// Simplified display - just show resource and amount on one line
 	entryText := fmt.Sprintf("  %s: %d", resourceType, storage.Amount)
-	DrawText(screen, entryText, textX, y, UITextPrimary)
+	views.DrawText(screen, entryText, textX, y, utils.TextPrimary)
 }
 
 // IsVisible returns whether the UI should be visible

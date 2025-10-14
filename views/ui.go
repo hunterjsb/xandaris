@@ -6,6 +6,7 @@ import (
 
 	"github.com/hajimehoshi/bitmapfont/v4"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
@@ -35,8 +36,8 @@ func NewUIPanel(x, y, width, height int) *UIPanel {
 		Y:           y,
 		Width:       width,
 		Height:      height,
-		BgColor:     UIPanelBg,
-		BorderColor: UIPanelBorder,
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
 	}
 }
 
@@ -79,7 +80,7 @@ func DrawText(screen *ebiten.Image, textStr string, x, y int, textColor color.RG
 func DrawCenteredText(screen *ebiten.Image, textStr string, x, y int) {
 	// Approximate text width (each character is about 6 pixels wide)
 	textWidth := len(textStr) * 6
-	DrawText(screen, textStr, x-textWidth/2, y, UITextPrimary)
+	DrawText(screen, textStr, x-textWidth/2, y, utils.TextPrimary)
 }
 
 // DrawTextCentered draws text centered at the given position with color and scale

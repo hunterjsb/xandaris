@@ -5,6 +5,7 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
@@ -245,10 +246,10 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 	kb := sv.ctx.GetKeyBindings()
 
 	// Background
-	screen.Fill(UIBackgroundDark)
+	screen.Fill(utils.BackgroundDark)
 
 	// Title
-	DrawTextCentered(screen, "Settings", ScreenWidth/2, 80, SystemLightBlue, 2.0)
+	DrawTextCentered(screen, "Settings", ScreenWidth/2, 80, utils.SystemLightBlue, 2.0)
 
 	// Back button
 	backPanel := &UIPanel{
@@ -256,14 +257,14 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		Y:           50,
 		Width:       150,
 		Height:      40,
-		BgColor:     UIButtonActive,
-		BorderColor: UIHighlight,
+		BgColor:     utils.ButtonActive,
+		BorderColor: utils.Highlight,
 	}
 	backPanel.Draw(screen)
-	DrawText(screen, "< Back", 70, 60, UITextPrimary)
+	DrawText(screen, "< Back", 70, 60, utils.TextPrimary)
 
 	// Subtitle
-	DrawTextCentered(screen, "Key Bindings", ScreenWidth/2, 130, UITextPrimary, 1.2)
+	DrawTextCentered(screen, "Key Bindings", ScreenWidth/2, 130, utils.TextPrimary, 1.2)
 
 	// Key binding list
 	startY := 200
@@ -276,9 +277,9 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		}
 
 		// Highlight selected
-		bgColor := UIPanelBg
+		bgColor := utils.PanelBg
 		if i == sv.selectedIndex {
-			bgColor = UIButtonActive
+			bgColor = utils.ButtonActive
 		}
 
 		// Draw item background
@@ -288,13 +289,13 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 			Width:       880,
 			Height:      45,
 			BgColor:     bgColor,
-			BorderColor: UIPanelBorder,
+			BorderColor: utils.PanelBorder,
 		}
 		itemPanel.Draw(screen)
 
 		// Action name
 		actionName := GetActionName(action)
-		DrawText(screen, actionName, 220, itemY+15, UITextPrimary)
+		DrawText(screen, actionName, 220, itemY+15, utils.TextPrimary)
 
 		// Current key binding
 		keyName := "Not bound"
@@ -307,9 +308,9 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 			keyName = "Press key..."
 		}
 
-		keyColor := UITextSecondary
+		keyColor := utils.TextSecondary
 		if sv.waitingForKey && sv.editingAction == action {
-			keyColor = SystemYellow
+			keyColor = utils.SystemYellow
 		}
 
 		DrawText(screen, keyName, 800, itemY+15, keyColor)
@@ -319,9 +320,9 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 	// Save button
 	saveButtonY := ScreenHeight - 120
 	saveSelected := sv.selectedIndex == len(sv.actions)
-	saveBgColor := UIButtonActive
+	saveBgColor := utils.ButtonActive
 	if saveSelected {
-		saveBgColor = UIHighlight
+		saveBgColor = utils.Highlight
 	}
 
 	savePanel := &UIPanel{
@@ -330,15 +331,15 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		Width:       200,
 		Height:      40,
 		BgColor:     saveBgColor,
-		BorderColor: UIHighlight,
+		BorderColor: utils.Highlight,
 	}
 	savePanel.Draw(screen)
-	DrawTextCentered(screen, "Save Settings", ScreenWidth/2, saveButtonY+12, UITextPrimary, 1.0)
+	DrawTextCentered(screen, "Save Settings", ScreenWidth/2, saveButtonY+12, utils.TextPrimary, 1.0)
 
 	// Reset to defaults button
 	resetButtonY := ScreenHeight - 70
 	resetSelected := sv.selectedIndex == len(sv.actions)+1
-	resetBgColor := UIButtonDisabled
+	resetBgColor := utils.ButtonDisabled
 	if resetSelected {
 		resetBgColor = color.RGBA{100, 60, 60, 230}
 	}
@@ -349,25 +350,25 @@ func (sv *SettingsView) Draw(screen *ebiten.Image) {
 		Width:       200,
 		Height:      40,
 		BgColor:     resetBgColor,
-		BorderColor: UIPanelBorder,
+		BorderColor: utils.PanelBorder,
 	}
 	resetPanel.Draw(screen)
-	DrawTextCentered(screen, "Reset to Defaults", ScreenWidth/2, resetButtonY+12, UITextPrimary, 0.9)
+	DrawTextCentered(screen, "Reset to Defaults", ScreenWidth/2, resetButtonY+12, utils.TextPrimary, 0.9)
 
 	// Error/success message
 	if sv.errorTimer > 0 {
-		msgColor := SystemYellow
+		msgColor := utils.SystemYellow
 		if sv.errorMessage == "Settings saved!" || sv.errorMessage == "Reset to defaults" {
-			msgColor = ColorStationResearch // Green
+			msgColor = utils.StationResearch // Green
 		} else {
-			msgColor = SystemRed
+			msgColor = utils.SystemRed
 		}
 		DrawTextCentered(screen, sv.errorMessage, ScreenWidth/2, 160, msgColor, 1.0)
 	}
 
 	// Scroll hint
 	if len(sv.actions) > 10 {
-		DrawTextCentered(screen, "Scroll for more", ScreenWidth/2, ScreenHeight-20, UITextSecondary, 0.8)
+		DrawTextCentered(screen, "Scroll for more", ScreenWidth/2, ScreenHeight-20, utils.TextSecondary, 0.8)
 	}
 }
 

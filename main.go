@@ -20,6 +20,7 @@ import (
 	"github.com/hunterjsb/xandaris/tickable"
 	_ "github.com/hunterjsb/xandaris/tickable" // Import tickable systems for auto-registration
 	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // StartMode represents how the game was started
@@ -533,7 +534,7 @@ func (g *Game) drawTickInfo(screen *ebiten.Image) {
 	y := screenHeight - 60
 
 	// Create small panel
-	panel := NewUIPanel(x, y, 200, 50)
+	panel := views.NewUIPanel(x, y, 200, 50)
 	panel.Draw(screen)
 
 	// Draw tick info
@@ -541,9 +542,9 @@ func (g *Game) drawTickInfo(screen *ebiten.Image) {
 	textY := y + 15
 
 	speedStr := g.tickManager.GetSpeedString()
-	DrawText(screen, "Speed: "+speedStr, textX, textY, UITextPrimary)
-	DrawText(screen, g.tickManager.GetGameTimeFormatted(), textX, textY+15, UITextSecondary)
-	DrawText(screen, "[Space] Pause  [F5] Save", textX, textY+30, UITextSecondary)
+	views.DrawText(screen, "Speed: "+speedStr, textX, textY, utils.TextPrimary)
+	views.DrawText(screen, g.tickManager.GetGameTimeFormatted(), textX, textY+15, utils.TextSecondary)
+	views.DrawText(screen, "[Space] Pause  [F5] Save", textX, textY+30, utils.TextSecondary)
 }
 
 // Layout returns the game's screen size

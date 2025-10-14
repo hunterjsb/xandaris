@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 )
@@ -250,10 +251,10 @@ func (pv *PlanetView) Update() error {
 // Draw implements View interface
 func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	// Fill background
-	screen.Fill(UIBackground)
+	screen.Fill(utils.Background)
 
 	if pv.planet == nil {
-		DrawText(screen, "No planet selected", 10, 10, UITextPrimary)
+		DrawText(screen, "No planet selected", 10, 10, utils.TextPrimary)
 		return
 	}
 
@@ -275,7 +276,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		DrawHighlightCircle(screen,
 			int(x), int(y),
 			int(selectedObj.GetClickRadius()),
-			UIHighlight)
+			utils.Highlight)
 	}
 
 	// Draw context menu if active (but not if build menu is open)
@@ -285,18 +286,18 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 
 	// Draw UI info
 	title := fmt.Sprintf("Planet View: %s", pv.planet.Name)
-	DrawText(screen, title, 10, 10, UITextPrimary)
-	DrawText(screen, fmt.Sprintf("Type: %s", pv.planet.PlanetType), 10, 25, UITextSecondary)
-	DrawText(screen, fmt.Sprintf("Resources: %d deposits", len(pv.planet.Resources)), 10, 40, UITextSecondary)
-	DrawText(screen, fmt.Sprintf("Buildings: %d", len(pv.planet.Buildings)), 10, 55, UITextSecondary)
+	DrawText(screen, title, 10, 10, utils.TextPrimary)
+	DrawText(screen, fmt.Sprintf("Type: %s", pv.planet.PlanetType), 10, 25, utils.TextSecondary)
+	DrawText(screen, fmt.Sprintf("Resources: %d deposits", len(pv.planet.Resources)), 10, 40, utils.TextSecondary)
+	DrawText(screen, fmt.Sprintf("Buildings: %d", len(pv.planet.Buildings)), 10, 55, utils.TextSecondary)
 
 	// Show build hints if player owns this planet
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	if humanPlayer != nil && pv.planet.Owner == humanPlayer.Name {
-		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, 70, UITextSecondary)
-		DrawText(screen, "Press ESC to return to system", 10, 85, UITextSecondary)
+		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, 70, utils.TextSecondary)
+		DrawText(screen, "Press ESC to return to system", 10, 85, utils.TextSecondary)
 	} else {
-		DrawText(screen, "Press ESC to return to system", 10, 70, UITextSecondary)
+		DrawText(screen, "Press ESC to return to system", 10, 70, utils.TextSecondary)
 	}
 
 	// Draw construction queue UI
@@ -625,20 +626,20 @@ func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 			Y:           badgeY - 2,
 			Width:       12,
 			Height:      12,
-			BgColor:     UIPanelBg,
-			BorderColor: UIPanelBorder,
+			BgColor:     utils.PanelBg,
+			BorderColor: utils.PanelBorder,
 		}
 		badgePanel.Draw(screen)
 
-		DrawText(screen, badge, badgeX, badgeY, UIHighlight)
+		DrawText(screen, badge, badgeX, badgeY, utils.Highlight)
 	}
 
 	// Draw fleet info
 	if fleet.Size() == 1 {
-		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, UITextSecondary)
+		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, utils.TextSecondary)
 	} else {
 		fleetText := fmt.Sprintf("Fleet (%d ships)", fleet.Size())
-		DrawText(screen, fleetText, centerX-40, centerY+size+5, UITextSecondary)
+		DrawText(screen, fleetText, centerX-40, centerY+size+5, utils.TextSecondary)
 	}
 }
 

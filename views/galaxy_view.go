@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 )
@@ -89,7 +90,7 @@ func (gv *GalaxyView) Update() error {
 // Draw implements View interface
 func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	// Fill background
-	screen.Fill(UIBackground)
+	screen.Fill(utils.Background)
 
 	// Draw hyperlanes first (so they appear behind systems)
 	gv.drawHyperlanes(screen)
@@ -108,7 +109,7 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 		DrawHighlightCircle(screen,
 			int(x), int(y),
 			int(selectedObj.GetClickRadius()),
-			UIHighlight)
+			utils.Highlight)
 	}
 
 	// Draw context menu if active
@@ -117,9 +118,9 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	DrawText(screen, "Xandaris II - Galaxy Map", 10, 10, UITextPrimary)
-	DrawText(screen, "Double-click system to view", 10, 25, UITextSecondary)
-	DrawText(screen, "Press ESC to quit", 10, 40, UITextSecondary)
+	DrawText(screen, "Xandaris II - Galaxy Map", 10, 10, utils.TextPrimary)
+	DrawText(screen, "Double-click system to view", 10, 25, utils.TextSecondary)
+	DrawText(screen, "Press ESC to quit", 10, 40, utils.TextSecondary)
 
 	// Draw player info
 	gv.drawPlayerInfo(screen)
@@ -147,7 +148,7 @@ func (gv *GalaxyView) GetType() ViewType {
 
 // drawHyperlanes draws connections between systems
 func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
-	hyperlaneColor := HyperlaneNormal
+	hyperlaneColor := utils.HyperlaneNormal
 
 	for _, hyperlane := range gv.ctx.GetHyperlanes() {
 		systems := gv.ctx.GetSystems()
@@ -242,7 +243,7 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 
 		// Count total ships across all fleets
 		totalShips := 0
-		ownerColor := UITextPrimary
+		ownerColor := utils.TextPrimary
 		for _, fleet := range fleets {
 			totalShips += fleet.Size()
 			// Use player color if owned by human player
@@ -340,7 +341,7 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship,
 			dx := float64(px - pulseSize)
 			dy := float64(py - pulseSize)
 			if dx*dx+dy*dy <= float64(pulseSize*pulseSize) {
-				screen.Set(shipX+px-pulseSize, shipY+py-pulseSize+8, SystemBlue)
+				screen.Set(shipX+px-pulseSize, shipY+py-pulseSize+8, utils.SystemBlue)
 			}
 		}
 	}
@@ -368,11 +369,11 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	textY := panelY + 15
 
 	DrawText(screen, humanPlayer.Name, textX, textY, humanPlayer.Color)
-	DrawText(screen, fmt.Sprintf("Credits: %d", humanPlayer.Credits), textX, textY+15, UITextPrimary)
-	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+30, UITextPrimary)
-	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+45, UITextPrimary)
+	DrawText(screen, fmt.Sprintf("Credits: %d", humanPlayer.Credits), textX, textY+15, utils.TextPrimary)
+	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+30, utils.TextPrimary)
+	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+45, utils.TextPrimary)
 
 	if humanPlayer.HomeSystem != nil {
-		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+60, UITextSecondary)
+		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+60, utils.TextSecondary)
 	}
 }

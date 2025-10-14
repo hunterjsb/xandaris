@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 )
@@ -134,10 +135,10 @@ func (sv *SystemView) Update() error {
 // Draw implements View interface
 func (sv *SystemView) Draw(screen *ebiten.Image) {
 	// Fill background
-	screen.Fill(UIBackground)
+	screen.Fill(utils.Background)
 
 	if sv.system == nil {
-		DrawText(screen, "No system selected", 10, 10, UITextPrimary)
+		DrawText(screen, "No system selected", 10, 10, utils.TextPrimary)
 		return
 	}
 
@@ -153,7 +154,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 		DrawHighlightCircle(screen,
 			int(x), int(y),
 			int(selectedObj.GetClickRadius()),
-			UIHighlight)
+			utils.Highlight)
 	}
 
 	// Draw context menu if active
@@ -168,8 +169,8 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 
 	// Draw UI info
 	title := fmt.Sprintf("System View: %s", sv.system.Name)
-	DrawText(screen, title, 10, 10, UITextPrimary)
-	DrawText(screen, "Press ESC to return to galaxy", 10, 25, UITextSecondary)
+	DrawText(screen, title, 10, 10, utils.TextPrimary)
+	DrawText(screen, "Press ESC to return to galaxy", 10, 25, utils.TextSecondary)
 }
 
 // updateFleets aggregates ships into fleets
@@ -382,38 +383,38 @@ func (sv *SystemView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 			Y:           badgeY - 2,
 			Width:       12,
 			Height:      12,
-			BgColor:     UIPanelBg,
-			BorderColor: UIPanelBorder,
+			BgColor:     utils.PanelBg,
+			BorderColor: utils.PanelBorder,
 		}
 		badgePanel.Draw(screen)
 
-		DrawText(screen, badge, badgeX, badgeY, UIHighlight)
+		DrawText(screen, badge, badgeX, badgeY, utils.Highlight)
 	}
 
 	// Draw fleet info
 	if fleet.Size() == 1 {
-		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, UITextSecondary)
+		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, utils.TextSecondary)
 	} else {
 		typeCounts := fleet.GetShipTypeCounts()
 		fleetText := fmt.Sprintf("Fleet (%d ships)", fleet.Size())
-		DrawText(screen, fleetText, centerX-40, centerY+size+5, UITextSecondary)
+		DrawText(screen, fleetText, centerX-40, centerY+size+5, utils.TextSecondary)
 
 		// Show ship type breakdown
 		offsetY := 18
 		for shipType, count := range typeCounts {
 			typeText := fmt.Sprintf("%dx %s", count, shipType)
-			DrawText(screen, typeText, centerX-35, centerY+size+5+offsetY, UITextSecondary)
+			DrawText(screen, typeText, centerX-35, centerY+size+5+offsetY, utils.TextSecondary)
 			offsetY += 12
 		}
 	}
 
 	// Draw fuel indicator
 	fuelPercent := fleet.GetAverageFuelPercent()
-	fuelColor := ColorStationResearch // Green for good fuel
+	fuelColor := utils.StationResearch // Green for good fuel
 	if fuelPercent < 25 {
-		fuelColor = SystemRed
+		fuelColor = utils.SystemRed
 	} else if fuelPercent < 50 {
-		fuelColor = SystemOrange
+		fuelColor = utils.SystemOrange
 	}
 	fuelText := fmt.Sprintf("Fuel: %.0f%%", fuelPercent)
 	DrawText(screen, fuelText, centerX-25, centerY+size+5+12, fuelColor)
