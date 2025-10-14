@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/hunterjsb/xandaris/entities"
@@ -35,7 +36,7 @@ func (a *App) InitializeForMenu() error {
 	a.keyBindings = systems.NewKeyBindings()
 	// Try to load custom key bindings from config
 	if err := a.keyBindings.LoadFromFile(systems.GetKeyBindingsConfigPath()); err != nil {
-		// Silently use defaults if config doesn't exist
+		fmt.Println("Failed to load custom key bindings:", err)
 	}
 
 	// Initialize tick manager for menu (though it won't really be used)
