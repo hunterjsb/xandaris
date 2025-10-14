@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ type BuildMenuItem struct {
 
 // BuildMenu displays available buildings and handles construction
 type BuildMenu struct {
-	game              *Game
+	ctx              UIContext
 	isOpen            bool
 	x                 int
 	y                 int
@@ -44,9 +44,9 @@ type BuildMenu struct {
 }
 
 // NewBuildMenu creates a new build menu
-func NewBuildMenu(game *Game) *BuildMenu {
+func NewBuildMenu(ctx UIContext) *BuildMenu {
 	return &BuildMenu{
-		game:          game,
+		ctx:          ctx,
 		isOpen:        false,
 		width:         400,
 		height:        500,
@@ -74,11 +74,11 @@ func (bm *BuildMenu) Open(attachedTo entities.Entity, x, y int) {
 	if bm.y < 10 {
 		bm.y = 10
 	}
-	if bm.x+bm.width > screenWidth-10 {
-		bm.x = screenWidth - bm.width - 10
+	if bm.x+bm.width > 1280-10 {
+		bm.x = 1280 - bm.width - 10
 	}
-	if bm.y+bm.height > screenHeight-10 {
-		bm.y = screenHeight - bm.height - 10
+	if bm.y+bm.height > 720-10 {
+		bm.y = 720 - bm.height - 10
 	}
 
 	// Determine what we're building on
@@ -196,7 +196,7 @@ func (bm *BuildMenu) Update() {
 	}
 
 	// Close on Escape or right-click
-	if bm.game.keyBindings.IsActionJustPressed(views.ActionEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+	if bm.ctx.GetKeyBindings().IsActionJustPressed(views.ActionEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
 		bm.Close()
 		return
 	}
@@ -251,7 +251,7 @@ func (bm *BuildMenu) updateHover(mx, my int) {
 // findParentPlanet finds the planet that contains a given resource
 func (bm *BuildMenu) findParentPlanet(resource *entities.Resource) *entities.Planet {
 	// Search through all systems to find the planet with this resource
-	for _, system := range bm.game.systems {
+	for _, system := range bm.ctx.GetState().Systems {
 		for _, entity := range system.Entities {
 			if planet, ok := entity.(*entities.Planet); ok {
 				for _, res := range planet.Resources {
@@ -311,27 +311,27 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 	}
 
 	// Check if player has enough credits
-	if bm.game.humanPlayer.Credits < item.Cost {
+	if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
 		bm.notification = "Insufficient funds"
 		bm.notificationTimer = 120 // 2 seconds at 60fps
 		return
 	}
 
 	// Deduct cost
-	bm.game.humanPlayer.Credits -= item.Cost
+	bm.ctx.GetState().HumanPlayer.Credits -= item.Cost
 
 	// Create construction item
 	constructionItem := &tickable.ConstructionItem{
-		ID:             fmt.Sprintf("%s_%d_%d", bm.attachmentID, bm.game.tickManager.GetCurrentTick(), itemIndex),
+		ID:             fmt.Sprintf("%s_%d_%d", bm.attachmentID, bm.ctx.GetTickManager().GetCurrentTick(), itemIndex),
 		Type:           "Building",
 		Name:           item.Name,
 		Location:       bm.attachmentID,
-		Owner:          bm.game.humanPlayer.Name,
+		Owner:          bm.ctx.GetState().HumanPlayer.Name,
 		Progress:       0,
 		TotalTicks:     600, // 60 seconds at 1x speed
 		RemainingTicks: 600,
 		Cost:           item.Cost,
-		Started:        bm.game.tickManager.GetCurrentTick(),
+		Started:        bm.ctx.GetTickManager().GetCurrentTick(),
 	}
 
 	// Add to construction queue
@@ -365,7 +365,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 
 	// Draw player credits
 	creditsY := subtitleY + 20
-	creditsText := fmt.Sprintf("Credits: %d", bm.game.humanPlayer.Credits)
+	creditsText := fmt.Sprintf("Credits: %d", bm.ctx.GetState().HumanPlayer.Credits)
 	views.DrawCenteredText(screen, creditsText, bm.x+bm.width/2, creditsY)
 
 	// Draw separator line
@@ -442,7 +442,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		costText := fmt.Sprintf("Cost: %d credits", item.Cost)
 		costY := nameY + 15
 		costColor := utils.TextSecondary
-		if bm.game.humanPlayer.Credits < item.Cost {
+		if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
 			costColor = color.RGBA{200, 100, 100, 255} // Red if can't afford
 		}
 		views.DrawText(screen, costText, nameX, costY, costColor)

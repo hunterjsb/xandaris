@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"encoding/gob"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
@@ -17,15 +18,6 @@ const (
 	saveDirectory = "saves"
 	saveExtension = ".xsave"
 )
-
-// SaveFileMetadata contains basic info about a save file
-type SaveFileMetadata struct {
-	Version    string    `json:"version"`
-	SavedAt    time.Time `json:"saved_at"`
-	PlayerName string    `json:"player_name"`
-	GameTime   string    `json:"game_time"`
-	Tick       int64     `json:"tick"`
-}
 
 // init registers all types that need to be serialized with gob
 func init() {
@@ -43,8 +35,18 @@ func init() {
 	gob.Register(&tickable.ConstructionItem{})
 }
 
+// SaveFileInfo contains metadata about a save file
+type SaveFileInfo struct {
+	Filename   string
+	Path       string
+	PlayerName string
+	GameTime   string
+	SavedAt    time.Time
+	ModTime    time.Time
+}
+
 // SaveGameToFile saves the current game state to a file using gob
-func (g *Game) SaveGameToFile(playerName string) error {
+func (a *App) SaveGameToFile(playerName string) error {
 	// Create saves directory if it doesn't exist
 	if err := os.MkdirAll(saveDirectory, 0755); err != nil {
 		return fmt.Errorf("failed to create save directory: %w", err)
@@ -89,13 +91,13 @@ func (g *Game) SaveGameToFile(playerName string) error {
 		Version:            "2.0.0-gob",
 		SavedAt:            time.Now(),
 		PlayerName:         playerName,
-		GameTime:           g.tickManager.GetGameTimeFormatted(),
-		Tick:               g.tickManager.GetCurrentTick(),
-		Seed:               g.seed,
-		TickSpeed:          g.tickManager.GetSpeed().(systems.TickSpeed),
-		Systems:            g.systems,
-		Hyperlanes:         g.hyperlanes,
-		Players:            g.players,
+		GameTime:           a.tickManager.GetGameTimeFormatted(),
+		Tick:               a.tickManager.GetCurrentTick(),
+		Seed:               a.state.Seed,
+		TickSpeed:          a.tickManager.GetSpeed().(systems.TickSpeed),
+		Systems:            a.state.Systems,
+		Hyperlanes:         a.state.Hyperlanes,
+		Players:            a.state.Players,
 		ConstructionQueues: constructionQueues,
 	}
 
@@ -105,18 +107,19 @@ func (g *Game) SaveGameToFile(playerName string) error {
 	}
 
 	fmt.Printf("[SaveSystem] Game saved to: %s\n", filename)
-	fmt.Printf("[SaveSystem] Saved %d systems, %d players, tick %d\n", len(g.systems), len(g.players), g.tickManager.GetCurrentTick())
+	fmt.Printf("[SaveSystem] Saved %d systems, %d players, tick %d\n",
+		len(a.state.Systems), len(a.state.Players), a.tickManager.GetCurrentTick())
 	return nil
 }
 
-// LoadGameFromFile loads a game state from a file using gob
-func LoadGameFromFile(filename string) (*Game, error) {
-	fmt.Printf("[SaveSystem] Loading game from: %s\n", filename)
+// LoadGameFromPath loads a game from the given path
+func (a *App) LoadGameFromPath(path string) error {
+	fmt.Printf("[SaveSystem] Loading game from: %s\n", path)
 
 	// Open file
-	file, err := os.Open(filename)
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open save file: %w", err)
+		return fmt.Errorf("failed to open save file: %w", err)
 	}
 	defer file.Close()
 
@@ -143,49 +146,40 @@ func LoadGameFromFile(filename string) (*Game, error) {
 	}
 
 	if err := decoder.Decode(&saveData); err != nil {
-		return nil, fmt.Errorf("failed to decode save data: %w", err)
+		return fmt.Errorf("failed to decode save data: %w", err)
 	}
 
 	fmt.Printf("[SaveSystem] Decoded save data: version=%s, player=%s, systems=%d\n",
 		saveData.Version, saveData.PlayerName, len(saveData.Systems))
 
-	// Create new game instance
-	g := &Game{
-		systems:    saveData.Systems,
-		hyperlanes: saveData.Hyperlanes,
-		seed:       saveData.Seed,
-		players:    saveData.Players,
-	}
+	// Update game state
+	a.state.Systems = saveData.Systems
+	a.state.Hyperlanes = saveData.Hyperlanes
+	a.state.Seed = saveData.Seed
+	a.state.Players = saveData.Players
 
-	// Initialize key bindings
-	g.keyBindings = systems.NewKeyBindings()
-	// Try to load custom key bindings from config
-	if err := g.keyBindings.LoadFromFile(systems.GetKeyBindingsConfigPath()); err != nil {
-		// Silently use defaults if config doesn't exist
-	}
-
-	// Initialize tick manager with saved state
-	g.tickManager = systems.NewTickManager(10.0)
-	g.tickManager.SetSpeed(saveData.TickSpeed)
-	g.tickManager.SetCurrentTick(saveData.Tick)
+	// Update tick manager with saved state
+	a.tickManager.SetSpeed(saveData.TickSpeed)
+	a.tickManager.SetCurrentTick(saveData.Tick)
 
 	// Find human player
-	for _, player := range g.players {
+	a.state.HumanPlayer = nil
+	for _, player := range a.state.Players {
 		if player.Type == entities.PlayerTypeHuman {
-			g.humanPlayer = player
+			a.state.HumanPlayer = player
 			break
 		}
 	}
 
 	// Rebuild planet owner references
-	for _, player := range g.players {
+	for _, player := range a.state.Players {
 		for _, planet := range player.OwnedPlanets {
 			planet.Owner = player.Name
 		}
 	}
 
 	// Initialize tickable systems
-	context := &GameSystemContext{game: g}
+	context := &GameSystemContext{app: a}
 	tickable.InitializeAllSystems(context)
 
 	// Restore construction queues
@@ -198,44 +192,57 @@ func LoadGameFromFile(filename string) (*Game, error) {
 		}
 	}
 
-	g.registerConstructionHandler()
+	a.registerConstructionHandler()
 
-	// Initialize fleet manager
-	g.fleetManager = systems.NewFleetManager(g)
+	// Update fleet command executor with loaded systems/hyperlanes
+	a.fleetCmdExecutor = game.NewFleetCommandExecutor(a.state.Systems, a.state.Hyperlanes)
 
-	// Initialize view system
-	g.viewManager = views.NewViewManager()
-
-	// Create UI components (stay in main package)
-	buildMenu := NewBuildMenu(g)
-	constructionQueue := NewConstructionQueueUI(g)
-	resourceStorage := NewResourceStorageUI(g)
-	shipyardUI := NewShipyardUI(g)
-	fleetInfoUI := NewFleetInfoUI(g)
-
-	// Create and register views
-	mainMenuView := views.NewMainMenuView(g)
-	galaxyView := views.NewGalaxyView(g)
-	systemView := views.NewSystemView(g, fleetInfoUI)
-	planetView := views.NewPlanetView(g, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
-	settingsView := views.NewSettingsView(g)
-
-	g.viewManager.RegisterView(mainMenuView)
-	g.viewManager.RegisterView(galaxyView)
-	g.viewManager.RegisterView(systemView)
-	g.viewManager.RegisterView(planetView)
-	g.viewManager.RegisterView(settingsView)
-
-	// Start with galaxy view
-	g.viewManager.SwitchTo(views.ViewTypeGalaxy)
-
-	fmt.Printf("[SaveSystem] Game successfully loaded: %d systems, %d players, tick %d\n",
-		len(g.systems), len(g.players), g.tickManager.GetCurrentTick())
-	return g, nil
+	fmt.Printf("[SaveSystem] Game loaded successfully\n")
+	return nil
 }
 
-// ListSaveFiles returns a list of all save files
-func ListSaveFiles() ([]SaveFileInfo, error) {
+// ListSaveFiles returns all save files (implements SaveLoadInterface)
+func (a *App) ListSaveFiles() ([]views.SaveFileInfo, error) {
+	files, err := listSaveFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert from app.SaveFileInfo to views.SaveFileInfo
+	viewFiles := make([]views.SaveFileInfo, len(files))
+	for i, f := range files {
+		viewFiles[i] = views.SaveFileInfo{
+			Filename:   f.Filename,
+			Path:       f.Path,
+			PlayerName: f.PlayerName,
+			GameTime:   f.GameTime,
+			SavedAt:    f.SavedAt,
+			ModTime:    f.ModTime,
+		}
+	}
+	return viewFiles, nil
+}
+
+// GetSaveFileInfo gets info about a specific save file (implements SaveLoadInterface)
+func (a *App) GetSaveFileInfo(path string) (views.SaveFileInfo, error) {
+	info, err := getSaveFileInfo(path)
+	if err != nil {
+		return views.SaveFileInfo{}, err
+	}
+
+	// Convert from app.SaveFileInfo to views.SaveFileInfo
+	return views.SaveFileInfo{
+		Filename:   info.Filename,
+		Path:       info.Path,
+		PlayerName: info.PlayerName,
+		GameTime:   info.GameTime,
+		SavedAt:    info.SavedAt,
+		ModTime:    info.ModTime,
+	}, nil
+}
+
+// listSaveFiles returns a list of all save files (internal helper)
+func listSaveFiles() ([]SaveFileInfo, error) {
 	// Create saves directory if it doesn't exist
 	if err := os.MkdirAll(saveDirectory, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create save directory: %w", err)
@@ -257,7 +264,7 @@ func ListSaveFiles() ([]SaveFileInfo, error) {
 			fullPath := filepath.Join(saveDirectory, entry.Name())
 
 			// Try to read basic info from the save file
-			info, err := GetSaveFileInfo(fullPath)
+			info, err := getSaveFileInfo(fullPath)
 			if err != nil {
 				// If we can't read it, just add basic info from file system
 				fileInfo, _ := entry.Info()
@@ -278,18 +285,8 @@ func ListSaveFiles() ([]SaveFileInfo, error) {
 	return saveFiles, nil
 }
 
-// SaveFileInfo contains metadata about a save file
-type SaveFileInfo struct {
-	Filename   string
-	Path       string
-	PlayerName string
-	GameTime   string
-	SavedAt    time.Time
-	ModTime    time.Time
-}
-
-// GetSaveFileInfo reads metadata from a save file without loading the entire game
-func GetSaveFileInfo(filepath string) (SaveFileInfo, error) {
+// getSaveFileInfo reads metadata from a save file without loading the entire game (internal helper)
+func getSaveFileInfo(filepath string) (SaveFileInfo, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
 		return SaveFileInfo{}, err

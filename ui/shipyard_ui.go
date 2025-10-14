@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 
 // ShipyardUI displays the ship construction interface
 type ShipyardUI struct {
-	game         *Game
+	ctx         UIContext
 	planet       *entities.Planet
 	shipyard     *entities.Building
 	x            int
@@ -31,11 +31,11 @@ type ShipyardUI struct {
 }
 
 // NewShipyardUI creates a new shipyard UI
-func NewShipyardUI(game *Game) *ShipyardUI {
+func NewShipyardUI(ctx UIContext) *ShipyardUI {
 	return &ShipyardUI{
-		game:   game,
-		x:      screenWidth/2 - 250,
-		y:      screenHeight/2 - 250,
+		ctx:   ctx,
+		x:      1280/2 - 250,
+		y:      720/2 - 250,
 		width:  500,
 		height: 500,
 		shipTypes: []entities.ShipType{
@@ -86,7 +86,7 @@ func (sui *ShipyardUI) Update() {
 	}
 
 	// Handle escape key to close
-	if sui.game.keyBindings.IsActionJustPressed(views.ActionEscape) {
+	if sui.ctx.GetKeyBindings().IsActionJustPressed(views.ActionEscape) {
 		sui.Hide()
 		return
 	}
@@ -176,14 +176,14 @@ func (sui *ShipyardUI) handleHover(mx, my int) {
 
 // buildShip attempts to build the selected ship
 func (sui *ShipyardUI) buildShip() {
-	if sui.selectedShip == "" || sui.planet == nil || sui.game.humanPlayer == nil {
+	if sui.selectedShip == "" || sui.planet == nil || sui.ctx.GetState().HumanPlayer == nil {
 		return
 	}
 
 	// Check if player has enough credits
 	cost := entities.GetShipBuildCost(sui.selectedShip)
-	if sui.game.humanPlayer.Credits < cost {
-		sui.showError(fmt.Sprintf("Not enough credits! Need %d, have %d", cost, sui.game.humanPlayer.Credits))
+	if sui.ctx.GetState().HumanPlayer.Credits < cost {
+		sui.showError(fmt.Sprintf("Not enough credits! Need %d, have %d", cost, sui.ctx.GetState().HumanPlayer.Credits))
 		return
 	}
 
@@ -198,7 +198,7 @@ func (sui *ShipyardUI) buildShip() {
 	}
 
 	// Deduct credits
-	sui.game.humanPlayer.Credits -= cost
+	sui.ctx.GetState().HumanPlayer.Credits -= cost
 
 	// Deduct resources
 	for resourceType, amount := range requirements {
@@ -214,7 +214,7 @@ func (sui *ShipyardUI) buildShip() {
 
 // addShipToConstructionQueue adds a ship to the construction system
 func (sui *ShipyardUI) addShipToConstructionQueue(shipType entities.ShipType) {
-	if sui.planet == nil || sui.game.humanPlayer == nil {
+	if sui.planet == nil || sui.ctx.GetState().HumanPlayer == nil {
 		return
 	}
 
@@ -236,16 +236,16 @@ func (sui *ShipyardUI) addShipToConstructionQueue(shipType entities.ShipType) {
 	location := fmt.Sprintf("planet_%d", sui.planet.GetID())
 
 	item := &tickable.ConstructionItem{
-		ID:             fmt.Sprintf("ship_%s_%d", shipType, sui.game.tickManager.GetCurrentTick()),
+		ID:             fmt.Sprintf("ship_%s_%d", shipType, sui.ctx.GetTickManager().GetCurrentTick()),
 		Type:           "Ship",
 		Name:           fmt.Sprintf("%s", shipType),
 		Location:       location, // Use same format as queue location
-		Owner:          sui.game.humanPlayer.Name,
+		Owner:          sui.ctx.GetState().HumanPlayer.Name,
 		Progress:       0,
 		TotalTicks:     entities.GetShipBuildTime(shipType),
 		RemainingTicks: entities.GetShipBuildTime(shipType),
 		Cost:           entities.GetShipBuildCost(shipType),
-		Started:        sui.game.tickManager.GetCurrentTick(),
+		Started:        sui.ctx.GetTickManager().GetCurrentTick(),
 	}
 
 	// Add to construction queue
@@ -288,7 +288,7 @@ func (sui *ShipyardUI) Draw(screen *ebiten.Image) {
 
 	// Player credits
 	creditsY := sui.y + 45
-	views.DrawText(screen, fmt.Sprintf("Credits: %d", sui.game.humanPlayer.Credits), sui.x+20, creditsY, utils.TextPrimary)
+	views.DrawText(screen, fmt.Sprintf("Credits: %d", sui.ctx.GetState().HumanPlayer.Credits), sui.x+20, creditsY, utils.TextPrimary)
 
 	// Ship list
 	sui.drawShipList(screen)
@@ -357,7 +357,7 @@ func (sui *ShipyardUI) drawShipList(screen *ebiten.Image) {
 		// Cost
 		cost := entities.GetShipBuildCost(shipType)
 		costColor := utils.TextPrimary
-		if sui.game.humanPlayer.Credits < cost {
+		if sui.ctx.GetState().HumanPlayer.Credits < cost {
 			costColor = color.RGBA{255, 100, 100, 255}
 		}
 		views.DrawText(screen, fmt.Sprintf("Cost: %d credits", cost), sui.x+30, itemY+30, costColor)
@@ -469,7 +469,7 @@ func (sui *ShipyardUI) drawError(screen *ebiten.Image) {
 func (sui *ShipyardUI) canAffordShip(shipType entities.ShipType) bool {
 	// Check credits
 	cost := entities.GetShipBuildCost(shipType)
-	if sui.game.humanPlayer.Credits < cost {
+	if sui.ctx.GetState().HumanPlayer.Credits < cost {
 		return false
 	}
 

@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 
 // FleetInfoUI displays detailed information about a selected fleet
 type FleetInfoUI struct {
-	game                  *Game
+	ctx                  UIContext
 	fleet                 *views.Fleet
 	x                     int
 	y                     int
@@ -31,10 +31,10 @@ type FleetInfoUI struct {
 }
 
 // NewFleetInfoUI creates a new fleet info UI
-func NewFleetInfoUI(game *Game) *FleetInfoUI {
+func NewFleetInfoUI(ctx UIContext) *FleetInfoUI {
 	return &FleetInfoUI{
-		game:   game,
-		x:      screenWidth - 320,
+		ctx:   ctx,
+		x:      1280 - 320,
 		y:      80,
 		width:  310,
 		height: 400,
@@ -117,11 +117,11 @@ func (fui *FleetInfoUI) Update() {
 				// Get connected systems and current system entities
 				if len(fui.fleet.Ships) > 0 {
 					firstShip := fui.fleet.Ships[0]
-					helper := tickable.NewShipMovementHelper(fui.game.GetSystemsMap(), fui.game.GetHyperlanes())
+					helper := tickable.NewShipMovementHelper(fui.ctx.GetSystemsMap(), fui.ctx.GetHyperlanes())
 					fui.connectedSystems = helper.GetConnectedSystems(firstShip.CurrentSystem)
 
 					// Get current system entities (planets)
-					systems := fui.game.GetSystemsMap()
+					systems := fui.ctx.GetSystemsMap()
 					currentSystem := systems[firstShip.CurrentSystem]
 					if currentSystem != nil {
 						fui.currentSystemEntities = make([]entities.Entity, 0)
@@ -164,7 +164,7 @@ func (fui *FleetInfoUI) Update() {
 				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
 					my >= itemY && my <= itemY+itemHeight-5 {
 					// Move fleet to this system (inter-system jump)
-					fleetManager := systems.NewFleetManager(fui.game)
+					fleetManager := systems.NewFleetManager(fui.ctx)
 					success, _ := fleetManager.MoveFleet(fui.fleet, systemID)
 					if success > 0 {
 						fui.showMoveMenu = false
@@ -310,7 +310,7 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 	buttonH := 30
 
 	// Check if fleet can move (has any ship with fuel)
-	canMove, lowFuel, noFuel := systems.NewFleetManager(fui.game).GetFleetMovementStatus(fui.fleet)
+	canMove, lowFuel, noFuel := systems.NewFleetManager(fui.ctx).GetFleetMovementStatus(fui.fleet)
 
 	buttonColor := utils.ButtonActive
 	buttonText := "Move Fleet"
@@ -375,7 +375,7 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 		currentY += 15
 	}
 
-	systems := fui.game.GetSystemsMap()
+	systems := fui.ctx.GetSystemsMap()
 	for _, systemID := range fui.connectedSystems {
 		itemY := currentY
 
@@ -586,7 +586,7 @@ func (fui *FleetInfoUI) isFleetAtPlanet() bool {
 
 	// Check if any ship is at a planet's orbit distance
 	firstShip := fui.fleet.Ships[0]
-	systems := fui.game.GetSystemsMap()
+	systems := fui.ctx.GetSystemsMap()
 	currentSystem := systems[firstShip.CurrentSystem]
 	if currentSystem == nil {
 		return false

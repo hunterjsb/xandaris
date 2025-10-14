@@ -53,9 +53,12 @@ type TickManagerInterface interface {
 	GetGameTimeFormatted() string
 	GetSpeed() interface{}  // Returns TickSpeed type from main package
 	GetSpeedFloat() float64 // Returns speed as float64 for animation calculations
+	GetSpeedString() string // Returns human-readable speed string
+	GetEffectiveTicksPerSecond() float64 // Returns actual ticks per second considering speed
 	SetSpeed(speed interface{})
 	TogglePause()
 	IsPaused() bool
+	Reset()
 }
 
 // KeyBindingsInterface defines what views need from key bindings

@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 
 // ConstructionQueueUI displays all active construction items
 type ConstructionQueueUI struct {
-	game         *Game
+	ctx         UIContext
 	x            int
 	y            int
 	width        int
@@ -24,10 +24,10 @@ type ConstructionQueueUI struct {
 }
 
 // NewConstructionQueueUI creates a new construction queue UI
-func NewConstructionQueueUI(game *Game) *ConstructionQueueUI {
+func NewConstructionQueueUI(ctx UIContext) *ConstructionQueueUI {
 	return &ConstructionQueueUI{
-		game:         game,
-		x:            screenWidth - 310,
+		ctx:         ctx,
+		x:            1280 - 310,
 		y:            120,
 		width:        300,
 		itemHeight:   70,
@@ -178,8 +178,8 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *
 func (cq *ConstructionQueueUI) getAllConstructions() []*tickable.ConstructionItem {
 	constructionSystem := tickable.GetSystemByName("Construction")
 	if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-		if cq.game.humanPlayer != nil {
-			items := cs.GetConstructionsByOwner(cq.game.humanPlayer.Name)
+		if cq.ctx.GetState().HumanPlayer != nil {
+			items := cs.GetConstructionsByOwner(cq.ctx.GetState().HumanPlayer.Name)
 
 			// Sort by start time to ensure consistent order
 			// This prevents flickering from map iteration randomness
@@ -200,7 +200,7 @@ func (cq *ConstructionQueueUI) getAllConstructions() []*tickable.ConstructionIte
 // getLocationName gets a friendly name for a location ID
 func (cq *ConstructionQueueUI) getLocationName(locationID string) string {
 	// Search for the location in all systems
-	for _, system := range cq.game.systems {
+	for _, system := range cq.ctx.GetState().Systems {
 		for _, entity := range system.Entities {
 			if fmt.Sprintf("%d", entity.GetID()) == locationID {
 				return entity.GetName()
@@ -221,7 +221,7 @@ func (cq *ConstructionQueueUI) getLocationName(locationID string) string {
 
 // formatTimeRemaining formats remaining ticks as a time string
 func (cq *ConstructionQueueUI) formatTimeRemaining(remainingTicks int) string {
-	effectiveSpeed := cq.game.tickManager.GetEffectiveTicksPerSecond()
+	effectiveSpeed := cq.ctx.GetTickManager().GetEffectiveTicksPerSecond()
 
 	if effectiveSpeed == 0 {
 		return "Paused"
@@ -280,7 +280,7 @@ func (cq *ConstructionQueueUI) handleRightClick(mx, my int) {
 			if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
 				// Refund partial cost based on progress
 				refundAmount := int(float64(construction.Cost) * (1.0 - float64(construction.Progress)/100.0))
-				cq.game.humanPlayer.Credits += refundAmount
+				cq.ctx.GetState().HumanPlayer.Credits += refundAmount
 
 				// Remove from queue
 				cs.RemoveFromQueue(construction.Location, construction.ID)

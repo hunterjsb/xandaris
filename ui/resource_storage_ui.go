@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 
 // ResourceStorageUI displays stored resources on a planet
 type ResourceStorageUI struct {
-	game   *Game
+	ctx   UIContext
 	planet *entities.Planet
 	x      int
 	y      int
@@ -21,11 +21,11 @@ type ResourceStorageUI struct {
 }
 
 // NewResourceStorageUI creates a new resource storage UI
-func NewResourceStorageUI(game *Game) *ResourceStorageUI {
+func NewResourceStorageUI(ctx UIContext) *ResourceStorageUI {
 	return &ResourceStorageUI{
-		game:   game,
+		ctx:   ctx,
 		x:      220,
-		y:      screenHeight - 180,
+		y:      720 - 180,
 		width:  290,
 		height: 170,
 	}
@@ -39,13 +39,13 @@ func (rsu *ResourceStorageUI) SetPlanet(planet *entities.Planet) {
 // getCurrentPlanet gets the actual current planet from game state
 // This ensures we always read from the live planet object, not a stale reference
 func (rsu *ResourceStorageUI) getCurrentPlanet() *entities.Planet {
-	if rsu.planet == nil || rsu.game.humanPlayer == nil {
+	if rsu.planet == nil || rsu.ctx.GetState().HumanPlayer == nil {
 		return nil
 	}
 
 	// Find the matching planet in the player's owned planets by ID
 	planetID := rsu.planet.GetID()
-	for _, ownedPlanet := range rsu.game.humanPlayer.OwnedPlanets {
+	for _, ownedPlanet := range rsu.ctx.GetState().HumanPlayer.OwnedPlanets {
 		if ownedPlanet.GetID() == planetID {
 			return ownedPlanet
 		}
@@ -64,11 +64,11 @@ func (rsu *ResourceStorageUI) Update() {
 func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	// Get the current planet from game state
 	planet := rsu.getCurrentPlanet()
-	if planet == nil || rsu.game.humanPlayer == nil {
+	if planet == nil || rsu.ctx.GetState().HumanPlayer == nil {
 		return
 	}
 
-	if planet.Owner != rsu.game.humanPlayer.Name {
+	if planet.Owner != rsu.ctx.GetState().HumanPlayer.Name {
 		return
 	}
 
@@ -104,7 +104,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 		ownedCount := 0
 		for _, resourceEntity := range planet.Resources {
 			if resource, ok := resourceEntity.(*entities.Resource); ok {
-				if resource.Owner == rsu.game.humanPlayer.Name {
+				if resource.Owner == rsu.ctx.GetState().HumanPlayer.Name {
 					ownedCount++
 				}
 			}
@@ -181,9 +181,9 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 // IsVisible returns whether the UI should be visible
 func (rsu *ResourceStorageUI) IsVisible() bool {
 	planet := rsu.getCurrentPlanet()
-	if planet == nil || rsu.game.humanPlayer == nil {
+	if planet == nil || rsu.ctx.GetState().HumanPlayer == nil {
 		return false
 	}
 	// Always show for owned planets to provide feedback
-	return planet.Owner == rsu.game.humanPlayer.Name
+	return planet.Owner == rsu.ctx.GetState().HumanPlayer.Name
 }
