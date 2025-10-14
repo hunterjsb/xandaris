@@ -8,8 +8,8 @@ import (
 
 // drawTickInfo draws tick information overlay
 func (a *App) drawTickInfo(screen *ebiten.Image) {
-	// Don't draw in main menu
-	if a.viewManager.GetCurrentView().GetType() == views.ViewTypeMainMenu {
+	// Don't draw in main menu or if tick manager is not initialized
+	if a.viewManager.GetCurrentView().GetType() == views.ViewTypeMainMenu || a.tickManager == nil {
 		return
 	}
 

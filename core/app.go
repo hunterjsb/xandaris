@@ -76,7 +76,9 @@ func (a *App) Update() error {
 	a.handleGlobalInput()
 
 	// Update tick system (this will also update tickable systems)
-	a.tickManager.Update()
+	if a.tickManager != nil {
+		a.tickManager.Update()
+	}
 
 	// Update current view
 	return a.viewManager.Update()

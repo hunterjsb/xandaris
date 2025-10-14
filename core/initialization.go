@@ -39,6 +39,20 @@ func (a *App) InitializeForMenu() error {
 		fmt.Println("Failed to load custom key bindings:", err)
 	}
 
+	// Initialize view system
+	a.viewManager = views.NewViewManager()
+
+	// Initialize and register all views
+	a.initializeViews()
+
+	// Start with main menu
+	a.viewManager.SwitchTo(views.ViewTypeMainMenu)
+
+	return nil
+}
+
+// InitializeForGame initializes the app with the state for a new game
+func (a *App) InitializeForGame() {
 	// Initialize tick manager for menu (though it won't really be used)
 	a.tickManager = systems.NewTickManager(10.0)
 
@@ -48,9 +62,6 @@ func (a *App) InitializeForMenu() error {
 	// Initialize fleet command executor (empty for menu)
 	a.fleetCmdExecutor = game.NewFleetCommandExecutor(a.state.Systems, a.state.Hyperlanes)
 
-	// Initialize view system
-	a.viewManager = views.NewViewManager()
-
 	// Create UI components
 	buildMenu := ui.NewBuildMenu(a)
 	constructionQueue := ui.NewConstructionQueueUI(a)
@@ -59,12 +70,7 @@ func (a *App) InitializeForMenu() error {
 	fleetInfoUI := ui.NewFleetInfoUI(a)
 
 	// Initialize and register all views
-	a.initializeViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
-
-	// Start with main menu
-	a.viewManager.SwitchTo(views.ViewTypeMainMenu)
-
-	return nil
+	a.initializeGameViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
 }
 
 // InitializeNewGame initializes a new game with the given player name
@@ -72,6 +78,9 @@ func (a *App) InitializeNewGame(playerName string) error {
 	// Reset game state
 	a.state.Reset()
 	a.state.Seed = time.Now().UnixNano()
+
+	// Initialize game systems
+	a.InitializeForGame()
 
 	// Reset tick manager
 	a.tickManager.Reset()
