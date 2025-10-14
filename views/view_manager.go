@@ -13,6 +13,7 @@ const (
 	ViewTypePlanet   ViewType = "planet"
 	ViewTypeMainMenu ViewType = "mainmenu"
 	ViewTypeSettings ViewType = "settings"
+	ViewTypeMarket   ViewType = "market"
 )
 
 // View interface that all game views must implement

@@ -418,6 +418,8 @@ func GetActionName(action KeyAction) string {
 		return "Escape/Back"
 	case ActionOpenBuildMenu:
 		return "Open Build Menu"
+	case ActionOpenMarket:
+		return "Open Market"
 	case ActionMenuUp:
 		return "Menu: Up"
 	case ActionMenuDown:
@@ -432,4 +434,3 @@ func GetActionName(action KeyAction) string {
 		return string(action)
 	}
 }
-

@@ -8,8 +8,14 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/tickable"
-	"github.com/hunterjsb/xandaris/views"
 	"github.com/hunterjsb/xandaris/utils"
+	"github.com/hunterjsb/xandaris/views"
+)
+
+const (
+	buildMenuItemHeight  = 80
+	buildMenuItemPadding = 5
+	scrollStepPixels     = 40
 )
 
 // BuildMenuItem represents a single building option in the menu
@@ -27,7 +33,7 @@ type BuildMenuItem struct {
 
 // BuildMenu displays available buildings and handles construction
 type BuildMenu struct {
-	ctx              UIContext
+	ctx               UIContext
 	isOpen            bool
 	x                 int
 	y                 int
@@ -46,7 +52,7 @@ type BuildMenu struct {
 // NewBuildMenu creates a new build menu
 func NewBuildMenu(ctx UIContext) *BuildMenu {
 	return &BuildMenu{
-		ctx:          ctx,
+		ctx:           ctx,
 		isOpen:        false,
 		width:         400,
 		height:        500,
@@ -137,6 +143,16 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		Color:          utils.StationRefinery, // Orange color
 	})
 
+	// Trading Post
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Trading Post",
+		Name:           "Trading Post",
+		Description:    "Opens interstellar commerce and grants access to the market.",
+		Cost:           1200,
+		AttachmentType: "Planet",
+		Color:          color.RGBA{210, 175, 95, 255},
+	})
+
 	// Future: Add more planet buildings here
 	// - Research Lab
 	// - Barracks
@@ -189,6 +205,24 @@ func (bm *BuildMenu) loadResourceBuildings() {
 func (bm *BuildMenu) Update() {
 	if !bm.isOpen {
 		return
+	}
+
+	if len(bm.items) > 0 {
+		_, wheelY := ebiten.Wheel()
+		if wheelY != 0 {
+			_, _, maxScroll := bm.computeScrollMetrics()
+			if maxScroll > 0 {
+				bm.scrollOffset -= int(wheelY * scrollStepPixels)
+				if bm.scrollOffset < 0 {
+					bm.scrollOffset = 0
+				}
+				if bm.scrollOffset > maxScroll {
+					bm.scrollOffset = maxScroll
+				}
+			} else {
+				bm.scrollOffset = 0
+			}
+		}
 	}
 
 	if bm.notificationTimer > 0 {
@@ -373,19 +407,35 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 	views.DrawLine(screen, bm.x+10, lineY, bm.x+bm.width-10, lineY, utils.PanelBorder)
 
 	// Draw building items
-	itemY := lineY + 10
-	itemHeight := 80
-	itemPadding := 5
+	contentTop := bm.getContentTop()
+	contentBottom := bm.getContentBottom()
+	itemY := contentTop - bm.scrollOffset
+
+	_, _, maxScroll := bm.computeScrollMetrics()
+	if bm.scrollOffset > maxScroll {
+		bm.scrollOffset = maxScroll
+	}
 
 	for i, item := range bm.items {
 		itemX := bm.x + 10
 		itemW := bm.width - 20
 
-		// Store bounds for click detection
+		item.Bounds.Width = 0
+		item.Bounds.Height = 0
+
+		if itemY+buildMenuItemHeight < contentTop {
+			itemY += buildMenuItemHeight + buildMenuItemPadding
+			continue
+		}
+		if itemY > contentBottom {
+			itemY += buildMenuItemHeight + buildMenuItemPadding
+			continue
+		}
+
 		item.Bounds.X = itemX
 		item.Bounds.Y = itemY
 		item.Bounds.Width = itemW
-		item.Bounds.Height = itemHeight
+		item.Bounds.Height = buildMenuItemHeight
 
 		// Check if this item can be built
 		canBuild := true
@@ -419,7 +469,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 			itemBg = color.RGBA{40, 40, 80, 230}
 		}
 
-		itemPanel := views.NewUIPanel(itemX, itemY, itemW, itemHeight)
+		itemPanel := views.NewUIPanel(itemX, itemY, itemW, buildMenuItemHeight)
 		itemPanel.BgColor = itemBg
 		itemPanel.Draw(screen)
 
@@ -456,7 +506,33 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		buildTimeY := descY + 15
 		views.DrawText(screen, buildTimeText, nameX, buildTimeY, utils.TextSecondary)
 
-		itemY += itemHeight + itemPadding
+		itemY += buildMenuItemHeight + buildMenuItemPadding
+	}
+
+	// Draw scroll bar if content overflows
+	if maxScroll > 0 {
+		scrollAreaHeight := contentBottom - contentTop
+		totalHeight := bm.totalContentHeight()
+		if totalHeight <= 0 {
+			totalHeight = scrollAreaHeight
+		}
+		scrollbarHeight := int(float64(scrollAreaHeight) * float64(scrollAreaHeight) / float64(totalHeight))
+		if scrollbarHeight < 20 {
+			scrollbarHeight = 20
+		}
+		scrollbarRange := scrollAreaHeight - scrollbarHeight
+		scrollbarY := contentTop
+		if scrollbarRange > 0 && maxScroll > 0 {
+			scrollbarY = contentTop + int(float64(bm.scrollOffset)/float64(maxScroll)*float64(scrollbarRange))
+		}
+
+		scrollbarX := bm.x + bm.width - 14
+		scrollbar := ebiten.NewImage(6, scrollbarHeight)
+		scrollbar.Fill(color.RGBA{120, 160, 210, 200})
+
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(scrollbarX), float64(scrollbarY))
+		screen.DrawImage(scrollbar, opts)
 	}
 
 	// Draw notification message
@@ -467,5 +543,40 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 
 	// Draw instructions at bottom
 	instructionsY := bm.y + bm.height - 25
-	views.DrawCenteredText(screen, "Click to build  |  ESC to cancel", bm.x+bm.width/2, instructionsY)
+	instructionText := "Click to build  |  ESC to cancel"
+	if maxScroll > 0 {
+		instructionText = "Scroll to browse  |  Click to build  |  ESC to cancel"
+	}
+	views.DrawCenteredText(screen, instructionText, bm.x+bm.width/2, instructionsY)
+}
+
+func (bm *BuildMenu) totalContentHeight() int {
+	count := len(bm.items)
+	if count == 0 {
+		return 0
+	}
+	return count*(buildMenuItemHeight+buildMenuItemPadding) - buildMenuItemPadding
+}
+
+func (bm *BuildMenu) computeScrollMetrics() (visibleHeight int, totalHeight int, maxScroll int) {
+	top := bm.getContentTop()
+	bottom := bm.getContentBottom()
+	if bottom < top {
+		bottom = top
+	}
+	visibleHeight = bottom - top
+	totalHeight = bm.totalContentHeight()
+	maxScroll = totalHeight - visibleHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	return
+}
+
+func (bm *BuildMenu) getContentTop() int {
+	return bm.y + 80
+}
+
+func (bm *BuildMenu) getContentBottom() int {
+	return bm.y + bm.height - 60
 }

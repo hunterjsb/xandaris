@@ -51,9 +51,9 @@ type ViewManagerInterface interface {
 type TickManagerInterface interface {
 	GetCurrentTick() int64
 	GetGameTimeFormatted() string
-	GetSpeed() interface{}  // Returns TickSpeed type from main package
-	GetSpeedFloat() float64 // Returns speed as float64 for animation calculations
-	GetSpeedString() string // Returns human-readable speed string
+	GetSpeed() interface{}               // Returns TickSpeed type from main package
+	GetSpeedFloat() float64              // Returns speed as float64 for animation calculations
+	GetSpeedString() string              // Returns human-readable speed string
 	GetEffectiveTicksPerSecond() float64 // Returns actual ticks per second considering speed
 	SetSpeed(speed interface{})
 	TogglePause()
@@ -90,6 +90,7 @@ const (
 	// View navigation
 	ActionEscape        KeyAction = "escape"
 	ActionOpenBuildMenu KeyAction = "open_build_menu"
+	ActionOpenMarket    KeyAction = "open_market"
 
 	// Menu navigation
 	ActionMenuUp      KeyAction = "menu_up"

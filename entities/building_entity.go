@@ -103,6 +103,12 @@ func (b *Building) GetContextMenuItems() []string {
 		items = append(items, fmt.Sprintf("Owner: %s", b.Owner))
 	}
 
+	if b.BuildingType == "Trading Post" {
+		items = append(items, "") // Empty line
+		items = append(items, "Market Access: Enabled")
+		items = append(items, "Open market view with [M]")
+	}
+
 	if b.Description != "" {
 		items = append(items, "") // Empty line
 		items = append(items, b.Description)

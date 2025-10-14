@@ -49,4 +49,25 @@ func (a *App) handleGlobalInput() {
 			}
 		}
 	}
+
+	// Market view toggle
+	if a.keyBindings.IsActionJustPressed(views.ActionOpenMarket) {
+		currentView := a.viewManager.GetCurrentView()
+		if currentView == nil {
+			return
+		}
+
+		if currentView.GetType() == views.ViewTypeMarket {
+			if marketView, ok := currentView.(*views.MarketView); ok {
+				a.viewManager.SwitchTo(marketView.GetReturnView())
+			}
+			return
+		}
+
+		targetView := a.viewManager.GetView(views.ViewTypeMarket)
+		if marketView, ok := targetView.(*views.MarketView); ok {
+			marketView.SetReturnView(currentView.GetType())
+		}
+		a.viewManager.SwitchTo(views.ViewTypeMarket)
+	}
 }

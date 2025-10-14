@@ -10,9 +10,9 @@ import (
 
 // ConstructionHandler handles construction completion events
 type ConstructionHandler struct {
-	systems      []*entities.System
-	players      []*entities.Player
-	tickManager  TickManagerInterface
+	systems     []*entities.System
+	players     []*entities.Player
+	tickManager TickManagerInterface
 }
 
 // TickManagerInterface provides access to tick information
@@ -23,9 +23,9 @@ type TickManagerInterface interface {
 // NewConstructionHandler creates a new construction handler
 func NewConstructionHandler(systems []*entities.System, players []*entities.Player, tickManager TickManagerInterface) *ConstructionHandler {
 	return &ConstructionHandler{
-		systems:      systems,
-		players:      players,
-		tickManager:  tickManager,
+		systems:     systems,
+		players:     players,
+		tickManager: tickManager,
 	}
 }
 
@@ -166,6 +166,7 @@ func (ch *ConstructionHandler) createBuildingFromCompletion(completion tickable.
 	generators := entities.GetGeneratorsByType(entities.EntityTypeBuilding)
 	for _, gen := range generators {
 		if gen.GetSubType() == completion.Item.Type ||
+			completion.Item.Name == gen.GetSubType() ||
 			gen.GetSubType()+" Complex" == completion.Item.Name ||
 			gen.GetSubType()+" Module" == completion.Item.Name ||
 			"Orbital "+gen.GetSubType() == completion.Item.Name ||

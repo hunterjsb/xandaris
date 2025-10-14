@@ -23,8 +23,10 @@ func (a *App) initializeGameViews(buildMenu *ui.BuildMenu, constructionQueue *ui
 	galaxyView := views.NewGalaxyView(a)
 	systemView := views.NewSystemView(a, fleetInfoUI)
 	planetView := views.NewPlanetView(a, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
+	marketView := views.NewMarketView(a)
 
 	a.viewManager.RegisterView(galaxyView)
 	a.viewManager.RegisterView(systemView)
 	a.viewManager.RegisterView(planetView)
+	a.viewManager.RegisterView(marketView)
 }
