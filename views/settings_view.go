@@ -420,6 +420,10 @@ func GetActionName(action KeyAction) string {
 		return "Open Build Menu"
 	case ActionOpenMarket:
 		return "Open Market"
+	case ActionOpenPlayerDir:
+		return "Open Player Directory"
+	case ActionFocusHome:
+		return "Focus Home System"
 	case ActionMenuUp:
 		return "Menu: Up"
 	case ActionMenuDown:

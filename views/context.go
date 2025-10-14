@@ -91,6 +91,8 @@ const (
 	ActionEscape        KeyAction = "escape"
 	ActionOpenBuildMenu KeyAction = "open_build_menu"
 	ActionOpenMarket    KeyAction = "open_market"
+	ActionOpenPlayerDir KeyAction = "open_player_directory"
+	ActionFocusHome     KeyAction = "focus_home_system"
 
 	// Menu navigation
 	ActionMenuUp      KeyAction = "menu_up"

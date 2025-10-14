@@ -40,6 +40,8 @@ func (kb *KeyBindings) LoadDefaults() {
 	kb.bindings[views.ActionEscape] = ebiten.KeyEscape
 	kb.bindings[views.ActionOpenBuildMenu] = ebiten.KeyB
 	kb.bindings[views.ActionOpenMarket] = ebiten.KeyM
+	kb.bindings[views.ActionOpenPlayerDir] = ebiten.KeyP
+	kb.bindings[views.ActionFocusHome] = ebiten.KeyTab
 
 	// Menu navigation
 	kb.bindings[views.ActionMenuUp] = ebiten.KeyUp
@@ -82,6 +84,8 @@ func (kb *KeyBindings) GetActionName(action views.KeyAction) string {
 		views.ActionEscape:        "Escape/Back",
 		views.ActionOpenBuildMenu: "Open Build Menu",
 		views.ActionOpenMarket:    "Open Market",
+		views.ActionOpenPlayerDir: "Open Player Directory",
+		views.ActionFocusHome:     "Focus Home System",
 		views.ActionMenuUp:        "Menu: Up",
 		views.ActionMenuDown:      "Menu: Down",
 		views.ActionMenuConfirm:   "Menu: Confirm",
@@ -159,6 +163,8 @@ func (kb *KeyBindings) GetAllActions() []views.KeyAction {
 		views.ActionEscape,
 		views.ActionOpenBuildMenu,
 		views.ActionOpenMarket,
+		views.ActionOpenPlayerDir,
+		views.ActionFocusHome,
 		views.ActionMenuUp,
 		views.ActionMenuDown,
 		views.ActionMenuConfirm,

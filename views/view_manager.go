@@ -14,6 +14,7 @@ const (
 	ViewTypeMainMenu ViewType = "mainmenu"
 	ViewTypeSettings ViewType = "settings"
 	ViewTypeMarket   ViewType = "market"
+	ViewTypePlayers  ViewType = "players"
 )
 
 // View interface that all game views must implement

@@ -70,4 +70,25 @@ func (a *App) handleGlobalInput() {
 		}
 		a.viewManager.SwitchTo(views.ViewTypeMarket)
 	}
+
+	// Player directory toggle
+	if a.keyBindings.IsActionJustPressed(views.ActionOpenPlayerDir) {
+		currentView := a.viewManager.GetCurrentView()
+		if currentView == nil {
+			return
+		}
+
+		if currentView.GetType() == views.ViewTypePlayers {
+			if directory, ok := currentView.(*views.PlayerDirectoryView); ok {
+				a.viewManager.SwitchTo(directory.GetReturnView())
+			}
+			return
+		}
+
+		targetView := a.viewManager.GetView(views.ViewTypePlayers)
+		if directory, ok := targetView.(*views.PlayerDirectoryView); ok {
+			directory.SetReturnView(currentView.GetType())
+		}
+		a.viewManager.SwitchTo(views.ViewTypePlayers)
+	}
 }

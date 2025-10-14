@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
 
@@ -17,21 +18,29 @@ const (
 
 // GalaxyView represents the galaxy map view
 type GalaxyView struct {
-	ctx           GameContext
-	clickHandler  *ClickHandler
-	lastClickX    int
-	lastClickY    int
-	lastClickTime int64
-	systemFleets  map[int][]*Fleet // Fleets per system ID
-	orbitOffset   float64
+	ctx                     GameContext
+	clickHandler            *ClickHandler
+	lastClickX              int
+	lastClickY              int
+	lastClickTime           int64
+	systemFleets            map[int][]*Fleet // Fleets per system ID
+	orbitOffset             float64
+	playerPanelRect         image.Rectangle
+	playerDirectoryHintRect image.Rectangle
+	playerPanelToggleRect   image.Rectangle
+	playerPanelCollapsed    bool
 }
 
 // NewGalaxyView creates a new galaxy view
 func NewGalaxyView(ctx GameContext) *GalaxyView {
 	gv := &GalaxyView{
-		ctx:          ctx,
-		clickHandler: NewClickHandler(),
-		systemFleets: make(map[int][]*Fleet),
+		ctx:                     ctx,
+		clickHandler:            NewClickHandler(),
+		systemFleets:            make(map[int][]*Fleet),
+		playerPanelRect:         image.Rectangle{},
+		playerDirectoryHintRect: image.Rectangle{},
+		playerPanelToggleRect:   image.Rectangle{},
+		playerPanelCollapsed:    false,
 	}
 
 	// Register all systems as clickable
@@ -60,8 +69,8 @@ func (gv *GalaxyView) Update() error {
 	// Update fleet aggregation for each system
 	gv.updateFleets()
 
-	// Quick-select home system on pause key (Space)
-	if kb.IsActionJustPressed(ActionPauseToggle) {
+	// Quick-select home system
+	if kb.IsActionJustPressed(ActionFocusHome) {
 		gv.focusHomeSystem()
 	}
 
@@ -74,6 +83,25 @@ func (gv *GalaxyView) Update() error {
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
+
+		if gv.playerPanelToggleRect.Dx() > 0 && gv.playerPanelToggleRect.Dy() > 0 {
+			if x >= gv.playerPanelToggleRect.Min.X && x <= gv.playerPanelToggleRect.Max.X &&
+				y >= gv.playerPanelToggleRect.Min.Y && y <= gv.playerPanelToggleRect.Max.Y {
+				gv.playerPanelCollapsed = !gv.playerPanelCollapsed
+				return nil
+			}
+		}
+
+		if gv.playerDirectoryHintRect.Dx() > 0 && gv.playerDirectoryHintRect.Dy() > 0 {
+			if x >= gv.playerDirectoryHintRect.Min.X && x <= gv.playerDirectoryHintRect.Max.X &&
+				y >= gv.playerDirectoryHintRect.Min.Y && y <= gv.playerDirectoryHintRect.Max.Y {
+				if directory, ok := vm.GetView(ViewTypePlayers).(*PlayerDirectoryView); ok {
+					directory.SetReturnView(ViewTypeGalaxy)
+				}
+				vm.SwitchTo(ViewTypePlayers)
+				return nil
+			}
+		}
 
 		// Check for double-click with more forgiving tolerance
 		currentTime := ebiten.Tick()
@@ -270,18 +298,21 @@ func (gv *GalaxyView) getOwnerColor(owner string) (color.RGBA, bool) {
 	return color.RGBA{}, false
 }
 
+// FocusSystem highlights the given system in the galaxy view
+func (gv *GalaxyView) FocusSystem(system *entities.System) {
+	if system == nil {
+		return
+	}
+	gv.clickHandler.Select(system)
+}
+
 func (gv *GalaxyView) focusHomeSystem() {
 	player := gv.ctx.GetHumanPlayer()
 	if player == nil || player.HomeSystem == nil {
 		return
 	}
 
-	for _, system := range gv.ctx.GetSystems() {
-		if system == player.HomeSystem {
-			gv.clickHandler.Select(system)
-			break
-		}
-	}
+	gv.FocusSystem(player.HomeSystem)
 }
 
 // updateFleets aggregates fleets for each system
@@ -436,6 +467,10 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		return
 	}
 
+	gv.playerPanelRect = image.Rectangle{}
+	gv.playerDirectoryHintRect = image.Rectangle{}
+	gv.playerPanelToggleRect = image.Rectangle{}
+
 	players := gv.ctx.GetPlayers()
 	aiSummaries := make([]struct {
 		name         string
@@ -470,57 +505,86 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		})
 	}
 
-	baseHeight := 100
-	extraHeight := len(aiSummaries) * 24
+	baseHeight := 150
+	extraHeight := len(aiSummaries) * 26
 	panelHeight := baseHeight + extraHeight
+	if gv.playerPanelCollapsed {
+		panelHeight = 74
+	}
 	if panelHeight > ScreenHeight-20 {
 		panelHeight = ScreenHeight - 20
 	}
-	if panelHeight < baseHeight {
+	if panelHeight < baseHeight && !gv.playerPanelCollapsed {
 		panelHeight = baseHeight
 	}
 
 	// Draw panel in top-right corner
-	panelX := ScreenWidth - 250
+	panelWidth := 260
+	panelX := ScreenWidth - panelWidth - 10
 	panelY := 10
-	panelWidth := 240
+
+	gv.playerPanelRect = image.Rect(panelX, panelY, panelX+panelWidth, panelY+panelHeight)
 
 	// Draw panel background
 	panel := NewUIPanel(panelX, panelY, panelWidth, panelHeight)
 	panel.Draw(screen)
 
 	// Draw player info
-	textX := panelX + 10
-	textY := panelY + 15
+	textX := panelX + 12
+	textY := panelY + 16
+
+	toggleLabel := "−"
+	if gv.playerPanelCollapsed {
+		toggleLabel = "+"
+	}
+	gv.playerPanelToggleRect = image.Rect(panelX+panelWidth-28, panelY+14, panelX+panelWidth-8, panelY+34)
+	DrawText(screen, fmt.Sprintf("[%s]", toggleLabel), panelX+panelWidth-28, panelY+18, utils.Highlight)
 
 	DrawText(screen, humanPlayer.Name, textX, textY, humanPlayer.Color)
-	DrawText(screen, fmt.Sprintf("Credits: %d", humanPlayer.Credits), textX, textY+15, utils.TextPrimary)
-	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+30, utils.TextPrimary)
-	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+45, utils.TextPrimary)
+	DrawText(screen, fmt.Sprintf("Credits: %d", humanPlayer.Credits), textX, textY+18, utils.TextPrimary)
+
+	if gv.playerPanelCollapsed {
+		DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+36, utils.TextPrimary)
+		collapsedHint := "Click [+] to expand  |  Press P for Directory"
+		hintY := panelY + panelHeight - 18
+		DrawText(screen, collapsedHint, textX, hintY, utils.TextSecondary)
+		hintWidth := len(collapsedHint) * 6
+		gv.playerDirectoryHintRect = image.Rect(textX-2, hintY-12, textX+hintWidth+2, hintY+4)
+		return
+	}
+
+	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+36, utils.TextPrimary)
+	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+54, utils.TextPrimary)
 
 	if humanPlayer.HomeSystem != nil {
-		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+60, utils.TextSecondary)
+		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+72, utils.TextSecondary)
 	}
 
 	if len(aiSummaries) > 0 {
-		separatorY := textY + 75
+		separatorY := textY + 88
 		DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.PanelBorder)
 		listY := separatorY + 10
 		DrawText(screen, "NPC Traders:", textX, listY, utils.TextSecondary)
 		listY += 15
-		maxListY := panelY + panelHeight - 20
+		maxListY := panelY + panelHeight - 32
 
 		for _, summary := range aiSummaries {
 			if listY+18 > maxListY {
-				DrawText(screen, "...more traders active", textX, maxListY, utils.TextSecondary)
+				DrawText(screen, "...more traders active", textX, maxListY-4, utils.TextSecondary)
 				break
 			}
 			DrawText(screen, summary.name, textX, listY, summary.color)
 			info := fmt.Sprintf("P:%d  Posts:%d  Stock:%d", summary.planets, summary.tradingPosts, summary.totalStorage)
 			DrawText(screen, info, textX, listY+12, utils.TextSecondary)
-			listY += 24
+			listY += 26
 		}
 	}
+
+	hintText := "Press P (or click) for Player Directory"
+	hintY := panelY + panelHeight - 18
+	DrawText(screen, hintText, textX, hintY, utils.TextSecondary)
+	hintWidth := len(hintText) * 6
+	gv.playerDirectoryHintRect = image.Rect(textX-2, hintY-12, textX+hintWidth+2, hintY+4)
 }
 
 func countTradingPosts(planets []*entities.Planet) int {
