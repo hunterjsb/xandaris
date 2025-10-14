@@ -5,11 +5,8 @@ import (
 	"github.com/hunterjsb/xandaris/views"
 )
 
-// initializeViews creates and registers all game views
-// This must be called after UI components are created
+// initializeViews creates and registers only the menu-related views
 func (a *App) initializeViews() {
-
-	// Create and register views (pass App as GameContext)
 	mainMenuView := views.NewMainMenuView(a)
 	settingsView := views.NewSettingsView(a)
 

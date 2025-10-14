@@ -39,6 +39,9 @@ func (a *App) InitializeForMenu() error {
 		fmt.Println("Failed to load custom key bindings:", err)
 	}
 
+	// Initialize tick manager (needed for game loading, even if not actively ticking in menu)
+	a.tickManager = systems.NewTickManager(10.0)
+
 	// Initialize view system
 	a.viewManager = views.NewViewManager()
 
@@ -52,14 +55,11 @@ func (a *App) InitializeForMenu() error {
 }
 
 // InitializeForGame initializes the app with the state for a new game
-func (a *App) InitializeForGame() {
-	// Initialize tick manager for menu (though it won't really be used)
-	a.tickManager = systems.NewTickManager(10.0)
-
-	// Initialize fleet manager (empty for menu)
+func (a *App) initializeGameComponents() {
+	// Initialize fleet manager
 	a.fleetManager = systems.NewFleetManager(a)
 
-	// Initialize fleet command executor (empty for menu)
+	// Initialize fleet command executor
 	a.fleetCmdExecutor = game.NewFleetCommandExecutor(a.state.Systems, a.state.Hyperlanes)
 
 	// Create UI components
@@ -69,7 +69,7 @@ func (a *App) InitializeForGame() {
 	shipyardUI := ui.NewShipyardUI(a)
 	fleetInfoUI := ui.NewFleetInfoUI(a)
 
-	// Initialize and register all views
+	// Initialize and register all game views with actual UI components
 	a.initializeGameViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
 }
 
@@ -79,8 +79,8 @@ func (a *App) InitializeNewGame(playerName string) error {
 	a.state.Reset()
 	a.state.Seed = time.Now().UnixNano()
 
-	// Initialize game systems
-	a.InitializeForGame()
+	// Initialize game-specific components
+	a.initializeGameComponents()
 
 	// Reset tick manager
 	a.tickManager.Reset()

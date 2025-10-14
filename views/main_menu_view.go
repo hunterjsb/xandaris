@@ -275,6 +275,10 @@ func (mmv *MainMenuView) loadSelectedGame() {
 
 	// Switch to galaxy view
 	mmv.ctx.GetViewManager().SwitchTo(ViewTypeGalaxy)
+
+	// Clear error message if any
+	mmv.errorMessage = ""
+	mmv.errorTimer = 0
 }
 
 // showError displays an error message

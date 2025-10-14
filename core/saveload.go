@@ -197,6 +197,9 @@ func (a *App) LoadGameFromPath(path string) error {
 	// Update fleet command executor with loaded systems/hyperlanes
 	a.fleetCmdExecutor = game.NewFleetCommandExecutor(a.state.Systems, a.state.Hyperlanes)
 
+	// Initialize game-specific components
+	a.initializeGameComponents()
+
 	fmt.Printf("[SaveSystem] Game loaded successfully\n")
 	return nil
 }
