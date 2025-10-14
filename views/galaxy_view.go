@@ -183,8 +183,10 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	centerY := int(system.Y)
 
 	// Draw ownership indicator if system has player-owned planets
+	var ownershipColor color.RGBA
 	if humanPlayer != nil && system.HasOwnershipByPlayer(humanPlayer.Name) {
-		DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), humanPlayer.Color)
+		ownershipColor = humanPlayer.Color
+		// DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), humanPlayer.Color)
 	}
 
 	// Get the star and planets from the system
@@ -210,6 +212,10 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 
 	// Draw the correct number of orbits
 	orbitColor := color.RGBA{R: 100, G: 100, B: 100, A: 100}
+	if ownershipColor.A != 0 {
+		orbitColor = ownershipColor
+	}
+
 	for i, planet := range planets {
 		orbitRadius := float64(starRadius + (i+1)*4)
 		segments := 20
