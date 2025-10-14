@@ -2,6 +2,8 @@ package views
 
 import (
 	"fmt"
+	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/utils"
@@ -21,6 +23,7 @@ type GalaxyView struct {
 	lastClickY    int
 	lastClickTime int64
 	systemFleets  map[int][]*Fleet // Fleets per system ID
+	orbitOffset   float64
 }
 
 // NewGalaxyView creates a new galaxy view
@@ -43,6 +46,16 @@ func NewGalaxyView(ctx GameContext) *GalaxyView {
 func (gv *GalaxyView) Update() error {
 	kb := gv.ctx.GetKeyBindings()
 	vm := gv.ctx.GetViewManager()
+
+	// Update orbit animation
+	tm := gv.ctx.GetTickManager()
+	if tm != nil && !tm.IsPaused() {
+		speedVal := tm.GetSpeedFloat()
+		gv.orbitOffset += 0.005 * speedVal
+		if gv.orbitOffset > 6.28318 { // 2*PI
+			gv.orbitOffset -= 6.28318
+		}
+	}
 
 	// Update fleet aggregation for each system
 	gv.updateFleets()
@@ -174,31 +187,64 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 		DrawOwnershipRing(screen, centerX, centerY, float64(circleRadius+4), humanPlayer.Color)
 	}
 
-	// Get the star from the system
+	// Get the star and planets from the system
 	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
+	planets := system.GetEntitiesByType(entities.EntityTypePlanet)
 
-	// Create a circular image for the system
-	circleImg := ebiten.NewImage(circleRadius*2, circleRadius*2)
-
-	// Draw a circle by filling pixels within the radius
-	for py := 0; py < circleRadius*2; py++ {
-		for px := 0; px < circleRadius*2; px++ {
-			// Calculate distance from center
-			dx := float64(px - circleRadius)
-			dy := float64(py - circleRadius)
+	// Draw a small circle for the star
+	starRadius := 4
+	starImg := ebiten.NewImage(starRadius*2, starRadius*2)
+	for py := 0; py < starRadius*2; py++ {
+		for px := 0; px < starRadius*2; px++ {
+			dx := float64(px - starRadius)
+			dy := float64(py - starRadius)
 			dist := dx*dx + dy*dy
-
-			// If within radius, set pixel to system color
-			if dist <= float64(circleRadius*circleRadius) {
-				circleImg.Set(px, py, star.Color)
+			if dist <= float64(starRadius*starRadius) {
+				starImg.Set(px, py, star.Color)
 			}
 		}
 	}
-
-	// Draw the circle centered
 	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(centerX-circleRadius), float64(centerY-circleRadius))
-	screen.DrawImage(circleImg, opts)
+	opts.GeoM.Translate(float64(centerX-starRadius), float64(centerY-starRadius))
+	screen.DrawImage(starImg, opts)
+
+	// Draw the correct number of orbits
+	orbitColor := color.RGBA{R: 100, G: 100, B: 100, A: 100}
+	for i, planet := range planets {
+		orbitRadius := float64(starRadius + (i+1)*4)
+		segments := 20
+		for j := 0; j < segments; j++ {
+			angle1 := float64(j) * 2 * math.Pi / float64(segments)
+			angle2 := float64(j+1) * 2 * math.Pi / float64(segments)
+
+			x1 := centerX + int(orbitRadius*math.Cos(angle1))
+			y1 := centerY + int(orbitRadius*math.Sin(angle1))
+			x2 := centerX + int(orbitRadius*math.Cos(angle2))
+			y2 := centerY + int(orbitRadius*math.Sin(angle2))
+
+			DrawLine(screen, x1, y1, x2, y2, orbitColor)
+		}
+
+		// Draw the planet
+		planetRadius := 1
+		planetAngle := planet.GetOrbitAngle() + gv.orbitOffset // Animate planet orbit
+		planetX := centerX + int(orbitRadius*math.Cos(planetAngle))
+		planetY := centerY + int(orbitRadius*math.Sin(planetAngle))
+		planetImg := ebiten.NewImage(planetRadius*2, planetRadius*2)
+		for py := 0; py < planetRadius*2; py++ {
+			for px := 0; px < planetRadius*2; px++ {
+				dx := float64(px - planetRadius)
+				dy := float64(py - planetRadius)
+				dist := dx*dx + dy*dy
+				if dist <= float64(planetRadius*planetRadius) {
+					planetImg.Set(px, py, planet.GetColor())
+				}
+			}
+		}
+		planetOpts := &ebiten.DrawImageOptions{}
+		planetOpts.GeoM.Translate(float64(planetX-planetRadius), float64(planetY-planetRadius))
+		screen.DrawImage(planetImg, planetOpts)
+	}
 
 	// Draw centered label below the circle
 	labelY := centerY + circleRadius + 15
