@@ -60,6 +60,11 @@ func (gv *GalaxyView) Update() error {
 	// Update fleet aggregation for each system
 	gv.updateFleets()
 
+	// Quick-select home system on pause key (Space)
+	if kb.IsActionJustPressed(ActionPauseToggle) {
+		gv.focusHomeSystem()
+	}
+
 	// Handle escape to return to main menu
 	if kb.IsActionJustPressed(ActionEscape) {
 		vm.SwitchTo(ViewTypeMainMenu)
@@ -263,6 +268,20 @@ func (gv *GalaxyView) getOwnerColor(owner string) (color.RGBA, bool) {
 	}
 
 	return color.RGBA{}, false
+}
+
+func (gv *GalaxyView) focusHomeSystem() {
+	player := gv.ctx.GetHumanPlayer()
+	if player == nil || player.HomeSystem == nil {
+		return
+	}
+
+	for _, system := range gv.ctx.GetSystems() {
+		if system == player.HomeSystem {
+			gv.clickHandler.Select(system)
+			break
+		}
+	}
 }
 
 // updateFleets aggregates fleets for each system

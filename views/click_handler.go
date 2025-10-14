@@ -71,6 +71,19 @@ func (c *ClickHandler) HandleClick(x, y int) bool {
 	return false
 }
 
+// Select programmatically selects a clickable object
+func (c *ClickHandler) Select(clickable Clickable) {
+	if clickable == nil {
+		c.selectedObject = nil
+		c.activeMenu = nil
+		return
+	}
+
+	objX, objY := clickable.GetPosition()
+	c.selectedObject = clickable
+	c.createContextMenu(clickable, int(objX), int(objY))
+}
+
 // createContextMenu creates and positions a context menu for the given object
 func (c *ClickHandler) createContextMenu(clickable Clickable, x, y int) {
 	c.activeMenu = NewContextMenuFromProvider(clickable)
