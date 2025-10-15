@@ -410,8 +410,6 @@ func GetActionName(action KeyAction) string {
 		return "Speed: 4x"
 	case ActionSpeedVeryFast:
 		return "Speed: 8x"
-	case ActionSpeedIncrease:
-		return "Increase Speed"
 	case ActionQuickSave:
 		return "Quick Save"
 	case ActionEscape:

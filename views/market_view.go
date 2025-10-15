@@ -2,42 +2,42 @@ package views
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"sort"
-	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/utils"
 )
 
-type marketContribution struct {
-	planet  string
-	amount  int
-	owner   string
-	isHuman bool
-}
-
 type marketResourceRow struct {
-	resource      string
-	totalAmount   int
-	contributions []marketContribution
+	resource   string
+	humanStock int
+	npcStock   int
+	avgValue   float64
 }
 
-// MarketView presents a consolidated look at trade goods across Trading Posts
+// MarketView presents a simplified trading interface
 type MarketView struct {
 	ctx               GameContext
 	rows              []marketResourceRow
 	scrollOffset      int
 	maxVisibleRows    int
-	tradingPostCount  int
-	humanTradingPosts int
-	aiTradingPosts    int
 	returnTo          ViewType
 	backgroundPanel   *UIPanel
 	headerPanel       *UIPanel
 	tablePanel        *UIPanel
 	instructionsPanel *UIPanel
+	rowHits           map[string]tableRowHit
+	humanCredits      int
+}
+
+type tableRowHit struct {
+	row  image.Rectangle
+	buy  image.Rectangle
+	sell image.Rectangle
 }
 
 // NewMarketView creates a new market view instance
@@ -48,7 +48,7 @@ func NewMarketView(ctx GameContext) *MarketView {
 		Y:           panelMargin,
 		Width:       ScreenWidth - panelMargin*2,
 		Height:      ScreenHeight - panelMargin*2,
-		BgColor:     color.RGBA{15, 20, 30, 235},
+		BgColor:     color.RGBA{18, 20, 32, 235},
 		BorderColor: utils.PanelBorder,
 	}
 
@@ -56,8 +56,8 @@ func NewMarketView(ctx GameContext) *MarketView {
 		X:           background.X + 20,
 		Y:           background.Y + 20,
 		Width:       background.Width - 40,
-		Height:      80,
-		BgColor:     color.RGBA{25, 35, 55, 245},
+		Height:      70,
+		BgColor:     color.RGBA{28, 38, 58, 245},
 		BorderColor: utils.PanelBorder,
 	}
 
@@ -65,17 +65,17 @@ func NewMarketView(ctx GameContext) *MarketView {
 		X:           header.X,
 		Y:           header.Y + header.Height + 10,
 		Width:       header.Width,
-		Height:      background.Height - header.Height - 100,
-		BgColor:     color.RGBA{18, 28, 45, 230},
+		Height:      background.Height - header.Height - 120,
+		BgColor:     color.RGBA{22, 30, 48, 235},
 		BorderColor: utils.PanelBorder,
 	}
 
 	instructions := &UIPanel{
 		X:           background.X + 20,
-		Y:           background.Y + background.Height - 70,
+		Y:           table.Y + table.Height + 10,
 		Width:       background.Width - 40,
 		Height:      50,
-		BgColor:     color.RGBA{20, 30, 48, 235},
+		BgColor:     color.RGBA{22, 32, 48, 235},
 		BorderColor: utils.PanelBorder,
 	}
 
@@ -84,32 +84,24 @@ func NewMarketView(ctx GameContext) *MarketView {
 		rows:              make([]marketResourceRow, 0),
 		scrollOffset:      0,
 		maxVisibleRows:    12,
-		tradingPostCount:  0,
-		humanTradingPosts: 0,
-		aiTradingPosts:    0,
 		returnTo:          ViewTypeGalaxy,
 		backgroundPanel:   background,
 		headerPanel:       header,
 		tablePanel:        table,
 		instructionsPanel: instructions,
+		rowHits:           make(map[string]tableRowHit),
 	}
 }
 
-// GetType returns the view type
-func (mv *MarketView) GetType() ViewType {
-	return ViewTypeMarket
-}
+func (mv *MarketView) GetType() ViewType { return ViewTypeMarket }
 
-// OnEnter resets scrolling and refreshes cached data
 func (mv *MarketView) OnEnter() {
 	mv.scrollOffset = 0
 	mv.refreshData()
 }
 
-// OnExit is part of the view interface (no-op for now)
 func (mv *MarketView) OnExit() {}
 
-// Update refreshes market data and handles scrolling
 func (mv *MarketView) Update() error {
 	mv.refreshData()
 
@@ -134,170 +126,254 @@ func (mv *MarketView) Update() error {
 		}
 	}
 
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		mx, my := ebiten.CursorPosition()
+		for resource, hits := range mv.rowHits {
+			if mx >= hits.buy.Min.X && mx <= hits.buy.Max.X && my >= hits.buy.Min.Y && my <= hits.buy.Max.Y {
+				mv.handleTrade(resource, true)
+				return nil
+			}
+			if mx >= hits.sell.Min.X && mx <= hits.sell.Max.X && my >= hits.sell.Min.Y && my <= hits.sell.Max.Y {
+				mv.handleTrade(resource, false)
+				return nil
+			}
+		}
+	}
 	return nil
 }
 
-// Draw renders the market overview
 func (mv *MarketView) Draw(screen *ebiten.Image) {
-	// Panels
 	mv.backgroundPanel.Draw(screen)
 	mv.headerPanel.Draw(screen)
 	mv.tablePanel.Draw(screen)
 	mv.instructionsPanel.Draw(screen)
 
-	// Header content
-	titleY := mv.headerPanel.Y + 22
-	DrawTextCentered(screen, "Market Overview", mv.headerPanel.X+mv.headerPanel.Width/2, titleY, color.RGBA{225, 230, 255, 255}, 1.8)
+	title := "Market Directory"
+	subtitle := fmt.Sprintf("Credits Available: %d", mv.humanCredits)
+	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+22, utils.TextPrimary)
+	DrawText(screen, subtitle, mv.headerPanel.X+20, mv.headerPanel.Y+40, utils.TextSecondary)
+	DrawText(screen, fmt.Sprintf("Commodities Listed: %d", len(mv.rows)), mv.headerPanel.X+20, mv.headerPanel.Y+58, utils.TextSecondary)
 
-	subtitle := fmt.Sprintf("Trading Posts Online: %d (You: %d | NPC: %d)", mv.tradingPostCount, mv.humanTradingPosts, mv.aiTradingPosts)
-	DrawTextCentered(screen, subtitle, mv.headerPanel.X+mv.headerPanel.Width/2, titleY+40, utils.TextSecondary, 1.2)
+	headerY := mv.tablePanel.Y + 18
+	colResource := mv.tablePanel.X + 20
+	colHuman := mv.tablePanel.X + 220
+	colNpc := mv.tablePanel.X + 320
+	colValue := mv.tablePanel.X + 420
+	colAction := mv.tablePanel.X + mv.tablePanel.Width - 180
 
-	// Table header
-	headerY := mv.tablePanel.Y + 20
-	leftX := mv.tablePanel.X + 20
-	rightX := mv.tablePanel.X + mv.tablePanel.Width - 20
+	DrawText(screen, "Commodity", colResource, headerY, utils.TextPrimary)
+	DrawText(screen, "Your Stock", colHuman, headerY, utils.TextPrimary)
+	DrawText(screen, "NPC Stock", colNpc, headerY, utils.TextPrimary)
+	DrawText(screen, "Avg Value", colValue, headerY, utils.TextPrimary)
+	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
 
-	DrawText(screen, "Resource", leftX, headerY, utils.TextPrimary)
-	DrawText(screen, "Total Stock", mv.tablePanel.X+220, headerY, utils.TextPrimary)
-	DrawText(screen, "Supply by Trading Post", mv.tablePanel.X+360, headerY, utils.TextPrimary)
-
-	// Separator line
-	DrawLine(screen, mv.tablePanel.X+15, headerY+12, rightX-5, headerY+12, utils.PanelBorder)
-
-	rowStartY := headerY + 30
-	rowHeight := 26
-
-	if mv.tradingPostCount == 0 {
-		DrawText(screen, "No Trading Posts constructed. Build one on a colony to access the market.",
-			mv.tablePanel.X+20, rowStartY, utils.TextSecondary)
-		return
-	}
+	DrawLine(screen, mv.tablePanel.X+15, headerY+12, mv.tablePanel.X+mv.tablePanel.Width-15, headerY+12, utils.PanelBorder)
 
 	if len(mv.rows) == 0 {
-		DrawText(screen, "No tradable inventory yet. When Trading Posts store resources, they will appear here.",
-			mv.tablePanel.X+20, rowStartY, utils.TextSecondary)
+		DrawText(screen, "No tradable inventory available yet. Build Trading Posts and accumulate goods to access the market.",
+			mv.tablePanel.X+20, headerY+40, utils.TextSecondary)
+		mv.drawInstructions(screen)
 		return
 	}
+
+	y := headerY + 24
+	rowHeight := 28
+	mv.rowHits = make(map[string]tableRowHit)
 
 	endIndex := mv.scrollOffset + mv.maxVisibleRows
 	if endIndex > len(mv.rows) {
 		endIndex = len(mv.rows)
 	}
 
-	y := rowStartY
 	for _, row := range mv.rows[mv.scrollOffset:endIndex] {
-		DrawText(screen, row.resource, leftX, y, utils.TextPrimary)
-		DrawText(screen, fmt.Sprintf("%d", row.totalAmount), mv.tablePanel.X+220, y, utils.TextPrimary)
+		rowRect := image.Rect(mv.tablePanel.X+12, y-4, mv.tablePanel.X+mv.tablePanel.Width-12, y+rowHeight-4)
 
-		var builder strings.Builder
-		for i, contribution := range row.contributions {
-			if i > 0 {
-				builder.WriteString(", ")
-			}
-			ownerLabel := contribution.owner
-			if contribution.isHuman {
-				ownerLabel = "You"
-			}
-			builder.WriteString(fmt.Sprintf("%s (%s: %d)", contribution.planet, ownerLabel, contribution.amount))
+		rowPanel := NewUIPanel(rowRect.Min.X, rowRect.Min.Y, rowRect.Dx(), rowRect.Dy())
+		rowPanel.BgColor = color.RGBA{34, 46, 70, 220}
+		rowPanel.BorderColor = utils.PanelBorder
+		rowPanel.Draw(screen)
+
+		DrawText(screen, row.resource, colResource, y, utils.TextPrimary)
+		DrawText(screen, fmt.Sprintf("%d", row.humanStock), colHuman, y, utils.TextPrimary)
+		DrawText(screen, fmt.Sprintf("%d", row.npcStock), colNpc, y, utils.TextPrimary)
+		DrawText(screen, fmt.Sprintf("%.0f", row.avgValue), colValue, y, utils.TextSecondary)
+
+		buyLabel := "[Buy]"
+		sellLabel := "[Sell]"
+		DrawText(screen, buyLabel, colAction, y, utils.SystemGreen)
+		DrawText(screen, sellLabel, colAction+60, y, utils.SystemRed)
+
+		mv.rowHits[row.resource] = tableRowHit{
+			row:  rowRect,
+			buy:  image.Rect(colAction-2, y-6, colAction+len(buyLabel)*6+4, y+rowHeight-10),
+			sell: image.Rect(colAction+58, y-6, colAction+58+len(sellLabel)*6+4, y+rowHeight-10),
 		}
-		DrawText(screen, builder.String(), mv.tablePanel.X+360, y, utils.TextSecondary)
 
 		y += rowHeight
 	}
 
-	// Scroll indicator
 	if len(mv.rows) > mv.maxVisibleRows {
-		scrollText := fmt.Sprintf("Showing %d-%d of %d entries",
+		scrollText := fmt.Sprintf("Showing %d-%d of %d commodities",
 			mv.scrollOffset+1, mv.scrollOffset+endIndex-mv.scrollOffset, len(mv.rows))
-		DrawText(screen, scrollText, mv.tablePanel.X+20, mv.tablePanel.Y+mv.tablePanel.Height-30, utils.TextSecondary)
+		DrawText(screen, scrollText, mv.tablePanel.X+20, mv.tablePanel.Y+mv.tablePanel.Height-24, utils.TextSecondary)
 	}
 
-	// Instructions
-	instrY := mv.instructionsPanel.Y + 20
-	DrawCenteredText(screen, "Use the mouse wheel to scroll, [Esc] to return. Trading Posts automatically list stored resources for all factions.",
-		mv.instructionsPanel.X+mv.instructionsPanel.Width/2, instrY)
+	mv.drawInstructions(screen)
 }
 
-func (mv *MarketView) refreshData() {
-	mv.rows = mv.rows[:0]
-	mv.tradingPostCount = 0
-	mv.humanTradingPosts = 0
-	mv.aiTradingPosts = 0
+func (mv *MarketView) handleTrade(resource string, buy bool) {
+	row := mv.getRow(resource)
+	if row == nil {
+		return
+	}
+	qty := 10
+	if buy {
+		if row.npcStock < qty {
+			fmt.Println("[Market] Not enough NPC stock")
+			return
+		}
+		cost := int(row.avgValue * float64(qty))
+		if cost <= 0 {
+			cost = qty * 50
+		}
+		human := mv.ctx.GetHumanPlayer()
+		if human == nil || human.Credits < cost {
+			fmt.Println("[Market] Insufficient credits")
+			return
+		}
+		if !mv.transferStock(resource, qty, false) {
+			fmt.Println("[Market] Failed to obtain stock from NPCs")
+			return
+		}
+		if !mv.transferStock(resource, qty, true) {
+			fmt.Println("[Market] Failed to add stock to human colony")
+			return
+		}
+		human.Credits -= cost
+		fmt.Printf("[Market] Purchased %d units of %s for %d credits\n", qty, resource, cost)
+	} else {
+		if row.humanStock < qty {
+			fmt.Println("[Market] Not enough stock to sell")
+			return
+		}
+		revenue := int(row.avgValue * float64(qty))
+		if revenue <= 0 {
+			revenue = qty * 40
+		}
+		if !mv.removeFromHuman(resource, qty) {
+			fmt.Println("[Market] Failed to remove stock from player")
+			return
+		}
+		mv.transferToNPC(resource, qty)
+		if human := mv.ctx.GetHumanPlayer(); human != nil {
+			human.Credits += revenue
+		}
+		fmt.Printf("[Market] Sold %d units of %s for %d credits\n", qty, resource, revenue)
+	}
+	mv.refreshData()
+}
 
-	resourceMap := make(map[string]*marketResourceRow)
+func (mv *MarketView) drawInstructions(screen *ebiten.Image) {
+	instr := "Click [Buy] or [Sell] to trade 10 units. Scroll the list with the mouse wheel. Press Esc to return."
+	DrawText(screen, instr, mv.instructionsPanel.X+20, mv.instructionsPanel.Y+20, utils.TextSecondary)
+}
 
+func (mv *MarketView) getRow(resource string) *marketResourceRow {
+	for i := range mv.rows {
+		if mv.rows[i].resource == resource {
+			return &mv.rows[i]
+		}
+	}
+	return nil
+}
+
+func (mv *MarketView) transferStock(resource string, qty int, toHuman bool) bool {
 	players := mv.ctx.GetPlayers()
 	if len(players) == 0 {
-		return
+		return false
+	}
+	if toHuman {
+		human := mv.ctx.GetHumanPlayer()
+		if human == nil {
+			return false
+		}
+		planet := firstPlanetWithTradingPost(human)
+		if planet == nil {
+			return false
+		}
+		planet.AddStoredResource(resource, qty)
+		return true
 	}
 
 	for _, player := range players {
-		if player == nil {
+		if player == nil || player.IsHuman() {
 			continue
 		}
 		for _, planet := range player.OwnedPlanets {
-			if planet == nil || planet.Owner != player.Name {
+			if planet == nil {
 				continue
 			}
-			if !mv.planetHasTradingPost(planet) {
-				continue
-			}
-
-			mv.tradingPostCount++
-			if player.IsHuman() {
-				mv.humanTradingPosts++
-			} else {
-				mv.aiTradingPosts++
-			}
-
-			for resourceType, storage := range planet.StoredResources {
-				if storage == nil || storage.Amount <= 0 {
-					continue
+			if storage := planet.StoredResources[resource]; storage != nil && storage.Amount > 0 {
+				removed := planet.RemoveStoredResource(resource, qty)
+				if removed > 0 {
+					return true
 				}
-
-				row, exists := resourceMap[resourceType]
-				if !exists {
-					row = &marketResourceRow{
-						resource:      resourceType,
-						totalAmount:   0,
-						contributions: make([]marketContribution, 0),
-					}
-					resourceMap[resourceType] = row
-				}
-
-				row.totalAmount += storage.Amount
-				row.contributions = append(row.contributions, marketContribution{
-					planet:  planet.Name,
-					owner:   player.Name,
-					amount:  storage.Amount,
-					isHuman: player.IsHuman(),
-				})
 			}
 		}
 	}
-
-	for _, row := range resourceMap {
-		sort.Slice(row.contributions, func(i, j int) bool {
-			if row.contributions[i].amount == row.contributions[j].amount {
-				if row.contributions[i].owner == row.contributions[j].owner {
-					return row.contributions[i].planet < row.contributions[j].planet
-				}
-				return row.contributions[i].owner < row.contributions[j].owner
-			}
-			return row.contributions[i].amount > row.contributions[j].amount
-		})
-		mv.rows = append(mv.rows, *row)
-	}
-
-	sort.Slice(mv.rows, func(i, j int) bool {
-		if mv.rows[i].totalAmount == mv.rows[j].totalAmount {
-			return mv.rows[i].resource < mv.rows[j].resource
-		}
-		return mv.rows[i].totalAmount > mv.rows[j].totalAmount
-	})
+	return false
 }
 
-func (mv *MarketView) planetHasTradingPost(planet *entities.Planet) bool {
+func (mv *MarketView) removeFromHuman(resource string, qty int) bool {
+	human := mv.ctx.GetHumanPlayer()
+	if human == nil {
+		return false
+	}
+	for _, planet := range human.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		if storage := planet.StoredResources[resource]; storage != nil && storage.Amount >= qty {
+			removed := planet.RemoveStoredResource(resource, qty)
+			return removed == qty
+		}
+	}
+	return false
+}
+
+func (mv *MarketView) transferToNPC(resource string, qty int) {
+	players := mv.ctx.GetPlayers()
+	for _, player := range players {
+		if player == nil || player.IsHuman() {
+			continue
+		}
+		planet := firstPlanetWithTradingPost(player)
+		if planet != nil {
+			planet.AddStoredResource(resource, qty)
+			return
+		}
+	}
+}
+
+func firstPlanetWithTradingPost(player *entities.Player) *entities.Planet {
+	if player == nil {
+		return nil
+	}
+	for _, planet := range player.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		if hasTradingPost(planet) {
+			return planet
+		}
+	}
+	if len(player.OwnedPlanets) > 0 {
+		return player.OwnedPlanets[0]
+	}
+	return nil
+}
+
+func hasTradingPost(planet *entities.Planet) bool {
 	for _, buildingEntity := range planet.Buildings {
 		if building, ok := buildingEntity.(*entities.Building); ok {
 			if building.BuildingType == "Trading Post" && building.IsOperational {
@@ -308,12 +384,99 @@ func (mv *MarketView) planetHasTradingPost(planet *entities.Planet) bool {
 	return false
 }
 
-// SetReturnView configures which view to go back to when exiting the market
-func (mv *MarketView) SetReturnView(view ViewType) {
-	mv.returnTo = view
+func (mv *MarketView) refreshData() {
+	mv.rows = mv.rows[:0]
+	mv.rowHits = make(map[string]tableRowHit)
+	mv.humanCredits = 0
+
+	player := mv.ctx.GetHumanPlayer()
+	if player != nil {
+		mv.humanCredits = player.Credits
+	}
+
+	players := mv.ctx.GetPlayers()
+	if len(players) == 0 {
+		return
+	}
+
+	type stockAccumulator struct {
+		human int
+		npc   int
+		value float64
+		count int
+	}
+	acc := make(map[string]*stockAccumulator)
+
+	for _, player := range players {
+		if player == nil {
+			continue
+		}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			for resourceType, storage := range planet.StoredResources {
+				if storage == nil || storage.Amount <= 0 {
+					continue
+				}
+				entry, exists := acc[resourceType]
+				if !exists {
+					entry = &stockAccumulator{}
+					acc[resourceType] = entry
+				}
+				if player.IsHuman() {
+					entry.human += storage.Amount
+				} else {
+					entry.npc += storage.Amount
+				}
+				if value := lookupResourceValue(planet, resourceType); value > 0 {
+					entry.value += float64(value)
+					entry.count++
+				}
+			}
+		}
+	}
+
+	for resource, entry := range acc {
+		avg := 0.0
+		if entry.count > 0 {
+			avg = entry.value / float64(entry.count)
+		}
+		mv.rows = append(mv.rows, marketResourceRow{
+			resource:   resource,
+			humanStock: entry.human,
+			npcStock:   entry.npc,
+			avgValue:   avg,
+		})
+	}
+
+	sort.Slice(mv.rows, func(i, j int) bool {
+		totalI := mv.rows[i].humanStock + mv.rows[i].npcStock
+		totalJ := mv.rows[j].humanStock + mv.rows[j].npcStock
+		if totalI == totalJ {
+			return mv.rows[i].resource < mv.rows[j].resource
+		}
+		return totalI > totalJ
+	})
 }
 
-// GetReturnView exposes which view the market should return to
-func (mv *MarketView) GetReturnView() ViewType {
-	return mv.returnTo
+// helper for pricing lookup
+func lookupResourceValue(planet *entities.Planet, resourceType string) int {
+	if planet == nil {
+		return 0
+	}
+	for _, resEntity := range planet.Resources {
+		if resource, ok := resEntity.(*entities.Resource); ok {
+			if resource.ResourceType == resourceType {
+				return resource.Value
+			}
+		}
+	}
+	return 0
 }
+
+// SetReturnView configures which view to go back to when exiting the market
+func (mv *MarketView) SetReturnView(view ViewType) { mv.returnTo = view }
+
+// GetReturnView exposes which view the market should return to
+func (mv *MarketView) GetReturnView() ViewType { return mv.returnTo }

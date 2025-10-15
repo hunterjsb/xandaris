@@ -33,11 +33,6 @@ func (a *App) handleGlobalInput() {
 		a.tickManager.SetSpeed(systems.TickSpeed8x)
 	}
 
-	// Cycle speed
-	if a.keyBindings.IsActionJustPressed(views.ActionSpeedIncrease) {
-		a.tickManager.CycleSpeed()
-	}
-
 	// Quick save
 	if a.keyBindings.IsActionJustPressed(views.ActionQuickSave) {
 		if a.state.HumanPlayer != nil {

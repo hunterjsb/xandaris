@@ -84,7 +84,6 @@ const (
 	ActionSpeedNormal   KeyAction = "speed_normal"
 	ActionSpeedFast     KeyAction = "speed_fast"
 	ActionSpeedVeryFast KeyAction = "speed_very_fast"
-	ActionSpeedIncrease KeyAction = "speed_increase"
 	ActionQuickSave     KeyAction = "quick_save"
 
 	// View navigation

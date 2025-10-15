@@ -33,7 +33,6 @@ func (kb *KeyBindings) LoadDefaults() {
 	kb.bindings[views.ActionSpeedNormal] = ebiten.Key2
 	kb.bindings[views.ActionSpeedFast] = ebiten.Key3
 	kb.bindings[views.ActionSpeedVeryFast] = ebiten.Key4
-	kb.bindings[views.ActionSpeedIncrease] = ebiten.KeyEqual
 	kb.bindings[views.ActionQuickSave] = ebiten.KeyF5
 
 	// View navigation
@@ -79,7 +78,6 @@ func (kb *KeyBindings) GetActionName(action views.KeyAction) string {
 		views.ActionSpeedNormal:   "Speed: Normal",
 		views.ActionSpeedFast:     "Speed: Fast",
 		views.ActionSpeedVeryFast: "Speed: Very Fast",
-		views.ActionSpeedIncrease: "Speed: Increase",
 		views.ActionQuickSave:     "Quick Save",
 		views.ActionEscape:        "Escape/Back",
 		views.ActionOpenBuildMenu: "Open Build Menu",
@@ -158,7 +156,6 @@ func (kb *KeyBindings) GetAllActions() []views.KeyAction {
 		views.ActionSpeedNormal,
 		views.ActionSpeedFast,
 		views.ActionSpeedVeryFast,
-		views.ActionSpeedIncrease,
 		views.ActionQuickSave,
 		views.ActionEscape,
 		views.ActionOpenBuildMenu,
