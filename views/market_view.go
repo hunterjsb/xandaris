@@ -35,10 +35,11 @@ type MarketView struct {
 }
 
 type tableRowHit struct {
-	row  image.Rectangle
 	buy  image.Rectangle
 	sell image.Rectangle
 }
+
+const tradeLot = 10
 
 // NewMarketView creates a new market view instance
 func NewMarketView(ctx GameContext) *MarketView {
@@ -129,11 +130,11 @@ func (mv *MarketView) Update() error {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
 		for resource, hits := range mv.rowHits {
-			if mx >= hits.buy.Min.X && mx <= hits.buy.Max.X && my >= hits.buy.Min.Y && my <= hits.buy.Max.Y {
+			if pointInRect(mx, my, hits.buy) {
 				mv.handleTrade(resource, true)
 				return nil
 			}
-			if mx >= hits.sell.Min.X && mx <= hits.sell.Max.X && my >= hits.sell.Min.Y && my <= hits.sell.Max.Y {
+			if pointInRect(mx, my, hits.sell) {
 				mv.handleTrade(resource, false)
 				return nil
 			}
@@ -204,9 +205,8 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		DrawText(screen, sellLabel, colAction+60, y, utils.SystemRed)
 
 		mv.rowHits[row.resource] = tableRowHit{
-			row:  rowRect,
-			buy:  image.Rect(colAction-2, y-6, colAction+len(buyLabel)*6+4, y+rowHeight-10),
-			sell: image.Rect(colAction+58, y-6, colAction+58+len(sellLabel)*6+4, y+rowHeight-10),
+			buy:  makeLabelRect(colAction, y, buyLabel),
+			sell: makeLabelRect(colAction+60, y, sellLabel),
 		}
 
 		y += rowHeight
@@ -226,7 +226,7 @@ func (mv *MarketView) handleTrade(resource string, buy bool) {
 	if row == nil {
 		return
 	}
-	qty := 10
+	qty := tradeLot
 	if buy {
 		if row.npcStock < qty {
 			fmt.Println("[Market] Not enough NPC stock")
@@ -315,7 +315,7 @@ func (mv *MarketView) transferStock(resource string, qty int, toHuman bool) bool
 			}
 			if storage := planet.StoredResources[resource]; storage != nil && storage.Amount > 0 {
 				removed := planet.RemoveStoredResource(resource, qty)
-				if removed > 0 {
+				if removed >= qty {
 					return true
 				}
 			}
@@ -480,3 +480,12 @@ func (mv *MarketView) SetReturnView(view ViewType) { mv.returnTo = view }
 
 // GetReturnView exposes which view the market should return to
 func (mv *MarketView) GetReturnView() ViewType { return mv.returnTo }
+
+func pointInRect(x, y int, rect image.Rectangle) bool {
+	return x >= rect.Min.X && x <= rect.Max.X && y >= rect.Min.Y && y <= rect.Max.Y
+}
+
+func makeLabelRect(x, y int, label string) image.Rectangle {
+	width := len(label) * 6
+	return image.Rect(x-2, y-6, x+width+2, y+10)
+}
