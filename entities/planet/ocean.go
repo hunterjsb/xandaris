@@ -56,9 +56,7 @@ func (g *OceanGenerator) Generate(params entities.GenerationParams) entities.Ent
 	planet.Size = 5 + rand.Intn(3)         // 5-7 pixels (similar to terrestrial)
 	planet.Temperature = 0 + rand.Intn(40) // 0 to 40°C - temperate water worlds
 
-	// Atmosphere options for ocean worlds
-	atmospheres := []string{"Breathable", "Breathable", "Toxic"} // Higher chance of breathable
-	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType)
 
 	// Civilian population now starts at zero; growth systems will populate habitable worlds later
 	planet.Population = 0
@@ -66,18 +64,12 @@ func (g *OceanGenerator) Generate(params entities.GenerationParams) entities.Ent
 	// Generate resource entities for ocean worlds
 	generatePlanetResources(planet, params, 3, 3) // 3-5 resource deposits (ocean worlds are resource-rich)
 
-	// High habitability (water is life)
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Ocean")
-	// Bonus for ocean worlds
-	if planet.Atmosphere == "Breathable" {
-		planet.Habitability += 15
-		if planet.Habitability > 100 {
-			planet.Habitability = 100
-		}
-	}
 
 	// 20% chance of rings
 	planet.HasRings = rand.Float32() < 0.20
+
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }

@@ -54,10 +54,10 @@ func (g *GasGiantGenerator) Generate(params entities.GenerationParams) entities.
 	)
 
 	// Set gas giant-specific properties
-	planet.Size = 8 + rand.Intn(4)            // 8-11 pixels (much larger than terrestrial)
-	planet.Temperature = -150 + rand.Intn(50) // -150 to -100°C - very cold
-	planet.Atmosphere = "Dense"               // Always dense atmosphere
-	planet.Population = 0                     // No surface, but could have floating cities in future
+	planet.Size = 8 + rand.Intn(4)                                 // 8-11 pixels (much larger than terrestrial)
+	planet.Temperature = -150 + rand.Intn(50)                      // -150 to -100°C - very cold
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType) // Gas giants default to dense atmospheres
+	planet.Population = 0                                          // No surface, but could have floating cities in future
 
 	// Generate resource entities for gas giants
 	generatePlanetResources(planet, params, 2, 3) // 2-4 resource deposits
@@ -67,6 +67,8 @@ func (g *GasGiantGenerator) Generate(params entities.GenerationParams) entities.
 
 	// 40% chance of rings (gas giants often have rings)
 	planet.HasRings = rand.Float32() < 0.40
+
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }

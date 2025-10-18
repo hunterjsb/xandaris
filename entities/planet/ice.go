@@ -56,9 +56,7 @@ func (g *IceGenerator) Generate(params entities.GenerationParams) entities.Entit
 	planet.Size = 4 + rand.Intn(3)           // 4-6 pixels
 	planet.Temperature = -80 + rand.Intn(40) // -80 to -40°C - very cold
 
-	// Atmosphere options for ice worlds
-	atmospheres := []string{"Thin", "None"}
-	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType)
 
 	// Civilian population starts at zero; any presence represents later colonisation
 	planet.Population = 0
@@ -71,6 +69,8 @@ func (g *IceGenerator) Generate(params entities.GenerationParams) entities.Entit
 
 	// 15% chance of rings
 	planet.HasRings = rand.Float32() < 0.15
+
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }

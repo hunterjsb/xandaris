@@ -56,14 +56,13 @@ func (g *BarrenGenerator) Generate(params entities.GenerationParams) entities.En
 	planet.Size = 5 + rand.Intn(2)           // 5-6 pixels (medium size)
 	planet.Temperature = 30 - rand.Intn(100) // probably cold
 
-	// Atmosphere options for desert worlds
-	atmospheres := []string{"Thin", "Thin", "Toxic"} // Higher chance of thin atmosphere
-	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType)
 
 	// Generate resource entities for barren worlds
 	generatePlanetResources(planet, params, 1, 2) // 1-2 resource deposits
 
 	planet.Habitability = 0
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }

@@ -55,9 +55,7 @@ func (g *TerrestrialGenerator) Generate(params entities.GenerationParams) entiti
 	planet.Size = 5 + rand.Intn(3)           // 5-7 pixels
 	planet.Temperature = -20 + rand.Intn(60) // -20 to 40°C
 
-	// Atmosphere options for terrestrial planets
-	atmospheres := []string{"Breathable", "Toxic", "Thin"}
-	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType)
 
 	// Civilian population starts at zero; future growth will depend on habitability and housing
 	planet.Population = 0
@@ -70,6 +68,8 @@ func (g *TerrestrialGenerator) Generate(params entities.GenerationParams) entiti
 
 	// 10% chance of rings
 	planet.HasRings = rand.Float32() < 0.10
+
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }
@@ -103,41 +103,27 @@ func generatePlanetResources(planet *entities.Planet, params entities.Generation
 	}
 }
 
-// calculateHabitability calculates a habitability score 0-100
+// calculateHabitability calculates a habitability score (0-100) using shared rules
 func calculateHabitability(temperature int, atmosphere string, planetType string) int {
-	score := 50 // Base score
+	score := 40 // Base score shared across types
 
-	// Temperature scoring
-	if temperature >= -10 && temperature <= 30 {
-		score += 30 // Ideal temperature
-	} else if temperature >= -30 && temperature <= 50 {
-		score += 15 // Acceptable temperature
+	profile, ok := planetTemperatureProfiles[planetType]
+	if !ok {
+		profile = planetTemperatureProfiles["default"]
+	}
+
+	score += temperatureScore(temperature, profile)
+
+	if modifier, ok := atmosphereHabitabilityModifiers[atmosphere]; ok {
+		score += modifier
 	} else {
-		score -= 20 // Poor temperature
+		score -= 20
 	}
 
-	// Atmosphere scoring
-	switch atmosphere {
-	case "Breathable":
-		score += 20
-	case "Thin":
-		score += 5
-	case "Dense":
-		score -= 5
-	case "Toxic":
-		score -= 15
-	case "Corrosive":
-		score -= 30
-	case "None":
-		score -= 25
+	if modifier, ok := planetTypeHabitabilityModifiers[planetType]; ok {
+		score += modifier
 	}
 
-	// Planet type bonus
-	if planetType == "Terrestrial" {
-		score += 10
-	}
-
-	// Ensure score is between 0 and 100
 	if score < 0 {
 		score = 0
 	}

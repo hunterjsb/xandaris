@@ -56,9 +56,7 @@ func (g *DesertGenerator) Generate(params entities.GenerationParams) entities.En
 	planet.Size = 5 + rand.Intn(2)          // 5-6 pixels (medium size)
 	planet.Temperature = 30 + rand.Intn(70) // 30 to 100°C - hot and dry
 
-	// Atmosphere options for desert worlds
-	atmospheres := []string{"Thin", "Thin", "Toxic"} // Higher chance of thin atmosphere
-	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType)
 
 	// Civilian population starts at zero; habitation will grow once colonised
 	planet.Population = 0
@@ -66,16 +64,12 @@ func (g *DesertGenerator) Generate(params entities.GenerationParams) entities.En
 	// Generate resource entities for desert worlds
 	generatePlanetResources(planet, params, 2, 3) // 2-4 resource deposits
 
-	// Low to moderate habitability
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Desert")
-	// Desert penalty
-	planet.Habitability -= 15
-	if planet.Habitability < 0 {
-		planet.Habitability = 0
-	}
 
 	// 5% chance of rings (rare for desert worlds)
 	planet.HasRings = rand.Float32() < 0.05
+
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }

@@ -52,10 +52,10 @@ func (g *LavaGenerator) Generate(params entities.GenerationParams) entities.Enti
 	)
 
 	// Set lava-specific properties
-	planet.Size = 4 + rand.Intn(3)            // 4-6 pixels (smaller than terrestrial)
-	planet.Temperature = 800 + rand.Intn(500) // 800 to 1300°C - extremely hot
-	planet.Atmosphere = "Corrosive"           // Always corrosive
-	planet.Population = 0                     // Uninhabitable
+	planet.Size = 4 + rand.Intn(3)                                 // 4-6 pixels (smaller than terrestrial)
+	planet.Temperature = 800 + rand.Intn(500)                      // 800 to 1300°C - extremely hot
+	planet.Atmosphere = randomAtmosphereForType(planet.PlanetType) // Always corrosive for lava worlds
+	planet.Population = 0                                          // Uninhabitable
 
 	// Generate resource entities for lava planets
 	generatePlanetResources(planet, params, 2, 2) // 2-3 resource deposits
@@ -65,6 +65,8 @@ func (g *LavaGenerator) Generate(params entities.GenerationParams) entities.Enti
 
 	// 5% chance of rings (rare)
 	planet.HasRings = rand.Float32() < 0.05
+
+	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }
