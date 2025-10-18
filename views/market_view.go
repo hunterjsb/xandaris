@@ -274,7 +274,7 @@ func (mv *MarketView) handleTrade(resource string, buy bool) {
 }
 
 func (mv *MarketView) drawInstructions(screen *ebiten.Image) {
-	instr := "Click [Buy] or [Sell] to trade 10 units. Scroll the list with the mouse wheel. Press Esc to return."
+	instr := fmt.Sprintf("Click [Buy] or [Sell] to trade %d units. Scroll with the mouse wheel. Press [Tab] to focus home; press [Esc] to return.", tradeLot)
 	DrawText(screen, instr, mv.instructionsPanel.X+20, mv.instructionsPanel.Y+20, utils.TextSecondary)
 }
 
@@ -313,12 +313,10 @@ func (mv *MarketView) transferStock(resource string, qty int, toHuman bool) bool
 			if planet == nil {
 				continue
 			}
-			if storage := planet.StoredResources[resource]; storage != nil && storage.Amount > 0 {
-				removed := planet.RemoveStoredResource(resource, qty)
-				if removed >= qty {
-					return true
-				}
-			}
+            if storage := planet.StoredResources[resource]; storage != nil && storage.Amount >= qty {
+                planet.RemoveStoredResource(resource, qty)
+                return true
+            }
 		}
 	}
 	return false

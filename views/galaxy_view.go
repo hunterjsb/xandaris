@@ -545,7 +545,7 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 
 	if gv.playerPanelCollapsed {
 		DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+36, utils.TextPrimary)
-		collapsedHint := "Click [+] to expand  |  Press P for Directory"
+		collapsedHint := "Click [+] to expand  |  Press [P] for Directory"
 		hintY := panelY + panelHeight - 18
 		DrawText(screen, collapsedHint, textX, hintY, utils.TextSecondary)
 		hintWidth := len(collapsedHint) * 6
@@ -580,7 +580,7 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		}
 	}
 
-	hintText := "Press P (or click) for Player Directory"
+	hintText := "Press [P] (or click) for Player Directory"
 	hintY := panelY + panelHeight - 18
 	DrawText(screen, hintText, textX, hintY, utils.TextSecondary)
 	hintWidth := len(hintText) * 6
