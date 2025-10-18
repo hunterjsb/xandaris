@@ -95,14 +95,10 @@ func (ras *ResourceAccumulationSystem) calculateProduction(planetInterface inter
 
 	production := int64(0)
 
-	// Base production: 1 credit per million population per second
+	// Base production: 1 credit per 100 population per interval
 	if planet.Population > 0 {
-		production += planet.Population / 1000000
+		production += planet.Population / 100
 	}
-
-	// Habitability bonus (0-100% increases base by up to 50%)
-	habitabilityBonus := float64(planet.Habitability) / 200.0
-	production = int64(float64(production) * (1.0 + habitabilityBonus))
 
 	// Calculate production from resource extraction
 	for _, resourceEntity := range planet.Resources {

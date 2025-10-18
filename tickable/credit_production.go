@@ -20,8 +20,12 @@ type CreditProductionSystem struct {
 func (cps *CreditProductionSystem) OnTick(tick int64) {
 	cps.tickCounter++
 
-	// Only produce credits every 10 ticks (once per second at 1x speed)
-	if cps.tickCounter%10 != 0 {
+	interval := int64(cps.GetPriority())
+	if interval <= 0 {
+		interval = 1
+	}
+
+	if cps.tickCounter%interval != 0 {
 		return
 	}
 
@@ -44,14 +48,8 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 	for _, player := range players {
 		// Each planet produces credits based on population
 		for _, planet := range player.OwnedPlanets {
-			// Base production: 1 credit per million population per second
-			production := int(planet.Population / 1000000)
-
-			// Bonus for habitability
-			habitabilityBonus := float64(planet.Habitability) / 100.0
-			production = int(float64(production) * (1.0 + habitabilityBonus))
-
-			// Add production to player credits
+			// Base production: 1 credit per 100 population per interval
+			production := int(planet.Population / 100)
 			player.Credits += production
 		}
 	}
