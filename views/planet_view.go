@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -288,17 +289,26 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	// Draw UI info
 	title := fmt.Sprintf("Planet View: %s", pv.planet.Name)
 	DrawText(screen, title, 10, 10, utils.TextPrimary)
-	DrawText(screen, fmt.Sprintf("Type: %s", pv.planet.PlanetType), 10, 25, utils.TextSecondary)
-	DrawText(screen, fmt.Sprintf("Resources: %d deposits", len(pv.planet.Resources)), 10, 40, utils.TextSecondary)
-	DrawText(screen, fmt.Sprintf("Buildings: %d", len(pv.planet.Buildings)), 10, 55, utils.TextSecondary)
+
+	infoY := 25
+	for _, line := range formatPlanetDetails(pv.planet) {
+		color := utils.TextSecondary
+		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") {
+			color = utils.TextPrimary
+		}
+		DrawText(screen, line, 10, infoY, color)
+		infoY += 15
+	}
+
+	infoY += 10
 
 	// Show build hints if player owns this planet
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	if humanPlayer != nil && pv.planet.Owner == humanPlayer.Name {
-		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, 70, utils.TextSecondary)
-		DrawText(screen, "Press ESC to return to system", 10, 85, utils.TextSecondary)
+		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, infoY, utils.TextSecondary)
+		DrawText(screen, "Press ESC to return to system", 10, infoY+15, utils.TextSecondary)
 	} else {
-		DrawText(screen, "Press ESC to return to system", 10, 70, utils.TextSecondary)
+		DrawText(screen, "Press ESC to return to system", 10, infoY, utils.TextSecondary)
 	}
 
 	// Draw construction queue UI
@@ -683,4 +693,41 @@ func (pv *PlanetView) getOwnerColor(owner string) (color.RGBA, bool) {
 	}
 
 	return color.RGBA{}, false
+}
+
+func formatPlanetDetails(planet *entities.Planet) []string {
+	if planet == nil {
+		return nil
+	}
+
+	owner := planet.Owner
+	if owner == "" {
+		owner = "Unclaimed"
+	}
+
+	lines := []string{
+		fmt.Sprintf("Owner: %s", owner),
+		fmt.Sprintf("Type: %s", planet.PlanetType),
+		fmt.Sprintf("Atmosphere: %s", planet.Atmosphere),
+		fmt.Sprintf("Temperature: %d°C", planet.Temperature),
+		fmt.Sprintf("Habitability: %d%%", planet.Habitability),
+	}
+
+	populationStr := utils.FormatInt64WithCommas(planet.Population)
+	capacity := planet.GetTotalPopulationCapacity()
+	if capacity > 0 {
+		capacityStr := utils.FormatInt64WithCommas(capacity)
+		lines = append(lines, fmt.Sprintf("Population: %s / %s", populationStr, capacityStr))
+
+		baseHousing := utils.FormatInt64WithCommas(planet.GetBasePopulationCapacity())
+		buildingHousing := utils.FormatInt64WithCommas(planet.GetBuildingPopulationCapacity())
+		lines = append(lines, fmt.Sprintf("Housing: %s (Planet %s | Buildings %s)", capacityStr, baseHousing, buildingHousing))
+	} else {
+		lines = append(lines, fmt.Sprintf("Population: %s (no housing)", populationStr))
+	}
+
+	lines = append(lines, fmt.Sprintf("Resources: %d deposits", len(planet.Resources)))
+	lines = append(lines, fmt.Sprintf("Buildings: %d", len(planet.Buildings)))
+
+	return lines
 }

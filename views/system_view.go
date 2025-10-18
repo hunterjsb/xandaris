@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -171,6 +172,33 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	title := fmt.Sprintf("System View: %s", sv.system.Name)
 	DrawText(screen, title, 10, 10, utils.TextPrimary)
 	DrawText(screen, "Press ESC to return to galaxy", 10, 25, utils.TextSecondary)
+
+	if selected := sv.clickHandler.GetSelectedObject(); selected != nil {
+		infoY := 45
+
+		if planet, ok := selected.(*entities.Planet); ok {
+			DrawText(screen, fmt.Sprintf("Selected Planet: %s", planet.Name), 10, infoY, utils.TextPrimary)
+			infoY += 15
+			for _, line := range formatPlanetDetails(planet) {
+				color := utils.TextSecondary
+				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") {
+					color = utils.TextPrimary
+				}
+				DrawText(screen, line, 10, infoY, color)
+				infoY += 15
+			}
+		} else if provider, ok := selected.(ContextMenuProvider); ok {
+			DrawText(screen, provider.GetContextMenuTitle(), 10, infoY, utils.TextPrimary)
+			infoY += 15
+			for _, line := range provider.GetContextMenuItems() {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				DrawText(screen, line, 10, infoY, utils.TextSecondary)
+				infoY += 15
+			}
+		}
+	}
 }
 
 // updateFleets aggregates ships into fleets
