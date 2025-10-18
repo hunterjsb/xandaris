@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/entities/building"
 )
 
 func init() {
@@ -67,10 +68,10 @@ func (g *IceGenerator) Generate(params entities.GenerationParams) entities.Entit
 	// Low to moderate habitability
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Ice")
 
+	building.EnsurePlanetHasBase(planet, params)
+
 	// 15% chance of rings
 	planet.HasRings = rand.Float32() < 0.15
-
-	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }

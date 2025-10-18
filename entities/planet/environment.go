@@ -47,20 +47,20 @@ var planetAtmosphereDistributions = map[string][]atmosphereWeight{
 
 // Habitability modifiers applied per atmosphere class
 var atmosphereHabitabilityModifiers = map[string]int{
-	entities.AtmosphereBreathable: 25,
-	entities.AtmosphereThin:       5,
-	entities.AtmosphereDense:      -10,
-	entities.AtmosphereToxic:      -25,
-	entities.AtmosphereCorrosive:  -40,
-	entities.AtmosphereNone:       -30,
+	entities.AtmosphereBreathable: 15,
+	entities.AtmosphereThin:       0,
+	entities.AtmosphereDense:      -15,
+	entities.AtmosphereToxic:      -30,
+	entities.AtmosphereCorrosive:  -45,
+	entities.AtmosphereNone:       -35,
 }
 
 // Habitability baseline modifiers for specific planet subtypes
 var planetTypeHabitabilityModifiers = map[string]int{
-	"Terrestrial": 5,
-	"Ocean":       15,
-	"Desert":      -10,
-	"Ice":         -15,
+	"Terrestrial": 0,
+	"Ocean":       8,
+	"Desert":      -20,
+	"Ice":         -25,
 }
 
 type temperatureProfile struct {
@@ -109,10 +109,10 @@ func randomAtmosphereForType(planetType string) string {
 
 func temperatureScore(temp int, profile temperatureProfile) int {
 	if temp >= profile.IdealMin && temp <= profile.IdealMax {
-		return 30
+		return 20
 	}
 	if temp >= profile.HabitableMin && temp <= profile.HabitableMax {
-		return 10
+		return 5
 	}
-	return -35
+	return -40
 }

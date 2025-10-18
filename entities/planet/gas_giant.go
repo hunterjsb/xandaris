@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/entities/building"
 )
 
 func init() {
@@ -66,9 +67,9 @@ func (g *GasGiantGenerator) Generate(params entities.GenerationParams) entities.
 	planet.Habitability = 5 + rand.Intn(10) // 5-15% (potential for floating stations)
 
 	// 40% chance of rings (gas giants often have rings)
-	planet.HasRings = rand.Float32() < 0.40
+	building.EnsurePlanetHasBase(planet, params)
 
-	planet.RecalculateBasePopulationCapacity()
+	planet.HasRings = rand.Float32() < 0.40
 
 	return planet
 }

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/entities/building"
 )
 
 func init() {
@@ -62,7 +63,7 @@ func (g *BarrenGenerator) Generate(params entities.GenerationParams) entities.En
 	generatePlanetResources(planet, params, 1, 2) // 1-2 resource deposits
 
 	planet.Habitability = 0
-	planet.RecalculateBasePopulationCapacity()
+	building.EnsurePlanetHasBase(planet, params)
 
 	return planet
 }

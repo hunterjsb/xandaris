@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/entities/building"
 )
 
 func init() {
@@ -64,9 +65,9 @@ func (g *LavaGenerator) Generate(params entities.GenerationParams) entities.Enti
 	planet.Habitability = 0 // Completely uninhabitable
 
 	// 5% chance of rings (rare)
-	planet.HasRings = rand.Float32() < 0.05
+	building.EnsurePlanetHasBase(planet, params)
 
-	planet.RecalculateBasePopulationCapacity()
+	planet.HasRings = rand.Float32() < 0.05
 
 	return planet
 }

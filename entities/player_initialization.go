@@ -126,6 +126,7 @@ func InitializePlayer(player *Player, systems []*System) {
 	player.HomePlanet = bestPlanet
 	bestPlanet.Population = 1000 // 1,000 starting population
 	bestPlanet.Owner = player.Name
+	bestPlanet.SetBaseOwner(player.Name)
 
 	// Mark all resources on the home planet as owned by player
 	for _, resource := range bestPlanet.Resources {

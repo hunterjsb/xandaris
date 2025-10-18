@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/entities/building"
 )
 
 func init() {
@@ -66,10 +67,10 @@ func (g *TerrestrialGenerator) Generate(params entities.GenerationParams) entiti
 	// Calculate habitability
 	planet.Habitability = calculateHabitability(planet.Temperature, planet.Atmosphere, "Terrestrial")
 
+	building.EnsurePlanetHasBase(planet, params)
+
 	// 10% chance of rings
 	planet.HasRings = rand.Float32() < 0.10
-
-	planet.RecalculateBasePopulationCapacity()
 
 	return planet
 }
@@ -105,7 +106,7 @@ func generatePlanetResources(planet *entities.Planet, params entities.Generation
 
 // calculateHabitability calculates a habitability score (0-100) using shared rules
 func calculateHabitability(temperature int, atmosphere string, planetType string) int {
-	score := 40 // Base score shared across types
+	score := 25 // Lower baseline to make habitability harder to achieve
 
 	profile, ok := planetTemperatureProfiles[planetType]
 	if !ok {

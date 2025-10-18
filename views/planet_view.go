@@ -719,9 +719,18 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		capacityStr := utils.FormatInt64WithCommas(capacity)
 		lines = append(lines, fmt.Sprintf("Population: %s / %s", populationStr, capacityStr))
 
-		baseHousing := utils.FormatInt64WithCommas(planet.GetBasePopulationCapacity())
-		buildingHousing := utils.FormatInt64WithCommas(planet.GetBuildingPopulationCapacity())
-		lines = append(lines, fmt.Sprintf("Housing: %s (Planet %s | Buildings %s)", capacityStr, baseHousing, buildingHousing))
+		baseHousing := planet.GetBaseHousingCapacity()
+		otherHousing := capacity - baseHousing
+		if otherHousing < 0 {
+			otherHousing = 0
+		}
+
+		lines = append(lines, fmt.Sprintf(
+			"Housing: %s (Base %s | Buildings %s)",
+			capacityStr,
+			utils.FormatInt64WithCommas(baseHousing),
+			utils.FormatInt64WithCommas(otherHousing),
+		))
 	} else {
 		lines = append(lines, fmt.Sprintf("Population: %s (no housing)", populationStr))
 	}

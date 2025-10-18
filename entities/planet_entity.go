@@ -15,24 +15,23 @@ type ResourceStorage struct {
 // Planet represents a planet entity in a star system
 type Planet struct {
 	BaseEntity
-	Size                   int                         // Radius in pixels
-	PlanetType             string                      // Subtype like "Terrestrial", "Gas Giant", etc.
-	Population             int64                       // Number of inhabitants
-	BasePopulationCapacity int64                       // Housing provided by the planet itself
-	Resources              []Entity                    // Resource entities on this planet
-	Buildings              []Entity                    // Building entities on this planet
-	Temperature            int                         // Temperature in Celsius
-	Atmosphere             string                      // Type of atmosphere
-	HasRings               bool                        // Whether the planet has rings
-	Habitability           int                         // Habitability score 0-100
-	Owner                  string                      // Name of the player/faction who owns this planet
-	StoredResources        map[string]*ResourceStorage // Resources stored on this planet (credits, materials, etc.)
-	StorageCapacity        int                         // Total storage capacity
+	Size            int                         // Radius in pixels
+	PlanetType      string                      // Subtype like "Terrestrial", "Gas Giant", etc.
+	Population      int64                       // Number of inhabitants
+	Resources       []Entity                    // Resource entities on this planet
+	Buildings       []Entity                    // Building entities on this planet
+	Temperature     int                         // Temperature in Celsius
+	Atmosphere      string                      // Type of atmosphere
+	HasRings        bool                        // Whether the planet has rings
+	Habitability    int                         // Habitability score 0-100
+	Owner           string                      // Name of the player/faction who owns this planet
+	StoredResources map[string]*ResourceStorage // Resources stored on this planet (credits, materials, etc.)
+	StorageCapacity int                         // Total storage capacity
 }
 
 // NewPlanet creates a new planet entity
 func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float64, c color.RGBA) *Planet {
-	planet := &Planet{
+	return &Planet{
 		BaseEntity: BaseEntity{
 			ID:            id,
 			Name:          name,
@@ -42,23 +41,19 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 			OrbitDistance: orbitDistance,
 			OrbitAngle:    orbitAngle,
 		},
-		PlanetType:             planetType,
-		Size:                   5,
-		Temperature:            20,
-		Atmosphere:             AtmosphereThin,
-		Population:             0,
-		BasePopulationCapacity: 0,
-		Resources:              []Entity{},
-		Buildings:              []Entity{},
-		HasRings:               false,
-		Habitability:           50,
-		Owner:                  "", // Unowned by default
-		StoredResources:        make(map[string]*ResourceStorage),
-		StorageCapacity:        10000, // Base storage capacity
+		PlanetType:      planetType,
+		Size:            5,
+		Temperature:     20,
+		Atmosphere:      AtmosphereThin,
+		Population:      0,
+		Resources:       []Entity{},
+		Buildings:       []Entity{},
+		HasRings:        false,
+		Habitability:    50,
+		Owner:           "", // Unowned by default
+		StoredResources: make(map[string]*ResourceStorage),
+		StorageCapacity: 10000, // Base storage capacity
 	}
-
-	planet.RecalculateBasePopulationCapacity()
-	return planet
 }
 
 // GetDescription returns a brief description of the planet
@@ -110,6 +105,15 @@ func (p *Planet) GetContextMenuItems() []string {
 		items = append(items, fmt.Sprintf("Buildings: %d", len(p.Buildings)))
 	}
 
+	if capacity > 0 {
+		baseCap := p.GetBaseHousingCapacity()
+		otherCap := capacity - baseCap
+		if otherCap < 0 {
+			otherCap = 0
+		}
+		items = append(items, fmt.Sprintf("Housing: %d base / %d buildings", baseCap, otherCap))
+	}
+
 	if p.Owner != "" {
 		items = append(items, "") // Empty line
 		items = append(items, fmt.Sprintf("Owner: %s", p.Owner))
@@ -147,30 +151,6 @@ func (p *Planet) GetDetailedInfo() map[string]string {
 	}
 }
 
-// RecalculateBasePopulationCapacity updates the base capacity based on planet traits
-func (p *Planet) RecalculateBasePopulationCapacity() {
-	if !p.IsHabitable() || p.Habitability <= 0 {
-		p.BasePopulationCapacity = 0
-		return
-	}
-
-	sizeFactor := float64(p.Size)
-	habitabilityFactor := float64(p.Habitability) / 100.0
-
-	base := int64(sizeFactor * sizeFactor * 2500.0 * habitabilityFactor)
-
-	if base < 1000 {
-		base = 1000
-	}
-
-	p.BasePopulationCapacity = base
-}
-
-// GetBasePopulationCapacity returns the capacity provided by the planet itself
-func (p *Planet) GetBasePopulationCapacity() int64 {
-	return p.BasePopulationCapacity
-}
-
 // GetBuildingPopulationCapacity returns housing provided by constructed buildings
 func (p *Planet) GetBuildingPopulationCapacity() int64 {
 	total := int64(0)
@@ -195,9 +175,36 @@ func (p *Planet) GetBuildingPopulationCapacity() int64 {
 	return total
 }
 
+// GetBaseBuilding returns the primary base structure for the planet, if present
+func (p *Planet) GetBaseBuilding() *Building {
+	for _, entity := range p.Buildings {
+		if building, ok := entity.(*Building); ok {
+			if building.BuildingType == "Base" {
+				return building
+			}
+		}
+	}
+	return nil
+}
+
+// GetBaseHousingCapacity returns the housing provided by the base structure (0 if none)
+func (p *Planet) GetBaseHousingCapacity() int64 {
+	if base := p.GetBaseBuilding(); base != nil {
+		return base.GetEffectivePopulationCapacity()
+	}
+	return 0
+}
+
+// SetBaseOwner updates the ownership metadata on the base structure, when present
+func (p *Planet) SetBaseOwner(owner string) {
+	if base := p.GetBaseBuilding(); base != nil {
+		base.Owner = owner
+	}
+}
+
 // GetTotalPopulationCapacity returns total housing capacity (planet + buildings)
 func (p *Planet) GetTotalPopulationCapacity() int64 {
-	return p.GetBasePopulationCapacity() + p.GetBuildingPopulationCapacity()
+	return p.GetBuildingPopulationCapacity()
 }
 
 // GetAvailablePopulationCapacity returns the remaining space before reaching capacity
