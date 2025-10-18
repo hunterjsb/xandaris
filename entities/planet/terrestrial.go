@@ -59,14 +59,8 @@ func (g *TerrestrialGenerator) Generate(params entities.GenerationParams) entiti
 	atmospheres := []string{"Breathable", "Toxic", "Thin"}
 	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
 
-	// Population based on atmosphere
-	if planet.Atmosphere == "Breathable" {
-		planet.Population = int64(rand.Intn(2000000000))
-	} else if planet.Atmosphere == "Thin" {
-		planet.Population = int64(rand.Intn(500000000))
-	} else {
-		planet.Population = int64(rand.Intn(100000000))
-	}
+	// Civilian population starts at zero; future growth will depend on habitability and housing
+	planet.Population = 0
 
 	// Generate resource entities for terrestrial planets
 	generatePlanetResources(planet, params, 2, 3) // 2-4 resource deposits

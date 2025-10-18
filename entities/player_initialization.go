@@ -41,7 +41,7 @@ func InitializePlayer(player *Player, systems []*System) {
 		}
 	}
 
-	// Second fallback: use any system with a planet
+	// Second fallback: use any system with a habitable planet
 	if len(validSystems) == 0 {
 		for _, system := range systems {
 			for _, entity := range system.GetEntitiesByType(EntityTypePlanet) {
@@ -49,8 +49,10 @@ func InitializePlayer(player *Player, systems []*System) {
 					if planet.Owner != "" {
 						continue
 					}
-					validSystems = append(validSystems, system)
-					break
+					if planet.IsHabitable() {
+						validSystems = append(validSystems, system)
+						break
+					}
 				}
 			}
 		}
@@ -66,11 +68,14 @@ func InitializePlayer(player *Player, systems []*System) {
 
 	// Find the best terrestrial planet with Oil and Iron in that system
 	var bestPlanet *Planet
-	bestHabitability := 0
+	bestHabitability := -1
 
 	for _, entity := range homeSystem.GetEntities() {
 		if planet, ok := entity.(*Planet); ok {
 			if planet.Owner != "" {
+				continue
+			}
+			if !planet.IsHabitable() {
 				continue
 			}
 			if planet.PlanetType == "Terrestrial" && hasOilResource(planet) && hasIronResource(planet) && planet.Habitability > bestHabitability {
@@ -85,6 +90,9 @@ func InitializePlayer(player *Player, systems []*System) {
 		for _, entity := range homeSystem.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
 				if planet.Owner != "" {
+					continue
+				}
+				if !planet.IsHabitable() {
 					continue
 				}
 				if planet.PlanetType == "Terrestrial" && planet.Habitability > bestHabitability {
@@ -110,34 +118,23 @@ func InitializePlayer(player *Player, systems []*System) {
 		}
 	}
 
-	// Last resort: pick any planet
 	if bestPlanet == nil {
-		for _, entity := range homeSystem.GetEntities() {
-			if planet, ok := entity.(*Planet); ok {
-				if planet.Owner != "" {
-					continue
-				}
-				bestPlanet = planet
-				break
-			}
+		return
+	}
+
+	// Set up the home planet
+	player.HomePlanet = bestPlanet
+	bestPlanet.Population = 1000 // 1,000 starting population
+	bestPlanet.Owner = player.Name
+
+	// Mark all resources on the home planet as owned by player
+	for _, resource := range bestPlanet.Resources {
+		if res, ok := resource.(*Resource); ok {
+			res.Owner = player.Name
 		}
 	}
 
-	if bestPlanet != nil {
-		// Set up the home planet
-		player.HomePlanet = bestPlanet
-		bestPlanet.Population = 100000000 // 100 million starting population
-		bestPlanet.Owner = player.Name    // Mark planet as owned by player
-
-		// Mark all resources on the home planet as owned by player
-		for _, resource := range bestPlanet.Resources {
-			if res, ok := resource.(*Resource); ok {
-				res.Owner = player.Name
-			}
-		}
-
-		player.AddOwnedPlanet(bestPlanet)
-	}
+	player.AddOwnedPlanet(bestPlanet)
 }
 
 // hasOilResource checks if a planet has an Oil resource deposit

@@ -60,12 +60,8 @@ func (g *DesertGenerator) Generate(params entities.GenerationParams) entities.En
 	atmospheres := []string{"Thin", "Thin", "Toxic"} // Higher chance of thin atmosphere
 	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
 
-	// Population based on atmosphere (desert worlds have smaller populations)
-	if planet.Atmosphere == "Thin" {
-		planet.Population = int64(rand.Intn(500000000)) // Up to 500 million
-	} else {
-		planet.Population = int64(rand.Intn(100000000)) // Up to 100 million if toxic
-	}
+	// Civilian population starts at zero; habitation will grow once colonised
+	planet.Population = 0
 
 	// Generate resource entities for desert worlds
 	generatePlanetResources(planet, params, 2, 3) // 2-4 resource deposits

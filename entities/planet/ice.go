@@ -60,12 +60,8 @@ func (g *IceGenerator) Generate(params entities.GenerationParams) entities.Entit
 	atmospheres := []string{"Thin", "None"}
 	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
 
-	// Small population (research stations, mining colonies)
-	if planet.Atmosphere == "Thin" {
-		planet.Population = int64(rand.Intn(50000000))
-	} else {
-		planet.Population = int64(rand.Intn(10000000))
-	}
+	// Civilian population starts at zero; any presence represents later colonisation
+	planet.Population = 0
 
 	// Generate resource entities for ice worlds
 	generatePlanetResources(planet, params, 2, 3) // 2-4 resource deposits

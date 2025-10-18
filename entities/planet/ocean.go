@@ -60,12 +60,8 @@ func (g *OceanGenerator) Generate(params entities.GenerationParams) entities.Ent
 	atmospheres := []string{"Breathable", "Breathable", "Toxic"} // Higher chance of breathable
 	planet.Atmosphere = atmospheres[rand.Intn(len(atmospheres))]
 
-	// Population based on atmosphere
-	if planet.Atmosphere == "Breathable" {
-		planet.Population = int64(1000000000 + rand.Intn(2000000000)) // 1-3 billion
-	} else {
-		planet.Population = int64(rand.Intn(500000000)) // Smaller population if toxic
-	}
+	// Civilian population now starts at zero; growth systems will populate habitable worlds later
+	planet.Population = 0
 
 	// Generate resource entities for ocean worlds
 	generatePlanetResources(planet, params, 3, 3) // 3-5 resource deposits (ocean worlds are resource-rich)
