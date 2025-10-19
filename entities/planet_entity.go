@@ -265,8 +265,17 @@ func (p *Planet) RebalanceWorkforce() {
 
 	base := p.GetBaseBuilding()
 	if base != nil {
-		required := int64(base.WorkersRequired)
-		assign := required
+		target := int64(base.WorkersRequired)
+		if base.DesiredWorkers >= 0 {
+			target = int64(base.DesiredWorkers)
+			if target > int64(base.WorkersRequired) {
+				target = int64(base.WorkersRequired)
+			}
+		}
+		if target < 0 {
+			target = 0
+		}
+		assign := target
 		if assign > available {
 			assign = available
 		}
@@ -285,13 +294,19 @@ func (p *Planet) RebalanceWorkforce() {
 			continue
 		}
 
-		required := int64(building.WorkersRequired)
-		if required <= 0 {
+		target := int64(building.WorkersRequired)
+		if building.DesiredWorkers >= 0 {
+			target = int64(building.DesiredWorkers)
+			if target > int64(building.WorkersRequired) {
+				target = int64(building.WorkersRequired)
+			}
+		}
+		if target <= 0 {
 			building.SetWorkersAssigned(0)
 			continue
 		}
 
-		assign := required
+		assign := target
 		if assign > available {
 			assign = available
 		}

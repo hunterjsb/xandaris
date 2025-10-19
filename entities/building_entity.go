@@ -16,6 +16,7 @@ type Building struct {
 	PopulationCapacity int64   // Additional population capacity (for habitats)
 	WorkersRequired    int     // Number of workers required for full operation
 	WorkersAssigned    int     // Number of workers currently assigned
+	DesiredWorkers     int     // Player-specified workforce target (-1 = auto)
 	BuildCost          int     // Cost in credits to build
 	UpkeepCost         int     // Cost per tick to maintain
 	Level              int     // Building level (for upgrades)
@@ -45,6 +46,7 @@ func NewBuilding(id int, name, buildingType string, orbitDistance, orbitAngle fl
 		PopulationCapacity: 0,
 		WorkersRequired:    0,
 		WorkersAssigned:    0,
+		DesiredWorkers:     -1,
 		BuildCost:          1000,
 		UpkeepCost:         10,
 		Level:              1,
@@ -175,6 +177,9 @@ func (b *Building) SetWorkersRequired(workers int) {
 	if b.WorkersAssigned > b.WorkersRequired {
 		b.WorkersAssigned = b.WorkersRequired
 	}
+	if b.DesiredWorkers > b.WorkersRequired {
+		b.DesiredWorkers = b.WorkersRequired
+	}
 }
 
 // SetWorkersAssigned updates the number of workers currently staffed at this building
@@ -205,6 +210,26 @@ func (b *Building) HasSufficientWorkers() bool {
 		return true
 	}
 	return b.WorkersAssigned >= b.WorkersRequired
+}
+
+// SetDesiredWorkers sets the workforce target (-1 for auto)
+func (b *Building) SetDesiredWorkers(workers int) {
+	if workers < 0 {
+		b.DesiredWorkers = -1
+		return
+	}
+	if workers > b.WorkersRequired {
+		workers = b.WorkersRequired
+	}
+	b.DesiredWorkers = workers
+	if workers == 0 {
+		b.SetWorkersAssigned(0)
+	}
+}
+
+// GetDesiredWorkers returns the requested workforce target (-1 for auto)
+func (b *Building) GetDesiredWorkers() int {
+	return b.DesiredWorkers
 }
 
 // GetEffectiveProductionBonus returns the production bonus (0 if not operational)

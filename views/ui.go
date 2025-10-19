@@ -1,13 +1,14 @@
 package views
 
 import (
+	"image"
 	"image/color"
 	"math"
 
 	"github.com/hajimehoshi/bitmapfont/v4"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 var (
@@ -132,6 +133,28 @@ func DrawRectOutline(screen *ebiten.Image, x, y, width, height int, c color.RGBA
 	DrawLine(screen, x+width-1, y, x+width-1, y+height-1, c)
 }
 
+// DrawTextCenteredInRect draws text centered within the given rectangle
+func DrawTextCenteredInRect(screen *ebiten.Image, textStr string, rect image.Rectangle, textColor color.RGBA) {
+	if rect.Dx() <= 0 || rect.Dy() <= 0 {
+		return
+	}
+
+	const (
+		charWidth      = 6
+		charHeight     = 12
+		baselineAdjust = 2
+	)
+
+	textWidth := len(textStr) * charWidth
+	textX := rect.Min.X + (rect.Dx()-textWidth)/2
+	textY := rect.Min.Y + (rect.Dy()+charHeight)/2 - baselineAdjust - 10
+
+	op := &text.DrawOptions{}
+	op.GeoM.Translate(float64(textX), float64(textY))
+	op.ColorScale.ScaleWithColor(textColor)
+	text.Draw(screen, textStr, DefaultFontFace, op)
+}
+
 // DrawHighlightCircle draws a highlight ring around a circular object
 func DrawHighlightCircle(screen *ebiten.Image, centerX, centerY, radius int, highlightColor color.RGBA) {
 	highlightRadius := radius + 4
@@ -186,25 +209,25 @@ func DrawGlow(screen *ebiten.Image, centerX, centerY int, radius float64, glowCo
 
 // UIProgressBar renders a horizontal progress indicator with border
 type UIProgressBar struct {
-	X, Y         int
+	X, Y          int
 	Width, Height int
-	Value, Max   float64
-	FillColor    color.RGBA
-	BgColor      color.RGBA
-	BorderColor  color.RGBA
+	Value, Max    float64
+	FillColor     color.RGBA
+	BgColor       color.RGBA
+	BorderColor   color.RGBA
 }
 
 // NewUIProgressBar constructs a progress bar with sensible defaults
 func NewUIProgressBar(x, y, width, height int) *UIProgressBar {
 	return &UIProgressBar{
-		X:          x,
-		Y:          y,
-		Width:      width,
-		Height:     height,
-		Value:      0,
-		Max:        1,
-		FillColor:  utils.PlayerGreen,
-		BgColor:    color.RGBA{20, 20, 40, 255},
+		X:           x,
+		Y:           y,
+		Width:       width,
+		Height:      height,
+		Value:       0,
+		Max:         1,
+		FillColor:   utils.PlayerGreen,
+		BgColor:     color.RGBA{20, 20, 40, 255},
 		BorderColor: utils.PanelBorder,
 	}
 }

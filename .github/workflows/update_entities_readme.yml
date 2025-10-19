@@ -1,0 +1,31 @@
+name: Update Entities README
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'entities/**.go'
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Run update script
+        run: ./scripts/update_readme.sh
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          if [[ -n $(git status --porcelain) ]]; then
+            git add entities/README.md
+            git commit -m "docs: Automatically update core components in README"
+            git push
+          else
+            echo "No changes to commit."
+          fi
