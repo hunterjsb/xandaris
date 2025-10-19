@@ -1162,15 +1162,6 @@ func drawLegend(screen *ebiten.Image, x, y int, segments []barSegment) int {
 	return currentY
 }
 
-func drawColorSwatch(screen *ebiten.Image, x, y int, c color.RGBA) {
-	swatch := ebiten.NewImage(12, 12)
-	swatch.Fill(c)
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(x), float64(y))
-	screen.DrawImage(swatch, opts)
-	DrawRectOutline(screen, x, y, 12, 12, utils.PanelBorder)
-}
-
 func maxInt(a, b int) int {
 	if a > b {
 		return a
