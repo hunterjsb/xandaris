@@ -181,7 +181,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 			infoY += 15
 			for _, line := range formatPlanetDetails(planet) {
 				color := utils.TextSecondary
-				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") {
+				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
 					color = utils.TextPrimary
 				}
 				DrawText(screen, line, 10, infoY, color)

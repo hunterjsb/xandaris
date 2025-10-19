@@ -59,6 +59,7 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 								planet.AddStoredResource("Fuel", 0) // Initialize with 0 fuel
 							}
 						}
+						planet.RebalanceWorkforce()
 					}
 					return
 				}
@@ -72,6 +73,7 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 							// Buildings on resources need to be tracked somewhere
 							// For now, we'll add to the parent planet
 							planet.Buildings = append(planet.Buildings, building)
+							planet.RebalanceWorkforce()
 						}
 					}
 				}

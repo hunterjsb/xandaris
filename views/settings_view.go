@@ -422,6 +422,8 @@ func GetActionName(action KeyAction) string {
 		return "Open Player Directory"
 	case ActionFocusHome:
 		return "Focus Home System"
+	case ActionToggleWorkforceView:
+		return "Toggle Workforce View"
 	case ActionMenuUp:
 		return "Menu: Up"
 	case ActionMenuDown:

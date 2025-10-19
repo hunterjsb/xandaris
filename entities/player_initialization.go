@@ -136,6 +136,7 @@ func InitializePlayer(player *Player, systems []*System) {
 	}
 
 	player.AddOwnedPlanet(bestPlanet)
+	bestPlanet.RebalanceWorkforce()
 }
 
 // hasOilResource checks if a planet has an Oil resource deposit

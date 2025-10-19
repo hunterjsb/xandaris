@@ -60,6 +60,7 @@ func (g *RefineryGenerator) Generate(params entities.GenerationParams) entities.
 	refinery.Size = 8
 	refinery.Description = "Converts Oil into Fuel for spacecraft propulsion"
 	refinery.ProductionBonus = 1.0 // Base efficiency
+	refinery.SetWorkersRequired(250)
 
 	return refinery
 }

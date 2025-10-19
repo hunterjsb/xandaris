@@ -59,6 +59,7 @@ func (g *MineGenerator) Generate(params entities.GenerationParams) entities.Enti
 	building.MaxLevel = 5                // Can upgrade to level 5
 	building.Size = 4                    // 4 pixels
 	building.Description = "Extracts resources from deposits. Increases extraction rate."
+	building.SetWorkersRequired(80)
 
 	return building
 }

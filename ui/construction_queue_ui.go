@@ -142,23 +142,13 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *
 	// Draw progress bar
 	progressY := locationY + 15
 	progressBarWidth := itemW - 10
-	progressBarHeight := 8
+	progressBarHeight := 10
 
-	// Background bar
-	progressBg := views.NewUIPanel(itemX+5, progressY, progressBarWidth, progressBarHeight)
-	progressBg.BgColor = color.RGBA{20, 20, 40, 255}
-	progressBg.BorderColor = utils.PanelBorder
-	progressBg.Draw(screen)
-
-	// Progress fill
-	fillWidth := int(float64(progressBarWidth) * (float64(progress) / 100.0))
-	if fillWidth > 0 {
-		progressFill := ebiten.NewImage(fillWidth, progressBarHeight)
-		progressFill.Fill(color.RGBA{100, 200, 100, 255})
-		opts := &ebiten.DrawImageOptions{}
-		opts.GeoM.Translate(float64(itemX+5), float64(progressY))
-		screen.DrawImage(progressFill, opts)
-	}
+	bar := views.NewUIProgressBar(itemX+5, progressY, progressBarWidth, progressBarHeight)
+	bar.SetValue(float64(progress), 100.0)
+	bar.FillColor = color.RGBA{100, 200, 100, 255}
+	bar.BgColor = color.RGBA{22, 22, 38, 255}
+	bar.Draw(screen)
 
 	// Draw progress percentage and time remaining
 	progressTextY := progressY + progressBarHeight + 12

@@ -27,6 +27,8 @@ type Planet struct {
 	Owner           string                      // Name of the player/faction who owns this planet
 	StoredResources map[string]*ResourceStorage // Resources stored on this planet (credits, materials, etc.)
 	StorageCapacity int                         // Total storage capacity
+	WorkforceTotal  int64                       // Total workforce available (subset of population)
+	WorkforceUsed   int64                       // Workforce assigned to buildings/ships
 }
 
 // NewPlanet creates a new planet entity
@@ -53,6 +55,8 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 		Owner:           "", // Unowned by default
 		StoredResources: make(map[string]*ResourceStorage),
 		StorageCapacity: 10000, // Base storage capacity
+		WorkforceTotal:  0,
+		WorkforceUsed:   0,
 	}
 }
 
@@ -114,6 +118,10 @@ func (p *Planet) GetContextMenuItems() []string {
 		items = append(items, fmt.Sprintf("Housing: %d base / %d buildings", baseCap, otherCap))
 	}
 
+	if p.WorkforceTotal > 0 {
+		items = append(items, fmt.Sprintf("Workforce: %d used / %d total", p.WorkforceUsed, p.WorkforceTotal))
+	}
+
 	if p.Owner != "" {
 		items = append(items, "") // Empty line
 		items = append(items, fmt.Sprintf("Owner: %s", p.Owner))
@@ -140,7 +148,7 @@ func (p *Planet) IsHabitable() bool {
 
 // GetDetailedInfo returns detailed information about the planet
 func (p *Planet) GetDetailedInfo() map[string]string {
-	return map[string]string{
+	info := map[string]string{
 		"Type":         p.PlanetType,
 		"Population":   fmt.Sprintf("%d", p.Population),
 		"Capacity":     fmt.Sprintf("%d", p.GetTotalPopulationCapacity()),
@@ -149,6 +157,12 @@ func (p *Planet) GetDetailedInfo() map[string]string {
 		"Size":         fmt.Sprintf("%d km radius", p.Size*1000),
 		"Habitability": fmt.Sprintf("%d%%", p.Habitability),
 	}
+
+	if p.WorkforceTotal > 0 {
+		info["Workforce"] = fmt.Sprintf("%d / %d", p.WorkforceUsed, p.WorkforceTotal)
+	}
+
+	return info
 }
 
 // GetBuildingPopulationCapacity returns housing provided by constructed buildings
@@ -214,6 +228,85 @@ func (p *Planet) GetAvailablePopulationCapacity() int64 {
 		return 0
 	}
 	return capacity - p.Population
+}
+
+// UpdateWorkforceTotals recalculates the total workforce pool based on current population
+func (p *Planet) UpdateWorkforceTotals() {
+	if p.Population <= 0 {
+		p.WorkforceTotal = 0
+		return
+	}
+
+	p.WorkforceTotal = p.Population / 2 // Simple baseline: 50% of population is workforce
+	if p.WorkforceTotal < 0 {
+		p.WorkforceTotal = 0
+	}
+}
+
+// GetAvailableWorkforce returns unassigned worker count
+func (p *Planet) GetAvailableWorkforce() int64 {
+	available := p.WorkforceTotal - p.WorkforceUsed
+	if available < 0 {
+		return 0
+	}
+	return available
+}
+
+// RebalanceWorkforce distributes workers across buildings based on availability
+func (p *Planet) RebalanceWorkforce() {
+	p.UpdateWorkforceTotals()
+
+	available := p.WorkforceTotal
+	if available < 0 {
+		available = 0
+	}
+
+	p.WorkforceUsed = 0
+
+	base := p.GetBaseBuilding()
+	if base != nil {
+		required := int64(base.WorkersRequired)
+		assign := required
+		if assign > available {
+			assign = available
+		}
+		base.SetWorkersAssigned(int(assign))
+		available -= assign
+		p.WorkforceUsed += assign
+	}
+
+	for _, entity := range p.Buildings {
+		building, ok := entity.(*Building)
+		if !ok {
+			continue
+		}
+
+		if base != nil && building == base {
+			continue
+		}
+
+		required := int64(building.WorkersRequired)
+		if required <= 0 {
+			building.SetWorkersAssigned(0)
+			continue
+		}
+
+		assign := required
+		if assign > available {
+			assign = available
+		}
+
+		building.SetWorkersAssigned(int(assign))
+		available -= assign
+		p.WorkforceUsed += assign
+	}
+
+	if p.WorkforceUsed > p.WorkforceTotal {
+		p.WorkforceUsed = p.WorkforceTotal
+	}
+	if p.WorkforceUsed < 0 {
+		p.WorkforceUsed = 0
+	}
 }
 
 // AddStoredResource adds an amount of a resource to the planet's storage

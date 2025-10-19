@@ -14,6 +14,8 @@ type Building struct {
 	ResourceNodeID     int     // ID of the resource node this mine is attached to (for mines only)
 	ProductionBonus    float64 // Multiplier for resource production (e.g., 1.5 = +50%)
 	PopulationCapacity int64   // Additional population capacity (for habitats)
+	WorkersRequired    int     // Number of workers required for full operation
+	WorkersAssigned    int     // Number of workers currently assigned
 	BuildCost          int     // Cost in credits to build
 	UpkeepCost         int     // Cost per tick to maintain
 	Level              int     // Building level (for upgrades)
@@ -41,6 +43,8 @@ func NewBuilding(id int, name, buildingType string, orbitDistance, orbitAngle fl
 		AttachmentType:     "Planet",
 		ProductionBonus:    1.0,
 		PopulationCapacity: 0,
+		WorkersRequired:    0,
+		WorkersAssigned:    0,
 		BuildCost:          1000,
 		UpkeepCost:         10,
 		Level:              1,
@@ -96,6 +100,10 @@ func (b *Building) GetContextMenuItems() []string {
 
 	if b.PopulationCapacity > 0 {
 		items = append(items, fmt.Sprintf("Housing: %d capacity", b.PopulationCapacity))
+	}
+
+	if b.WorkersRequired > 0 {
+		items = append(items, fmt.Sprintf("Workforce: %d/%d", b.WorkersAssigned, b.WorkersRequired))
 	}
 
 	if b.Owner != "" {
@@ -158,12 +166,57 @@ func (b *Building) SetOperational(operational bool) {
 	b.IsOperational = operational
 }
 
+// SetWorkersRequired assigns the baseline workforce requirement for the building
+func (b *Building) SetWorkersRequired(workers int) {
+	if workers < 0 {
+		workers = 0
+	}
+	b.WorkersRequired = workers
+	if b.WorkersAssigned > b.WorkersRequired {
+		b.WorkersAssigned = b.WorkersRequired
+	}
+}
+
+// SetWorkersAssigned updates the number of workers currently staffed at this building
+func (b *Building) SetWorkersAssigned(workers int) {
+	if workers < 0 {
+		workers = 0
+	}
+	if b.WorkersRequired > 0 && workers > b.WorkersRequired {
+		workers = b.WorkersRequired
+	}
+	b.WorkersAssigned = workers
+}
+
+// GetStaffingRatio returns the 0..1 staffing ratio for the building
+func (b *Building) GetStaffingRatio() float64 {
+	if b.WorkersRequired <= 0 {
+		return 1.0
+	}
+	if b.WorkersAssigned <= 0 {
+		return 0.0
+	}
+	return float64(b.WorkersAssigned) / float64(b.WorkersRequired)
+}
+
+// HasSufficientWorkers reports whether the building has its full workforce complement
+func (b *Building) HasSufficientWorkers() bool {
+	if b.WorkersRequired <= 0 {
+		return true
+	}
+	return b.WorkersAssigned >= b.WorkersRequired
+}
+
 // GetEffectiveProductionBonus returns the production bonus (0 if not operational)
 func (b *Building) GetEffectiveProductionBonus() float64 {
 	if !b.IsOperational {
 		return 0.0
 	}
-	return b.ProductionBonus
+	ratio := b.GetStaffingRatio()
+	if ratio <= 0 {
+		return 0.0
+	}
+	return b.ProductionBonus * ratio
 }
 
 // GetEffectivePopulationCapacity returns the population capacity (0 if not operational)
@@ -171,7 +224,14 @@ func (b *Building) GetEffectivePopulationCapacity() int64 {
 	if !b.IsOperational {
 		return 0
 	}
-	return b.PopulationCapacity
+	if b.PopulationCapacity <= 0 {
+		return 0
+	}
+	ratio := b.GetStaffingRatio()
+	if ratio <= 0 {
+		return 0
+	}
+	return int64(float64(b.PopulationCapacity) * ratio)
 }
 
 // GetDetailedInfo returns detailed information about the building

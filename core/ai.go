@@ -118,6 +118,7 @@ func addTradingPostToPlanet(planet *entities.Planet, owner string, systemID int)
 		building.AttachedTo = fmt.Sprintf("%d", planet.GetID())
 		building.AttachmentType = "Planet"
 		planet.Buildings = append(planet.Buildings, building)
+		planet.RebalanceWorkforce()
 	}
 }
 

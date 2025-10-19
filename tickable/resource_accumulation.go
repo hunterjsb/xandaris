@@ -50,23 +50,11 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 						continue
 					}
 
-					// Base extraction rate (10 units per second, scaled by extraction rate)
-					extractionAmount := int(float64(10) * resource.ExtractionRate)
-
-					// Check for mines on this resource
-					mineBonus := 1.0
-					for _, buildingEntity := range planet.Buildings {
-						if building, ok := buildingEntity.(*entities.Building); ok {
-							if building.BuildingType == "Mine" && building.IsOperational && building.AttachedTo == fmt.Sprintf("%d", resource.GetID()) {
-								mineBonus += building.ProductionBonus - 1.0 // Add the bonus portion
-							}
-						}
+					extractionAmount := computeResourceExtraction(resource, planet)
+					if extractionAmount <= 0 {
+						continue
 					}
 
-					// Apply mine bonus
-					extractionAmount = int(float64(extractionAmount) * mineBonus)
-
-					// Try to add to planet storage
 					actualAmount := planet.AddStoredResource(resource.ResourceType, extractionAmount)
 
 					// Update abundance based on extraction
@@ -86,6 +74,49 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 	}
 }
 
+func computeResourceExtraction(resource *entities.Resource, planet *entities.Planet) int {
+	if resource == nil || planet == nil {
+		return 0
+	}
+
+	resourceID := fmt.Sprintf("%d", resource.GetID())
+	multiplier := 0.0
+
+	for _, buildingEntity := range planet.Buildings {
+		building, ok := buildingEntity.(*entities.Building)
+		if !ok {
+			continue
+		}
+		if building.BuildingType != "Mine" {
+			continue
+		}
+		if !building.IsOperational {
+			continue
+		}
+		if building.AttachmentType != "Resource" || building.AttachedTo != resourceID {
+			continue
+		}
+
+		ratio := building.GetStaffingRatio()
+		if ratio <= 0 {
+			continue
+		}
+
+		multiplier += ratio * building.ProductionBonus
+	}
+
+	if multiplier <= 0 {
+		return 0
+	}
+
+	amount := float64(10) * resource.ExtractionRate * multiplier
+	if amount < 0 {
+		return 0
+	}
+
+	return int(amount)
+}
+
 // calculateProduction calculates total resource production value for a planet (in credits/second)
 func (ras *ResourceAccumulationSystem) calculateProduction(planetInterface interface{}) int64 {
 	planet, ok := planetInterface.(*entities.Planet)
@@ -103,28 +134,16 @@ func (ras *ResourceAccumulationSystem) calculateProduction(planetInterface inter
 	// Calculate production from resource extraction
 	for _, resourceEntity := range planet.Resources {
 		if resource, ok := resourceEntity.(*entities.Resource); ok {
-			// Only count owned resources
 			if resource.Owner != planet.Owner {
 				continue
 			}
 
-			// Base extraction rate (10 units per second, scaled by extraction rate)
-			extractionAmount := int(float64(10) * resource.ExtractionRate)
-
-			// Apply mine bonuses
-			mineBonus := 1.0
-			for _, buildingEntity := range planet.Buildings {
-				if building, ok := buildingEntity.(*entities.Building); ok {
-					if building.BuildingType == "Mine" &&
-						building.IsOperational &&
-						building.AttachedTo == fmt.Sprintf("%d", resource.GetID()) {
-						mineBonus += building.ProductionBonus - 1.0
-					}
-				}
+			extractionAmount := computeResourceExtraction(resource, planet)
+			if extractionAmount <= 0 {
+				continue
 			}
 
-			// Calculate value of extracted resources
-			resourceValue := int64(float64(extractionAmount) * mineBonus * float64(resource.Value))
+			resourceValue := int64(float64(extractionAmount) * float64(resource.Value))
 			production += resourceValue
 		}
 	}
@@ -192,27 +211,15 @@ func (ras *ResourceAccumulationSystem) GetResourceBreakdown(playerInterface inte
 
 		for _, resourceEntity := range planet.Resources {
 			if resource, ok := resourceEntity.(*entities.Resource); ok {
-				// Only count owned resources
 				if resource.Owner != planet.Owner {
 					continue
 				}
 
-				// Base extraction rate (10 units per second, scaled by extraction rate)
-				extractionAmount := int(float64(10) * resource.ExtractionRate)
-
-				// Apply mine bonuses
-				mineBonus := 1.0
-				for _, buildingEntity := range planet.Buildings {
-					if building, ok := buildingEntity.(*entities.Building); ok {
-						if building.BuildingType == "Mine" &&
-							building.IsOperational &&
-							building.AttachedTo == fmt.Sprintf("%d", resource.GetID()) {
-							mineBonus += building.ProductionBonus - 1.0
-						}
-					}
+				extractionAmount := computeResourceExtraction(resource, planet)
+				if extractionAmount <= 0 {
+					continue
 				}
 
-				extractionAmount = int(float64(extractionAmount) * mineBonus)
 				planetResources[resource.ResourceType] = extractionAmount
 			}
 		}

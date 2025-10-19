@@ -2,14 +2,21 @@ package views
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/utils"
+)
+
+const (
+	workforceButtonWidth  = 170
+	workforceButtonHeight = 32
 )
 
 // BuildMenuInterface defines the interface for build menu operations
@@ -55,19 +62,20 @@ type FleetInfoUIInterface interface {
 
 // PlanetView represents the detailed view of a single planet
 type PlanetView struct {
-	ctx               GameContext
-	system            *entities.System
-	planet            *entities.Planet
-	clickHandler      *ClickHandler
-	buildMenu         BuildMenuInterface
-	constructionQueue ConstructionQueueUIInterface
-	resourceStorage   ResourceStorageUIInterface
-	shipyardUI        ShipyardUIInterface
-	fleetInfoUI       FleetInfoUIInterface
-	centerX           float64
-	centerY           float64
-	orbitOffset       float64 // For animating orbits
-	fleets            []*Fleet
+	ctx                  GameContext
+	system               *entities.System
+	planet               *entities.Planet
+	clickHandler         *ClickHandler
+	buildMenu            BuildMenuInterface
+	constructionQueue    ConstructionQueueUIInterface
+	resourceStorage      ResourceStorageUIInterface
+	shipyardUI           ShipyardUIInterface
+	fleetInfoUI          FleetInfoUIInterface
+	centerX              float64
+	centerY              float64
+	orbitOffset          float64 // For animating orbits
+	fleets               []*Fleet
+	showWorkforceOverlay bool
 }
 
 // NewPlanetView creates a new planet view
@@ -88,6 +96,7 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 // SetPlanet sets the planet to display
 func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 	pv.planet = planet
+	pv.showWorkforceOverlay = false
 
 	// Find the system that contains this planet
 	pv.system = nil
@@ -127,6 +136,10 @@ func (pv *PlanetView) Update() error {
 	kb := pv.ctx.GetKeyBindings()
 	vm := pv.ctx.GetViewManager()
 	tm := pv.ctx.GetTickManager()
+
+	if kb.IsActionJustPressed(ActionToggleWorkforceView) && pv.planet != nil {
+		pv.showWorkforceOverlay = !pv.showWorkforceOverlay
+	}
 
 	// Update orbit animation (very slow for planetary rotation effect)
 	if !tm.IsPaused() {
@@ -171,6 +184,11 @@ func (pv *PlanetView) Update() error {
 
 	// Handle escape key
 	if kb.IsActionJustPressed(ActionEscape) {
+		if pv.showWorkforceOverlay {
+			pv.showWorkforceOverlay = false
+			return nil
+		}
+
 		// Close fleet info UI if open
 		if pv.fleetInfoUI != nil && pv.fleetInfoUI.IsVisible() {
 			pv.fleetInfoUI.Hide()
@@ -196,6 +214,11 @@ func (pv *PlanetView) Update() error {
 	// Handle mouse clicks
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
+
+		if rectContains(x, y, pv.workforceButtonRect()) && pv.planet != nil {
+			pv.showWorkforceOverlay = !pv.showWorkforceOverlay
+			return nil
+		}
 
 		// Check if clicking on a fleet
 		fm := pv.ctx.GetFleetManager()
@@ -293,7 +316,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	infoY := 25
 	for _, line := range formatPlanetDetails(pv.planet) {
 		color := utils.TextSecondary
-		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") {
+		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
 			color = utils.TextPrimary
 		}
 		DrawText(screen, line, 10, infoY, color)
@@ -309,6 +332,13 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		DrawText(screen, "Press ESC to return to system", 10, infoY+15, utils.TextSecondary)
 	} else {
 		DrawText(screen, "Press ESC to return to system", 10, infoY, utils.TextSecondary)
+	}
+
+	pv.drawWorkforceToggleButton(screen)
+
+	if pv.showWorkforceOverlay {
+		pv.drawWorkforceOverlay(screen)
+		return
 	}
 
 	// Draw construction queue UI
@@ -735,8 +765,381 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		lines = append(lines, fmt.Sprintf("Population: %s (no housing)", populationStr))
 	}
 
+	if planet.WorkforceTotal > 0 {
+		lines = append(lines, fmt.Sprintf(
+			"Workforce: %s / %s",
+			utils.FormatInt64WithCommas(planet.WorkforceUsed),
+			utils.FormatInt64WithCommas(planet.WorkforceTotal),
+		))
+	}
+
 	lines = append(lines, fmt.Sprintf("Resources: %d deposits", len(planet.Resources)))
 	lines = append(lines, fmt.Sprintf("Buildings: %d", len(planet.Buildings)))
 
 	return lines
+}
+
+func (pv *PlanetView) drawWorkforceToggleButton(screen *ebiten.Image) {
+	rect := pv.workforceButtonRect()
+	panel := &UIPanel{
+		X:           rect.Min.X,
+		Y:           rect.Min.Y,
+		Width:       rect.Dx(),
+		Height:      rect.Dy(),
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
+	}
+	if pv.showWorkforceOverlay {
+		panel.BgColor = utils.ButtonActive
+	}
+	panel.Draw(screen)
+
+	label := "Workforce [W]"
+	textColor := utils.TextSecondary
+	if pv.showWorkforceOverlay {
+		textColor = utils.TextPrimary
+	}
+	DrawText(screen, label, rect.Min.X+12, rect.Min.Y+20, textColor)
+}
+
+func (pv *PlanetView) drawWorkforceOverlay(screen *ebiten.Image) {
+	planet := pv.planet
+	if planet == nil {
+		return
+	}
+
+	planet.RebalanceWorkforce()
+
+	overlayMargin := 60
+	overlayRect := image.Rect(overlayMargin, overlayMargin, ScreenWidth-overlayMargin, ScreenHeight-overlayMargin)
+	background := NewUIPanel(overlayRect.Min.X, overlayRect.Min.Y, overlayRect.Dx(), overlayRect.Dy())
+	background.BgColor = color.RGBA{18, 20, 32, 235}
+	background.Draw(screen)
+
+	DrawText(screen, "Population & Workforce Overview", overlayRect.Min.X+30, overlayRect.Min.Y+40, utils.TextPrimary)
+
+	contentX := overlayRect.Min.X + 30
+	contentWidth := overlayRect.Dx() - 60
+	leftWidth := int(float64(contentWidth) * 0.55)
+	if leftWidth < 240 {
+		leftWidth = 240
+	}
+	gap := 40
+	rightX := contentX + leftWidth + gap
+	rightWidth := overlayRect.Max.X - rightX - 30
+	if rightWidth < 200 {
+		rightWidth = 200
+		leftWidth = contentWidth - rightWidth - gap
+	}
+
+	leftY := overlayRect.Min.Y + 90
+	rightY := leftY
+
+	capacity := planet.GetTotalPopulationCapacity()
+	DrawText(screen, "Population", contentX, leftY, utils.TextSecondary)
+	leftY += 18
+	popBar := NewUIProgressBar(contentX, leftY, leftWidth, 18)
+	maxPop := float64(capacity)
+	if maxPop < 1 {
+		maxPop = 1
+	}
+	popBar.SetValue(float64(planet.Population), maxPop)
+	popBar.FillColor = utils.PlayerGreen
+	popBar.Draw(screen)
+	DrawText(screen,
+		fmt.Sprintf("%s / %s", utils.FormatInt64WithCommas(planet.Population), utils.FormatInt64WithCommas(capacity)),
+		contentX,
+		leftY+24,
+		utils.TextSecondary,
+	)
+	leftY += 54
+
+	housingSegments := buildHousingSegments(planet)
+	if len(housingSegments) > 0 {
+		DrawText(screen, "Housing Sources", contentX, leftY, utils.TextSecondary)
+		leftY += 18
+		drawStackedBar(screen, contentX, leftY, leftWidth, 18, housingSegments)
+		legendBottom := drawLegend(screen, contentX, leftY+24, housingSegments)
+		leftY = legendBottom + 20
+	}
+
+	DrawText(screen, "Workforce", contentX, leftY, utils.TextSecondary)
+	leftY += 18
+	workforceBar := NewUIProgressBar(contentX, leftY, leftWidth, 18)
+	maxWorkers := float64(planet.WorkforceTotal)
+	if maxWorkers < 1 {
+		maxWorkers = 1
+	}
+	workforceBar.SetValue(float64(planet.WorkforceUsed), maxWorkers)
+	workforceBar.FillColor = utils.PlayerBlue
+	workforceBar.Draw(screen)
+	DrawText(screen,
+		fmt.Sprintf("%s used / %s total  (Available: %s)",
+			utils.FormatInt64WithCommas(planet.WorkforceUsed),
+			utils.FormatInt64WithCommas(planet.WorkforceTotal),
+			utils.FormatInt64WithCommas(planet.GetAvailableWorkforce())),
+		contentX,
+		leftY+24,
+		utils.TextSecondary,
+	)
+	leftY += 54
+
+	DrawText(screen, "Employment", rightX, rightY, utils.TextSecondary)
+	rightY += 24
+	groups := buildWorkforceGroups(planet)
+	if len(groups) == 0 {
+		DrawText(screen, "No staffed buildings", rightX, rightY, utils.TextSecondary)
+	} else {
+		for _, group := range groups {
+			DrawText(screen, group.Label, rightX, rightY, utils.TextPrimary)
+			rightY += 16
+			bar := NewUIProgressBar(rightX, rightY, rightWidth, 16)
+			bar.SetValue(float64(group.Assigned), float64(maxInt(group.Required, 1)))
+			bar.FillColor = colorForWorkforceRatio(group.Assigned, group.Required)
+			bar.Draw(screen)
+			rightY += 22
+			DrawText(screen,
+				fmt.Sprintf("Staffed: %s / %s", utils.FormatIntWithCommas(group.Assigned), utils.FormatIntWithCommas(group.Required)),
+				rightX,
+				rightY,
+				utils.TextSecondary,
+			)
+			rightY += 24
+		}
+	}
+
+	DrawText(screen, "Press W or ESC to close", overlayRect.Min.X+30, overlayRect.Max.Y-30, utils.TextSecondary)
+}
+
+func (pv *PlanetView) workforceButtonRect() image.Rectangle {
+	x := ScreenWidth - workforceButtonWidth - 20
+	y := 10
+	return image.Rect(x, y, x+workforceButtonWidth, y+workforceButtonHeight)
+}
+
+func rectContains(x, y int, rect image.Rectangle) bool {
+	return x >= rect.Min.X && x < rect.Max.X && y >= rect.Min.Y && y < rect.Max.Y
+}
+
+type barSegment struct {
+	Label string
+	Value float64
+	Color color.RGBA
+}
+
+type workforceGroup struct {
+	Label    string
+	Assigned int
+	Required int
+}
+
+func drawStackedBar(screen *ebiten.Image, x, y, width, height int, segments []barSegment) {
+	if width <= 0 || height <= 0 {
+		return
+	}
+
+	barImg := ebiten.NewImage(width, height)
+	barImg.Fill(utils.BackgroundDark)
+
+	total := 0.0
+	for _, seg := range segments {
+		if seg.Value > 0 {
+			total += seg.Value
+		}
+	}
+
+	if total > 0 {
+		offset := 0
+		for idx, seg := range segments {
+			if seg.Value <= 0 {
+				continue
+			}
+			ratio := seg.Value / total
+			segWidth := int(ratio * float64(width))
+			if segWidth <= 0 && seg.Value > 0 {
+				if idx == len(segments)-1 {
+					segWidth = width - offset
+				} else {
+					segWidth = 1
+				}
+			}
+			if offset+segWidth > width {
+				segWidth = width - offset
+			}
+			if segWidth <= 0 {
+				continue
+			}
+
+			segImg := ebiten.NewImage(segWidth, height)
+			segImg.Fill(seg.Color)
+			opts := &ebiten.DrawImageOptions{}
+			opts.GeoM.Translate(float64(offset), 0)
+			barImg.DrawImage(segImg, opts)
+			offset += segWidth
+			if offset >= width {
+				break
+			}
+		}
+	}
+
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(float64(x), float64(y))
+	screen.DrawImage(barImg, opts)
+	DrawRectOutline(screen, x, y, width, height, utils.PanelBorder)
+}
+func drawLegend(screen *ebiten.Image, x, y int, segments []barSegment) int {
+	currentY := y
+	for _, seg := range segments {
+		if seg.Value <= 0 {
+			continue
+		}
+		drawColorSwatch(screen, x, currentY, seg.Color)
+		label := fmt.Sprintf("%s (%s)", seg.Label, utils.FormatInt64WithCommas(int64(seg.Value+0.5)))
+		DrawText(screen, label, x+18, currentY+12, utils.TextSecondary)
+		currentY += 20
+	}
+	return currentY
+}
+
+func drawColorSwatch(screen *ebiten.Image, x, y int, c color.RGBA) {
+	swatch := ebiten.NewImage(12, 12)
+	swatch.Fill(c)
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(float64(x), float64(y))
+	screen.DrawImage(swatch, opts)
+	DrawRectOutline(screen, x, y, 12, 12, utils.PanelBorder)
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func buildHousingSegments(planet *entities.Planet) []barSegment {
+	segments := make([]barSegment, 0)
+
+	baseCap := planet.GetBaseHousingCapacity()
+	if baseCap > 0 {
+		segments = append(segments, barSegment{
+			Label: "Base",
+			Value: float64(baseCap),
+			Color: colorForBuildingType("Base"),
+		})
+	}
+
+	typeSums := make(map[string]float64)
+	for _, entity := range planet.Buildings {
+		building, ok := entity.(*entities.Building)
+		if !ok {
+			continue
+		}
+		if building.BuildingType == "Base" {
+			continue
+		}
+		if building.PopulationCapacity <= 0 {
+			continue
+		}
+		cap := float64(building.GetEffectivePopulationCapacity())
+		if cap <= 0 {
+			continue
+		}
+		typeSums[building.BuildingType] += cap
+	}
+
+	labels := make([]string, 0, len(typeSums))
+	for label := range typeSums {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+
+	for _, label := range labels {
+		segments = append(segments, barSegment{
+			Label: label,
+			Value: typeSums[label],
+			Color: colorForBuildingType(label),
+		})
+	}
+
+	return segments
+}
+
+func buildWorkforceGroups(planet *entities.Planet) []workforceGroup {
+	groups := make([]workforceGroup, 0)
+
+	if base := planet.GetBaseBuilding(); base != nil && base.WorkersRequired > 0 {
+		groups = append(groups, workforceGroup{
+			Label:    "Base",
+			Assigned: base.WorkersAssigned,
+			Required: base.WorkersRequired,
+		})
+	}
+
+	typeSums := make(map[string]*workforceGroup)
+	for _, entity := range planet.Buildings {
+		building, ok := entity.(*entities.Building)
+		if !ok {
+			continue
+		}
+		if building.WorkersRequired <= 0 {
+			continue
+		}
+		if building.BuildingType == "Base" {
+			continue
+		}
+
+		grp, exists := typeSums[building.BuildingType]
+		if !exists {
+			grp = &workforceGroup{Label: building.BuildingType}
+			typeSums[building.BuildingType] = grp
+		}
+		grp.Assigned += building.WorkersAssigned
+		grp.Required += building.WorkersRequired
+	}
+
+	labels := make([]string, 0, len(typeSums))
+	for label := range typeSums {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+
+	for _, label := range labels {
+		groups = append(groups, *typeSums[label])
+	}
+
+	return groups
+}
+
+func colorForBuildingType(buildingType string) color.RGBA {
+	switch buildingType {
+	case "Base":
+		return utils.PlayerBlue
+	case "Habitat":
+		return utils.PlayerGreen
+	case "Mine":
+		return utils.StationMining
+	case "Refinery":
+		return utils.StationRefinery
+	case "Shipyard":
+		return utils.StationShipyard
+	case "Trading Post":
+		return utils.StationTrading
+	default:
+		return utils.Highlight
+	}
+}
+
+func colorForWorkforceRatio(assigned, required int) color.RGBA {
+	if required <= 0 {
+		return utils.PlayerGreen
+	}
+	ratio := float64(assigned) / float64(required)
+	if ratio >= 0.95 {
+		return utils.PlayerGreen
+	}
+	if ratio >= 0.5 {
+		return utils.StationRefinery
+	}
+	return color.RGBA{200, 80, 80, 255}
 }

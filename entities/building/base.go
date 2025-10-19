@@ -79,15 +79,18 @@ func EnsurePlanetHasBase(planet *entities.Planet, params entities.GenerationPara
 	base.AttachmentType = "Planet"
 	base.AttachedTo = fmt.Sprintf("%d", planet.GetID())
 
-	base.PopulationCapacity = calculateBaseHousing(planet)
-	if planet.Habitability <= 0 {
-		base.PopulationCapacity = 0
-		base.IsOperational = false
-	} else {
-		base.IsOperational = true
+	capacity := calculateBaseHousing(planet)
+	if capacity <= 0 && planet.IsHabitable() {
+		capacity = 1000
 	}
+	base.PopulationCapacity = capacity
+	base.IsOperational = capacity > 0
+
+	base.SetWorkersRequired(calculateBaseWorkforceRequirement(base))
 
 	base.Name = fmt.Sprintf("%s Base", planet.Name)
+
+	planet.RebalanceWorkforce()
 }
 
 func calculateBaseHousing(planet *entities.Planet) int64 {
@@ -108,4 +111,17 @@ func calculateBaseHousing(planet *entities.Planet) int64 {
 	}
 
 	return capacity
+}
+
+func calculateBaseWorkforceRequirement(base *entities.Building) int {
+	if base == nil || base.PopulationCapacity <= 0 {
+		return 0
+	}
+
+	workers := int(base.PopulationCapacity / 2000)
+	if workers < 25 {
+		workers = 25
+	}
+
+	return workers
 }

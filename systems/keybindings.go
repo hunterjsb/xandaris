@@ -41,6 +41,7 @@ func (kb *KeyBindings) LoadDefaults() {
 	kb.bindings[views.ActionOpenMarket] = ebiten.KeyM
 	kb.bindings[views.ActionOpenPlayerDir] = ebiten.KeyP
 	kb.bindings[views.ActionFocusHome] = ebiten.KeyTab
+	kb.bindings[views.ActionToggleWorkforceView] = ebiten.KeyW
 
 	// Menu navigation
 	kb.bindings[views.ActionMenuUp] = ebiten.KeyUp
@@ -73,22 +74,23 @@ func (kb *KeyBindings) SetKey(action views.KeyAction, key ebiten.Key) {
 // GetActionName returns a human-readable name for an action
 func (kb *KeyBindings) GetActionName(action views.KeyAction) string {
 	names := map[views.KeyAction]string{
-		views.ActionPauseToggle:   "Pause/Resume",
-		views.ActionSpeedSlow:     "Speed: Slow",
-		views.ActionSpeedNormal:   "Speed: Normal",
-		views.ActionSpeedFast:     "Speed: Fast",
-		views.ActionSpeedVeryFast: "Speed: Very Fast",
-		views.ActionQuickSave:     "Quick Save",
-		views.ActionEscape:        "Escape/Back",
-		views.ActionOpenBuildMenu: "Open Build Menu",
-		views.ActionOpenMarket:    "Open Market",
-		views.ActionOpenPlayerDir: "Open Player Directory",
-		views.ActionFocusHome:     "Focus Home System",
-		views.ActionMenuUp:        "Menu: Up",
-		views.ActionMenuDown:      "Menu: Down",
-		views.ActionMenuConfirm:   "Menu: Confirm",
-		views.ActionMenuCancel:    "Menu: Cancel",
-		views.ActionMenuDelete:    "Menu: Delete",
+		views.ActionPauseToggle:         "Pause/Resume",
+		views.ActionSpeedSlow:           "Speed: Slow",
+		views.ActionSpeedNormal:         "Speed: Normal",
+		views.ActionSpeedFast:           "Speed: Fast",
+		views.ActionSpeedVeryFast:       "Speed: Very Fast",
+		views.ActionQuickSave:           "Quick Save",
+		views.ActionEscape:              "Escape/Back",
+		views.ActionOpenBuildMenu:       "Open Build Menu",
+		views.ActionOpenMarket:          "Open Market",
+		views.ActionToggleWorkforceView: "Toggle Workforce View",
+		views.ActionOpenPlayerDir:       "Open Player Directory",
+		views.ActionFocusHome:           "Focus Home System",
+		views.ActionMenuUp:              "Menu: Up",
+		views.ActionMenuDown:            "Menu: Down",
+		views.ActionMenuConfirm:         "Menu: Confirm",
+		views.ActionMenuCancel:          "Menu: Cancel",
+		views.ActionMenuDelete:          "Menu: Delete",
 	}
 
 	name, exists := names[action]
@@ -162,6 +164,7 @@ func (kb *KeyBindings) GetAllActions() []views.KeyAction {
 		views.ActionOpenMarket,
 		views.ActionOpenPlayerDir,
 		views.ActionFocusHome,
+		views.ActionToggleWorkforceView,
 		views.ActionMenuUp,
 		views.ActionMenuDown,
 		views.ActionMenuConfirm,

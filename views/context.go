@@ -87,11 +87,12 @@ const (
 	ActionQuickSave     KeyAction = "quick_save"
 
 	// View navigation
-	ActionEscape        KeyAction = "escape"
-	ActionOpenBuildMenu KeyAction = "open_build_menu"
-	ActionOpenMarket    KeyAction = "open_market"
-	ActionOpenPlayerDir KeyAction = "open_player_directory"
-	ActionFocusHome     KeyAction = "focus_home_system"
+	ActionEscape              KeyAction = "escape"
+	ActionOpenBuildMenu       KeyAction = "open_build_menu"
+	ActionOpenMarket          KeyAction = "open_market"
+	ActionOpenPlayerDir       KeyAction = "open_player_directory"
+	ActionFocusHome           KeyAction = "focus_home_system"
+	ActionToggleWorkforceView KeyAction = "toggle_workforce_view"
 
 	// Menu navigation
 	ActionMenuUp      KeyAction = "menu_up"

@@ -121,6 +121,17 @@ func DrawLine(screen *ebiten.Image, x1, y1, x2, y2 int, c color.RGBA) {
 	}
 }
 
+// DrawRectOutline draws a rectangle outline with the specified color
+func DrawRectOutline(screen *ebiten.Image, x, y, width, height int, c color.RGBA) {
+	if width <= 0 || height <= 0 {
+		return
+	}
+	DrawLine(screen, x, y, x+width-1, y, c)
+	DrawLine(screen, x, y+height-1, x+width-1, y+height-1, c)
+	DrawLine(screen, x, y, x, y+height-1, c)
+	DrawLine(screen, x+width-1, y, x+width-1, y+height-1, c)
+}
+
 // DrawHighlightCircle draws a highlight ring around a circular object
 func DrawHighlightCircle(screen *ebiten.Image, centerX, centerY, radius int, highlightColor color.RGBA) {
 	highlightRadius := radius + 4
@@ -171,4 +182,70 @@ func DrawGlow(screen *ebiten.Image, centerX, centerY int, radius float64, glowCo
 
 		DrawLine(screen, x1, y1, x2, y2, glowColor)
 	}
+}
+
+// UIProgressBar renders a horizontal progress indicator with border
+type UIProgressBar struct {
+	X, Y         int
+	Width, Height int
+	Value, Max   float64
+	FillColor    color.RGBA
+	BgColor      color.RGBA
+	BorderColor  color.RGBA
+}
+
+// NewUIProgressBar constructs a progress bar with sensible defaults
+func NewUIProgressBar(x, y, width, height int) *UIProgressBar {
+	return &UIProgressBar{
+		X:          x,
+		Y:          y,
+		Width:      width,
+		Height:     height,
+		Value:      0,
+		Max:        1,
+		FillColor:  utils.PlayerGreen,
+		BgColor:    color.RGBA{20, 20, 40, 255},
+		BorderColor: utils.PanelBorder,
+	}
+}
+
+// SetValue updates the current value and maximum for the progress bar
+func (pb *UIProgressBar) SetValue(value, max float64) {
+	pb.Value = value
+	pb.Max = max
+}
+
+// Draw renders the progress bar
+func (pb *UIProgressBar) Draw(screen *ebiten.Image) {
+	if pb.Width <= 0 || pb.Height <= 0 {
+		return
+	}
+
+	if pb.Max == 0 {
+		pb.Max = 1
+	}
+
+	bg := ebiten.NewImage(pb.Width, pb.Height)
+	bg.Fill(pb.BgColor)
+
+	bgOpts := &ebiten.DrawImageOptions{}
+	bgOpts.GeoM.Translate(float64(pb.X), float64(pb.Y))
+	screen.DrawImage(bg, bgOpts)
+
+	if pb.Value > 0 && pb.Max > 0 {
+		ratio := pb.Value / pb.Max
+		if ratio > 1 {
+			ratio = 1
+		}
+		fillWidth := int(ratio * float64(pb.Width))
+		if fillWidth > 0 {
+			fill := ebiten.NewImage(fillWidth, pb.Height)
+			fill.Fill(pb.FillColor)
+			fillOpts := &ebiten.DrawImageOptions{}
+			fillOpts.GeoM.Translate(float64(pb.X), float64(pb.Y))
+			screen.DrawImage(fill, fillOpts)
+		}
+	}
+
+	DrawRectOutline(screen, pb.X, pb.Y, pb.Width, pb.Height, pb.BorderColor)
 }

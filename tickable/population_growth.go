@@ -57,6 +57,8 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 		return
 	}
 
+	defer planet.RebalanceWorkforce()
+
 	capacity := planet.GetTotalPopulationCapacity()
 	if capacity <= 0 {
 		if planet.Population > 0 {

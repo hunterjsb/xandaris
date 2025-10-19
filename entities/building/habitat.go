@@ -60,6 +60,7 @@ func (g *HabitatGenerator) Generate(params entities.GenerationParams) entities.E
 	building.MaxLevel = 10                 // Can upgrade to level 10 (more housing)
 	building.Size = 5                      // 5 pixels (larger than mine)
 	building.Description = "Provides housing for population. Increases planet capacity."
+	building.SetWorkersRequired(200)
 
 	return building
 }
