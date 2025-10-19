@@ -1,12 +1,11 @@
 package views
 
 import (
-	"fmt"
-	"image"
-	"image/color"
-	"math"
-	"sort"
-	"strings"
+    "fmt"
+    "image"
+    "image/color"
+    "math"
+    "strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -75,8 +74,7 @@ type PlanetView struct {
 	centerY              float64
 	orbitOffset          float64 // For animating orbits
 	fleets               []*Fleet
-	showWorkforceOverlay bool
-	workforceRowHits     map[*entities.Building]workforceRowHit
+	workforceOverlay     *WorkforceOverlay
 }
 
 // NewPlanetView creates a new planet view
@@ -91,15 +89,17 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 		fleetInfoUI:       fleetInfoUI,
 		centerX:           float64(ScreenWidth) / 2,
 		centerY:           float64(ScreenHeight) / 2,
-		workforceRowHits:  make(map[*entities.Building]workforceRowHit),
+		workforceOverlay:  NewWorkforceOverlay(),
 	}
 }
 
 // SetPlanet sets the planet to display
 func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 	pv.planet = planet
-	pv.showWorkforceOverlay = false
-	pv.workforceRowHits = make(map[*entities.Building]workforceRowHit)
+	if pv.workforceOverlay != nil {
+		pv.workforceOverlay.Hide()
+		pv.workforceOverlay.SetPlanet(planet)
+	}
 
 	// Find the system that contains this planet
 	pv.system = nil
@@ -141,7 +141,9 @@ func (pv *PlanetView) Update() error {
 	tm := pv.ctx.GetTickManager()
 
 	if kb.IsActionJustPressed(ActionToggleWorkforceView) && pv.planet != nil {
-		pv.showWorkforceOverlay = !pv.showWorkforceOverlay
+		if pv.workforceOverlay != nil {
+			pv.workforceOverlay.Toggle()
+		}
 	}
 
 	// Update orbit animation (very slow for planetary rotation effect)
@@ -187,8 +189,8 @@ func (pv *PlanetView) Update() error {
 
 	// Handle escape key
 	if kb.IsActionJustPressed(ActionEscape) {
-		if pv.showWorkforceOverlay {
-			pv.showWorkforceOverlay = false
+		if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
+			pv.workforceOverlay.Hide()
 			return nil
 		}
 
@@ -218,21 +220,15 @@ func (pv *PlanetView) Update() error {
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		x, y := ebiten.CursorPosition()
 
-		if pv.showWorkforceOverlay {
-			if pv.handleWorkforceOverlayClick(x, y) {
-				return nil
-			}
-		}
-
 		if rectContains(x, y, pv.workforceButtonRect()) && pv.planet != nil {
-			pv.showWorkforceOverlay = !pv.showWorkforceOverlay
+			if pv.workforceOverlay != nil {
+				pv.workforceOverlay.Toggle()
+			}
 			return nil
 		}
 
-		if pv.showWorkforceOverlay {
-			// Overlay is active; consume clicks within its bounds
-			overlayRect := workforceOverlayRect()
-			if rectContains(x, y, overlayRect) {
+		if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
+			if pv.workforceOverlay.HandleClick(x, y) {
 				return nil
 			}
 		}
@@ -353,8 +349,8 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 
 	pv.drawWorkforceToggleButton(screen)
 
-	if pv.showWorkforceOverlay {
-		pv.drawWorkforceOverlay(screen)
+	if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
+		pv.workforceOverlay.Draw(screen)
 		return
 	}
 
@@ -806,263 +802,20 @@ func (pv *PlanetView) drawWorkforceToggleButton(screen *ebiten.Image) {
 		BgColor:     utils.PanelBg,
 		BorderColor: utils.PanelBorder,
 	}
-	if pv.showWorkforceOverlay {
+	if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
 		panel.BgColor = utils.ButtonActive
 	}
 	panel.Draw(screen)
 
 	label := "Workforce [W]"
 	textColor := utils.TextSecondary
-	if pv.showWorkforceOverlay {
+	if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
 		textColor = utils.TextPrimary
 	}
 	DrawTextCenteredInRect(screen, label, rect, textColor)
 }
 
-func (pv *PlanetView) drawWorkforceOverlay(screen *ebiten.Image) {
-	planet := pv.planet
-	if planet == nil {
-		return
-	}
 
-	planet.RebalanceWorkforce()
-	pv.workforceRowHits = make(map[*entities.Building]workforceRowHit)
-
-	overlayRect := workforceOverlayRect()
-	background := NewUIPanel(overlayRect.Min.X, overlayRect.Min.Y, overlayRect.Dx(), overlayRect.Dy())
-	background.BgColor = color.RGBA{18, 20, 32, 235}
-	background.Draw(screen)
-
-	DrawText(screen, "Population & Workforce Overview", overlayRect.Min.X+30, overlayRect.Min.Y+40, utils.TextPrimary)
-
-	contentX := overlayRect.Min.X + 30
-	contentWidth := overlayRect.Dx() - 60
-	leftWidth := int(float64(contentWidth) * 0.55)
-	if leftWidth < 260 {
-		leftWidth = 260
-	}
-	gap := 40
-	rightX := contentX + leftWidth + gap
-	rightWidth := overlayRect.Max.X - rightX - 30
-	if rightWidth < 220 {
-		rightWidth = 220
-		leftWidth = contentWidth - rightWidth - gap
-	}
-
-	leftY := overlayRect.Min.Y + 90
-	rightY := leftY
-
-	capacity := planet.GetTotalPopulationCapacity()
-	DrawText(screen, "Population", contentX, leftY, utils.TextSecondary)
-	leftY += 20
-	popBar := NewUIProgressBar(contentX, leftY, leftWidth, 18)
-	maxPop := float64(capacity)
-	if maxPop < 1 {
-		maxPop = 1
-	}
-	popBar.SetValue(float64(planet.Population), maxPop)
-	popBar.FillColor = utils.PlayerGreen
-	popBar.Draw(screen)
-	DrawText(screen,
-		fmt.Sprintf("%s / %s", utils.FormatInt64WithCommas(planet.Population), utils.FormatInt64WithCommas(capacity)),
-		contentX,
-		leftY+26,
-		utils.TextSecondary,
-	)
-	leftY += 58
-
-	housingSegments := buildHousingSegments(planet)
-	if len(housingSegments) > 0 {
-		DrawText(screen, "Housing Sources", contentX, leftY, utils.TextSecondary)
-		leftY += 20
-		drawStackedBar(screen, contentX, leftY, leftWidth, 18, housingSegments)
-		legendBottom := drawLegend(screen, contentX, leftY+24, housingSegments)
-		leftY = legendBottom + 28
-	}
-
-	DrawText(screen, "Workforce", contentX, leftY, utils.TextSecondary)
-	leftY += 20
-	workforceBar := NewUIProgressBar(contentX, leftY, leftWidth, 18)
-	maxWorkers := float64(planet.WorkforceTotal)
-	if maxWorkers < 1 {
-		maxWorkers = 1
-	}
-	workforceBar.SetValue(float64(planet.WorkforceUsed), maxWorkers)
-	workforceBar.FillColor = utils.PlayerBlue
-	workforceBar.Draw(screen)
-	DrawText(screen,
-		fmt.Sprintf("%s used / %s total  (Available: %s)",
-			utils.FormatInt64WithCommas(planet.WorkforceUsed),
-			utils.FormatInt64WithCommas(planet.WorkforceTotal),
-			utils.FormatInt64WithCommas(planet.GetAvailableWorkforce())),
-		contentX,
-		leftY+26,
-		utils.TextSecondary,
-	)
-
-	DrawText(screen, "Building Staffing", rightX, rightY, utils.TextSecondary)
-	rightY += 28
-
-	rows := buildWorkforceRows(planet)
-	if len(rows) == 0 {
-		DrawText(screen, "No staffed buildings", rightX, rightY, utils.TextSecondary)
-	} else {
-		buttonWidth := 42
-		buttonHeight := 22
-		controlAreaWidth := buttonWidth*4 + 18
-		progressWidth := rightWidth - controlAreaWidth - 16
-		if progressWidth < 120 {
-			progressWidth = 120
-		}
-
-		for _, row := range rows {
-			building := row.Building
-			DrawText(screen, fmt.Sprintf("%s (%s)", building.Name, building.BuildingType), rightX, rightY, utils.TextPrimary)
-			rightY += 18
-
-			progressBar := NewUIProgressBar(rightX, rightY, progressWidth, 16)
-			progressBar.SetValue(float64(row.Assigned), float64(maxInt(row.Required, 1)))
-			progressBar.FillColor = colorForWorkforceRatio(row.Assigned, row.Required)
-			progressBar.Draw(screen)
-
-			DrawText(screen,
-				fmt.Sprintf("%s / %s assigned", utils.FormatIntWithCommas(row.Assigned), utils.FormatIntWithCommas(row.Required)),
-				rightX,
-				rightY+22,
-				utils.TextSecondary,
-			)
-
-			buttonY := rightY
-			buttonX := rightX + progressWidth + 12
-			minusRect := image.Rect(buttonX, buttonY, buttonX+buttonWidth, buttonY+buttonHeight)
-			buttonX += buttonWidth + 4
-			plusRect := image.Rect(buttonX, buttonY, buttonX+buttonWidth, buttonY+buttonHeight)
-			buttonX += buttonWidth + 4
-			autoRect := image.Rect(buttonX, buttonY, buttonX+buttonWidth, buttonY+buttonHeight)
-			buttonX += buttonWidth + 4
-			disableRect := image.Rect(buttonX, buttonY, buttonX+buttonWidth, buttonY+buttonHeight)
-
-			drawSmallButton(screen, minusRect, "-", false)
-			drawSmallButton(screen, plusRect, "+", false)
-			drawSmallButton(screen, autoRect, "Auto", row.Desired < 0)
-			drawSmallButton(screen, disableRect, "Off", row.Desired == 0)
-
-			pv.workforceRowHits[building] = workforceRowHit{
-				minus:   minusRect,
-				plus:    plusRect,
-				auto:    autoRect,
-				disable: disableRect,
-			}
-
-			desiredLabel := "Desired: Auto"
-			if row.Desired == 0 {
-				desiredLabel = "Desired: Off"
-			} else if row.Desired > 0 {
-				desiredLabel = fmt.Sprintf("Desired: %s", utils.FormatIntWithCommas(row.Desired))
-			}
-			DrawText(screen, desiredLabel, rightX, rightY+40, utils.TextSecondary)
-
-			rightY += 52
-		}
-	}
-
-	DrawText(screen, "Press W or ESC to close", overlayRect.Min.X+30, overlayRect.Max.Y-30, utils.TextSecondary)
-}
-
-func (pv *PlanetView) handleWorkforceOverlayClick(mx, my int) bool {
-	if pv.planet == nil {
-		return false
-	}
-	overlayRect := workforceOverlayRect()
-	if !rectContains(mx, my, overlayRect) {
-		return false
-	}
-
-	if pv.workforceRowHits == nil {
-		return true
-	}
-
-	for building, hits := range pv.workforceRowHits {
-		if rectContains(mx, my, hits.auto) {
-			building.SetDesiredWorkers(-1)
-			pv.planet.RebalanceWorkforce()
-			return true
-		}
-		if rectContains(mx, my, hits.disable) {
-			building.SetDesiredWorkers(0)
-			pv.planet.RebalanceWorkforce()
-			return true
-		}
-		if rectContains(mx, my, hits.minus) {
-			step := workforceAdjustStep(building)
-			desired := building.DesiredWorkers
-			if desired < 0 {
-				desired = building.WorkersRequired
-			}
-			desired -= step
-			if desired < 0 {
-				desired = 0
-			}
-			building.SetDesiredWorkers(desired)
-			pv.planet.RebalanceWorkforce()
-			return true
-		}
-		if rectContains(mx, my, hits.plus) {
-			step := workforceAdjustStep(building)
-			desired := building.DesiredWorkers
-			if desired < 0 {
-				desired = building.WorkersRequired
-			}
-			desired += step
-			if desired > building.WorkersRequired {
-				desired = building.WorkersRequired
-			}
-			building.SetDesiredWorkers(desired)
-			pv.planet.RebalanceWorkforce()
-			return true
-		}
-	}
-
-	return true // consume click inside overlay even if no button
-}
-
-func workforceOverlayRect() image.Rectangle {
-	margin := 60
-	return image.Rect(margin, margin, ScreenWidth-margin, ScreenHeight-margin)
-}
-
-func drawSmallButton(screen *ebiten.Image, rect image.Rectangle, label string, active bool) {
-	panel := NewUIPanel(rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy())
-	panel.BgColor = utils.PanelBg
-	if active {
-		panel.BgColor = utils.ButtonActive
-	}
-	panel.BorderColor = utils.PanelBorder
-	panel.Draw(screen)
-
-	textColor := utils.TextSecondary
-	if active {
-		textColor = utils.TextPrimary
-	}
-	DrawTextCenteredInRect(screen, label, rect, textColor)
-}
-
-func workforceAdjustStep(building *entities.Building) int {
-	if building == nil {
-		return 1
-	}
-	step := building.WorkersRequired / 10
-	if step < 5 {
-		step = 5
-	}
-	if step > building.WorkersRequired {
-		step = building.WorkersRequired
-	}
-	if step < 1 {
-		step = 1
-	}
-	return step
-}
 
 func (pv *PlanetView) workforceButtonRect() image.Rectangle {
 	x := ScreenWidth - workforceButtonWidth - 20
@@ -1078,20 +831,6 @@ type barSegment struct {
 	Label string
 	Value float64
 	Color color.RGBA
-}
-
-type workforceRowHit struct {
-	minus   image.Rectangle
-	plus    image.Rectangle
-	auto    image.Rectangle
-	disable image.Rectangle
-}
-
-type workforceRow struct {
-	Building *entities.Building
-	Assigned int
-	Required int
-	Desired  int
 }
 
 func drawStackedBar(screen *ebiten.Image, x, y, width, height int, segments []barSegment) {
@@ -1160,129 +899,4 @@ func drawLegend(screen *ebiten.Image, x, y int, segments []barSegment) int {
 		currentY += 20
 	}
 	return currentY
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func buildHousingSegments(planet *entities.Planet) []barSegment {
-	segments := make([]barSegment, 0)
-
-	baseCap := planet.GetBaseHousingCapacity()
-	if baseCap > 0 {
-		segments = append(segments, barSegment{
-			Label: "Base",
-			Value: float64(baseCap),
-			Color: colorForBuildingType("Base"),
-		})
-	}
-
-	typeSums := make(map[string]float64)
-	for _, entity := range planet.Buildings {
-		building, ok := entity.(*entities.Building)
-		if !ok {
-			continue
-		}
-		if building.BuildingType == "Base" {
-			continue
-		}
-		if building.PopulationCapacity <= 0 {
-			continue
-		}
-		cap := float64(building.GetEffectivePopulationCapacity())
-		if cap <= 0 {
-			continue
-		}
-		typeSums[building.BuildingType] += cap
-	}
-
-	labels := make([]string, 0, len(typeSums))
-	for label := range typeSums {
-		labels = append(labels, label)
-	}
-	sort.Strings(labels)
-
-	for _, label := range labels {
-		segments = append(segments, barSegment{
-			Label: label,
-			Value: typeSums[label],
-			Color: colorForBuildingType(label),
-		})
-	}
-
-	return segments
-}
-
-func buildWorkforceRows(planet *entities.Planet) []workforceRow {
-	rows := make([]workforceRow, 0)
-
-	for _, entity := range planet.Buildings {
-		building, ok := entity.(*entities.Building)
-		if !ok {
-			continue
-		}
-		if building.WorkersRequired <= 0 {
-			continue
-		}
-		rows = append(rows, workforceRow{
-			Building: building,
-			Assigned: building.WorkersAssigned,
-			Required: building.WorkersRequired,
-			Desired:  building.DesiredWorkers,
-		})
-	}
-
-	sort.Slice(rows, func(i, j int) bool {
-		bi := rows[i].Building
-		bj := rows[j].Building
-		if bi.BuildingType == bj.BuildingType {
-			return bi.Name < bj.Name
-		}
-		if bi.BuildingType == "Base" {
-			return true
-		}
-		if bj.BuildingType == "Base" {
-			return false
-		}
-		return bi.BuildingType < bj.BuildingType
-	})
-
-	return rows
-}
-
-func colorForBuildingType(buildingType string) color.RGBA {
-	switch buildingType {
-	case "Base":
-		return utils.PlayerBlue
-	case "Habitat":
-		return utils.PlayerGreen
-	case "Mine":
-		return utils.StationMining
-	case "Refinery":
-		return utils.StationRefinery
-	case "Shipyard":
-		return utils.StationShipyard
-	case "Trading Post":
-		return utils.StationTrading
-	default:
-		return utils.Highlight
-	}
-}
-
-func colorForWorkforceRatio(assigned, required int) color.RGBA {
-	if required <= 0 {
-		return utils.PlayerGreen
-	}
-	ratio := float64(assigned) / float64(required)
-	if ratio >= 0.95 {
-		return utils.PlayerGreen
-	}
-	if ratio >= 0.5 {
-		return utils.StationRefinery
-	}
-	return color.RGBA{200, 80, 80, 255}
 }
