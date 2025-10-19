@@ -1,6 +1,7 @@
 package views
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -230,6 +231,118 @@ func NewUIProgressBar(x, y, width, height int) *UIProgressBar {
 		BgColor:     color.RGBA{20, 20, 40, 255},
 		BorderColor: utils.PanelBorder,
 	}
+}
+
+// DrawLabeledButton renders a rectangular button with centered text.
+func DrawLabeledButton(screen *ebiten.Image, rect image.Rectangle, label string, active bool) {
+	panel := &UIPanel{
+		X:           rect.Min.X,
+		Y:           rect.Min.Y,
+		Width:       rect.Dx(),
+		Height:      rect.Dy(),
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
+	}
+	if active {
+		panel.BgColor = utils.ButtonActive
+	}
+	panel.Draw(screen)
+
+	textColor := utils.TextSecondary
+	if active {
+		textColor = utils.TextPrimary
+	}
+	DrawTextCenteredInRect(screen, label, rect, textColor)
+}
+
+// ChartSegment describes a slice in a stacked bar or legend.
+type ChartSegment struct {
+	Label string
+	Value float64
+	Color color.RGBA
+}
+
+// DrawStackedBar draws a horizontal stacked bar chart inside the given rectangle.
+func DrawStackedBar(screen *ebiten.Image, rect image.Rectangle, segments []ChartSegment, background, border color.RGBA) {
+	if rect.Dx() <= 0 || rect.Dy() <= 0 {
+		return
+	}
+
+	bar := ebiten.NewImage(rect.Dx(), rect.Dy())
+	bar.Fill(background)
+
+	total := 0.0
+	for _, seg := range segments {
+		if seg.Value > 0 {
+			total += seg.Value
+		}
+	}
+
+	if total > 0 {
+		offset := 0
+		for idx, seg := range segments {
+			if seg.Value <= 0 {
+				continue
+			}
+			ratio := seg.Value / total
+			segWidth := int(ratio * float64(rect.Dx()))
+			if segWidth <= 0 {
+				// ensure at least 1px for visible segments, but don't overflow the bar width
+				if idx == len(segments)-1 {
+					segWidth = rect.Dx() - offset
+				} else {
+					segWidth = 1
+				}
+			}
+			if offset+segWidth > rect.Dx() {
+				segWidth = rect.Dx() - offset
+			}
+			if segWidth <= 0 {
+				continue
+			}
+
+			segImg := ebiten.NewImage(segWidth, rect.Dy())
+			segImg.Fill(seg.Color)
+			opts := &ebiten.DrawImageOptions{}
+			opts.GeoM.Translate(float64(offset), 0)
+			bar.DrawImage(segImg, opts)
+			offset += segWidth
+			if offset >= rect.Dx() {
+				break
+			}
+		}
+	}
+
+	barOpts := &ebiten.DrawImageOptions{}
+	barOpts.GeoM.Translate(float64(rect.Min.X), float64(rect.Min.Y))
+	screen.DrawImage(bar, barOpts)
+	DrawRectOutline(screen, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), border)
+}
+
+// DrawLegend renders a vertical legend for the provided segments.
+// It returns the y-coordinate immediately following the drawn legend.
+func DrawLegend(screen *ebiten.Image, start image.Point, segments []ChartSegment) int {
+	currentY := start.Y
+	for _, seg := range segments {
+		if seg.Value <= 0 {
+			continue
+		}
+		drawColorSwatch(screen, start.X, currentY, seg.Color)
+		label := fmt.Sprintf("%s (%s)", seg.Label, utils.FormatInt64WithCommas(int64(seg.Value+0.5)))
+		DrawText(screen, label, start.X+18, currentY+12, utils.TextSecondary)
+		currentY += 20
+	}
+	return currentY
+}
+
+// drawColorSwatch draws a small filled square with a border for use in legends.
+func drawColorSwatch(screen *ebiten.Image, x, y int, c color.RGBA) {
+	swatch := ebiten.NewImage(12, 12)
+	swatch.Fill(c)
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(float64(x), float64(y))
+	screen.DrawImage(swatch, opts)
+	DrawRectOutline(screen, x, y, 12, 12, utils.PanelBorder)
 }
 
 // SetValue updates the current value and maximum for the progress bar

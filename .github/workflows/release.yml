@@ -14,6 +14,7 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       short_sha: ${{ steps.short_sha.outputs.sha }}
+      release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - name: Get short SHA
         id: short_sha
@@ -110,14 +111,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const release = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: '${{ needs.create_release.outputs.short_sha }}'
-            });
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              release_id: release.data.id,
+              release_id: ${{ needs.create_release.outputs.release_id }},
               draft: false
             });
