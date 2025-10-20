@@ -67,7 +67,7 @@ func (p *Planet) GetDescription() string {
 
 // GetClickRadius returns the click detection radius
 func (p *Planet) GetClickRadius() float64 {
-	return float64(p.Size) + 3 // Small margin for accurate clicking
+	return float64(p.Size) + 15 // 15 is still too small, TODO adjust based on planet size
 }
 
 // GetOwner returns the owner of this planet

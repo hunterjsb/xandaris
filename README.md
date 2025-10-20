@@ -1,6 +1,8 @@
-# Xandaris II
+# Xandaris
 
-Xandaris II is a space trading and exploration game written in Go using the [Ebitengine](https://github.com/hajimehoshi/ebiten/v2) game library.
+Xandaris is a space trading and exploration game written in Go using the [Ebitengine](https://github.com/hajimehoshi/ebiten/v2) game library.
+
+### ⚠️ Xandaris is in EARLY DEVELOPMENT, many features are unfinished.
 
 ## Controls
 
