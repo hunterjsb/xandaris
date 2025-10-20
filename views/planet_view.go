@@ -81,7 +81,7 @@ type PlanetView struct {
 func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQueue ConstructionQueueUIInterface, resourceStorage ResourceStorageUIInterface, shipyardUI ShipyardUIInterface, fleetInfoUI FleetInfoUIInterface) *PlanetView {
 	return &PlanetView{
 		ctx:               ctx,
-		clickHandler:      NewClickHandler(),
+		clickHandler:      NewClickHandler("planet"),
 		buildMenu:         buildMenu,
 		constructionQueue: constructionQueue,
 		resourceStorage:   resourceStorage,
@@ -250,7 +250,7 @@ func (pv *PlanetView) Update() error {
 				dx := float64(x) - bx
 				dy := float64(y) - by
 				distance := dx*dx + dy*dy
-				clickRadius := building.GetClickRadius()
+				clickRadius := building.GetClickRadius("planet")
 
 				if distance <= clickRadius*clickRadius {
 					// Clicked on a building
@@ -313,7 +313,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		x, y := selectedObj.GetPosition()
 		DrawHighlightCircle(screen,
 			int(x), int(y),
-			int(selectedObj.GetClickRadius()),
+			int(selectedObj.GetClickRadius("planet")),
 			utils.Highlight)
 	}
 

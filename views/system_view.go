@@ -32,7 +32,7 @@ type SystemView struct {
 func NewSystemView(ctx GameContext, fleetInfoUI FleetInfoUIInterface) *SystemView {
 	return &SystemView{
 		ctx:          ctx,
-		clickHandler: NewClickHandler(),
+		clickHandler: NewClickHandler("system"),
 		centerX:      float64(ScreenWidth) / 2,
 		centerY:      float64(ScreenHeight) / 2,
 		scale:        &SystemScale,
@@ -154,7 +154,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 		x, y := selectedObj.GetPosition()
 		DrawHighlightCircle(screen,
 			int(x), int(y),
-			int(selectedObj.GetClickRadius()),
+			int(selectedObj.GetClickRadius("system")),
 			utils.Highlight)
 	}
 

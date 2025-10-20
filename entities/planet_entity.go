@@ -66,8 +66,18 @@ func (p *Planet) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius
-func (p *Planet) GetClickRadius() float64 {
-	return float64(p.Size) + 15 // 15 is still too small, TODO adjust based on planet size
+func (p *Planet) GetClickRadius(view string) float64 {
+	switch view {
+	case "system":
+		// In system view, planets are small, so a larger relative radius is needed.
+		return float64(p.Size) + 10
+	case "planet":
+		// In planet view, the planet is large, so the radius can be closer to its visual size.
+		return float64(p.Size) * 8 * 1.1 // 10% larger than the visual radius in planet view
+	default:
+		// Default for galaxy view or other contexts
+		return float64(p.Size) + 5
+	}
 }
 
 // GetOwner returns the owner of this planet

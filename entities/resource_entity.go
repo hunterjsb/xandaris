@@ -49,7 +49,7 @@ func (r *Resource) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius
-func (r *Resource) GetClickRadius() float64 {
+func (r *Resource) GetClickRadius(view string) float64 {
 	return float64(r.Size) + 1
 }
 

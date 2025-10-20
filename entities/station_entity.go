@@ -45,7 +45,7 @@ func (s *Station) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius
-func (s *Station) GetClickRadius() float64 {
+func (s *Station) GetClickRadius(view string) float64 {
 	return 6.0 // Fixed radius for station click detection
 }
 

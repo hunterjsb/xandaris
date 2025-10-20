@@ -52,7 +52,7 @@ func (s *Star) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius
-func (s *Star) GetClickRadius() float64 {
+func (s *Star) GetClickRadius(view string) float64 {
 	return float64(s.Radius) + 5 // Star radius plus margin
 }
 

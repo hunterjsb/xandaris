@@ -67,7 +67,7 @@ func (b *Building) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius
-func (b *Building) GetClickRadius() float64 {
+func (b *Building) GetClickRadius(view string) float64 {
 	return float64(b.Size) + 1
 }
 

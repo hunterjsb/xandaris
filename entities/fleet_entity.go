@@ -72,8 +72,12 @@ func (f *Fleet) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius for the fleet
-func (f *Fleet) GetClickRadius() float64 {
-	return 15.0 // Fleets are easier to click than individual ships
+func (f *Fleet) GetClickRadius(view string) float64 {
+	// Fleets are represented by their lead ship
+	if f.LeadShip != nil {
+		return f.LeadShip.GetClickRadius(view)
+	}
+	return 10.0 // Default if no ships
 }
 
 // Size returns the number of ships in the fleet

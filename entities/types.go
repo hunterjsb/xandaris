@@ -32,7 +32,7 @@ type Entity interface {
 	SetAbsolutePosition(x, y float64)
 
 	// Click detection
-	GetClickRadius() float64
+	GetClickRadius(view string) float64
 
 	// Universal attributes (with sensible defaults)
 	GetOwner() string          // Empty string = unowned/neutral

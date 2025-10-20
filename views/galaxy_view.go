@@ -35,7 +35,7 @@ type GalaxyView struct {
 func NewGalaxyView(ctx GameContext) *GalaxyView {
 	gv := &GalaxyView{
 		ctx:                     ctx,
-		clickHandler:            NewClickHandler(),
+		clickHandler:            NewClickHandler("galaxy"),
 		systemFleets:            make(map[int][]*Fleet),
 		playerPanelRect:         image.Rectangle{},
 		playerDirectoryHintRect: image.Rectangle{},
@@ -154,7 +154,7 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 		x, y := selectedObj.GetPosition()
 		DrawHighlightCircle(screen,
 			int(x), int(y),
-			int(selectedObj.GetClickRadius()),
+			int(selectedObj.GetClickRadius("galaxy")),
 			utils.Highlight)
 	}
 

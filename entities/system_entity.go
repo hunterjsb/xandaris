@@ -102,7 +102,7 @@ func (s *System) GetPosition() (float64, float64) {
 }
 
 // GetClickRadius implements Clickable interface
-func (s *System) GetClickRadius() float64 {
+func (s *System) GetClickRadius(view string) float64 {
 	return float64(8) // circleRadius
 }
 

@@ -155,7 +155,7 @@ func (s *Ship) GetDescription() string {
 }
 
 // GetClickRadius returns the click detection radius
-func (s *Ship) GetClickRadius() float64 {
+func (s *Ship) GetClickRadius(view string) float64 {
 	return 8.0
 }
 

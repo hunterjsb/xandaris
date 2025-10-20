@@ -12,7 +12,7 @@ type ContextMenuProvider interface {
 type Clickable interface {
 	ContextMenuProvider
 	GetPosition() (float64, float64) // Returns X, Y coordinates
-	GetClickRadius() float64         // Returns click detection radius
+	GetClickRadius(view string) float64         // Returns click detection radius
 }
 
 // ClickHandler manages clickable objects and context menus
@@ -20,12 +20,14 @@ type ClickHandler struct {
 	clickables     []Clickable
 	activeMenu     *ContextMenu
 	selectedObject Clickable
+	view           string
 }
 
 // NewClickHandler creates a new click handler
-func NewClickHandler() *ClickHandler {
+func NewClickHandler(view string) *ClickHandler {
 	return &ClickHandler{
 		clickables: make([]Clickable, 0),
+		view:       view,
 	}
 }
 
@@ -52,7 +54,7 @@ func (c *ClickHandler) HandleClick(x, y int) bool {
 		dy := float64(y) - objY
 		distance := math.Sqrt(dx*dx + dy*dy)
 
-		if distance <= clickable.GetClickRadius() {
+		if distance <= clickable.GetClickRadius(c.view) {
 			// Toggle selection - if already selected, deselect
 			if c.selectedObject == clickable {
 				c.selectedObject = nil
@@ -87,7 +89,7 @@ func (c *ClickHandler) Select(clickable Clickable) {
 // createContextMenu creates and positions a context menu for the given object
 func (c *ClickHandler) createContextMenu(clickable Clickable, x, y int) {
 	c.activeMenu = NewContextMenuFromProvider(clickable)
-	c.activeMenu.PositionNear(x, y, int(clickable.GetClickRadius())+20)
+	c.activeMenu.PositionNear(x, y, int(clickable.GetClickRadius(c.view))+20)
 }
 
 // GetSelectedObject returns the currently selected object
