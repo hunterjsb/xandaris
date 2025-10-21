@@ -10,14 +10,22 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/rendering"
 	"github.com/hunterjsb/xandaris/utils"
 )
 
 var (
-	planetCircleCache   = utils.NewCircleImageCache()
-	planetRectCache     = utils.NewRectImageCache()
-	planetTriangleCache = utils.NewTriangleImageCache()
+	planetCircleCache      = utils.NewCircleImageCache()
+	planetRectCache        = utils.NewRectImageCache()
+	planetTriangleCache    = utils.NewTriangleImageCache()
+	planetSpriteRenderer   *rendering.SpriteRenderer
+	planetBuildingRenderer *rendering.BuildingRenderer
 )
+
+func init() {
+	planetSpriteRenderer = rendering.NewSpriteRenderer()
+	planetBuildingRenderer = rendering.NewBuildingRenderer(planetSpriteRenderer)
+}
 
 const (
 	workforceButtonWidth  = 170
@@ -81,10 +89,13 @@ type PlanetView struct {
 	orbitOffset       float64 // For animating orbits
 	fleets            []*Fleet
 	workforceOverlay  *WorkforceOverlay
+	spriteRenderer    *rendering.SpriteRenderer
+	buildingRenderer  *rendering.BuildingRenderer
 }
 
 // NewPlanetView creates a new planet view
 func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQueue ConstructionQueueUIInterface, resourceStorage ResourceStorageUIInterface, shipyardUI ShipyardUIInterface, fleetInfoUI FleetInfoUIInterface) *PlanetView {
+	spriteRenderer := rendering.NewSpriteRenderer()
 	return &PlanetView{
 		ctx:               ctx,
 		clickHandler:      NewClickHandler("planet"),
@@ -96,6 +107,8 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 		centerX:           float64(ScreenWidth) / 2,
 		centerY:           float64(ScreenHeight) / 2,
 		workforceOverlay:  NewWorkforceOverlay(),
+		spriteRenderer:    spriteRenderer,
+		buildingRenderer:  rendering.NewBuildingRenderer(spriteRenderer),
 	}
 }
 
@@ -140,6 +153,11 @@ func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 func (pv *PlanetView) Update() error {
 	if pv.planet == nil {
 		return nil
+	}
+
+	// Update sprite animations
+	if pv.spriteRenderer != nil {
+		pv.spriteRenderer.Update()
 	}
 
 	kb := pv.ctx.GetKeyBindings()
@@ -536,13 +554,40 @@ func (pv *PlanetView) drawPlanet(screen *ebiten.Image) {
 	// Scale up the planet for planet view
 	radius := pv.planet.Size * 8
 
-	// Get cached planet image
-	planetImg := planetCircleCache.GetOrCreate(radius, pv.planet.Color)
+	// Try to render planet with sprite, fallback to cached circle
+	sprite, err := pv.spriteRenderer.GetAssetLoader().LoadPlanetSprite(pv.planet.PlanetType)
+	if err == nil && sprite != nil {
+		// Render animated sprite
+		frame := sprite.GetFrame(pv.spriteRenderer.GetAnimationTick())
+		if frame != nil {
+			opts := &ebiten.DrawImageOptions{}
 
-	// Draw the planet
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
-	screen.DrawImage(planetImg, opts)
+			// Scale to match desired radius
+			bounds := frame.Bounds()
+			frameWidth := float64(bounds.Dx())
+			frameHeight := float64(bounds.Dy())
+			scale := float64(radius*2) / frameWidth
+
+			// Center and scale
+			opts.GeoM.Translate(-frameWidth/2, -frameHeight/2)
+			opts.GeoM.Scale(scale, scale)
+			opts.GeoM.Translate(float64(centerX), float64(centerY))
+
+			screen.DrawImage(frame, opts)
+		} else {
+			// Fallback to circle if frame is nil
+			planetImg := planetCircleCache.GetOrCreate(radius, pv.planet.Color)
+			opts := &ebiten.DrawImageOptions{}
+			opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
+			screen.DrawImage(planetImg, opts)
+		}
+	} else {
+		// Fallback to circle if sprite not found
+		planetImg := planetCircleCache.GetOrCreate(radius, pv.planet.Color)
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
+		screen.DrawImage(planetImg, opts)
+	}
 
 	// Draw planet name above
 	labelY := centerY - radius - 30
@@ -582,6 +627,21 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
 	screen.DrawImage(resourceImg, opts)
+
+	// Render any attached buildings
+	attachedBuildings := resource.GetAttachedBuildings()
+	for i, building := range attachedBuildings {
+		// Position buildings around the resource in a circle
+		angle := (float64(i) / float64(len(attachedBuildings))) * 2 * math.Pi
+		buildingRadius := float64(radius + 15)
+		buildingX := centerX + int(buildingRadius*math.Cos(angle))
+		buildingY := centerY + int(buildingRadius*math.Sin(angle))
+
+		pv.buildingRenderer.RenderBuilding(screen, building, buildingX, buildingY)
+
+		// Draw connection line
+		DrawLine(screen, centerX, centerY, buildingX, buildingY, building.Color)
+	}
 
 	// Draw resource type label below
 	labelY := centerY + radius + 12
@@ -632,12 +692,8 @@ func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 		}
 	}
 
-	// Draw ship as a triangle using cached image
-	shipImg := planetTriangleCache.GetOrCreate(size, fleet.LeadShip.Color)
-
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
-	screen.DrawImage(shipImg, op)
+	// Render fleet with sprite renderer
+	pv.spriteRenderer.RenderFleet(screen, centerX, centerY, size, fleet.LeadShip.Color)
 
 	// If multiple ships, draw count badge
 	if fleet.Size() > 1 {
@@ -673,24 +729,12 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	x, y := building.GetAbsolutePosition()
 	centerX := int(x)
 	centerY := int(y)
-	size := building.Size
 
-	if building.Owner != "" {
-		if ownerColor, ok := pv.getOwnerColor(building.Owner); ok {
-			DrawOwnershipRing(screen, centerX, centerY, float64(size+2), ownerColor)
-		}
-	}
-
-	// Get cached building image (square for buildings)
-	buildingImg := planetRectCache.GetOrCreate(size*2, size*2, building.Color)
-
-	// Draw the building
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(centerX-size), float64(centerY-size))
-	screen.DrawImage(buildingImg, opts)
+	// Use the building renderer with attachment support
+	pv.buildingRenderer.RenderBuildingWithAttachments(screen, building, centerX, centerY)
 
 	// Draw building type label below
-	labelY := centerY + size + 12
+	labelY := centerY + building.Size + 12
 	DrawCenteredText(screen, building.BuildingType, centerX, labelY)
 }
 

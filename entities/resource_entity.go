@@ -117,3 +117,35 @@ func (r *Resource) GetDetailedInfo() map[string]string {
 		"Extraction Difficulty": r.GetExtractionDifficulty(),
 	}
 }
+
+// AttachBuilding attaches a building to this resource node
+func (r *Resource) AttachBuilding(building *Building) {
+	r.BaseEntity.AttachEntity(building)
+	building.AttachedTo = fmt.Sprintf("%d", r.ID)
+	building.AttachmentType = "Resource"
+	building.ResourceNodeID = r.ID
+}
+
+// DetachBuilding detaches a building from this resource node
+func (r *Resource) DetachBuilding(buildingID int) bool {
+	return r.BaseEntity.DetachEntity(buildingID)
+}
+
+// GetAttachedBuildings returns all buildings attached to this resource
+func (r *Resource) GetAttachedBuildings() []*Building {
+	attachments := r.BaseEntity.GetAttachmentsByType(EntityTypeBuilding)
+	buildings := make([]*Building, 0, len(attachments))
+
+	for _, attachment := range attachments {
+		if building, ok := attachment.(*Building); ok {
+			buildings = append(buildings, building)
+		}
+	}
+
+	return buildings
+}
+
+// HasAttachedBuildings returns whether this resource has any attached buildings
+func (r *Resource) HasAttachedBuildings() bool {
+	return len(r.GetAttachedBuildings()) > 0
+}
