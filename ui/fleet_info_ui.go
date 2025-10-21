@@ -8,7 +8,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
-	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
 	"github.com/hunterjsb/xandaris/utils"
@@ -917,8 +916,7 @@ func (fui *FleetInfoUI) disbandFleet() {
 	}
 
 	// Get the fleet management system from app
-	state := fui.ctx.GetState()
-	fleetMgmt := game.NewFleetManagementSystem(state)
+	fleetMgmt := fui.ctx.GetFleetManagementSystem()
 
 	err := fleetMgmt.DisbandFleet(fui.fleet, humanPlayer)
 	if err != nil {
@@ -970,8 +968,7 @@ func (fui *FleetInfoUI) initializeJoinFleetMenu() {
 	}
 
 	// Get the fleet management system and find nearby fleets
-	state := fui.ctx.GetState()
-	fleetMgmt := game.NewFleetManagementSystem(state)
+	fleetMgmt := fui.ctx.GetFleetManagementSystem()
 	fui.nearbyFleets = fleetMgmt.GetNearbyFleets(fui.ship, humanPlayer)
 }
 
@@ -988,8 +985,7 @@ func (fui *FleetInfoUI) createFleetFromShip() {
 	}
 
 	// Get the fleet management system
-	state := fui.ctx.GetState()
-	fleetMgmt := game.NewFleetManagementSystem(state)
+	fleetMgmt := fui.ctx.GetFleetManagementSystem()
 
 	newFleet, err := fleetMgmt.CreateFleetFromShip(fui.ship, humanPlayer)
 	if err != nil {
@@ -1014,8 +1010,7 @@ func (fui *FleetInfoUI) joinSelectedFleet(fleet *entities.Fleet) {
 	}
 
 	// Get the fleet management system
-	state := fui.ctx.GetState()
-	fleetMgmt := game.NewFleetManagementSystem(state)
+	fleetMgmt := fui.ctx.GetFleetManagementSystem()
 
 	err := fleetMgmt.AddShipToFleet(fui.ship, fleet, humanPlayer)
 	if err != nil {

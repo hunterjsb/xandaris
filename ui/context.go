@@ -17,5 +17,6 @@ type UIContext interface {
 	// System managers (reuse interfaces from views package to avoid duplication)
 	GetTickManager() views.TickManagerInterface
 	GetFleetCommander() views.FleetCommandInterface
+	GetFleetManagementSystem() *game.FleetManagementSystem
 	GetKeyBindings() views.KeyBindingsInterface
 }
