@@ -39,13 +39,20 @@ func GetLoader() *AssetLoader {
 	return globalLoader
 }
 
+type LoopMode int
+
+const (
+	LoopForever LoopMode = 0  // Loop forever (GIF standard)
+	NoLoop      LoopMode = -1 // Don't loop
+)
+
 // AnimatedSprite represents an animated GIF sprite
 type AnimatedSprite struct {
 	Frames   []*ebiten.Image
 	Delays   []int // Delay in 100ths of a second for each frame
 	Width    int
 	Height   int
-	LoopMode int // 0 = loop forever, -1 = no loop
+	LoopMode LoopMode
 }
 
 // GetFrame returns the appropriate frame for the given time
@@ -155,7 +162,7 @@ func (al *AssetLoader) LoadAnimatedSprite(path string) (*AnimatedSprite, error) 
 	sprite := &AnimatedSprite{
 		Frames:   make([]*ebiten.Image, len(gifImg.Image)),
 		Delays:   gifImg.Delay,
-		LoopMode: gifImg.LoopCount,
+		LoopMode: LoopMode(gifImg.LoopCount),
 	}
 
 	for i, frame := range gifImg.Image {
