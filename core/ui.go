@@ -18,7 +18,7 @@ func (a *App) drawTickInfo(screen *ebiten.Image) {
 	y := a.screenHeight - 60
 
 	// Create small panel
-	panel := views.NewUIPanel(x, y, 200, 50)
+	panel := utils.NewUIPanel(x, y, 200, 50)
 	panel.Draw(screen)
 
 	// Draw tick info
@@ -26,7 +26,7 @@ func (a *App) drawTickInfo(screen *ebiten.Image) {
 	textY := y + 15
 
 	speedStr := a.tickManager.GetSpeedString()
-	views.DrawText(screen, "Speed: "+speedStr, textX, textY, utils.TextPrimary)
-	views.DrawText(screen, a.tickManager.GetGameTimeFormatted(), textX, textY+15, utils.TextSecondary)
-	views.DrawText(screen, "[Space] Pause  [F5] Save", textX, textY+30, utils.TextSecondary)
+	utils.DrawText(screen, "Speed: "+speedStr, textX, textY, utils.TextPrimary)
+	utils.DrawText(screen, a.tickManager.GetGameTimeFormatted(), textX, textY+15, utils.TextSecondary)
+	utils.DrawText(screen, "[Space] Pause  [F5] Save", textX, textY+30, utils.TextSecondary)
 }
