@@ -505,7 +505,10 @@ func (pv *PlanetView) registerClickables() {
 		return
 	}
 
-	// Register resources first so they have priority over the planet
+	// Register planet first, so it's checked last and doesn't steal clicks
+	pv.clickHandler.AddClickable(pv.planet)
+
+	// Register resources and buildings, which will have click priority over the planet
 	for _, resource := range pv.planet.Resources {
 		if clickable, ok := resource.(Clickable); ok {
 			pv.clickHandler.AddClickable(clickable)
@@ -518,9 +521,6 @@ func (pv *PlanetView) registerClickables() {
 			pv.clickHandler.AddClickable(clickable)
 		}
 	}
-
-	// Register planet itself as clickable (checked last)
-	pv.clickHandler.AddClickable(pv.planet)
 }
 
 // drawPlanet draws the planet at the center

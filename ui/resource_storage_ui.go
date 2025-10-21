@@ -83,16 +83,8 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	titleY := rsu.y + 15
 	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, utils.TextPrimary)
 
-	// Draw storage utilization bar
-	utilizationY := titleY + 20
-	rsu.drawStorageBarForPlanet(screen, utilizationY, planet)
-
-	// Draw separator
-	separatorY := utilizationY + 20
-	views.DrawLine(screen, rsu.x+10, separatorY, rsu.x+rsu.width-10, separatorY, utils.PanelBorder)
-
 	// Draw stored resources or empty message
-	resourceY := separatorY + 8
+	resourceY := titleY + 20
 
 	if !hasResources {
 		// Show message when no resources are stored
@@ -153,21 +145,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	}
 }
 
-// drawStorageBarForPlanet draws the overall storage utilization bar for a specific planet
-func (rsu *ResourceStorageUI) drawStorageBarForPlanet(screen *ebiten.Image, y int, planet *entities.Planet) {
-	// Calculate utilization
-	used := planet.GetTotalStorageUsed()
-	capacity := planet.StorageCapacity
-	utilization := 0.0
-	if capacity > 0 {
-		utilization = float64(used) / float64(capacity)
-	}
 
-	// Draw text showing usage (simplified - no bar for now)
-	textY := y + 5
-	usageText := fmt.Sprintf("Storage: %d / %d (%.0f%%)", used, capacity, utilization*100)
-	views.DrawText(screen, usageText, rsu.x+10, textY, utils.TextPrimary)
-}
 
 // drawResourceEntry draws a single resource entry
 func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceType string, storage *entities.ResourceStorage, y int) {

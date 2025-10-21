@@ -26,7 +26,6 @@ type Planet struct {
 	Habitability    int                         // Habitability score 0-100
 	Owner           string                      // Name of the player/faction who owns this planet
 	StoredResources map[string]*ResourceStorage // Resources stored on this planet (credits, materials, etc.)
-	StorageCapacity int                         // Total storage capacity
 	WorkforceTotal  int64                       // Total workforce available (subset of population)
 	WorkforceUsed   int64                       // Workforce assigned to buildings/ships
 }
@@ -54,7 +53,6 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 		Habitability:    50,
 		Owner:           "", // Unowned by default
 		StoredResources: make(map[string]*ResourceStorage),
-		StorageCapacity: 10000, // Base storage capacity
 		WorkforceTotal:  0,
 		WorkforceUsed:   0,
 	}
@@ -345,7 +343,7 @@ func (p *Planet) AddStoredResource(resourceType string, amount int) int {
 		storage = &ResourceStorage{
 			ResourceType: resourceType,
 			Amount:       0,
-			Capacity:     p.StorageCapacity,
+			Capacity:     10000, // Default capacity per resource
 		}
 		p.StoredResources[resourceType] = storage
 	}
@@ -390,21 +388,4 @@ func (p *Planet) GetStoredAmount(resourceType string) int {
 // HasStoredResource checks if the planet has at least a certain amount of a resource
 func (p *Planet) HasStoredResource(resourceType string, amount int) bool {
 	return p.GetStoredAmount(resourceType) >= amount
-}
-
-// GetTotalStorageUsed returns the total amount of storage space used
-func (p *Planet) GetTotalStorageUsed() int {
-	total := 0
-	for _, storage := range p.StoredResources {
-		total += storage.Amount
-	}
-	return total
-}
-
-// GetStorageUtilization returns storage usage as a percentage
-func (p *Planet) GetStorageUtilization() float64 {
-	if p.StorageCapacity == 0 {
-		return 0
-	}
-	return float64(p.GetTotalStorageUsed()) / float64(p.StorageCapacity) * 100.0
 }
