@@ -26,26 +26,60 @@ jobs:
           GOOS=js GOARCH=wasm go build -o dist/main.wasm .
           cp $(go env GOROOT)/lib/wasm/wasm_exec.js dist/
           cp -r assets dist/
-          cat > dist/index.html <<EOF
+          cat > dist/index.html <<'EOF'
           <!DOCTYPE html>
           <html>
           <head>
           <meta charset="utf-8">
-          <title>Go Wasm</title>
+          <title>Xandaris II</title>
+          <style>
+            body, html {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              height: 100%;
+              background-color: #111;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              overflow: hidden;
+            }
+            #game-container {
+              width: 100vw;
+              height: calc(100vw * 9 / 16);
+              max-width: 100%;
+              max-height: 100vh;
+              aspect-ratio: 16 / 9;
+              position: relative;
+            }
+            canvas {
+              width: 100%;
+              height: 100%;
+              display: block;
+            }
+          </style>
           </head>
           <body>
+          <div id="game-container">
+            <!-- Canvas will be inserted here by wasm_exec.js -->
+          </div>
           <script src="wasm_exec.js"></script>
           <script>
-          if (!WebAssembly.instantiateStreaming) { // polyfill
-              WebAssembly.instantiateStreaming = async (resp, importObject) => {
-                  const source = await (await resp).arrayBuffer();
-                  return await WebAssembly.instantiate(source, importObject);
-              };
-          }
-          const go = new Go();
-          WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
-              go.run(result.instance);
-          });
+            if (!WebAssembly.instantiateStreaming) { // polyfill
+                WebAssembly.instantiateStreaming = async (resp, importObject) => {
+                    const source = await (await resp).arrayBuffer();
+                    return await WebAssembly.instantiate(source, importObject);
+                };
+            }
+            const go = new Go();
+            WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+                go.run(result.instance);
+                // Ebitengine appends the canvas to the body, so we move it.
+                const canvas = document.querySelector('canvas');
+                if (canvas) {
+                  document.getElementById('game-container').appendChild(canvas);
+                }
+            });
           </script>
           </body>
           </html>

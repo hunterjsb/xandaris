@@ -497,7 +497,7 @@ func (pv *PlanetView) updateResourcePositions() {
 
 	// Ships orbit further out than buildings and orbit faster
 	if pv.system != nil {
-		shipRadius := planetRadius + 120.0     // 3x scale (was 40.0)
+		shipRadius := planetRadius + 40.0
 		shipOrbitSpeed := pv.orbitOffset * 8.0 // Ships orbit 8x faster than surface
 		for _, entity := range pv.system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
@@ -675,7 +675,6 @@ func (pv *PlanetView) drawBuildings(screen *ebiten.Image) {
 		}
 	}
 }
-
 
 // drawBuilding renders a single building
 func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Building) {

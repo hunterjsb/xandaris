@@ -57,8 +57,29 @@ func (f *fleetUIManager) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 		}
 	}
 
-	// Render fleet with sprite renderer
-	pv.spriteRenderer.RenderFleet(screen, centerX, centerY, size, fleet.LeadShip.Color)
+	// Try to load ship sprite
+	shipType := string(fleet.LeadShip.ShipType)
+	sprite, err := pv.spriteRenderer.GetAssetLoader().LoadShipSprite(shipType)
+	if err == nil && sprite != nil {
+		// Render sprite
+		opts := &ebiten.DrawImageOptions{}
+
+		// Scale to match desired size
+		bounds := sprite.Bounds()
+		spriteWidth := float64(bounds.Dx())
+		spriteHeight := float64(bounds.Dy())
+		scale := float64(size*2) / spriteWidth
+
+		// Center and scale
+		opts.GeoM.Translate(-spriteWidth/2, -spriteHeight/2)
+		opts.GeoM.Scale(scale, scale)
+		opts.GeoM.Translate(float64(centerX), float64(centerY))
+
+		screen.DrawImage(sprite, opts)
+	} else {
+		// Fallback to triangle
+		pv.spriteRenderer.RenderFleet(screen, centerX, centerY, size, fleet.LeadShip.Color)
+	}
 
 	// If multiple ships, draw count badge
 	if fleet.Size() > 1 {

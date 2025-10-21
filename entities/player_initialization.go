@@ -137,6 +137,24 @@ func InitializePlayer(player *Player, systems []*System) {
 
 	player.AddOwnedPlanet(bestPlanet)
 	bestPlanet.RebalanceWorkforce()
+
+	// Create starting scout ship
+	scoutShip := NewShip(
+		1000+player.ID, // Unique ship ID
+		player.Name+" Scout",
+		ShipTypeScout,
+		homeSystem.ID,
+		player.Name,
+		player.Color,
+	)
+
+	// Position ship in orbit around home planet
+	scoutShip.OrbitDistance = bestPlanet.GetOrbitDistance()
+	scoutShip.OrbitAngle = rand.Float64() * 6.28318 // Random angle around planet
+
+	// Add ship to home system and player
+	homeSystem.AddEntity(scoutShip)
+	player.AddOwnedShip(scoutShip)
 }
 
 // hasOilResource checks if a planet has an Oil resource deposit

@@ -7,15 +7,25 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/utils"
+)
+
+// MainMenuOption represents the different options in the main menu
+type MainMenuOption int
+
+const (
+	MainMenuNewGame MainMenuOption = iota
+	MainMenuLoadGame
+	MainMenuSettings
+	MainMenuQuit
 )
 
 // MainMenuView displays the main menu for starting or loading games
 type MainMenuView struct {
 	ctx              GameContext
 	playerName       string
-	selectedOption   int // 0 = New Game, 1 = Load Game, 2 = Settings, 3 = Quit
+	selectedOption   MainMenuOption
 	saveFiles        []SaveFileInfo
 	selectedSave     int
 	showLoadMenu     bool
@@ -730,7 +740,7 @@ func (mmv *MainMenuView) drawRenameDialog(screen *ebiten.Image) {
 	// Display filename with cursor
 	displayText := mmv.renameBuffer
 	tm := mmv.ctx.GetTickManager()
-	if (tm.GetCurrentTick() / 30) % 2 == 0 {
+	if (tm.GetCurrentTick()/30)%2 == 0 {
 		displayText += "_"
 	}
 	DrawTextCentered(screen, displayText, centerX, centerY-15, utils.TextPrimary, 1.0)

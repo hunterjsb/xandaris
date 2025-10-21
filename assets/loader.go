@@ -268,6 +268,29 @@ func (al *AssetLoader) LoadResourceSprite(resourceType string) (*ebiten.Image, e
 	return nil, fmt.Errorf("resource sprite not found for type %s", resourceType)
 }
 
+// LoadShipSprite loads a ship sprite by ship type
+func (al *AssetLoader) LoadShipSprite(shipType string) (*ebiten.Image, error) {
+	// Normalize ship type to lowercase for filename
+	normalizedType := strings.ToLower(strings.ReplaceAll(shipType, " ", "_"))
+
+	// Try PNG first (most common)
+	pngPath := fmt.Sprintf("images/ships/%s.png", normalizedType)
+	img, err := al.LoadStaticImage(pngPath)
+	if err == nil {
+		return img, nil
+	}
+
+	// Try GIF as fallback
+	gifPath := fmt.Sprintf("gifs/ships/%s.gif", normalizedType)
+	sprite, err := al.LoadAnimatedSprite(gifPath)
+	if err == nil && len(sprite.Frames) > 0 {
+		// Return first frame for now (we can enhance this later)
+		return sprite.Frames[0], nil
+	}
+
+	return nil, fmt.Errorf("ship sprite not found for type %s", shipType)
+}
+
 // ClearCache clears all cached assets and releases memory
 func (al *AssetLoader) ClearCache() {
 	al.mu.Lock()
