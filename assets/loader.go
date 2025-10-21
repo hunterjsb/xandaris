@@ -245,6 +245,29 @@ func (al *AssetLoader) LoadBuildingSprite(buildingType string) (*ebiten.Image, e
 	return nil, fmt.Errorf("building sprite not found for type %s", buildingType)
 }
 
+// LoadResourceSprite loads a resource sprite by resource type
+func (al *AssetLoader) LoadResourceSprite(resourceType string) (*ebiten.Image, error) {
+	// Normalize resource type to lowercase for filename
+	normalizedType := strings.ToLower(strings.ReplaceAll(resourceType, " ", "_"))
+
+	// Try PNG first (most common)
+	pngPath := fmt.Sprintf("images/resources/%s.png", normalizedType)
+	img, err := al.LoadStaticImage(pngPath)
+	if err == nil {
+		return img, nil
+	}
+
+	// Try GIF as fallback
+	gifPath := fmt.Sprintf("gifs/resources/%s.gif", normalizedType)
+	sprite, err := al.LoadAnimatedSprite(gifPath)
+	if err == nil && len(sprite.Frames) > 0 {
+		// Return first frame for now (we can enhance this later)
+		return sprite.Frames[0], nil
+	}
+
+	return nil, fmt.Errorf("resource sprite not found for type %s", resourceType)
+}
+
 // ClearCache clears all cached assets and releases memory
 func (al *AssetLoader) ClearCache() {
 	al.mu.Lock()

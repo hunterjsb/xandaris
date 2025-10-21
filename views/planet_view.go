@@ -628,13 +628,31 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 		}
 	}
 
-	// Get cached resource image
-	resourceImg := planetCircleCache.GetOrCreate(radius, resource.Color)
+	// Try to load resource sprite
+	sprite, err := pv.spriteRenderer.GetAssetLoader().LoadResourceSprite(resource.ResourceType)
+	if err == nil && sprite != nil {
+		// Render sprite
+		opts := &ebiten.DrawImageOptions{}
 
-	// Draw the resource
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
-	screen.DrawImage(resourceImg, opts)
+		// Scale to match desired size
+		bounds := sprite.Bounds()
+		spriteWidth := float64(bounds.Dx())
+		spriteHeight := float64(bounds.Dy())
+		scale := float64(radius*2) / spriteWidth
+
+		// Center and scale
+		opts.GeoM.Translate(-spriteWidth/2, -spriteHeight/2)
+		opts.GeoM.Scale(scale, scale)
+		opts.GeoM.Translate(float64(centerX), float64(centerY))
+
+		screen.DrawImage(sprite, opts)
+	} else {
+		// Fallback to cached circle
+		resourceImg := planetCircleCache.GetOrCreate(radius, resource.Color)
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(centerX-radius), float64(centerY-radius))
+		screen.DrawImage(resourceImg, opts)
+	}
 
 	// Render any attached buildings
 	attachedBuildings := resource.GetAttachedBuildings()
