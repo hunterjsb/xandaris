@@ -70,7 +70,7 @@ func (p *Planet) GetClickRadius(view string) float64 {
 	switch view {
 	case "system":
 		// In system view, planets are small, so a larger relative radius is needed.
-		return float64(p.Size) + 10
+		return float64(p.Size) + 8
 	case "planet":
 		// In planet view, the planet is large, so the radius can be closer to its visual size.
 		return float64(p.Size) * 8 * 1.1 // 10% larger than the visual radius in planet view
@@ -122,9 +122,7 @@ func (p *Planet) GetContextMenuItems() []string {
 	if capacity > 0 {
 		baseCap := p.GetBaseHousingCapacity()
 		otherCap := capacity - baseCap
-		if otherCap < 0 {
-			otherCap = 0
-		}
+		otherCap = max(otherCap, 0)
 		items = append(items, fmt.Sprintf("Housing: %d base / %d buildings", baseCap, otherCap))
 	}
 
