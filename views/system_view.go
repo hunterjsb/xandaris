@@ -122,18 +122,30 @@ func (sv *SystemView) Update() error {
 				}
 			}
 		} else {
-			// Single click - check if clicking on a fleet
-			clickedFleet := sv.getFleetAtPosition(x, y)
-			if clickedFleet != nil && sv.fleetInfoUI != nil {
-				sv.fleetInfoUI.ShowFleet(clickedFleet)
+			// Single click - check larger entities first (planets), then ships/fleets
+			// This prevents ships from blocking planet clicks
+			handled := sv.clickHandler.HandleClick(x, y)
+
+			// Only check ships/fleets if we didn't click on a planet/star/etc
+			if !handled && sv.shipFleetRenderer != nil && sv.fleetInfoUI != nil {
+				ships, fleets := sv.shipFleetRenderer.GetShipsAndFleetsInSystem(sv.system)
+				clickedShip, clickedFleet := sv.shipFleetRenderer.GetShipOrFleetAtPosition(ships, fleets, x, y, 8.0)
+
+				if clickedFleet != nil {
+					sv.fleetInfoUI.ShowFleet(clickedFleet)
+					sv.clickHandler.ClearClickables() // Clear context menu
+					sv.registerClickables()
+				} else if clickedShip != nil {
+					sv.fleetInfoUI.ShowShip(clickedShip)
+					sv.clickHandler.ClearClickables() // Clear context menu
+					sv.registerClickables()
+				}
 			}
 		}
 
 		sv.lastClickX = x
 		sv.lastClickY = y
 		sv.lastClickTime = currentTime
-
-		sv.clickHandler.HandleClick(x, y)
 	}
 
 	return nil
@@ -164,8 +176,8 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 			utils.Highlight)
 	}
 
-	// Draw context menu if active
-	if sv.clickHandler.HasActiveMenu() {
+	// Draw context menu if active (but not if FleetInfoUI is showing)
+	if sv.clickHandler.HasActiveMenu() && (sv.fleetInfoUI == nil || !sv.fleetInfoUI.IsVisible()) {
 		sv.clickHandler.GetActiveMenu().Draw(screen)
 	}
 
@@ -251,7 +263,7 @@ func (sv *SystemView) updateEntityPositions() {
 	}
 }
 
-// registerClickables adds all entities as clickable objects
+// registerClickables adds all entities as clickable objects (except ships/fleets)
 func (sv *SystemView) registerClickables() {
 	sv.clickHandler.ClearClickables()
 
@@ -260,6 +272,14 @@ func (sv *SystemView) registerClickables() {
 	}
 
 	for _, entity := range sv.system.Entities {
+		// Skip ships and fleets - they're handled separately by shipFleetRenderer
+		if _, isShip := entity.(*entities.Ship); isShip {
+			continue
+		}
+		if _, isFleet := entity.(*entities.Fleet); isFleet {
+			continue
+		}
+
 		if clickable, ok := entity.(Clickable); ok {
 			sv.clickHandler.AddClickable(clickable)
 		}
@@ -451,21 +471,4 @@ func (sv *SystemView) getOwnerColor(owner string) (color.RGBA, bool) {
 	}
 
 	return color.RGBA{}, false
-}
-
-// getFleetAtPosition returns the fleet at the given screen position, or nil if none
-func (sv *SystemView) getFleetAtPosition(x, y int) *entities.Fleet {
-	if sv.system == nil || sv.shipFleetRenderer == nil {
-		return nil
-	}
-
-	clickRadius := 15.0 // Click radius for fleets
-
-	// Get ships and fleets in the system
-	ships, fleets := sv.shipFleetRenderer.GetShipsAndFleetsInSystem(sv.system)
-
-	// Check click on ships/fleets
-	_, fleet := sv.shipFleetRenderer.GetShipOrFleetAtPosition(ships, fleets, x, y, clickRadius)
-
-	return fleet
 }

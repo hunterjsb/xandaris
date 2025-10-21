@@ -579,8 +579,14 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 		itemY := currentY
 		if itemY >= visibleTop-itemHeight && itemY <= visibleBottom {
 			// Get star color from current system
-			if len(fui.fleet.Ships) > 0 {
-				firstShip := fui.fleet.Ships[0]
+			var firstShip *entities.Ship
+			if fui.fleet != nil && len(fui.fleet.Ships) > 0 {
+				firstShip = fui.fleet.Ships[0]
+			} else if fui.ship != nil {
+				firstShip = fui.ship
+			}
+
+			if firstShip != nil {
 				currentSystem := systems[firstShip.CurrentSystem]
 				if currentSystem != nil {
 					starEntities := currentSystem.GetEntitiesByType(entities.EntityTypeStar)
