@@ -1,7 +1,6 @@
 ![img](assets/images/xandaris.png)
-# Xandaris
 
-## ☄️ https://xandaris.space
+# ☄️ https://xandaris.space
 
 Xandaris is a space trading and exploration game written in Go using the [Ebitengine](https://github.com/hajimehoshi/ebiten/v2) game library.
 
