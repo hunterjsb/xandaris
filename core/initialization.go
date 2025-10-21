@@ -56,11 +56,11 @@ func (a *App) InitializeForMenu() error {
 
 // InitializeForGame initializes the app with the state for a new game
 func (a *App) initializeGameComponents() {
-	// Initialize fleet manager
-	a.fleetManager = systems.NewFleetManager(a)
-
 	// Initialize fleet command executor
 	a.fleetCmdExecutor = game.NewFleetCommandExecutor(a.state.Systems, a.state.Hyperlanes)
+
+	// Initialize fleet management system
+	a.fleetMgmtSystem = game.NewFleetManagementSystem(a.state)
 
 	// Create UI components
 	buildMenu := ui.NewBuildMenu(a)

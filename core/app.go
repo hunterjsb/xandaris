@@ -11,12 +11,12 @@ import (
 
 // App orchestrates all game components and implements ebiten.Game
 type App struct {
-	state            *game.State
-	viewManager      *views.ViewManager
-	tickManager      *systems.TickManager
-	keyBindings      *systems.KeyBindings
-	fleetManager     *systems.FleetManager
-	fleetCmdExecutor *game.FleetCommandExecutor
+	state             *game.State
+	viewManager       *views.ViewManager
+	tickManager       *systems.TickManager
+	keyBindings       *systems.KeyBindings
+	fleetCmdExecutor  *game.FleetCommandExecutor
+	fleetMgmtSystem   *game.FleetManagementSystem
 
 	// Screen dimensions
 	screenWidth  int
@@ -52,14 +52,14 @@ func (a *App) GetKeyBindings() views.KeyBindingsInterface {
 	return a.keyBindings
 }
 
-// GetFleetManager returns the fleet manager
-func (a *App) GetFleetManager() views.FleetManagerInterface {
-	return a.fleetManager
-}
-
 // GetFleetCommander returns the fleet command interface (App implements it)
 func (a *App) GetFleetCommander() views.FleetCommandInterface {
 	return a
+}
+
+// GetFleetManagementSystem returns the fleet management system
+func (a *App) GetFleetManagementSystem() *game.FleetManagementSystem {
+	return a.fleetMgmtSystem
 }
 
 // SaveKeyBindings saves the current key bindings to config file

@@ -5,6 +5,12 @@ import (
 	"github.com/hunterjsb/xandaris/tickable"
 )
 
+// GameDataProvider defines the interface for accessing game data needed by fleet commander
+type GameDataProvider interface {
+	GetSystemsMap() map[int]*entities.System
+	GetHyperlanes() []entities.Hyperlane
+}
+
 // FleetCommander provides methods for commanding fleets
 type FleetCommander struct {
 	gameData GameDataProvider

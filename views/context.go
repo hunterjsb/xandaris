@@ -29,9 +29,6 @@ type GameContext interface {
 	// Save/Load interface
 	GetSaveLoad() SaveLoadInterface
 
-	// Fleet management interface
-	GetFleetManager() FleetManagerInterface
-
 	// Fleet command interface - for issuing commands to fleets
 	GetFleetCommander() FleetCommandInterface
 

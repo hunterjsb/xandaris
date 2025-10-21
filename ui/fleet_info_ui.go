@@ -8,16 +8,17 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
-	"github.com/hunterjsb/xandaris/systems"
+	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/views"
 	"github.com/hunterjsb/xandaris/utils"
 )
 
-// FleetInfoUI displays detailed information about a selected fleet
+// FleetInfoUI displays detailed information about a selected fleet or ship
 type FleetInfoUI struct {
 	ctx                  UIContext
-	fleet                 *views.Fleet
+	fleet                 *entities.Fleet
+	ship                  *entities.Ship // If showing a single ship (not a fleet)
 	x                     int
 	y                     int
 	width                 int
@@ -25,9 +26,12 @@ type FleetInfoUI struct {
 	visible               bool
 	scrollOffset          int
 	showMoveMenu          bool
+	showJoinFleetMenu     bool
+	nearbyFleets          []*entities.Fleet
 	connectedSystems      []int
 	currentSystemEntities []entities.Entity
 	moveMenuScrollOffset  int
+	joinMenuScrollOffset  int
 }
 
 // NewFleetInfoUI creates a new fleet info UI
@@ -42,25 +46,32 @@ func NewFleetInfoUI(ctx UIContext) *FleetInfoUI {
 }
 
 // ShowFleet displays the fleet info for a specific fleet
-func (fui *FleetInfoUI) ShowFleet(fleet *views.Fleet) {
+func (fui *FleetInfoUI) ShowFleet(fleet *entities.Fleet) {
 	fui.fleet = fleet
+	fui.ship = nil // Clear any ship
 	fui.visible = true
 	fui.scrollOffset = 0
 	fui.showMoveMenu = false
 	fui.moveMenuScrollOffset = 0
 }
 
-// ShowShip displays the fleet info for a single ship (wrapped as a fleet)
+// ShowShip displays info for a single ship (not in a fleet)
 func (fui *FleetInfoUI) ShowShip(ship *entities.Ship) {
-	// Create a single-ship fleet for display
-	fleet := views.NewFleet([]*entities.Ship{ship})
-	fui.ShowFleet(fleet)
+	fui.ship = ship
+	fui.fleet = nil // Clear any fleet
+	fui.visible = true
+	fui.scrollOffset = 0
+	fui.showMoveMenu = false
+	fui.showJoinFleetMenu = false
+	fui.moveMenuScrollOffset = 0
+	fui.joinMenuScrollOffset = 0
 }
 
 // Hide closes the fleet info UI
 func (fui *FleetInfoUI) Hide() {
 	fui.visible = false
 	fui.fleet = nil
+	fui.ship = nil
 	fui.showMoveMenu = false
 }
 
@@ -71,7 +82,7 @@ func (fui *FleetInfoUI) IsVisible() bool {
 
 // Update handles input for the fleet info UI
 func (fui *FleetInfoUI) Update() {
-	if !fui.visible || fui.fleet == nil {
+	if !fui.visible || (fui.fleet == nil && fui.ship == nil) {
 		return
 	}
 
@@ -80,7 +91,11 @@ func (fui *FleetInfoUI) Update() {
 	if dy != 0 {
 		fui.scrollOffset -= int(dy * 20)
 		// Clamp scroll offset
-		maxScroll := len(fui.fleet.Ships)*60 - (fui.height - 100)
+		shipCount := 1
+		if fui.fleet != nil {
+			shipCount = len(fui.fleet.Ships)
+		}
+		maxScroll := shipCount*60 - (fui.height - 100)
 		if maxScroll < 0 {
 			maxScroll = 0
 		}
@@ -104,35 +119,56 @@ func (fui *FleetInfoUI) Update() {
 			return
 		}
 
-		// Move Fleet button
-		if !fui.showMoveMenu {
-			moveButtonX := fui.x + 10
-			moveButtonY := fui.y + fui.height - 40
-			moveButtonW := fui.width - 20
-			moveButtonH := 30
-			if mx >= moveButtonX && mx <= moveButtonX+moveButtonW &&
-				my >= moveButtonY && my <= moveButtonY+moveButtonH {
-				// Show move menu
-				fui.showMoveMenu = true
-				// Get connected systems and current system entities
-				if len(fui.fleet.Ships) > 0 {
-					firstShip := fui.fleet.Ships[0]
-					helper := tickable.NewShipMovementHelper(fui.ctx.GetSystemsMap(), fui.ctx.GetHyperlanes())
-					fui.connectedSystems = helper.GetConnectedSystems(firstShip.CurrentSystem)
+		// Handle button clicks based on whether showing fleet or ship
+		if !fui.showMoveMenu && !fui.showJoinFleetMenu {
+			buttonY := fui.y + fui.height - 40
+			buttonH := 30
 
-					// Get current system entities (planets)
-					systems := fui.ctx.GetSystemsMap()
-					currentSystem := systems[firstShip.CurrentSystem]
-					if currentSystem != nil {
-						fui.currentSystemEntities = make([]entities.Entity, 0)
-						for _, entity := range currentSystem.Entities {
-							if _, isPlanet := entity.(*entities.Planet); isPlanet {
-								fui.currentSystemEntities = append(fui.currentSystemEntities, entity)
-							}
-						}
-					}
+			if fui.fleet != nil {
+				// Fleet has 2 buttons: Move, Disband
+				buttonW := (fui.width - 30) / 2
+
+				// Move button (left)
+				if mx >= fui.x+10 && mx <= fui.x+10+buttonW &&
+					my >= buttonY && my <= buttonY+buttonH {
+					fui.showMoveMenu = true
+					fui.initializeMoveMenu()
+					return
 				}
-				return
+
+				// Disband button (right)
+				if mx >= fui.x+20+buttonW && mx <= fui.x+20+buttonW+buttonW &&
+					my >= buttonY && my <= buttonY+buttonH {
+					fui.disbandFleet()
+					return
+				}
+
+			} else if fui.ship != nil {
+				// Ship has 3 buttons: Move, Create, Join
+				buttonW := (fui.width - 40) / 3
+
+				// Move button (left)
+				if mx >= fui.x+10 && mx <= fui.x+10+buttonW &&
+					my >= buttonY && my <= buttonY+buttonH {
+					fui.showMoveMenu = true
+					fui.initializeMoveMenu()
+					return
+				}
+
+				// Create Fleet button (middle)
+				if mx >= fui.x+20+buttonW && mx <= fui.x+20+buttonW+buttonW &&
+					my >= buttonY && my <= buttonY+buttonH {
+					fui.createFleetFromShip()
+					return
+				}
+
+				// Join Fleet button (right)
+				if mx >= fui.x+30+buttonW*2 && mx <= fui.x+30+buttonW*2+buttonW &&
+					my >= buttonY && my <= buttonY+buttonH {
+					fui.showJoinFleetMenu = true
+					fui.initializeJoinFleetMenu()
+					return
+				}
 			}
 		}
 
@@ -163,11 +199,20 @@ func (fui *FleetInfoUI) Update() {
 				}
 				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
 					my >= itemY && my <= itemY+itemHeight-5 {
-					// Move fleet to this system (inter-system jump)
-					fleetManager := systems.NewFleetManager(fui.ctx)
-					success, _ := fleetManager.MoveFleet(fui.fleet, systemID)
-					if success > 0 {
-						fui.showMoveMenu = false
+					// Move fleet/ship to this system (inter-system jump)
+					if fui.fleet != nil {
+						fleetCommander := fui.ctx.GetFleetCommander()
+						success, _ := fleetCommander.MoveFleetToSystem(fui.fleet, systemID)
+						if success > 0 {
+							fui.showMoveMenu = false
+						}
+					} else if fui.ship != nil {
+						// Move single ship
+						helper := tickable.NewShipMovementHelper(fui.ctx.GetSystemsMap(), fui.ctx.GetHyperlanes())
+						if helper.StartJourney(fui.ship, systemID) {
+							fui.showMoveMenu = false
+							fui.Hide() // Close UI since ship is now moving
+						}
 					}
 					return
 				}
@@ -205,6 +250,37 @@ func (fui *FleetInfoUI) Update() {
 				}
 			}
 		}
+
+		// Handle join fleet menu clicks
+		if fui.showJoinFleetMenu {
+			// Back button
+			backButtonX := fui.x + 10
+			backButtonY := fui.y + fui.height - 40
+			backButtonW := 60
+			backButtonH := 30
+			if mx >= backButtonX && mx <= backButtonX+backButtonW &&
+				my >= backButtonY && my <= backButtonY+backButtonH {
+				fui.showJoinFleetMenu = false
+				return
+			}
+
+			// Fleet list clicks
+			listStartY := fui.y + 110
+			itemHeight := 40
+			for i, fleet := range fui.nearbyFleets {
+				itemY := listStartY + i*itemHeight - fui.joinMenuScrollOffset
+				if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
+					continue
+				}
+				if mx >= fui.x+10 && mx <= fui.x+fui.width-10 &&
+					my >= itemY && my <= itemY+itemHeight-5 {
+					// Join this fleet
+					fui.joinSelectedFleet(fleet)
+					fui.showJoinFleetMenu = false
+					return
+				}
+			}
+		}
 	}
 
 	// Handle scroll for move menu
@@ -230,11 +306,29 @@ func (fui *FleetInfoUI) Update() {
 			}
 		}
 	}
+
+	// Handle scroll for join fleet menu
+	if fui.showJoinFleetMenu {
+		_, dy := ebiten.Wheel()
+		if dy != 0 {
+			fui.joinMenuScrollOffset -= int(dy * 20)
+			maxScroll := len(fui.nearbyFleets)*40 - (fui.height - 160)
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if fui.joinMenuScrollOffset < 0 {
+				fui.joinMenuScrollOffset = 0
+			}
+			if fui.joinMenuScrollOffset > maxScroll {
+				fui.joinMenuScrollOffset = maxScroll
+			}
+		}
+	}
 }
 
 // Draw renders the fleet info panel
 func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
-	if !fui.visible || fui.fleet == nil {
+	if !fui.visible || (fui.fleet == nil && fui.ship == nil) {
 		return
 	}
 
@@ -250,7 +344,10 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	panel.Draw(screen)
 
 	// Title
-	titleText := fmt.Sprintf("Fleet Details")
+	titleText := "Fleet Details"
+	if fui.ship != nil {
+		titleText = "Ship Details"
+	}
 	views.DrawText(screen, titleText, fui.x+10, fui.y+15, utils.SystemLightBlue)
 
 	// Close button
@@ -258,14 +355,36 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	closeY := fui.y + 10
 	views.DrawText(screen, "[X]", closeX, closeY, utils.SystemRed)
 
-	// Fleet summary
+	// Summary - different for ship vs fleet
 	summaryY := fui.y + 40
-	views.DrawText(screen, fmt.Sprintf("Ships: %d", fui.fleet.Size()), fui.x+10, summaryY, utils.TextPrimary)
-	views.DrawText(screen, fmt.Sprintf("Owner: %s", fui.fleet.Owner), fui.x+10, summaryY+15, utils.TextSecondary)
+
+	var ships []*entities.Ship
+	var owner string
+	if fui.fleet != nil {
+		ships = fui.fleet.Ships
+		owner = fui.fleet.GetOwner()
+		views.DrawText(screen, fmt.Sprintf("Ships: %d", fui.fleet.Size()), fui.x+10, summaryY, utils.TextPrimary)
+	} else if fui.ship != nil {
+		ships = []*entities.Ship{fui.ship}
+		owner = fui.ship.Owner
+		views.DrawText(screen, fmt.Sprintf("Ship: %s", fui.ship.ShipType), fui.x+10, summaryY, utils.TextPrimary)
+	}
+	views.DrawText(screen, fmt.Sprintf("Owner: %s", owner), fui.x+10, summaryY+15, utils.TextSecondary)
 
 	// Fuel stats
 	fuelY := summaryY + 35
-	avgFuel := fui.fleet.GetAverageFuelPercent()
+	var avgFuel float64
+	var totalFuel, totalMaxFuel int
+
+	for _, ship := range ships {
+		avgFuel += ship.GetFuelPercentage()
+		totalFuel += ship.CurrentFuel
+		totalMaxFuel += ship.MaxFuel
+	}
+	if len(ships) > 0 {
+		avgFuel /= float64(len(ships))
+	}
+
 	fuelColor := utils.StationResearch // Green for good fuel
 	if avgFuel < 25 {
 		fuelColor = utils.SystemRed // Red for low fuel
@@ -273,16 +392,18 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 		fuelColor = utils.SystemOrange // Orange for medium fuel
 	}
 	views.DrawText(screen, fmt.Sprintf("Avg Fuel: %.0f%%", avgFuel), fui.x+10, fuelY, fuelColor)
-	views.DrawText(screen, fmt.Sprintf("Total: %d/%d", fui.fleet.GetTotalFuel(), fui.fleet.GetTotalMaxFuel()),
+	views.DrawText(screen, fmt.Sprintf("Total: %d/%d", totalFuel, totalMaxFuel),
 		fui.x+10, fuelY+15, utils.TextSecondary)
 
 	// Separator
 	separatorY := fuelY + 35
 	views.DrawLine(screen, fui.x+10, separatorY, fui.x+fui.width-10, separatorY, utils.PanelBorder)
 
-	// Show either the ship list OR the move menu (not both)
+	// Show either the ship list, move menu, or join fleet menu
 	if fui.showMoveMenu {
 		fui.drawMoveMenu(screen)
+	} else if fui.showJoinFleetMenu {
+		fui.drawJoinFleetMenu(screen)
 	} else {
 		// Ship list header
 		listHeaderY := separatorY + 10
@@ -295,52 +416,107 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 		fui.drawMoveButton(screen)
 
 		// Scroll indicator for ship list
-		if len(fui.fleet.Ships) > 5 {
+		shipCount := 1
+		if fui.fleet != nil {
+			shipCount = len(fui.fleet.Ships)
+		}
+		if shipCount > 5 {
 			scrollHintY := fui.y + fui.height - 50
 			views.DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, utils.TextSecondary, 0.7)
 		}
 	}
 }
 
-// drawMoveButton draws the "Move Fleet" button
+// drawMoveButton draws the action buttons (Move, Create/Disband/Join Fleet)
 func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
-	buttonX := fui.x + 10
 	buttonY := fui.y + fui.height - 40
-	buttonW := fui.width - 20
 	buttonH := 30
 
-	// Check if fleet can move (has any ship with fuel)
-	canMove, lowFuel, noFuel := systems.NewFleetManager(fui.ctx).GetFleetMovementStatus(fui.fleet)
-
-	buttonColor := utils.ButtonActive
-	buttonText := "Move Fleet"
-
-	if canMove == 0 {
-		buttonColor = utils.ButtonDisabled
-		if noFuel > 0 {
-			buttonText = "No Fuel"
-		} else {
-			buttonText = "Cannot Move"
+	// Check if can move
+	var canMove int
+	if fui.fleet != nil {
+		canMove, _, _ = fui.fleet.GetMovementStatus()
+	} else if fui.ship != nil {
+		if fui.ship.CanJump() {
+			canMove = 1
 		}
-	} else if lowFuel > 0 || noFuel > 0 {
-		buttonText = fmt.Sprintf("Move Fleet (%d/%d ready)", canMove, len(fui.fleet.Ships))
 	}
 
-	// Button background
-	buttonPanel := &views.UIPanel{
-		X:           buttonX,
-		Y:           buttonY,
-		Width:       buttonW,
-		Height:      buttonH,
-		BgColor:     buttonColor,
-		BorderColor: utils.Highlight,
+	moveButtonColor := utils.ButtonActive
+	moveButtonText := "Move"
+	if canMove == 0 {
+		moveButtonColor = utils.ButtonDisabled
+		moveButtonText = "No Fuel"
 	}
-	buttonPanel.Draw(screen)
 
-	// Button text
-	textX := buttonX + buttonW/2
-	textY := buttonY + 10
-	views.DrawTextCentered(screen, buttonText, textX, textY, utils.TextPrimary, 1.0)
+	// For fleets: 2 buttons (Move, Disband)
+	if fui.fleet != nil {
+		buttonW := (fui.width - 30) / 2
+
+		// Move button (left)
+		movePanel := &views.UIPanel{
+			X:           fui.x + 10,
+			Y:           buttonY,
+			Width:       buttonW,
+			Height:      buttonH,
+			BgColor:     moveButtonColor,
+			BorderColor: utils.Highlight,
+		}
+		movePanel.Draw(screen)
+		views.DrawTextCentered(screen, moveButtonText, fui.x+10+buttonW/2, buttonY+10, utils.TextPrimary, 1.0)
+
+		// Disband button (right)
+		disbandPanel := &views.UIPanel{
+			X:           fui.x + 20 + buttonW,
+			Y:           buttonY,
+			Width:       buttonW,
+			Height:      buttonH,
+			BgColor:     utils.SystemRed,
+			BorderColor: utils.Highlight,
+		}
+		disbandPanel.Draw(screen)
+		views.DrawTextCentered(screen, "Disband", fui.x+20+buttonW+buttonW/2, buttonY+10, utils.TextPrimary, 1.0)
+
+	} else if fui.ship != nil {
+		// For ships: 3 buttons (Move, Create, Join)
+		buttonW := (fui.width - 40) / 3
+
+		// Move button
+		movePanel := &views.UIPanel{
+			X:           fui.x + 10,
+			Y:           buttonY,
+			Width:       buttonW,
+			Height:      buttonH,
+			BgColor:     moveButtonColor,
+			BorderColor: utils.Highlight,
+		}
+		movePanel.Draw(screen)
+		views.DrawTextCentered(screen, moveButtonText, fui.x+10+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+
+		// Create Fleet button
+		createPanel := &views.UIPanel{
+			X:           fui.x + 20 + buttonW,
+			Y:           buttonY,
+			Width:       buttonW,
+			Height:      buttonH,
+			BgColor:     color.RGBA{50, 100, 50, 255},
+			BorderColor: utils.Highlight,
+		}
+		createPanel.Draw(screen)
+		views.DrawTextCentered(screen, "Create", fui.x+20+buttonW+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+
+		// Join Fleet button
+		joinPanel := &views.UIPanel{
+			X:           fui.x + 30 + buttonW*2,
+			Y:           buttonY,
+			Width:       buttonW,
+			Height:      buttonH,
+			BgColor:     color.RGBA{50, 50, 100, 255},
+			BorderColor: utils.Highlight,
+		}
+		joinPanel.Draw(screen)
+		views.DrawTextCentered(screen, "Join", fui.x+30+buttonW*2+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+	}
 }
 
 // drawMoveMenu draws the destination selection menu
@@ -472,11 +648,86 @@ func (fui *FleetInfoUI) drawMoveMenu(screen *ebiten.Image) {
 	}
 }
 
+// drawJoinFleetMenu draws the menu for selecting a fleet to join
+func (fui *FleetInfoUI) drawJoinFleetMenu(screen *ebiten.Image) {
+	// Title (fixed, doesn't scroll)
+	menuTitleY := fui.y + 100
+	views.DrawText(screen, "Select Fleet to Join:", fui.x+10, menuTitleY, utils.SystemLightBlue)
+
+	// Check if there are any nearby fleets
+	if len(fui.nearbyFleets) == 0 {
+		noFleetsY := fui.y + fui.height/2
+		views.DrawTextCentered(screen, "No nearby fleets", fui.x+fui.width/2, noFleetsY, utils.TextSecondary, 1.0)
+		views.DrawTextCentered(screen, "(within same orbit)", fui.x+fui.width/2, noFleetsY+15, utils.TextSecondary, 0.8)
+	} else {
+		// List of nearby fleets
+		listStartY := fui.y + 110
+		itemHeight := 40
+
+		for i, fleet := range fui.nearbyFleets {
+			itemY := listStartY + i*itemHeight - fui.joinMenuScrollOffset
+
+			// Don't draw off screen
+			if itemY < listStartY-itemHeight || itemY > fui.y+fui.height-60 {
+				continue
+			}
+
+			// Fleet item
+			fleetName := fmt.Sprintf("Fleet %d (%d ships)", fleet.ID, fleet.Size())
+			itemColor := fleet.GetColor()
+
+			fui.drawMenuItem(screen, itemY, itemHeight, itemColor, fleetName)
+
+			// Show ship type breakdown
+			typeCounts := fleet.GetShipTypeCounts()
+			typeY := itemY + 20
+			typeText := ""
+			for shipType, count := range typeCounts {
+				if typeText != "" {
+					typeText += ", "
+				}
+				typeText += fmt.Sprintf("%dx%s", count, shipType)
+			}
+			views.DrawText(screen, typeText, fui.x+35, typeY, utils.TextSecondary)
+		}
+	}
+
+	// Back button
+	backButtonX := fui.x + 10
+	backButtonY := fui.y + fui.height - 40
+	backButtonW := 60
+	backButtonH := 30
+
+	backPanel := &views.UIPanel{
+		X:           backButtonX,
+		Y:           backButtonY,
+		Width:       backButtonW,
+		Height:      backButtonH,
+		BgColor:     utils.ButtonActive,
+		BorderColor: utils.Highlight,
+	}
+	backPanel.Draw(screen)
+	views.DrawTextCentered(screen, "Back", backButtonX+backButtonW/2, backButtonY+10, utils.TextPrimary, 1.0)
+
+	// Scroll hint
+	if len(fui.nearbyFleets) > 5 {
+		scrollHintY := fui.y + fui.height - 50
+		views.DrawTextCentered(screen, "Scroll for more", fui.x+fui.width/2, scrollHintY, utils.TextSecondary, 0.7)
+	}
+}
+
 // drawShipList draws the scrollable list of ships
 func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 	itemHeight := 60
 
-	for i, ship := range fui.fleet.Ships {
+	var ships []*entities.Ship
+	if fui.fleet != nil {
+		ships = fui.fleet.Ships
+	} else if fui.ship != nil {
+		ships = []*entities.Ship{fui.ship}
+	}
+
+	for i, ship := range ships {
 		itemY := startY + i*itemHeight - fui.scrollOffset
 
 		// Skip if off screen
@@ -547,7 +798,7 @@ func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 }
 
 // GetFleet returns the currently displayed fleet
-func (fui *FleetInfoUI) GetFleet() *views.Fleet {
+func (fui *FleetInfoUI) GetFleet() *entities.Fleet {
 	return fui.fleet
 }
 
@@ -578,14 +829,19 @@ func (fui *FleetInfoUI) drawMenuItem(screen *ebiten.Image, y int, height int, it
 	views.DrawText(screen, text, fui.x+35, y+10, utils.TextPrimary)
 }
 
-// isFleetAtPlanet checks if the fleet is currently orbiting a planet
+// isFleetAtPlanet checks if the fleet/ship is currently orbiting a planet
 func (fui *FleetInfoUI) isFleetAtPlanet() bool {
-	if fui.fleet == nil || len(fui.fleet.Ships) == 0 {
+	var firstShip *entities.Ship
+	if fui.fleet != nil && len(fui.fleet.Ships) > 0 {
+		firstShip = fui.fleet.Ships[0]
+	} else if fui.ship != nil {
+		firstShip = fui.ship
+	}
+
+	if firstShip == nil {
 		return false
 	}
 
-	// Check if any ship is at a planet's orbit distance
-	firstShip := fui.fleet.Ships[0]
 	systems := fui.ctx.GetSystemsMap()
 	currentSystem := systems[firstShip.CurrentSystem]
 	if currentSystem == nil {
@@ -603,31 +859,164 @@ func (fui *FleetInfoUI) isFleetAtPlanet() bool {
 	return false
 }
 
-// moveFleetToPlanet moves a fleet to orbit a planet in the current system
+// moveFleetToPlanet moves a fleet/ship to orbit a planet in the current system
 func (fui *FleetInfoUI) moveFleetToPlanet(entity entities.Entity) {
 	planet, ok := entity.(*entities.Planet)
-	if !ok || fui.fleet == nil {
+	if !ok {
 		return
 	}
 
+	var ships []*entities.Ship
+	if fui.fleet != nil {
+		ships = fui.fleet.Ships
+	} else if fui.ship != nil {
+		ships = []*entities.Ship{fui.ship}
+	}
+
 	// Move all ships to the planet's orbit
-	for _, ship := range fui.fleet.Ships {
+	for _, ship := range ships {
 		ship.OrbitDistance = planet.GetOrbitDistance()
 		ship.OrbitAngle = planet.GetOrbitAngle()
 		ship.Status = entities.ShipStatusOrbiting
 	}
 }
 
-// moveFleetToStar moves a fleet to orbit the star in the current system
+// moveFleetToStar moves a fleet/ship to orbit the star in the current system
 func (fui *FleetInfoUI) moveFleetToStar() {
-	if fui.fleet == nil || len(fui.fleet.Ships) == 0 {
-		return
+	var ships []*entities.Ship
+	if fui.fleet != nil {
+		ships = fui.fleet.Ships
+	} else if fui.ship != nil {
+		ships = []*entities.Ship{fui.ship}
 	}
 
 	// Move all ships to a mid-range star orbit
-	for _, ship := range fui.fleet.Ships {
+	for _, ship := range ships {
 		ship.OrbitDistance = 150.0 // Standard star orbit distance
 		ship.OrbitAngle = 0.0
 		ship.Status = entities.ShipStatusOrbiting
 	}
+}
+
+// disbandFleet breaks up the fleet into individual ships
+func (fui *FleetInfoUI) disbandFleet() {
+	if fui.fleet == nil {
+		return
+	}
+
+	// Find the owner
+	humanPlayer := fui.ctx.GetState().HumanPlayer
+	if humanPlayer == nil || fui.fleet.GetOwner() != humanPlayer.Name {
+		return
+	}
+
+	// Get the fleet management system from app
+	state := fui.ctx.GetState()
+	fleetMgmt := game.NewFleetManagementSystem(state)
+
+	err := fleetMgmt.DisbandFleet(fui.fleet, humanPlayer)
+	if err != nil {
+		fmt.Printf("[FleetInfoUI] Error disbanding fleet: %v\n", err)
+		return
+	}
+
+	// Close the UI since the fleet no longer exists
+	fui.Hide()
+}
+
+// initializeMoveMenu prepares data for the move menu
+func (fui *FleetInfoUI) initializeMoveMenu() {
+	var firstShip *entities.Ship
+	if fui.fleet != nil && len(fui.fleet.Ships) > 0 {
+		firstShip = fui.fleet.Ships[0]
+	} else if fui.ship != nil {
+		firstShip = fui.ship
+	}
+
+	if firstShip != nil {
+		helper := tickable.NewShipMovementHelper(fui.ctx.GetSystemsMap(), fui.ctx.GetHyperlanes())
+		fui.connectedSystems = helper.GetConnectedSystems(firstShip.CurrentSystem)
+
+		// Get current system entities (planets)
+		systems := fui.ctx.GetSystemsMap()
+		currentSystem := systems[firstShip.CurrentSystem]
+		if currentSystem != nil {
+			fui.currentSystemEntities = make([]entities.Entity, 0)
+			for _, entity := range currentSystem.Entities {
+				if _, isPlanet := entity.(*entities.Planet); isPlanet {
+					fui.currentSystemEntities = append(fui.currentSystemEntities, entity)
+				}
+			}
+		}
+	}
+}
+
+// initializeJoinFleetMenu prepares data for the join fleet menu
+func (fui *FleetInfoUI) initializeJoinFleetMenu() {
+	if fui.ship == nil {
+		return
+	}
+
+	// Find the owner
+	humanPlayer := fui.ctx.GetState().HumanPlayer
+	if humanPlayer == nil || fui.ship.Owner != humanPlayer.Name {
+		return
+	}
+
+	// Get the fleet management system and find nearby fleets
+	state := fui.ctx.GetState()
+	fleetMgmt := game.NewFleetManagementSystem(state)
+	fui.nearbyFleets = fleetMgmt.GetNearbyFleets(fui.ship, humanPlayer)
+}
+
+// createFleetFromShip promotes a single ship to a fleet
+func (fui *FleetInfoUI) createFleetFromShip() {
+	if fui.ship == nil {
+		return
+	}
+
+	// Find the owner
+	humanPlayer := fui.ctx.GetState().HumanPlayer
+	if humanPlayer == nil || fui.ship.Owner != humanPlayer.Name {
+		return
+	}
+
+	// Get the fleet management system
+	state := fui.ctx.GetState()
+	fleetMgmt := game.NewFleetManagementSystem(state)
+
+	newFleet, err := fleetMgmt.CreateFleetFromShip(fui.ship, humanPlayer)
+	if err != nil {
+		fmt.Printf("[FleetInfoUI] Error creating fleet: %v\n", err)
+		return
+	}
+
+	// Update the UI to show the real fleet instead of the ship
+	fui.ShowFleet(newFleet)
+}
+
+// joinSelectedFleet adds the ship to the selected fleet
+func (fui *FleetInfoUI) joinSelectedFleet(fleet *entities.Fleet) {
+	if fui.ship == nil || fleet == nil {
+		return
+	}
+
+	// Find the owner
+	humanPlayer := fui.ctx.GetState().HumanPlayer
+	if humanPlayer == nil || fui.ship.Owner != humanPlayer.Name {
+		return
+	}
+
+	// Get the fleet management system
+	state := fui.ctx.GetState()
+	fleetMgmt := game.NewFleetManagementSystem(state)
+
+	err := fleetMgmt.AddShipToFleet(fui.ship, fleet, humanPlayer)
+	if err != nil {
+		fmt.Printf("[FleetInfoUI] Error joining fleet: %v\n", err)
+		return
+	}
+
+	// Update the UI to show the fleet the ship just joined
+	fui.ShowFleet(fleet)
 }

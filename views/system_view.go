@@ -20,29 +20,33 @@ var (
 
 // SystemView represents the detailed view of a single system
 type SystemView struct {
-	ctx           GameContext
-	system        *entities.System
-	clickHandler  *ClickHandler
-	centerX       float64
-	centerY       float64
-	scale         *ViewScale
-	lastClickX    int
-	lastClickY    int
-	lastClickTime int64
-	orbitOffset   float64 // For animating orbits
-	fleets        []*Fleet
-	fleetInfoUI   FleetInfoUIInterface
+	ctx              GameContext
+	system           *entities.System
+	clickHandler     *ClickHandler
+	centerX          float64
+	centerY          float64
+	scale            *ViewScale
+	lastClickX       int
+	lastClickY       int
+	lastClickTime    int64
+	orbitOffset      float64 // For animating orbits
+	fleetInfoUI      FleetInfoUIInterface
+	shipFleetRenderer *ShipFleetRenderer
 }
 
 // NewSystemView creates a new system view
 func NewSystemView(ctx GameContext, fleetInfoUI FleetInfoUIInterface) *SystemView {
+	// Use planet sprite renderer for ships/fleets in system view
+	spriteRenderer := planetSpriteRenderer
+
 	return &SystemView{
-		ctx:          ctx,
-		clickHandler: NewClickHandler("system"),
-		centerX:      float64(ScreenWidth) / 2,
-		centerY:      float64(ScreenHeight) / 2,
-		scale:        &SystemScale,
-		fleetInfoUI:  fleetInfoUI,
+		ctx:              ctx,
+		clickHandler:     NewClickHandler("system"),
+		centerX:          float64(ScreenWidth) / 2,
+		centerY:          float64(ScreenHeight) / 2,
+		scale:            &SystemScale,
+		fleetInfoUI:      fleetInfoUI,
+		shipFleetRenderer: NewShipFleetRenderer(ctx, spriteRenderer),
 	}
 }
 
@@ -55,7 +59,6 @@ func (sv *SystemView) SetSystem(system *entities.System) {
 	sv.scale = AutoScale(maxDistance, ScreenWidth, ScreenHeight)
 
 	sv.updateEntityPositions()
-	sv.updateFleets()
 	sv.registerClickables()
 }
 
@@ -80,9 +83,6 @@ func (sv *SystemView) Update() error {
 
 	// Update entity positions for animation
 	sv.updateEntityPositions()
-
-	// Update fleet aggregation
-	sv.updateFleets()
 
 	// Update fleet info UI if it exists
 	if sv.fleetInfoUI != nil && sv.fleetInfoUI.IsVisible() {
@@ -207,14 +207,6 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	}
 }
 
-// updateFleets aggregates ships into fleets
-func (sv *SystemView) updateFleets() {
-	if sv.system == nil {
-		return
-	}
-	fm := sv.ctx.GetFleetManager()
-	sv.fleets = fm.AggregateFleets(sv.system)
-}
 
 // OnEnter implements View interface
 func (sv *SystemView) OnEnter() {
@@ -359,77 +351,15 @@ func (sv *SystemView) drawEntities(screen *ebiten.Image) {
 
 // drawFleets draws all fleets in the system
 func (sv *SystemView) drawFleets(screen *ebiten.Image) {
-	for _, fleet := range sv.fleets {
-		sv.drawFleet(screen, fleet)
-	}
-}
-
-// drawFleet draws a fleet of ships
-func (sv *SystemView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
-	if fleet == nil || len(fleet.Ships) == 0 {
+	if sv.system == nil || sv.shipFleetRenderer == nil {
 		return
 	}
 
-	// Use lead ship's position
-	x, y := fleet.GetPosition()
-	centerX := int(x)
-	centerY := int(y)
-	size := 6
+	// Get ships and fleets from the system
+	ships, fleets := sv.shipFleetRenderer.GetShipsAndFleetsInSystem(sv.system)
 
-	// Draw ship as a triangle using cached image
-	shipImg := systemTriangleCache.GetOrCreate(size, fleet.LeadShip.Color)
-
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
-	screen.DrawImage(shipImg, op)
-
-	// If multiple ships, draw count badge
-	if fleet.Size() > 1 {
-		badge := fmt.Sprintf("%d", fleet.Size())
-		badgeX := centerX + size - 2
-		badgeY := centerY - size - 8
-
-		// Badge background
-		badgePanel := &UIPanel{
-			X:           badgeX - 2,
-			Y:           badgeY - 2,
-			Width:       12,
-			Height:      12,
-			BgColor:     utils.PanelBg,
-			BorderColor: utils.PanelBorder,
-		}
-		badgePanel.Draw(screen)
-
-		DrawText(screen, badge, badgeX, badgeY, utils.Highlight)
-	}
-
-	// Draw fleet info
-	if fleet.Size() == 1 {
-		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, utils.TextSecondary)
-	} else {
-		typeCounts := fleet.GetShipTypeCounts()
-		fleetText := fmt.Sprintf("Fleet (%d ships)", fleet.Size())
-		DrawText(screen, fleetText, centerX-40, centerY+size+5, utils.TextSecondary)
-
-		// Show ship type breakdown
-		offsetY := 18
-		for shipType, count := range typeCounts {
-			typeText := fmt.Sprintf("%dx %s", count, shipType)
-			DrawText(screen, typeText, centerX-35, centerY+size+5+offsetY, utils.TextSecondary)
-			offsetY += 12
-		}
-	}
-
-	// Draw fuel indicator
-	fuelPercent := fleet.GetAverageFuelPercent()
-	fuelColor := utils.StationResearch // Green for good fuel
-	if fuelPercent < 25 {
-		fuelColor = utils.SystemRed
-	} else if fuelPercent < 50 {
-		fuelColor = utils.SystemOrange
-	}
-	fuelText := fmt.Sprintf("Fuel: %.0f%%", fuelPercent)
-	DrawText(screen, fuelText, centerX-25, centerY+size+5+12, fuelColor)
+	// Draw them using centralized renderer
+	sv.shipFleetRenderer.DrawShipsAndFleets(screen, ships, fleets, 6)
 }
 
 // drawPlanet renders a single planet
@@ -524,19 +454,18 @@ func (sv *SystemView) getOwnerColor(owner string) (color.RGBA, bool) {
 }
 
 // getFleetAtPosition returns the fleet at the given screen position, or nil if none
-func (sv *SystemView) getFleetAtPosition(x, y int) *Fleet {
-	clickRadius := 15.0 // Click radius for fleets
-
-	for _, fleet := range sv.fleets {
-		fx, fy := fleet.GetPosition()
-		dx := float64(x) - fx
-		dy := float64(y) - fy
-		distance := math.Sqrt(dx*dx + dy*dy)
-
-		if distance <= clickRadius {
-			return fleet
-		}
+func (sv *SystemView) getFleetAtPosition(x, y int) *entities.Fleet {
+	if sv.system == nil || sv.shipFleetRenderer == nil {
+		return nil
 	}
 
-	return nil
+	clickRadius := 15.0 // Click radius for fleets
+
+	// Get ships and fleets in the system
+	ships, fleets := sv.shipFleetRenderer.GetShipsAndFleetsInSystem(sv.system)
+
+	// Check click on ships/fleets
+	_, fleet := sv.shipFleetRenderer.GetShipOrFleetAtPosition(ships, fleets, x, y, clickRadius)
+
+	return fleet
 }

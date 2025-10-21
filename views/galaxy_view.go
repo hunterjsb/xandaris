@@ -27,7 +27,7 @@ type GalaxyView struct {
 	lastClickX              int
 	lastClickY              int
 	lastClickTime           int64
-	systemFleets            map[int][]*Fleet // Fleets per system ID
+	systemFleets            map[int][]*entities.Fleet // Fleets per system ID
 	orbitOffset             float64
 	playerPanelRect         image.Rectangle
 	playerDirectoryHintRect image.Rectangle
@@ -40,7 +40,7 @@ func NewGalaxyView(ctx GameContext) *GalaxyView {
 	gv := &GalaxyView{
 		ctx:                     ctx,
 		clickHandler:            NewClickHandler("galaxy"),
-		systemFleets:            make(map[int][]*Fleet),
+		systemFleets:            make(map[int][]*entities.Fleet),
 		playerPanelRect:         image.Rectangle{},
 		playerDirectoryHintRect: image.Rectangle{},
 		playerPanelToggleRect:   image.Rectangle{},
@@ -299,14 +299,18 @@ func (gv *GalaxyView) focusHomeSystem() {
 	gv.FocusSystem(player.HomeSystem)
 }
 
-// updateFleets aggregates fleets for each system
+// updateFleets collects fleets for each system
 func (gv *GalaxyView) updateFleets() {
-	fm := gv.ctx.GetFleetManager()
-	gv.systemFleets = make(map[int][]*Fleet)
+	gv.systemFleets = make(map[int][]*entities.Fleet)
 
 	for _, system := range gv.ctx.GetSystems() {
-		// Get fleets orbiting the star in this system (not planets)
-		fleets := fm.AggregateFleets(system)
+		// Get actual fleet entities in this system
+		var fleets []*entities.Fleet
+		for _, entity := range system.Entities {
+			if fleet, ok := entity.(*entities.Fleet); ok {
+				fleets = append(fleets, fleet)
+			}
+		}
 		if len(fleets) > 0 {
 			gv.systemFleets[system.ID] = fleets
 		}
@@ -344,7 +348,7 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 		for _, fleet := range fleets {
 			totalShips += fleet.Size()
 			// Use player color if owned by human player
-			if humanPlayer != nil && fleet.Owner == humanPlayer.Name {
+			if humanPlayer != nil && fleet.GetOwner() == humanPlayer.Name {
 				ownerColor = humanPlayer.Color
 			}
 		}

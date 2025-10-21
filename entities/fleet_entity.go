@@ -183,3 +183,56 @@ func (f *Fleet) GetColor() color.RGBA {
 	}
 	return f.Color
 }
+
+// GetMovementStatus returns a summary of fleet movement capability
+// Returns (canMove, lowFuel, noFuel) ship counts
+func (f *Fleet) GetMovementStatus() (canMove int, lowFuel int, noFuel int) {
+	for _, ship := range f.Ships {
+		if ship.CanJump() {
+			canMove++
+		} else if ship.CurrentFuel > 0 {
+			lowFuel++
+		} else {
+			noFuel++
+		}
+	}
+	return canMove, lowFuel, noFuel
+}
+
+// GetContextMenuTitle implements ContextMenuProvider
+func (f *Fleet) GetContextMenuTitle() string {
+	if f.Size() == 1 {
+		return f.Ships[0].Name
+	}
+	return fmt.Sprintf("Fleet (%d ships)", f.Size())
+}
+
+// GetContextMenuItems implements ContextMenuProvider
+func (f *Fleet) GetContextMenuItems() []string {
+	items := []string{
+		fmt.Sprintf("Ships: %d", f.Size()),
+		fmt.Sprintf("Owner: %s", f.GetOwner()),
+		"",
+	}
+
+	// Show ship type breakdown
+	typeCounts := f.GetShipTypeCounts()
+	for shipType, count := range typeCounts {
+		items = append(items, fmt.Sprintf("  %dx %s", count, shipType))
+	}
+
+	items = append(items, "")
+
+	// Show aggregate fuel
+	avgFuel := f.GetAverageFuelPercent()
+	items = append(items, fmt.Sprintf("Avg Fuel: %.0f%%", avgFuel))
+
+	// Show aggregate health
+	currentHP, maxHP := f.GetHP()
+	if maxHP > 0 {
+		hpPercent := float64(currentHP) / float64(maxHP) * 100
+		items = append(items, fmt.Sprintf("Fleet HP: %d/%d (%.0f%%)", currentHP, maxHP, hpPercent))
+	}
+
+	return items
+}

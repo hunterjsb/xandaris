@@ -65,7 +65,7 @@ type ShipyardUIInterface interface {
 
 // FleetInfoUIInterface defines the interface for the fleet info UI
 type FleetInfoUIInterface interface {
-	ShowFleet(fleet *Fleet)
+	ShowFleet(fleet *entities.Fleet)
 	ShowShip(ship *entities.Ship)
 	Hide()
 	IsVisible() bool
@@ -87,11 +87,11 @@ type PlanetView struct {
 	centerX           float64
 	centerY           float64
 	orbitOffset       float64 // For animating orbits
-	fleets            []*Fleet
 	workforceOverlay  *WorkforceOverlay
 	spriteRenderer    *rendering.SpriteRenderer
 	buildingRenderer  *rendering.BuildingRenderer
 	fleetUIManager    *fleetUIManager
+	shipFleetRenderer *ShipFleetRenderer
 }
 
 // NewPlanetView creates a new planet view
@@ -110,6 +110,7 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 		workforceOverlay:  NewWorkforceOverlay(),
 		spriteRenderer:    spriteRenderer,
 		buildingRenderer:  rendering.NewBuildingRenderer(spriteRenderer),
+		shipFleetRenderer: NewShipFleetRenderer(ctx, spriteRenderer),
 	}
 	pv.fleetUIManager = newFleetUIManager(pv)
 	return pv
@@ -495,14 +496,16 @@ func (pv *PlanetView) updateResourcePositions() {
 		building.SetAbsolutePosition(x, y)
 	}
 
-	// Ships orbit further out than buildings and orbit faster
+	// Ships and Fleets orbit further out than buildings and orbit faster
 	if pv.system != nil {
-		shipRadius := planetRadius + 40.0
+		shipRadius := planetRadius + 120.0    // 3x scale (was 40.0)
 		shipOrbitSpeed := pv.orbitOffset * 8.0 // Ships orbit 8x faster than surface
+		planetOrbit := pv.planet.GetOrbitDistance()
+
 		for _, entity := range pv.system.Entities {
+			// Handle individual ships
 			if ship, ok := entity.(*entities.Ship); ok {
 				// Only show ships that are orbiting THIS specific planet
-				planetOrbit := pv.planet.GetOrbitDistance()
 				shipOrbit := ship.GetOrbitDistance()
 
 				// Ships must be at the EXACT same orbital distance as this planet
@@ -516,6 +519,27 @@ func (pv *PlanetView) updateResourcePositions() {
 
 					// Update absolute position
 					ship.SetAbsolutePosition(x, y)
+				}
+			}
+
+			// Handle fleets
+			if fleet, ok := entity.(*entities.Fleet); ok {
+				if fleet.LeadShip != nil {
+					// Only show fleets that are orbiting THIS specific planet
+					fleetOrbit := fleet.LeadShip.GetOrbitDistance()
+
+					// Fleets must be at the EXACT same orbital distance as this planet
+					if math.Abs(planetOrbit-fleetOrbit) < 1.0 {
+						// Use the fleet's orbit angle relative to planet, with faster animation
+						angle := fleet.LeadShip.GetOrbitAngle() - pv.planet.GetOrbitAngle() + shipOrbitSpeed
+
+						// Position at ship orbit radius around this planet
+						x := pv.centerX + shipRadius*math.Cos(angle)
+						y := pv.centerY + shipRadius*math.Sin(angle)
+
+						// Update absolute position for the fleet
+						fleet.SetAbsolutePosition(x, y)
+					}
 				}
 			}
 		}
