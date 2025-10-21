@@ -248,18 +248,13 @@ func (p *Planet) UpdateWorkforceTotals() {
 	}
 
 	p.WorkforceTotal = p.Population / 2 // Simple baseline: 50% of population is workforce
-	if p.WorkforceTotal < 0 {
-		p.WorkforceTotal = 0
-	}
+	p.WorkforceTotal = max(p.WorkforceTotal, 0)
 }
 
 // GetAvailableWorkforce returns unassigned worker count
 func (p *Planet) GetAvailableWorkforce() int64 {
-	available := p.WorkforceTotal - p.WorkforceUsed
-	if available < 0 {
-		return 0
-	}
-	return available
+	return max(p.WorkforceTotal-p.WorkforceUsed, 0)
+
 }
 
 // RebalanceWorkforce distributes workers across buildings based on availability
