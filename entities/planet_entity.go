@@ -5,6 +5,8 @@ import (
 	"image/color"
 )
 
+const DEFAULT_RESOURCE_CAPACITY = 10_000
+
 // ResourceStorage tracks stored resources on a planet
 type ResourceStorage struct {
 	ResourceType string
@@ -343,7 +345,7 @@ func (p *Planet) AddStoredResource(resourceType string, amount int) int {
 		storage = &ResourceStorage{
 			ResourceType: resourceType,
 			Amount:       0,
-			Capacity:     10000, // Default capacity per resource
+			Capacity:     DEFAULT_RESOURCE_CAPACITY,
 		}
 		p.StoredResources[resourceType] = storage
 	}
@@ -351,9 +353,7 @@ func (p *Planet) AddStoredResource(resourceType string, amount int) int {
 	// Calculate how much can be added (limited by capacity)
 	availableSpace := storage.Capacity - storage.Amount
 	actualAmount := amount
-	if actualAmount > availableSpace {
-		actualAmount = availableSpace
-	}
+	actualAmount = min(actualAmount, availableSpace)
 
 	storage.Amount += actualAmount
 	return actualAmount // Return how much was actually added
