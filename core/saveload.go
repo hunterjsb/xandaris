@@ -244,6 +244,31 @@ func (a *App) GetSaveFileInfo(path string) (views.SaveFileInfo, error) {
 	}, nil
 }
 
+// DeleteSaveFile deletes a save file by path (implements SaveLoadInterface)
+func (a *App) DeleteSaveFile(path string) error {
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("failed to delete save file: %w", err)
+	}
+	fmt.Printf("[SaveSystem] Save file deleted: %s\n", path)
+	return nil
+}
+
+// RenameSaveFile renames a save file (implements SaveLoadInterface)
+func (a *App) RenameSaveFile(oldPath string, newFilename string) error {
+	// Validate new filename doesn't already exist
+	newPath := filepath.Join(saveDirectory, newFilename)
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("save file already exists: %s", newFilename)
+	}
+
+	// Rename the file
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("failed to rename save file: %w", err)
+	}
+	fmt.Printf("[SaveSystem] Save file renamed from %s to %s\n", oldPath, newPath)
+	return nil
+}
+
 // listSaveFiles returns a list of all save files (internal helper)
 func listSaveFiles() ([]SaveFileInfo, error) {
 	// Create saves directory if it doesn't exist

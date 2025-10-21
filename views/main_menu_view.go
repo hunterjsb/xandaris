@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"sort"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/utils"
@@ -12,15 +13,19 @@ import (
 
 // MainMenuView displays the main menu for starting or loading games
 type MainMenuView struct {
-	ctx            GameContext
-	playerName     string
-	selectedOption int // 0 = New Game, 1 = Load Game, 2 = Settings, 3 = Quit
-	saveFiles      []SaveFileInfo
-	selectedSave   int
-	showLoadMenu   bool
-	inputActive    bool
-	errorMessage   string
-	errorTimer     int
+	ctx              GameContext
+	playerName       string
+	selectedOption   int // 0 = New Game, 1 = Load Game, 2 = Settings, 3 = Quit
+	saveFiles        []SaveFileInfo
+	selectedSave     int
+	showLoadMenu     bool
+	inputActive      bool
+	errorMessage     string
+	errorTimer       int
+	renameMode       bool // true if renaming a save
+	renameBuffer     string
+	deleteConfirm    bool // true if confirming delete
+	deleteConfirmMsg string
 }
 
 // NewMainMenuView creates a new main menu view
@@ -48,6 +53,18 @@ func (mmv *MainMenuView) Update() error {
 	// Handle text input for player name
 	if mmv.inputActive && !mmv.showLoadMenu {
 		mmv.handleTextInput()
+	}
+
+	// Handle rename mode
+	if mmv.renameMode {
+		mmv.handleRenameInput()
+		return nil
+	}
+
+	// Handle delete confirmation
+	if mmv.deleteConfirm {
+		mmv.handleDeleteConfirm()
+		return nil
 	}
 
 	// Handle menu navigation
@@ -178,6 +195,21 @@ func (mmv *MainMenuView) handleLoadMenuInput() {
 		startY := 150
 		for i := range mmv.saveFiles {
 			if x >= 200 && x <= 1080 && y >= startY+i*80 && y < startY+(i+1)*80 {
+				// Check rename button (at x: 1000-1035)
+				if x >= 1000 && x <= 1035 && y >= startY+i*80+5 && y < startY+i*80+35 {
+					mmv.selectedSave = i
+					mmv.startRename()
+					return
+				}
+
+				// Check delete button (at x: 1050-1085)
+				if x >= 1050 && x <= 1085 && y >= startY+i*80+5 && y < startY+i*80+35 {
+					mmv.selectedSave = i
+					mmv.startDelete()
+					return
+				}
+
+				// Load game if clicking on the main panel area
 				mmv.selectedSave = i
 				mmv.loadSelectedGame()
 				return
@@ -207,6 +239,182 @@ func (mmv *MainMenuView) handleLoadMenuInput() {
 	if kb.IsActionJustPressed(ActionMenuCancel) {
 		mmv.showLoadMenu = false
 	}
+
+	// Handle R key for rename
+	if ebiten.IsKeyPressed(ebiten.KeyR) && len(mmv.saveFiles) > 0 {
+		mmv.startRename()
+	}
+
+	// Handle D key for delete
+	if ebiten.IsKeyPressed(ebiten.KeyD) && len(mmv.saveFiles) > 0 {
+		mmv.startDelete()
+	}
+
+	// Handle right-click to show context menu (delete/rename)
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		x, y := ebiten.CursorPosition()
+
+		// Check if right-clicking on a save file
+		startY := 150
+		for i := range mmv.saveFiles {
+			if x >= 200 && x <= 1080 && y >= startY+i*80 && y < startY+(i+1)*80 {
+				mmv.selectedSave = i
+				// Show context menu with delete and rename options
+				mmv.showSaveContextMenu()
+				return
+			}
+		}
+	}
+}
+
+// handleRenameInput handles input for renaming a save file
+func (mmv *MainMenuView) handleRenameInput() {
+	kb := mmv.ctx.GetKeyBindings()
+
+	// Handle character input
+	for _, r := range ebiten.AppendInputChars(nil) {
+		if len(mmv.renameBuffer) < 80 { // Max filename length
+			mmv.renameBuffer += string(r)
+		}
+	}
+
+	// Handle backspace
+	if kb.IsActionJustPressed(ActionMenuDelete) {
+		if len(mmv.renameBuffer) > 0 {
+			mmv.renameBuffer = mmv.renameBuffer[:len(mmv.renameBuffer)-1]
+		}
+	}
+
+	// Handle enter to confirm rename
+	if kb.IsActionJustPressed(ActionMenuConfirm) {
+		mmv.confirmRename()
+	}
+
+	// Handle escape to cancel
+	if kb.IsActionJustPressed(ActionMenuCancel) {
+		mmv.renameMode = false
+		mmv.renameBuffer = ""
+	}
+}
+
+// handleDeleteConfirm handles delete confirmation
+func (mmv *MainMenuView) handleDeleteConfirm() {
+	kb := mmv.ctx.GetKeyBindings()
+
+	// Handle enter to confirm delete
+	if kb.IsActionJustPressed(ActionMenuConfirm) {
+		mmv.confirmDelete()
+		return
+	}
+
+	// Handle escape to cancel
+	if kb.IsActionJustPressed(ActionMenuCancel) {
+		mmv.deleteConfirm = false
+		mmv.deleteConfirmMsg = ""
+	}
+
+	// Handle mouse clicks for confirmation
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		// Yes button
+		if x >= 300 && x <= 450 && y >= 400 && y <= 440 {
+			mmv.confirmDelete()
+			return
+		}
+		// No button
+		if x >= 550 && x <= 700 && y >= 400 && y <= 440 {
+			mmv.deleteConfirm = false
+			mmv.deleteConfirmMsg = ""
+		}
+	}
+}
+
+// showSaveContextMenu displays delete and rename options for the selected save
+func (mmv *MainMenuView) showSaveContextMenu() {
+	// For simplicity, we'll prompt with R for rename and D for delete
+	// This could be expanded to show a visual menu
+	mmv.showError("Press R to Rename or D to Delete (Escape to Cancel)")
+}
+
+// startRename initiates rename mode for the selected save
+func (mmv *MainMenuView) startRename() {
+	if mmv.selectedSave >= len(mmv.saveFiles) {
+		return
+	}
+
+	mmv.renameMode = true
+	// Start with the current filename (without path)
+	saveFile := mmv.saveFiles[mmv.selectedSave]
+	mmv.renameBuffer = saveFile.Filename
+}
+
+// confirmRename confirms the rename operation
+func (mmv *MainMenuView) confirmRename() {
+	if mmv.selectedSave >= len(mmv.saveFiles) {
+		mmv.renameMode = false
+		mmv.renameBuffer = ""
+		return
+	}
+
+	if mmv.renameBuffer == "" {
+		mmv.showError("Filename cannot be empty")
+		return
+	}
+
+	saveFile := mmv.saveFiles[mmv.selectedSave]
+	saveLoad := mmv.ctx.GetSaveLoad()
+
+	// Extract filename only (no path)
+	filename := mmv.renameBuffer
+	// Ensure it has the right extension
+	if !strings.HasSuffix(filename, ".xsave") {
+		filename += ".xsave"
+	}
+
+	if err := saveLoad.RenameSaveFile(saveFile.Path, filename); err != nil {
+		mmv.showError(fmt.Sprintf("Error renaming save: %v", err))
+	} else {
+		mmv.showError("Save renamed successfully!")
+		// Refresh the save file list
+		mmv.showLoadGameMenu()
+	}
+
+	mmv.renameMode = false
+	mmv.renameBuffer = ""
+}
+
+// startDelete initiates delete confirmation for the selected save
+func (mmv *MainMenuView) startDelete() {
+	if mmv.selectedSave >= len(mmv.saveFiles) {
+		return
+	}
+
+	saveFile := mmv.saveFiles[mmv.selectedSave]
+	mmv.deleteConfirm = true
+	mmv.deleteConfirmMsg = fmt.Sprintf("Delete save '%s'?", saveFile.PlayerName)
+}
+
+// confirmDelete confirms the delete operation
+func (mmv *MainMenuView) confirmDelete() {
+	if mmv.selectedSave >= len(mmv.saveFiles) {
+		mmv.deleteConfirm = false
+		mmv.deleteConfirmMsg = ""
+		return
+	}
+
+	saveFile := mmv.saveFiles[mmv.selectedSave]
+	saveLoad := mmv.ctx.GetSaveLoad()
+
+	if err := saveLoad.DeleteSaveFile(saveFile.Path); err != nil {
+		mmv.showError(fmt.Sprintf("Error deleting save: %v", err))
+	} else {
+		mmv.showError("Save deleted successfully!")
+		// Refresh the save file list
+		mmv.showLoadGameMenu()
+	}
+
+	mmv.deleteConfirm = false
+	mmv.deleteConfirmMsg = ""
 }
 
 // startNewGame starts a new game with the entered player name
@@ -296,6 +504,16 @@ func (mmv *MainMenuView) Draw(screen *ebiten.Image) {
 		mmv.drawLoadMenu(screen)
 	} else {
 		mmv.drawMainMenu(screen)
+	}
+
+	// Draw rename dialog if active
+	if mmv.renameMode {
+		mmv.drawRenameDialog(screen)
+	}
+
+	// Draw delete confirmation if active
+	if mmv.deleteConfirm {
+		mmv.drawDeleteConfirm(screen)
 	}
 
 	// Draw error message if present
@@ -399,10 +617,38 @@ func (mmv *MainMenuView) drawLoadMenu(screen *ebiten.Image) {
 		DrawText(screen, saveFile.PlayerName, 220, y+15, utils.TextPrimary)
 		DrawText(screen, fmt.Sprintf("Game Time: %s", saveFile.GameTime), 220, y+35, utils.TextSecondary)
 		DrawText(screen, fmt.Sprintf("Saved: %s", saveFile.SavedAt.Format("2006-01-02 15:04:05")), 220, y+52, utils.TextSecondary)
+
+		// Rename button
+		renameButtonX := 1000
+		renameButtonY := y + 5
+		renameButtonPanel := &UIPanel{
+			X:           renameButtonX,
+			Y:           renameButtonY,
+			Width:       35,
+			Height:      30,
+			BgColor:     color.RGBA{50, 50, 100, 255},
+			BorderColor: utils.PanelBorder,
+		}
+		renameButtonPanel.Draw(screen)
+		DrawTextCentered(screen, "✎", renameButtonX+17, renameButtonY+15, color.RGBA{150, 200, 255, 255}, 1.0)
+
+		// Delete button
+		deleteButtonX := 1050
+		deleteButtonY := y + 5
+		deleteButtonPanel := &UIPanel{
+			X:           deleteButtonX,
+			Y:           deleteButtonY,
+			Width:       35,
+			Height:      30,
+			BgColor:     color.RGBA{100, 30, 30, 255},
+			BorderColor: color.RGBA{200, 80, 80, 255},
+		}
+		deleteButtonPanel.Draw(screen)
+		DrawTextCentered(screen, "✕", deleteButtonX+17, deleteButtonY+15, color.RGBA{255, 150, 150, 255}, 1.0)
 	}
 
 	// Controls hint
-	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Load | Escape to Go Back", ScreenWidth/2, ScreenHeight-30, utils.TextSecondary, 0.8)
+	DrawTextCentered(screen, "Arrow Keys to Navigate | Enter to Load | R to Rename | D to Delete | Escape to Go Back", ScreenWidth/2, ScreenHeight-30, utils.TextSecondary, 0.8)
 }
 
 // drawButton draws a menu button
@@ -444,6 +690,105 @@ func (mmv *MainMenuView) drawError(screen *ebiten.Image) {
 	panel.Draw(screen)
 
 	DrawTextCentered(screen, mmv.errorMessage, centerX, centerY-5, color.RGBA{255, 150, 150, 255}, 1.0)
+}
+
+// drawRenameDialog draws the rename dialog
+func (mmv *MainMenuView) drawRenameDialog(screen *ebiten.Image) {
+	centerX := ScreenWidth / 2
+	centerY := ScreenHeight / 2
+
+	// Semi-transparent overlay
+	overlay := ebiten.NewImage(ScreenWidth, ScreenHeight)
+	overlay.Fill(color.RGBA{0, 0, 0, 150})
+	screen.DrawImage(overlay, nil)
+
+	// Dialog panel
+	panel := &UIPanel{
+		X:           centerX - 250,
+		Y:           centerY - 100,
+		Width:       500,
+		Height:      200,
+		BgColor:     color.RGBA{20, 20, 40, 255},
+		BorderColor: utils.PanelBorder,
+	}
+	panel.Draw(screen)
+
+	// Title
+	DrawTextCentered(screen, "Rename Save", centerX, centerY-80, utils.TextPrimary, 1.2)
+
+	// Input box
+	inputPanel := &UIPanel{
+		X:           centerX - 200,
+		Y:           centerY - 30,
+		Width:       400,
+		Height:      40,
+		BgColor:     utils.BackgroundDark,
+		BorderColor: utils.PanelBorder,
+	}
+	inputPanel.Draw(screen)
+
+	// Display filename with cursor
+	displayText := mmv.renameBuffer
+	tm := mmv.ctx.GetTickManager()
+	if (tm.GetCurrentTick() / 30) % 2 == 0 {
+		displayText += "_"
+	}
+	DrawTextCentered(screen, displayText, centerX, centerY-15, utils.TextPrimary, 1.0)
+
+	// Instructions
+	DrawTextCentered(screen, "Enter to confirm | Escape to cancel", centerX, centerY+40, utils.TextSecondary, 0.9)
+}
+
+// drawDeleteConfirm draws the delete confirmation dialog
+func (mmv *MainMenuView) drawDeleteConfirm(screen *ebiten.Image) {
+	centerX := ScreenWidth / 2
+	centerY := ScreenHeight / 2
+
+	// Semi-transparent overlay
+	overlay := ebiten.NewImage(ScreenWidth, ScreenHeight)
+	overlay.Fill(color.RGBA{0, 0, 0, 150})
+	screen.DrawImage(overlay, nil)
+
+	// Dialog panel
+	panel := &UIPanel{
+		X:           centerX - 250,
+		Y:           centerY - 100,
+		Width:       500,
+		Height:      200,
+		BgColor:     color.RGBA{40, 20, 20, 255},
+		BorderColor: color.RGBA{200, 50, 50, 255},
+	}
+	panel.Draw(screen)
+
+	// Title
+	DrawTextCentered(screen, "Confirm Delete", centerX, centerY-80, color.RGBA{255, 100, 100, 255}, 1.2)
+
+	// Message
+	DrawTextCentered(screen, mmv.deleteConfirmMsg, centerX, centerY-20, utils.TextPrimary, 1.0)
+
+	// Yes button
+	yesPanel := &UIPanel{
+		X:           centerX - 180,
+		Y:           centerY + 40,
+		Width:       120,
+		Height:      40,
+		BgColor:     color.RGBA{100, 30, 30, 255},
+		BorderColor: color.RGBA{200, 80, 80, 255},
+	}
+	yesPanel.Draw(screen)
+	DrawTextCentered(screen, "Yes (Enter)", centerX-60, centerY+55, color.RGBA{255, 150, 150, 255}, 1.0)
+
+	// No button
+	noPanel := &UIPanel{
+		X:           centerX + 60,
+		Y:           centerY + 40,
+		Width:       120,
+		Height:      40,
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
+	}
+	noPanel.Draw(screen)
+	DrawTextCentered(screen, "No (Esc)", centerX+120, centerY+55, utils.TextPrimary, 1.0)
 }
 
 // OnEnter is called when entering this view

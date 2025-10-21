@@ -116,4 +116,6 @@ type SaveFileInfo struct {
 type SaveLoadInterface interface {
 	ListSaveFiles() ([]SaveFileInfo, error)
 	GetSaveFileInfo(path string) (SaveFileInfo, error)
+	DeleteSaveFile(path string) error
+	RenameSaveFile(oldPath string, newFilename string) error
 }

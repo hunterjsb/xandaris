@@ -91,12 +91,13 @@ type PlanetView struct {
 	workforceOverlay  *WorkforceOverlay
 	spriteRenderer    *rendering.SpriteRenderer
 	buildingRenderer  *rendering.BuildingRenderer
+	fleetUIManager    *fleetUIManager
 }
 
 // NewPlanetView creates a new planet view
 func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQueue ConstructionQueueUIInterface, resourceStorage ResourceStorageUIInterface, shipyardUI ShipyardUIInterface, fleetInfoUI FleetInfoUIInterface) *PlanetView {
 	spriteRenderer := rendering.NewSpriteRenderer()
-	return &PlanetView{
+	pv := &PlanetView{
 		ctx:               ctx,
 		clickHandler:      NewClickHandler("planet"),
 		buildMenu:         buildMenu,
@@ -110,6 +111,8 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 		spriteRenderer:    spriteRenderer,
 		buildingRenderer:  rendering.NewBuildingRenderer(spriteRenderer),
 	}
+	pv.fleetUIManager = newFleetUIManager(pv)
+	return pv
 }
 
 // SetPlanet sets the planet to display
@@ -145,7 +148,7 @@ func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 	}
 
 	pv.updateResourcePositions()
-	pv.updateFleets()
+	pv.fleetUIManager.updateFleets()
 	pv.registerClickables()
 }
 
@@ -191,7 +194,7 @@ func (pv *PlanetView) Update() error {
 	pv.updateResourcePositions()
 
 	// Update fleet aggregation
-	pv.updateFleets()
+	pv.fleetUIManager.updateFleets()
 
 	// Update construction queue UI
 	if pv.constructionQueue != nil {
@@ -209,9 +212,7 @@ func (pv *PlanetView) Update() error {
 	}
 
 	// Update fleet info UI
-	if pv.fleetInfoUI != nil && pv.fleetInfoUI.IsVisible() {
-		pv.fleetInfoUI.Update()
-	}
+	pv.fleetUIManager.updateFleetInfoUI()
 
 	// Update build menu first (it handles its own input)
 	if pv.buildMenu != nil && pv.buildMenu.IsOpen() {
@@ -227,8 +228,7 @@ func (pv *PlanetView) Update() error {
 		}
 
 		// Close fleet info UI if open
-		if pv.fleetInfoUI != nil && pv.fleetInfoUI.IsVisible() {
-			pv.fleetInfoUI.Hide()
+		if pv.fleetUIManager.closeFleetInfoUI() {
 			return nil
 		}
 		// Close shipyard UI if open
@@ -266,12 +266,7 @@ func (pv *PlanetView) Update() error {
 		}
 
 		// Check if clicking on a fleet
-		fm := pv.ctx.GetFleetManager()
-		clickedFleet := fm.GetFleetAtPosition(pv.fleets, x, y, 15.0)
-		if clickedFleet != nil {
-			if pv.fleetInfoUI != nil {
-				pv.fleetInfoUI.ShowFleet(clickedFleet)
-			}
+		if pv.fleetUIManager.handleFleetClick(x, y) {
 			return nil
 		}
 
@@ -338,7 +333,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	pv.drawBuildings(screen)
 
 	// Draw all fleets orbiting this planet
-	pv.drawFleets(screen)
+	pv.fleetUIManager.drawFleets(screen)
 
 	// Highlight selected object
 	if selectedObj := pv.clickHandler.GetSelectedObject(); selectedObj != nil {
@@ -402,9 +397,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw fleet info UI if visible
-	if pv.fleetInfoUI != nil && pv.fleetInfoUI.IsVisible() {
-		pv.fleetInfoUI.Draw(screen)
-	}
+	pv.fleetUIManager.drawFleetInfoUI(screen)
 
 	// Draw build menu if visible (on top of everything)
 	if pv.buildMenu != nil {
@@ -416,7 +409,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 func (pv *PlanetView) OnEnter() {
 	if pv.planet != nil {
 		pv.updateResourcePositions()
-		pv.updateFleets()
+		pv.fleetUIManager.updateFleets()
 		pv.registerClickables()
 	}
 }
@@ -683,72 +676,6 @@ func (pv *PlanetView) drawBuildings(screen *ebiten.Image) {
 	}
 }
 
-// updateFleets aggregates ships into fleets at this planet
-func (pv *PlanetView) updateFleets() {
-	if pv.system == nil || pv.planet == nil {
-		return
-	}
-	// Only aggregate ships that are actually at this planet's orbital distance
-	fm := pv.ctx.GetFleetManager()
-	pv.fleets = fm.AggregateFleetsAtPlanet(pv.system, pv.planet)
-}
-
-// drawFleets draws all fleets orbiting this planet
-func (pv *PlanetView) drawFleets(screen *ebiten.Image) {
-	for _, fleet := range pv.fleets {
-		pv.drawFleet(screen, fleet)
-	}
-}
-
-// drawFleet draws a fleet of ships
-func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
-	if fleet == nil || len(fleet.Ships) == 0 {
-		return
-	}
-
-	// Use lead ship's position
-	x, y := fleet.GetPosition()
-	centerX := int(x)
-	centerY := int(y)
-	size := 6
-
-	if fleet.Owner != "" {
-		if ownerColor, ok := pv.getOwnerColor(fleet.Owner); ok {
-			DrawOwnershipRing(screen, centerX, centerY, float64(size+9), ownerColor)
-		}
-	}
-
-	// Render fleet with sprite renderer
-	pv.spriteRenderer.RenderFleet(screen, centerX, centerY, size, fleet.LeadShip.Color)
-
-	// If multiple ships, draw count badge
-	if fleet.Size() > 1 {
-		badge := fmt.Sprintf("%d", fleet.Size())
-		badgeX := centerX + size - 2
-		badgeY := centerY - size - 8
-
-		// Badge background
-		badgePanel := &UIPanel{
-			X:           badgeX - 2,
-			Y:           badgeY - 2,
-			Width:       12,
-			Height:      12,
-			BgColor:     utils.PanelBg,
-			BorderColor: utils.PanelBorder,
-		}
-		badgePanel.Draw(screen)
-
-		DrawText(screen, badge, badgeX, badgeY, utils.Highlight)
-	}
-
-	// Draw fleet info
-	if fleet.Size() == 1 {
-		DrawText(screen, fleet.Ships[0].Name, centerX-30, centerY+size+5, utils.TextSecondary)
-	} else {
-		fleetText := fmt.Sprintf("Fleet (%d ships)", fleet.Size())
-		DrawText(screen, fleetText, centerX-40, centerY+size+5, utils.TextSecondary)
-	}
-}
 
 // drawBuilding renders a single building
 func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Building) {
