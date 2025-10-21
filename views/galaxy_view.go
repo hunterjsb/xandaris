@@ -12,6 +12,10 @@ import (
 	"github.com/hunterjsb/xandaris/utils"
 )
 
+var (
+	galaxyCircleCache = utils.NewCircleImageCache()
+)
+
 const (
 	circleRadius = 8
 )
@@ -220,17 +224,7 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 
 	// Draw a small circle for the star
 	starRadius := 4
-	starImg := ebiten.NewImage(starRadius*2, starRadius*2)
-	for py := 0; py < starRadius*2; py++ {
-		for px := 0; px < starRadius*2; px++ {
-			dx := float64(px - starRadius)
-			dy := float64(py - starRadius)
-			dist := dx*dx + dy*dy
-			if dist <= float64(starRadius*starRadius) {
-				starImg.Set(px, py, star.Color)
-			}
-		}
-	}
+	starImg := galaxyCircleCache.GetOrCreate(starRadius, star.Color)
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(centerX-starRadius), float64(centerY-starRadius))
 	screen.DrawImage(starImg, opts)
@@ -263,17 +257,7 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 		planetAngle := planet.GetOrbitAngle() + gv.orbitOffset // Animate planet orbit
 		planetX := centerX + int(orbitRadius*math.Cos(planetAngle))
 		planetY := centerY + int(orbitRadius*math.Sin(planetAngle))
-		planetImg := ebiten.NewImage(planetRadius*2, planetRadius*2)
-		for py := 0; py < planetRadius*2; py++ {
-			for px := 0; px < planetRadius*2; px++ {
-				dx := float64(px - planetRadius)
-				dy := float64(py - planetRadius)
-				dist := dx*dx + dy*dy
-				if dist <= float64(planetRadius*planetRadius) {
-					planetImg.Set(px, py, planet.GetColor())
-				}
-			}
-		}
+		planetImg := galaxyCircleCache.GetOrCreate(planetRadius, planet.GetColor())
 		planetOpts := &ebiten.DrawImageOptions{}
 		planetOpts.GeoM.Translate(float64(planetX-planetRadius), float64(planetY-planetRadius))
 		screen.DrawImage(planetImg, planetOpts)

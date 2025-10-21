@@ -14,6 +14,7 @@ import (
 
 var (
 	DefaultFontFace *text.GoXFace
+	rectCache       = utils.NewRectImageCache()
 )
 
 func init() {
@@ -29,6 +30,8 @@ type UIPanel struct {
 	Height      int
 	BgColor     color.RGBA
 	BorderColor color.RGBA
+	cachedImage *ebiten.Image
+	cachedKey   string
 }
 
 // NewUIPanel creates a new UI panel
@@ -45,24 +48,38 @@ func NewUIPanel(x, y, width, height int) *UIPanel {
 
 // Draw renders the panel to the screen
 func (p *UIPanel) Draw(screen *ebiten.Image) {
-	// Create panel image
-	panelImg := ebiten.NewImage(p.Width, p.Height)
-	panelImg.Fill(p.BgColor)
+	// Generate cache key based on panel properties
+	key := fmt.Sprintf("panel_%dx%d_%d_%d_%d_%d_%d_%d_%d_%d",
+		p.Width, p.Height,
+		p.BgColor.R, p.BgColor.G, p.BgColor.B, p.BgColor.A,
+		p.BorderColor.R, p.BorderColor.G, p.BorderColor.B, p.BorderColor.A)
 
-	// Draw border
-	for i := 0; i < p.Width; i++ {
-		panelImg.Set(i, 0, p.BorderColor)
-		panelImg.Set(i, p.Height-1, p.BorderColor)
-	}
-	for i := 0; i < p.Height; i++ {
-		panelImg.Set(0, i, p.BorderColor)
-		panelImg.Set(p.Width-1, i, p.BorderColor)
+	// Check if we need to regenerate the cached image
+	if p.cachedImage == nil || p.cachedKey != key {
+		// Create panel image
+		if p.cachedImage != nil {
+			p.cachedImage.Clear()
+		} else {
+			p.cachedImage = ebiten.NewImage(p.Width, p.Height)
+		}
+		p.cachedImage.Fill(p.BgColor)
+
+		// Draw border
+		for i := 0; i < p.Width; i++ {
+			p.cachedImage.Set(i, 0, p.BorderColor)
+			p.cachedImage.Set(i, p.Height-1, p.BorderColor)
+		}
+		for i := 0; i < p.Height; i++ {
+			p.cachedImage.Set(0, i, p.BorderColor)
+			p.cachedImage.Set(p.Width-1, i, p.BorderColor)
+		}
+		p.cachedKey = key
 	}
 
 	// Draw to screen
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(p.X), float64(p.Y))
-	screen.DrawImage(panelImg, opts)
+	screen.DrawImage(p.cachedImage, opts)
 }
 
 // Contains checks if a point is within the panel bounds
@@ -216,6 +233,8 @@ type UIProgressBar struct {
 	FillColor     color.RGBA
 	BgColor       color.RGBA
 	BorderColor   color.RGBA
+	cachedBg      *ebiten.Image
+	cachedFill    *ebiten.Image
 }
 
 // NewUIProgressBar constructs a progress bar with sensible defaults
@@ -268,8 +287,7 @@ func DrawStackedBar(screen *ebiten.Image, rect image.Rectangle, segments []Chart
 		return
 	}
 
-	bar := ebiten.NewImage(rect.Dx(), rect.Dy())
-	bar.Fill(background)
+	bar := rectCache.GetOrCreate(rect.Dx(), rect.Dy(), background)
 
 	total := 0.0
 	for _, seg := range segments {
@@ -301,8 +319,7 @@ func DrawStackedBar(screen *ebiten.Image, rect image.Rectangle, segments []Chart
 				continue
 			}
 
-			segImg := ebiten.NewImage(segWidth, rect.Dy())
-			segImg.Fill(seg.Color)
+			segImg := rectCache.GetOrCreate(segWidth, rect.Dy(), seg.Color)
 			opts := &ebiten.DrawImageOptions{}
 			opts.GeoM.Translate(float64(offset), 0)
 			bar.DrawImage(segImg, opts)
@@ -337,8 +354,7 @@ func DrawLegend(screen *ebiten.Image, start image.Point, segments []ChartSegment
 
 // drawColorSwatch draws a small filled square with a border for use in legends.
 func drawColorSwatch(screen *ebiten.Image, x, y int, c color.RGBA) {
-	swatch := ebiten.NewImage(12, 12)
-	swatch.Fill(c)
+	swatch := rectCache.GetOrCreate(12, 12, c)
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(float64(x), float64(y))
 	screen.DrawImage(swatch, opts)
@@ -361,12 +377,15 @@ func (pb *UIProgressBar) Draw(screen *ebiten.Image) {
 		pb.Max = 1
 	}
 
-	bg := ebiten.NewImage(pb.Width, pb.Height)
-	bg.Fill(pb.BgColor)
+	// Cache background image
+	if pb.cachedBg == nil {
+		pb.cachedBg = ebiten.NewImage(pb.Width, pb.Height)
+		pb.cachedBg.Fill(pb.BgColor)
+	}
 
 	bgOpts := &ebiten.DrawImageOptions{}
 	bgOpts.GeoM.Translate(float64(pb.X), float64(pb.Y))
-	screen.DrawImage(bg, bgOpts)
+	screen.DrawImage(pb.cachedBg, bgOpts)
 
 	if pb.Value > 0 && pb.Max > 0 {
 		ratio := pb.Value / pb.Max
@@ -375,11 +394,19 @@ func (pb *UIProgressBar) Draw(screen *ebiten.Image) {
 		}
 		fillWidth := int(ratio * float64(pb.Width))
 		if fillWidth > 0 {
-			fill := ebiten.NewImage(fillWidth, pb.Height)
-			fill.Fill(pb.FillColor)
+			// Reuse or create fill image
+			if pb.cachedFill == nil || pb.cachedFill.Bounds().Dx() != fillWidth {
+				if pb.cachedFill != nil {
+					pb.cachedFill.Deallocate()
+				}
+				pb.cachedFill = ebiten.NewImage(fillWidth, pb.Height)
+			}
+			pb.cachedFill.Clear()
+			pb.cachedFill.Fill(pb.FillColor)
+
 			fillOpts := &ebiten.DrawImageOptions{}
 			fillOpts.GeoM.Translate(float64(pb.X), float64(pb.Y))
-			screen.DrawImage(fill, fillOpts)
+			screen.DrawImage(pb.cachedFill, fillOpts)
 		}
 	}
 

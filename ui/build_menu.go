@@ -12,6 +12,10 @@ import (
 	"github.com/hunterjsb/xandaris/views"
 )
 
+var (
+	buildMenuRectCache = utils.NewRectImageCache()
+)
+
 const (
 	buildMenuItemHeight  = 80
 	buildMenuItemPadding = 5
@@ -477,8 +481,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		colorBoxSize := 12
 		colorBoxX := itemX + 10
 		colorBoxY := itemY + 10
-		colorBox := ebiten.NewImage(colorBoxSize, colorBoxSize)
-		colorBox.Fill(item.Color)
+		colorBox := buildMenuRectCache.GetOrCreate(colorBoxSize, colorBoxSize, item.Color)
 		opts := &ebiten.DrawImageOptions{}
 		opts.GeoM.Translate(float64(colorBoxX), float64(colorBoxY))
 		screen.DrawImage(colorBox, opts)
@@ -527,8 +530,8 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		}
 
 		scrollbarX := bm.x + bm.width - 14
-		scrollbar := ebiten.NewImage(6, scrollbarHeight)
-		scrollbar.Fill(color.RGBA{120, 160, 210, 200})
+		scrollbarColor := color.RGBA{120, 160, 210, 200}
+		scrollbar := buildMenuRectCache.GetOrCreate(6, scrollbarHeight, scrollbarColor)
 
 		opts := &ebiten.DrawImageOptions{}
 		opts.GeoM.Translate(float64(scrollbarX), float64(scrollbarY))

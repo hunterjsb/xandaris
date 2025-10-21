@@ -12,6 +12,12 @@ import (
 	"github.com/hunterjsb/xandaris/utils"
 )
 
+var (
+	systemCircleCache   = utils.NewCircleImageCache()
+	systemRectCache     = utils.NewRectImageCache()
+	systemTriangleCache = utils.NewTriangleImageCache()
+)
+
 // SystemView represents the detailed view of a single system
 type SystemView struct {
 	ctx           GameContext
@@ -275,21 +281,8 @@ func (sv *SystemView) drawStar(screen *ebiten.Image, star *entities.Star) {
 	// Scale the star radius based on the view scale
 	radius := sv.scale.ScaleSize(float64(star.Radius))
 
-	// Create star image
-	starImg := ebiten.NewImage(radius*2, radius*2)
-
-	// Draw a circle for the star
-	for py := 0; py < radius*2; py++ {
-		for px := 0; px < radius*2; px++ {
-			dx := float64(px - radius)
-			dy := float64(py - radius)
-			dist := dx*dx + dy*dy
-
-			if dist <= float64(radius*radius) {
-				starImg.Set(px, py, star.Color)
-			}
-		}
-	}
+	// Get cached star image
+	starImg := systemCircleCache.GetOrCreate(radius, star.Color)
 
 	// Draw the star
 	opts := &ebiten.DrawImageOptions{}
@@ -383,17 +376,8 @@ func (sv *SystemView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 	centerY := int(y)
 	size := 6
 
-	// Draw ship as a triangle
-	shipImg := ebiten.NewImage(size*2, size*2)
-	for py := 0; py < size*2; py++ {
-		for px := 0; px < size*2; px++ {
-			dx := float64(px - size)
-			dy := float64(py - size)
-			if dy > 0 && math.Abs(dx) < float64(size)-dy/2 {
-				shipImg.Set(px, py, fleet.LeadShip.Color)
-			}
-		}
-	}
+	// Draw ship as a triangle using cached image
+	shipImg := systemTriangleCache.GetOrCreate(size, fleet.LeadShip.Color)
 
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
@@ -462,21 +446,8 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 		}
 	}
 
-	// Create planet image
-	planetImg := ebiten.NewImage(radius*2, radius*2)
-
-	// Draw a circle for the planet
-	for py := 0; py < radius*2; py++ {
-		for px := 0; px < radius*2; px++ {
-			dx := float64(px - radius)
-			dy := float64(py - radius)
-			dist := dx*dx + dy*dy
-
-			if dist <= float64(radius*radius) {
-				planetImg.Set(px, py, planet.Color)
-			}
-		}
-	}
+	// Get cached planet image
+	planetImg := systemCircleCache.GetOrCreate(radius, planet.Color)
 
 	// Draw the planet
 	opts := &ebiten.DrawImageOptions{}
@@ -520,9 +491,8 @@ func (sv *SystemView) drawStation(screen *ebiten.Image, station *entities.Statio
 	// Keep station size consistent regardless of orbital scale
 	size := 8
 
-	// Draw station as a square/diamond
-	stationImg := ebiten.NewImage(size*2, size*2)
-	stationImg.Fill(station.Color)
+	// Get cached station image (square/diamond)
+	stationImg := systemRectCache.GetOrCreate(size*2, size*2, station.Color)
 
 	// Draw the station
 	opts := &ebiten.DrawImageOptions{}

@@ -1,16 +1,22 @@
 package views
 
 import (
-    "fmt"
-    "image"
-    "image/color"
-    "math"
-    "strings"
+	"fmt"
+	"image"
+	"image/color"
+	"math"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/utils"
+)
+
+var (
+	planetCircleCache   = utils.NewCircleImageCache()
+	planetRectCache     = utils.NewRectImageCache()
+	planetTriangleCache = utils.NewTriangleImageCache()
 )
 
 const (
@@ -61,20 +67,20 @@ type FleetInfoUIInterface interface {
 
 // PlanetView represents the detailed view of a single planet
 type PlanetView struct {
-	ctx                  GameContext
-	system               *entities.System
-	planet               *entities.Planet
-	clickHandler         *ClickHandler
-	buildMenu            BuildMenuInterface
-	constructionQueue    ConstructionQueueUIInterface
-	resourceStorage      ResourceStorageUIInterface
-	shipyardUI           ShipyardUIInterface
-	fleetInfoUI          FleetInfoUIInterface
-	centerX              float64
-	centerY              float64
-	orbitOffset          float64 // For animating orbits
-	fleets               []*Fleet
-	workforceOverlay     *WorkforceOverlay
+	ctx               GameContext
+	system            *entities.System
+	planet            *entities.Planet
+	clickHandler      *ClickHandler
+	buildMenu         BuildMenuInterface
+	constructionQueue ConstructionQueueUIInterface
+	resourceStorage   ResourceStorageUIInterface
+	shipyardUI        ShipyardUIInterface
+	fleetInfoUI       FleetInfoUIInterface
+	centerX           float64
+	centerY           float64
+	orbitOffset       float64 // For animating orbits
+	fleets            []*Fleet
+	workforceOverlay  *WorkforceOverlay
 }
 
 // NewPlanetView creates a new planet view
@@ -445,7 +451,7 @@ func (pv *PlanetView) updateResourcePositions() {
 			for _, resource := range pv.planet.Resources {
 				if resource.GetID() == bldg.ResourceNodeID {
 					if res, ok := resource.(*entities.Resource); ok {
-						// Use the resource's node position (fixed)
+						// Use the resource's node position
 						orbitAngle = res.NodePosition + pv.orbitOffset
 					}
 					break
@@ -530,21 +536,8 @@ func (pv *PlanetView) drawPlanet(screen *ebiten.Image) {
 	// Scale up the planet for planet view
 	radius := pv.planet.Size * 8
 
-	// Create planet image
-	planetImg := ebiten.NewImage(radius*2, radius*2)
-
-	// Draw a circle for the planet
-	for py := 0; py < radius*2; py++ {
-		for px := 0; px < radius*2; px++ {
-			dx := float64(px - radius)
-			dy := float64(py - radius)
-			dist := dx*dx + dy*dy
-
-			if dist <= float64(radius*radius) {
-				planetImg.Set(px, py, pv.planet.Color)
-			}
-		}
-	}
+	// Get cached planet image
+	planetImg := planetCircleCache.GetOrCreate(radius, pv.planet.Color)
 
 	// Draw the planet
 	opts := &ebiten.DrawImageOptions{}
@@ -582,21 +575,8 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 		}
 	}
 
-	// Create resource image
-	resourceImg := ebiten.NewImage(radius*2, radius*2)
-
-	// Draw a circle for the resource
-	for py := 0; py < radius*2; py++ {
-		for px := 0; px < radius*2; px++ {
-			dx := float64(px - radius)
-			dy := float64(py - radius)
-			dist := dx*dx + dy*dy
-
-			if dist <= float64(radius*radius) {
-				resourceImg.Set(px, py, resource.Color)
-			}
-		}
-	}
+	// Get cached resource image
+	resourceImg := planetCircleCache.GetOrCreate(radius, resource.Color)
 
 	// Draw the resource
 	opts := &ebiten.DrawImageOptions{}
@@ -652,17 +632,8 @@ func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 		}
 	}
 
-	// Draw ship as a triangle
-	shipImg := ebiten.NewImage(size*2, size*2)
-	for py := 0; py < size*2; py++ {
-		for px := 0; px < size*2; px++ {
-			dx := float64(px - size)
-			dy := float64(py - size)
-			if dy > 0 && math.Abs(dx) < float64(size)-dy/2 {
-				shipImg.Set(px, py, fleet.LeadShip.Color)
-			}
-		}
-	}
+	// Draw ship as a triangle using cached image
+	shipImg := planetTriangleCache.GetOrCreate(size, fleet.LeadShip.Color)
 
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(centerX-size), float64(centerY-size))
@@ -710,9 +681,8 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 		}
 	}
 
-	// Create building image (square for buildings)
-	buildingImg := ebiten.NewImage(size*2, size*2)
-	buildingImg.Fill(building.Color)
+	// Get cached building image (square for buildings)
+	buildingImg := planetRectCache.GetOrCreate(size*2, size*2, building.Color)
 
 	// Draw the building
 	opts := &ebiten.DrawImageOptions{}
@@ -815,8 +785,6 @@ func (pv *PlanetView) drawWorkforceToggleButton(screen *ebiten.Image) {
 	DrawTextCenteredInRect(screen, label, rect, textColor)
 }
 
-
-
 func (pv *PlanetView) workforceButtonRect() image.Rectangle {
 	x := ScreenWidth - workforceButtonWidth - 20
 	y := 10
@@ -838,8 +806,7 @@ func drawStackedBar(screen *ebiten.Image, x, y, width, height int, segments []ba
 		return
 	}
 
-	barImg := ebiten.NewImage(width, height)
-	barImg.Fill(utils.BackgroundDark)
+	barImg := planetRectCache.GetOrCreate(width, height, utils.BackgroundDark)
 
 	total := 0.0
 	for _, seg := range segments {
@@ -870,8 +837,7 @@ func drawStackedBar(screen *ebiten.Image, x, y, width, height int, segments []ba
 				continue
 			}
 
-			segImg := ebiten.NewImage(segWidth, height)
-			segImg.Fill(seg.Color)
+			segImg := planetRectCache.GetOrCreate(segWidth, height, seg.Color)
 			opts := &ebiten.DrawImageOptions{}
 			opts.GeoM.Translate(float64(offset), 0)
 			barImg.DrawImage(segImg, opts)
