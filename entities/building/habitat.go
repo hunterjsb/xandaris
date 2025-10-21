@@ -52,13 +52,13 @@ func (g *HabitatGenerator) Generate(params entities.GenerationParams) entities.E
 	)
 
 	// Set habitat-specific properties
-	building.AttachmentType = "Planet"     // Habitats are built on planets
-	building.ProductionBonus = 1.0         // No production bonus (housing focused)
-	building.PopulationCapacity = 10000000 // 10 million population capacity
-	building.BuildCost = 800               // 800 credits to build
-	building.UpkeepCost = 8                // 8 credits/sec upkeep
-	building.MaxLevel = 10                 // Can upgrade to level 10 (more housing)
-	building.Size = 5                      // 5 pixels (larger than mine)
+	building.AttachmentType = "Planet"   // Habitats are built on planets
+	building.ProductionBonus = 1.0       // No production bonus (housing focused)
+	building.PopulationCapacity = 10_000 // 10 thousand population capacity
+	building.BuildCost = 800             // 800 credits to build
+	building.UpkeepCost = 8              // 8 credits/sec upkeep
+	building.MaxLevel = 10               // Can upgrade to level 10 (more housing)
+	building.Size = 5                    // 5 pixels (larger than mine)
 	building.Description = "Provides housing for population. Increases planet capacity."
 	building.SetWorkersRequired(200)
 
