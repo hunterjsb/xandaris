@@ -438,7 +438,7 @@ func (pv *PlanetView) updateResourcePositions() {
 	}
 
 	// Resources and buildings are positioned at the planet's surface edge
-	planetRadius := float64(pv.planet.Size * 8) // Same scaling as in drawPlanet
+	planetRadius := float64(pv.planet.Size * 24) // Same scaling as in drawPlanet (3x scale)
 
 	for _, resource := range pv.planet.Resources {
 		// Use the orbit angle for positioning around the surface
@@ -455,7 +455,7 @@ func (pv *PlanetView) updateResourcePositions() {
 	}
 
 	// Buildings orbit slightly further out than resources
-	buildingRadius := planetRadius + 20.0 // Increased from 15 for better visibility
+	buildingRadius := planetRadius + 60.0 // 3x scale (was 20.0)
 
 	// Count non-mine buildings to distribute them evenly
 	nonMineBuildings := make([]entities.Entity, 0)
@@ -504,7 +504,7 @@ func (pv *PlanetView) updateResourcePositions() {
 
 	// Ships orbit further out than buildings and orbit faster
 	if pv.system != nil {
-		shipRadius := planetRadius + 40.0
+		shipRadius := planetRadius + 120.0      // 3x scale (was 40.0)
 		shipOrbitSpeed := pv.orbitOffset * 10.0 // Ships orbit 10x faster than surface
 		for _, entity := range pv.system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
@@ -560,7 +560,7 @@ func (pv *PlanetView) drawPlanet(screen *ebiten.Image) {
 	centerX := int(pv.centerX)
 	centerY := int(pv.centerY)
 	// Scale up the planet for planet view
-	radius := pv.planet.Size * 8
+	radius := pv.planet.Size * 24
 
 	// Try to render planet with sprite, fallback to cached circle
 	sprite, err := pv.spriteRenderer.GetAssetLoader().LoadPlanetSprite(pv.planet.PlanetType)
@@ -624,7 +624,7 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 
 	if resource.Owner != "" {
 		if ownerColor, ok := pv.getOwnerColor(resource.Owner); ok {
-			DrawOwnershipRing(screen, centerX, centerY, float64(radius+2), ownerColor)
+			DrawOwnershipRing(screen, centerX, centerY, float64(radius+6), ownerColor)
 		}
 	}
 
@@ -641,7 +641,7 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	for i, building := range attachedBuildings {
 		// Position buildings around the resource in a circle
 		angle := (float64(i) / float64(len(attachedBuildings))) * 2 * math.Pi
-		buildingRadius := float64(radius + 15)
+		buildingRadius := float64(radius + 45) // Increase spacing for 3x scale
 		buildingX := centerX + int(buildingRadius*math.Cos(angle))
 		buildingY := centerY + int(buildingRadius*math.Sin(angle))
 
@@ -696,7 +696,7 @@ func (pv *PlanetView) drawFleet(screen *ebiten.Image, fleet *Fleet) {
 
 	if fleet.Owner != "" {
 		if ownerColor, ok := pv.getOwnerColor(fleet.Owner); ok {
-			DrawOwnershipRing(screen, centerX, centerY, float64(size+3), ownerColor)
+			DrawOwnershipRing(screen, centerX, centerY, float64(size+9), ownerColor)
 		}
 	}
 

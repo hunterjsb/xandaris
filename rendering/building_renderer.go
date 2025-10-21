@@ -34,26 +34,39 @@ func (br *BuildingRenderer) RenderBuilding(screen *ebiten.Image, building *entit
 
 	buildingX := int(x)
 	buildingY := int(y)
-	size := building.Size
+	size := building.Size * 3 // Scale buildings 3x
 
 	// Draw ownership ring if owned
 	if building.Owner != "" {
 		if ownerColor, ok := br.getOwnerColorFromContext(building.Owner); ok {
-			br.drawOwnershipRing(screen, buildingX, buildingY, float64(size+2), ownerColor)
+			br.drawOwnershipRing(screen, buildingX, buildingY, float64(size+6), ownerColor)
 		}
 	}
 
-	// Render the building sprite or fallback
-	err := br.spriteRenderer.RenderBuilding(
-		screen,
-		buildingX,
-		buildingY,
-		size,
-		building.BuildingType,
-		building.Color,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to render building: %w", err)
+	// Try to load building sprite
+	sprite, err := br.spriteRenderer.GetAssetLoader().LoadBuildingSprite(building.BuildingType)
+	if err == nil && sprite != nil {
+		// Render sprite
+		opts := &ebiten.DrawImageOptions{}
+
+		// Scale to match desired size
+		bounds := sprite.Bounds()
+		spriteWidth := float64(bounds.Dx())
+		spriteHeight := float64(bounds.Dy())
+		scale := float64(size*2) / spriteWidth
+
+		// Center and scale
+		opts.GeoM.Translate(-spriteWidth/2, -spriteHeight/2)
+		opts.GeoM.Scale(scale, scale)
+		opts.GeoM.Translate(float64(buildingX), float64(buildingY))
+
+		screen.DrawImage(sprite, opts)
+	} else {
+		// Fallback to colored rectangle
+		rectImg := br.spriteRenderer.rectCache.GetOrCreate(size*2, size*2, building.Color)
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(buildingX-size), float64(buildingY-size))
+		screen.DrawImage(rectImg, opts)
 	}
 
 	// Draw building label

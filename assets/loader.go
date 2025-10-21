@@ -13,7 +13,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-//go:embed gifs/**
+//go:embed gifs/** images/**
 var assetsFS embed.FS
 
 // AssetLoader manages loading and caching of game assets
@@ -226,23 +226,23 @@ func (al *AssetLoader) PreloadPlanetSprites() error {
 func (al *AssetLoader) LoadBuildingSprite(buildingType string) (*ebiten.Image, error) {
 	// Normalize building type to lowercase for filename
 	normalizedType := strings.ToLower(strings.ReplaceAll(buildingType, " ", "_"))
-	path := fmt.Sprintf("gifs/buildings/%s.gif", normalizedType)
 
-	// Try to load as animated first
-	sprite, err := al.LoadAnimatedSprite(path)
+	// Try PNG first (most common)
+	pngPath := fmt.Sprintf("images/buildings/%s.png", normalizedType)
+	img, err := al.LoadStaticImage(pngPath)
+	if err == nil {
+		return img, nil
+	}
+
+	// Try GIF as fallback
+	gifPath := fmt.Sprintf("gifs/buildings/%s.gif", normalizedType)
+	sprite, err := al.LoadAnimatedSprite(gifPath)
 	if err == nil && len(sprite.Frames) > 0 {
 		// Return first frame for now (we can enhance this later)
 		return sprite.Frames[0], nil
 	}
 
-	// Try as static image
-	pngPath := fmt.Sprintf("images/buildings/%s.png", normalizedType)
-	img, err := al.LoadStaticImage(pngPath)
-	if err != nil {
-		return nil, fmt.Errorf("building sprite not found for type %s: %w", buildingType, err)
-	}
-
-	return img, nil
+	return nil, fmt.Errorf("building sprite not found for type %s", buildingType)
 }
 
 // ClearCache clears all cached assets and releases memory
