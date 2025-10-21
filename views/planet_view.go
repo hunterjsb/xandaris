@@ -155,9 +155,17 @@ func (pv *PlanetView) Update() error {
 		return nil
 	}
 
-	// Update sprite animations
+	// Update sprite animations based on game tick rate
 	if pv.spriteRenderer != nil {
-		pv.spriteRenderer.Update()
+		tm := pv.ctx.GetTickManager()
+		// Scale animation speed with tick rate (1 = normal, 2 = 2x faster, etc)
+		speedMultiplier := int(tm.GetSpeedFloat())
+		if speedMultiplier < 1 {
+			speedMultiplier = 1
+		}
+		for i := 0; i < speedMultiplier; i++ {
+			pv.spriteRenderer.Update()
+		}
 	}
 
 	kb := pv.ctx.GetKeyBindings()
