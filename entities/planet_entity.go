@@ -266,10 +266,7 @@ func (p *Planet) GetAvailableWorkforce() int64 {
 func (p *Planet) RebalanceWorkforce() {
 	p.UpdateWorkforceTotals()
 
-	available := p.WorkforceTotal
-	if available < 0 {
-		available = 0
-	}
+	available := max(p.WorkforceTotal, 0)
 
 	p.WorkforceUsed = 0
 
@@ -277,18 +274,12 @@ func (p *Planet) RebalanceWorkforce() {
 	if base != nil {
 		target := int64(base.WorkersRequired)
 		if base.DesiredWorkers >= 0 {
-			target = int64(base.DesiredWorkers)
-			if target > int64(base.WorkersRequired) {
-				target = int64(base.WorkersRequired)
-			}
+			target = min(int64(base.DesiredWorkers), int64(base.WorkersRequired))
 		}
 		if target < 0 {
 			target = 0
 		}
-		assign := target
-		if assign > available {
-			assign = available
-		}
+		assign := min(target, available)
 		base.SetWorkersAssigned(int(assign))
 		available -= assign
 		p.WorkforceUsed += assign
@@ -306,20 +297,14 @@ func (p *Planet) RebalanceWorkforce() {
 
 		target := int64(building.WorkersRequired)
 		if building.DesiredWorkers >= 0 {
-			target = int64(building.DesiredWorkers)
-			if target > int64(building.WorkersRequired) {
-				target = int64(building.WorkersRequired)
-			}
+			target = min(int64(building.DesiredWorkers), int64(building.WorkersRequired))
 		}
 		if target <= 0 {
 			building.SetWorkersAssigned(0)
 			continue
 		}
 
-		assign := target
-		if assign > available {
-			assign = available
-		}
+		assign := min(target, available)
 
 		building.SetWorkersAssigned(int(assign))
 		available -= assign
