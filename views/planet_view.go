@@ -504,8 +504,8 @@ func (pv *PlanetView) updateResourcePositions() {
 
 	// Ships orbit further out than buildings and orbit faster
 	if pv.system != nil {
-		shipRadius := planetRadius + 120.0      // 3x scale (was 40.0)
-		shipOrbitSpeed := pv.orbitOffset * 10.0 // Ships orbit 10x faster than surface
+		shipRadius := planetRadius + 120.0     // 3x scale (was 40.0)
+		shipOrbitSpeed := pv.orbitOffset * 8.0 // Ships orbit 8x faster than surface
 		for _, entity := range pv.system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
 				// Only show ships that are orbiting THIS specific planet
