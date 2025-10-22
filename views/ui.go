@@ -20,7 +20,7 @@ var (
 func DrawCenteredText(screen *ebiten.Image, textStr string, x, y int) {
 	// Approximate text width (each character is about 6 pixels wide)
 	textWidth := len(textStr) * 6
-	utils.DrawText(screen, textStr, x-textWidth/2, y, utils.TextPrimary)
+	ui.DrawText(screen, textStr, x-textWidth/2, y, utils.TextPrimary)
 }
 
 // DrawTextCentered draws text centered at the given position with color and scale
@@ -28,7 +28,7 @@ func DrawTextCentered(screen *ebiten.Image, textStr string, x, y int, textColor 
 	op := &text.DrawOptions{}
 
 	// Calculate text bounds for centering
-	bounds, _ := text.Measure(textStr, utils.DefaultFontFace, 0)
+	bounds, _ := text.Measure(textStr, ui.DefaultFontFace, 0)
 	width := bounds * scale
 
 	// Apply scale and center
@@ -36,7 +36,7 @@ func DrawTextCentered(screen *ebiten.Image, textStr string, x, y int, textColor 
 	op.GeoM.Translate(float64(x)-width/2, float64(y))
 	op.ColorScale.ScaleWithColor(textColor)
 
-	text.Draw(screen, textStr, utils.DefaultFontFace, op)
+	text.Draw(screen, textStr, ui.DefaultFontFace, op)
 }
 
 // DrawLine draws a simple line between two points
@@ -91,7 +91,7 @@ func DrawTextCenteredInRect(screen *ebiten.Image, textStr string, rect image.Rec
 	op := &text.DrawOptions{}
 	op.GeoM.Translate(float64(textX), float64(textY))
 	op.ColorScale.ScaleWithColor(textColor)
-	text.Draw(screen, textStr, utils.DefaultFontFace, op)
+	text.Draw(screen, textStr, ui.DefaultFontFace, op)
 }
 
 // DrawHighlightCircle draws a highlight ring around a circular object
@@ -175,7 +175,7 @@ func NewUIProgressBar(x, y, width, height int) *UIProgressBar {
 
 // DrawLabeledButton renders a rectangular button with centered text.
 func DrawLabeledButton(screen *ebiten.Image, rect image.Rectangle, label string, active bool) {
-	panel := utils.NewUIPanel(rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy())
+	panel := ui.NewUIPanel(rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy())
 	if active {
 		panel.BgColor = utils.ButtonActive
 	}
@@ -260,7 +260,7 @@ func DrawLegend(screen *ebiten.Image, start image.Point, segments []ChartSegment
 		}
 		drawColorSwatch(screen, start.X, currentY, seg.Color)
 		label := fmt.Sprintf("%s (%s)", seg.Label, utils.FormatInt64WithCommas(int64(seg.Value+0.5)))
-		utils.DrawText(screen, label, start.X+18, currentY+12, utils.TextSecondary)
+		ui.DrawText(screen, label, start.X+18, currentY+12, utils.TextSecondary)
 		currentY += 20
 	}
 	return currentY

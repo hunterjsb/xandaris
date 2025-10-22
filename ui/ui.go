@@ -1,4 +1,4 @@
-package utils
+package ui
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"github.com/hajimehoshi/bitmapfont/v4"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 var (
@@ -37,8 +38,8 @@ func NewUIPanel(x, y, width, height int) *UIPanel {
 		Y:           y,
 		Width:       width,
 		Height:      height,
-		BgColor:     PanelBg,
-		BorderColor: PanelBorder,
+		BgColor:     utils.PanelBg,
+		BorderColor: utils.PanelBorder,
 	}
 }
 

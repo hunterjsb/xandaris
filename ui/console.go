@@ -66,13 +66,13 @@ func (c *Console) Draw(screen *ebiten.Image) {
 
 	// Draw console background
 	screenWidth, _ := ebiten.WindowSize()
-	panel := utils.NewUIPanel(0, 0, screenWidth, consoleHeight)
+	panel := NewUIPanel(0, 0, screenWidth, consoleHeight)
 	panel.Draw(screen)
 
 	// Draw history
 	y := consoleHeight - consolePadding - consoleFontSize
 	for i := len(c.history) - 1; i >= 0; i-- {
-		utils.DrawText(screen, c.history[i], consolePadding, y, utils.TextPrimary)
+		DrawText(screen, c.history[i], consolePadding, y, utils.TextPrimary)
 		y -= consoleFontSize
 		if y < 0 {
 			break
@@ -80,7 +80,7 @@ func (c *Console) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw current line
-	utils.DrawText(screen, "> "+c.currentLine, consolePadding, consoleHeight-consolePadding, utils.TextPrimary)
+	DrawText(screen, "> "+c.currentLine, consolePadding, consoleHeight-consolePadding, utils.TextPrimary)
 }
 
 func (c *Console) processCommand() {
