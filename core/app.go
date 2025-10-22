@@ -6,6 +6,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
+	"github.com/hunterjsb/xandaris/ui"
 	"github.com/hunterjsb/xandaris/views"
 )
 
@@ -17,6 +18,7 @@ type App struct {
 	keyBindings       *systems.KeyBindings
 	fleetCmdExecutor  *game.FleetCommandExecutor
 	fleetMgmtSystem   *game.FleetManagementSystem
+	console           *ui.Console
 
 	// Screen dimensions
 	screenWidth  int
@@ -29,6 +31,7 @@ func New(screenWidth, screenHeight int) *App {
 		state:        game.NewState(),
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
+		console:      ui.NewConsole(),
 	}
 }
 
@@ -72,8 +75,14 @@ func (a *App) SaveKeyBindings() error {
 
 // Update updates the app state (implements ebiten.Game)
 func (a *App) Update() error {
-	// Handle global keyboard shortcuts
+	// Handle global keyboard shortcuts first
 	a.handleGlobalInput()
+
+	// If console is active, it captures all input
+	if a.console.IsActive() {
+		a.console.Update()
+		return nil // Don't update the rest of the game
+	}
 
 	// Update tick system (this will also update tickable systems)
 	if a.tickManager != nil {
@@ -90,6 +99,9 @@ func (a *App) Draw(screen *ebiten.Image) {
 
 	// Draw tick info overlay
 	a.drawTickInfo(screen)
+
+	// Draw console on top of everything
+	a.console.Draw(screen)
 }
 
 // Layout returns the game's screen size (implements ebiten.Game)

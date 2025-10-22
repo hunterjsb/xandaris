@@ -82,6 +82,7 @@ const (
 	ActionSpeedFast     KeyAction = "speed_fast"
 	ActionSpeedVeryFast KeyAction = "speed_very_fast"
 	ActionQuickSave     KeyAction = "quick_save"
+	ActionToggleConsole KeyAction = "toggle_console"
 
 	// View navigation
 	ActionEscape              KeyAction = "escape"

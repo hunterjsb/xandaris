@@ -86,4 +86,10 @@ func (a *App) handleGlobalInput() {
 		}
 		a.viewManager.SwitchTo(views.ViewTypePlayers)
 	}
+
+	// Console toggle
+	if a.keyBindings.IsActionJustPressed(views.ActionToggleConsole) {
+		// This will be handled by the app's Update loop
+		a.console.Toggle()
+	}
 }
