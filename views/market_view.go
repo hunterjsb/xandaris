@@ -25,6 +25,7 @@ type marketResourceRow struct {
 	demand         float64
 	trend          float64
 	importFee      float64 // dynamic fee rate (0.05-0.20)
+	galaxyNetFlow  float64 // galaxy-wide production - consumption
 }
 
 // MarketView presents a simplified trading interface
@@ -268,7 +269,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	DrawText(screen, "Buy @", colBuy, headerY, utils.SystemGreen)
 	DrawText(screen, "Sell @", colSell, headerY, utils.SystemOrange)
 	DrawText(screen, "Best@", colBase, headerY, utils.SystemGreen)
-	DrawText(screen, "Demand", colDemand, headerY, utils.TextSecondary)
+	DrawText(screen, "Flow", colDemand, headerY, utils.TextSecondary)
 	DrawText(screen, "Status", colTrend, headerY, utils.TextPrimary)
 	DrawText(screen, "Fee", colFee, headerY, utils.TextSecondary)
 	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
@@ -358,12 +359,17 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 			DrawText(screen, fmt.Sprintf("%.0f", row.basePrice), colBase, y, utils.TextSecondary)
 		}
 
-		// Demand signal
-		demandColor := utils.TextSecondary
-		if row.demand > 30 {
-			demandColor = utils.SystemOrange
+		// Galaxy net flow (production - consumption)
+		flowColor := utils.TextSecondary
+		flowStr := "0"
+		if row.galaxyNetFlow > 0.5 {
+			flowColor = utils.SystemGreen
+			flowStr = fmt.Sprintf("+%.0f", row.galaxyNetFlow)
+		} else if row.galaxyNetFlow < -0.5 {
+			flowColor = utils.SystemRed
+			flowStr = fmt.Sprintf("%.0f", row.galaxyNetFlow)
 		}
-		DrawText(screen, fmt.Sprintf("%.0f", row.demand), colDemand, y, demandColor)
+		DrawText(screen, flowStr, colDemand, y, flowColor)
 
 		// Scarcity indicator (uses economy.ComputeScarcity, same thresholds as API)
 		scarcity := economy.ComputeScarcity(float64(row.galaxySupply), row.demand)
@@ -695,6 +701,14 @@ func (mv *MarketView) refreshData() {
 		mv.rows = append(mv.rows, row)
 	}
 
+	// Compute galaxy-wide net flows
+	galaxyFlows := mv.computeGalaxyFlows()
+	for i := range mv.rows {
+		if flow, ok := galaxyFlows[mv.rows[i].resource]; ok {
+			mv.rows[i].galaxyNetFlow = flow
+		}
+	}
+
 	sort.Slice(mv.rows, func(i, j int) bool {
 		if mv.rows[i].galaxySupply == mv.rows[j].galaxySupply {
 			return mv.rows[i].resource < mv.rows[j].resource
@@ -708,6 +722,66 @@ func (mv *MarketView) SetReturnView(view ViewType) { mv.returnTo = view }
 
 // GetReturnView exposes which view the market should return to
 func (mv *MarketView) GetReturnView() ViewType { return mv.returnTo }
+
+// computeGalaxyFlows calculates galaxy-wide net production - consumption per resource.
+func (mv *MarketView) computeGalaxyFlows() map[string]float64 {
+	flow := make(map[string]float64)
+	for _, player := range mv.ctx.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			// Mine production
+			for _, resEntity := range planet.Resources {
+				res, ok := resEntity.(*entities.Resource)
+				if !ok || res.Abundance <= 0 {
+					continue
+				}
+				resIDStr := fmt.Sprintf("%d", res.GetID())
+				multiplier := 0.0
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok {
+						if b.BuildingType == "Mine" && b.AttachedTo == resIDStr && b.IsOperational {
+							multiplier += b.GetStaffingRatio() * b.ProductionBonus
+						}
+					}
+				}
+				if multiplier > 0 {
+					af := float64(res.Abundance) / 70.0
+					if af > 1.0 { af = 1.0 }
+					if af < 0.1 { af = 0.1 }
+					flow[res.ResourceType] += 8.0 * res.ExtractionRate * multiplier * af
+				}
+			}
+			// Refinery
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Refinery" && b.IsOperational {
+					lm := 1.0 + float64(b.Level-1)*0.3
+					flow["Fuel"] += 3.0 * lm
+					flow["Oil"] -= 2.0 * lm
+				}
+			}
+			// Population consumption
+			for _, rate := range economy.PopulationConsumption {
+				flow[rate.ResourceType] -= float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
+			}
+			// Building upkeep
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.IsOperational {
+					if upkeeps, found := economy.BuildingResourceUpkeep[b.BuildingType]; found {
+						for _, u := range upkeeps {
+							flow[u.ResourceType] -= float64(u.Amount)
+						}
+					}
+				}
+			}
+		}
+	}
+	return flow
+}
 
 func pointInRect(x, y int, rect image.Rectangle) bool {
 	return x >= rect.Min.X && x <= rect.Max.X && y >= rect.Min.Y && y <= rect.Max.Y
