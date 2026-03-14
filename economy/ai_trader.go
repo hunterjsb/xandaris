@@ -106,6 +106,45 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 			}
 		}
 
+		// Speculative trading: sell when price is very high (even below surplus threshold)
+		// This creates more dynamic markets — AI acts as price stabilizer
+		if player.Credits > 500 {
+			for resType, storage := range planet.StoredResources {
+				if storage == nil || storage.Amount < 50 {
+					continue // keep minimum buffer
+				}
+				market := executor.market
+				if market == nil {
+					continue
+				}
+				sellPrice := market.GetSellPrice(resType)
+				basePrice := GetBasePrice(resType)
+
+				// Sell if price is > 2x base and we have stock to spare
+				if sellPrice > basePrice*2.0 && storage.Amount > 100 {
+					qty := storage.Amount / 4 // sell 25% of stock
+					if qty > aiMaxTradeQty {
+						qty = aiMaxTradeQty
+					}
+					if qty > 0 {
+						executor.Sell(player, allPlayers, resType, qty, planet)
+					}
+				}
+
+				// Buy if price is < 50% of base (bargain) and we have room
+				ratio := float64(storage.Amount) / float64(storage.Capacity)
+				if ratio < 0.5 {
+					buyPrice := market.GetBuyPrice(resType)
+					if buyPrice < basePrice*0.5 && player.Credits > int(buyPrice)*20 {
+						qty := 20
+						if _, err := executor.Buy(player, allPlayers, resType, qty, planet); err != nil {
+							_ = err
+						}
+					}
+				}
+			}
+		}
+
 		// Also try to buy resources that aren't in storage yet
 		// (consumption creates demand for resources the planet doesn't produce)
 		for _, resType := range []string{"Water", "Iron", "Oil", "Fuel"} {
