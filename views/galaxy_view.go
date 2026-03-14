@@ -507,7 +507,7 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	}
 
 	// Draw panel in top-right corner
-	panelWidth := 260
+	panelWidth := 290
 	panelX := ScreenWidth - panelWidth - 10
 	panelY := 10
 
@@ -548,31 +548,34 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+72, utils.TextSecondary)
 	}
 
+	// Separator + footer hint
+	separatorY := textY + 88
+	DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.PanelBorder)
+
+	// Footer: Player Directory hint
+	footerY := panelY + panelHeight - 18
+	DrawText(screen, "Press [P] for Player Directory", textX, footerY, utils.TextSecondary)
+	footerWidth := len("Press [P] for Player Directory") * 6
+	gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
+
 	if len(aiSummaries) > 0 {
-		separatorY := textY + 88
-		DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.PanelBorder)
 		listY := separatorY + 10
 		DrawText(screen, "NPC Traders:", textX, listY, utils.TextSecondary)
 		listY += 15
-		maxListY := panelY + panelHeight - 32
+		maxListY := footerY - 8
 
 		for _, summary := range aiSummaries {
 			if listY+18 > maxListY {
-				DrawText(screen, "...more traders active", textX, maxListY-4, utils.TextSecondary)
+				DrawText(screen, fmt.Sprintf("+%d more", len(aiSummaries)-len(aiSummaries)), textX, maxListY-4, utils.TextSecondary)
 				break
 			}
 			DrawText(screen, summary.name, textX, listY, summary.color)
-			info := fmt.Sprintf("P:%d  Posts:%d  Stock:%d", summary.planets, summary.tradingPosts, summary.totalStorage)
-			DrawText(screen, info, textX, listY+12, utils.TextSecondary)
+			info := fmt.Sprintf("%dp %dTP %d stock", summary.planets, summary.tradingPosts, summary.totalStorage)
+			DrawText(screen, info, textX+4, listY+12, utils.TextSecondary)
 			listY += 26
 		}
 	}
 
-	hintText := "Press [P] (or click) for Player Directory"
-	hintY := panelY + panelHeight - 18
-	DrawText(screen, hintText, textX, hintY, utils.TextSecondary)
-	hintWidth := len(hintText) * 6
-	gv.playerDirectoryHintRect = image.Rect(textX-2, hintY-12, textX+hintWidth+2, hintY+4)
 }
 
 func countTradingPosts(planets []*entities.Planet) int {
