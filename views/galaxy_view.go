@@ -497,7 +497,7 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		})
 	}
 
-	baseHeight := 150
+	baseHeight := 170
 	extraHeight := len(aiSummaries) * 26
 	panelHeight := baseHeight + extraHeight
 	if gv.playerPanelCollapsed {
@@ -548,12 +548,25 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+36, utils.TextPrimary)
 	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+54, utils.TextPrimary)
 
+	// Ships + construction count on same line
+	shipCount := len(humanPlayer.OwnedShips) + len(humanPlayer.OwnedFleets)
+	shipLine := fmt.Sprintf("Ships: %d", shipCount)
+	if cs := tickable.GetSystemByName("Construction"); cs != nil {
+		if csys, ok := cs.(*tickable.ConstructionSystem); ok {
+			queueItems := csys.GetConstructionsByOwner(humanPlayer.Name)
+			if len(queueItems) > 0 {
+				shipLine += fmt.Sprintf("  Building: %d", len(queueItems))
+			}
+		}
+	}
+	DrawText(screen, shipLine, textX, textY+72, utils.TextPrimary)
+
 	if humanPlayer.HomeSystem != nil {
-		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+72, utils.TextSecondary)
+		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+90, utils.TextSecondary)
 	}
 
 	// Separator + footer hint
-	separatorY := textY + 88
+	separatorY := textY + 106
 	DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.PanelBorder)
 
 	// Footer: Player Directory hint
