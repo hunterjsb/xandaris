@@ -47,6 +47,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 
 	case "refuel":
 		gs.handleRefuelCommand(cmd)
+
+	case "colonize":
+		gs.handleColonizeCommand(cmd)
 	}
 }
 
@@ -447,6 +450,88 @@ func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
 			"refueled": amount,
 			"fuel_now": ship.CurrentFuel,
 			"fuel_max": ship.MaxFuel,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
+	cd, ok := cmd.Data.(game.ColonizeCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid colonize data"))
+		return
+	}
+
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	// Find the colony ship
+	ship := game.FindShipByID(gs.State.Players, cd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+	if ship.ShipType != entities.ShipTypeColony {
+		sendResult(cmd, fmt.Errorf("not a colony ship"))
+		return
+	}
+	if ship.Colonists <= 0 {
+		sendResult(cmd, fmt.Errorf("no colonists on ship"))
+		return
+	}
+	if ship.Status == entities.ShipStatusMoving {
+		sendResult(cmd, fmt.Errorf("ship is moving"))
+		return
+	}
+
+	// Find the target planet
+	planet := gs.CargoCommander.FindPlanetByID(cd.PlanetID)
+	if planet == nil {
+		sendResult(cmd, fmt.Errorf("planet not found"))
+		return
+	}
+	if planet.Owner != "" {
+		sendResult(cmd, fmt.Errorf("planet already claimed by %s", planet.Owner))
+		return
+	}
+	if !planet.IsHabitable() {
+		sendResult(cmd, fmt.Errorf("planet is not habitable"))
+		return
+	}
+
+	// Colonize: transfer colonists, claim planet, set up base
+	planet.Owner = human.Name
+	planet.Population = int64(ship.Colonists)
+	planet.SetBaseOwner(human.Name)
+	human.AddOwnedPlanet(planet)
+
+	// Mark all resources on the planet as owned
+	for _, resEntity := range planet.Resources {
+		if res, ok := resEntity.(*entities.Resource); ok {
+			res.Owner = human.Name
+		}
+	}
+
+	// Seed initial resources and add Trading Post
+	systemID := gs.CargoCommander.GetSystemForPlanet(planet)
+	game.PrepareHomeworld(human, false)
+
+	// Consume the colony ship (colonists are now on the planet)
+	ship.Colonists = 0
+	ship.Status = entities.ShipStatusOrbiting
+
+	// Rebalance workforce
+	planet.RebalanceWorkforce()
+
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"planet":    planet.Name,
+			"planet_id": planet.GetID(),
+			"system_id": systemID,
+			"colonists": planet.Population,
 		}
 		close(cmd.Result)
 	}

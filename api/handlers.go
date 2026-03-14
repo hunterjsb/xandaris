@@ -459,6 +459,14 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 		}
 	}
 
+	// Check for colony ships ready to colonize
+	for _, ship := range human.OwnedShips {
+		if ship != nil && ship.ShipType == entities.ShipTypeColony && ship.Colonists > 0 {
+			hints = append(hints, "Colony ship ready — move to an unclaimed habitable planet and POST /api/colonize")
+			break
+		}
+	}
+
 	return hints
 }
 

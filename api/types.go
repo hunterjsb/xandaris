@@ -207,6 +207,12 @@ type ShipRefuelRequest struct {
 	Amount   int `json:"amount"` // 0 = fill up
 }
 
+// ColonizeRequest is the body for POST /api/colonize.
+type ColonizeRequest struct {
+	ShipID   int `json:"ship_id"`
+	PlanetID int `json:"planet_id"`
+}
+
 // UpgradeRequest is the body for POST /api/upgrade.
 type UpgradeRequest struct {
 	PlanetID      int `json:"planet_id"`

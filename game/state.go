@@ -66,6 +66,12 @@ type UpgradeCommandData struct {
 	BuildingIndex int // index in planet.Buildings array
 }
 
+// ColonizeCommandData is the payload for colonizing a planet.
+type ColonizeCommandData struct {
+	ShipID   int // colony ship to use
+	PlanetID int // unclaimed planet to colonize
+}
+
 // ShipRefuelCommandData is the payload for refueling a ship.
 type ShipRefuelCommandData struct {
 	ShipID   int // ship to refuel
