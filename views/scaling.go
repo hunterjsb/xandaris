@@ -106,21 +106,3 @@ func GetSystemMaxOrbitDistance(system *entities.System) float64 {
 	// Add some padding
 	return maxDistance + 50.0
 }
-
-// ScalePosition scales a position from world coordinates to screen coordinates
-func (vs *ViewScale) ScalePosition(worldX, worldY, centerX, centerY float64) (float64, float64) {
-	scaledX := centerX + (worldX-centerX)*vs.OrbitMultiplier
-	scaledY := centerY + (worldY-centerY)*vs.OrbitMultiplier
-	return scaledX, scaledY
-}
-
-// ScaleEntityForRendering returns the appropriate size for rendering an entity
-func (vs *ViewScale) ScaleEntityForRendering(entity interface{}) int {
-	switch entity.(type) {
-	case *entities.System:
-		return vs.ScaleSize(float64(circleRadius))
-	default:
-		// For other entities, use a base size
-		return vs.ScaleSize(8.0)
-	}
-}

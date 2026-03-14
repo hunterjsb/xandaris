@@ -174,17 +174,6 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 	}
 }
 
-func getMineResourceType(mine *entities.Building, planet *entities.Planet) string {
-	for _, resEntity := range planet.Resources {
-		if res, ok := resEntity.(*entities.Resource); ok {
-			if fmt.Sprintf("%d", res.GetID()) == mine.AttachedTo {
-				return res.ResourceType
-			}
-		}
-	}
-	return ""
-}
-
 func countBuildings(planet *entities.Planet, buildingType string) int {
 	count := 0
 	for _, be := range planet.Buildings {
