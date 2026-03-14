@@ -9,6 +9,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/rendering"
 	"github.com/hunterjsb/xandaris/utils"
@@ -801,6 +802,22 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 
 	lines = append(lines, fmt.Sprintf("Resources: %d deposits", len(planet.Resources)))
 	lines = append(lines, fmt.Sprintf("Buildings: %d", len(planet.Buildings)))
+
+	// Credit income/upkeep summary
+	creditIncome := int(planet.Population / 100)     // 1cr per 100 pop
+	creditUpkeep := int(planet.Population / 1000)     // admin costs
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.IsOperational {
+			if cost, found := economy.BuildingCreditUpkeep[b.BuildingType]; found {
+				creditUpkeep += cost + (b.Level - 1)
+			}
+			if b.BuildingType == "Trading Post" {
+				creditIncome += 2 * b.Level
+			}
+		}
+	}
+	netCredits := creditIncome - creditUpkeep
+	lines = append(lines, fmt.Sprintf("Credits: +%d income  -%d upkeep  =%d net", creditIncome, creditUpkeep, netCredits))
 
 	return lines
 }
