@@ -127,12 +127,15 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 		return sortedResources[i].resourceType < sortedResources[j].resourceType
 	})
 
+	// Compute net flow for each resource
+	netFlow := rsu.computeNetFlow(planet)
+
 	for _, resource := range sortedResources {
 		if count >= maxVisible {
 			break
 		}
 
-		rsu.drawResourceEntry(screen, resource.resourceType, resource.storage, resourceY)
+		rsu.drawResourceEntry(screen, resource.resourceType, resource.storage, netFlow[resource.resourceType], resourceY)
 		resourceY += 18
 		count++
 	}
@@ -147,20 +150,92 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 
 
 
-// drawResourceEntry draws a single resource entry with capacity bar
-func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceType string, storage *entities.ResourceStorage, y int) {
+// computeNetFlow calculates production - consumption for each resource on a planet.
+func (rsu *ResourceStorageUI) computeNetFlow(planet *entities.Planet) map[string]float64 {
+	flow := make(map[string]float64)
+
+	// Mine production
+	for _, resEntity := range planet.Resources {
+		res, ok := resEntity.(*entities.Resource)
+		if !ok || res.Abundance <= 0 {
+			continue
+		}
+		resIDStr := fmt.Sprintf("%d", res.GetID())
+		multiplier := 0.0
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok {
+				if b.BuildingType == "Mine" && b.AttachedTo == resIDStr && b.IsOperational {
+					multiplier += b.GetStaffingRatio() * b.ProductionBonus
+				}
+			}
+		}
+		if multiplier > 0 {
+			af := float64(res.Abundance) / 70.0
+			if af > 1.0 {
+				af = 1.0
+			}
+			if af < 0.1 {
+				af = 0.1
+			}
+			flow[res.ResourceType] += 8.0 * res.ExtractionRate * multiplier * af
+		}
+	}
+
+	// Refinery: +Fuel, -Oil
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.BuildingType == "Refinery" && b.IsOperational {
+			lm := 1.0 + float64(b.Level-1)*0.3
+			flow["Fuel"] += 3.0 * lm
+			flow["Oil"] -= 2.0 * lm
+		}
+	}
+
+	// Population consumption
+	popRates := map[string]float64{"Water": 250, "Iron": 500, "Oil": 800, "Rare Metals": 5000, "Helium-3": 10000}
+	for res, div := range popRates {
+		flow[res] -= float64(planet.Population) / div
+	}
+
+	// Building upkeep
+	upkeep := map[string]map[string]float64{
+		"Mine": {"Iron": 1}, "Trading Post": {"Oil": 1},
+		"Refinery": {"Oil": 2, "Iron": 1}, "Shipyard": {"Fuel": 2, "Iron": 1, "Rare Metals": 1},
+		"Habitat": {"Water": 1, "Fuel": 1}, "Base": {"Fuel": 1},
+	}
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.IsOperational {
+			if u, found := upkeep[b.BuildingType]; found {
+				for res, amt := range u {
+					flow[res] -= amt
+				}
+			}
+		}
+	}
+
+	return flow
+}
+
+// drawResourceEntry draws a single resource entry with capacity bar and flow indicator
+func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceType string, storage *entities.ResourceStorage, flow float64, y int) {
 	textX := rsu.x + 10
 
-	// Resource name and amount/capacity
+	// Resource name
 	amtColor := utils.TextPrimary
 	if storage.Amount == 0 {
 		amtColor = utils.SystemRed
 	} else if storage.Capacity > 0 && storage.Amount >= storage.Capacity-10 {
-		amtColor = utils.SystemOrange // near full
+		amtColor = utils.SystemOrange
 	}
 
-	label := fmt.Sprintf("%s", resourceType)
+	label := resourceType
 	views.DrawText(screen, label, textX, y, amtColor)
+
+	// Net flow indicator after the name
+	if flow > 0.5 {
+		views.DrawText(screen, "+", textX+len(label)*6+2, y, utils.SystemGreen)
+	} else if flow < -0.5 {
+		views.DrawText(screen, "-", textX+len(label)*6+2, y, utils.SystemRed)
+	}
 
 	// Amount / capacity on the right
 	amtStr := fmt.Sprintf("%d/%d", storage.Amount, storage.Capacity)
