@@ -126,11 +126,13 @@ var tools = []openai.Tool{
 	},
 }
 
+var serverURL string
+
 func callAPI(method, endpoint string, body string) (string, error) {
 	var req *http.Request
 	var err error
 
-	url := fmt.Sprintf("http://localhost:8080%s", endpoint)
+	url := fmt.Sprintf("%s%s", serverURL, endpoint)
 	if method == "GET" {
 		req, err = http.NewRequest("GET", url, nil)
 	} else {
@@ -253,9 +255,12 @@ func executeTool(name string, args string) string {
 func main() {
 	apiKey := flag.String("key", os.Getenv("OPENROUTER_API_KEY"), "OpenRouter API key")
 	model := flag.String("model", "z-ai/glm-4.7-flash", "Model to use")
+	server := flag.String("server", "http://localhost:8080", "Game server URL")
 	turns := flag.Int("turns", 10, "Number of decision turns")
 	interval := flag.Duration("interval", 30*time.Second, "Time between turns")
 	flag.Parse()
+
+	serverURL = *server
 
 	if *apiKey == "" {
 		log.Fatal("Set OPENROUTER_API_KEY or use -key flag")
@@ -269,11 +274,11 @@ func main() {
 	fmt.Printf("🤖 Xandaris AI Agent\n")
 	fmt.Printf("   Model: %s\n", *model)
 	fmt.Printf("   Turns: %d (every %s)\n", *turns, *interval)
-	fmt.Printf("   Server: http://localhost:8080\n\n")
+	fmt.Printf("   Server: %s\n\n", serverURL)
 
 	// Verify server is running
 	if _, err := callAPI("GET", "/api/game", ""); err != nil {
-		log.Fatalf("Cannot reach game server: %v\nStart the game first with: ./xandaris-bin --headless --auto --player Agent", err)
+		log.Fatalf("Cannot reach game server at %s: %v", serverURL, err)
 	}
 
 	for turn := 1; turn <= *turns; turn++ {
