@@ -25,9 +25,9 @@ func NewResourceStorageUI(ctx UIContext) *ResourceStorageUI {
 	return &ResourceStorageUI{
 		ctx:   ctx,
 		x:      220,
-		y:      720 - 180,
-		width:  290,
-		height: 170,
+		y:      720 - 190,
+		width:  320,
+		height: 180,
 	}
 }
 
@@ -147,13 +147,56 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 
 
 
-// drawResourceEntry draws a single resource entry
+// drawResourceEntry draws a single resource entry with capacity bar
 func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceType string, storage *entities.ResourceStorage, y int) {
-	textX := rsu.x + 15
+	textX := rsu.x + 10
 
-	// Simplified display - just show resource and amount on one line
-	entryText := fmt.Sprintf("  %s: %d", resourceType, storage.Amount)
-	views.DrawText(screen, entryText, textX, y, utils.TextPrimary)
+	// Resource name and amount/capacity
+	amtColor := utils.TextPrimary
+	if storage.Amount == 0 {
+		amtColor = utils.SystemRed
+	} else if storage.Capacity > 0 && storage.Amount >= storage.Capacity-10 {
+		amtColor = utils.SystemOrange // near full
+	}
+
+	label := fmt.Sprintf("%s", resourceType)
+	views.DrawText(screen, label, textX, y, amtColor)
+
+	// Amount / capacity on the right
+	amtStr := fmt.Sprintf("%d/%d", storage.Amount, storage.Capacity)
+	amtWidth := len(amtStr) * 6
+	views.DrawText(screen, amtStr, rsu.x+rsu.width-amtWidth-15, y, amtColor)
+
+	// Small capacity bar
+	barX := textX + 90
+	barW := rsu.width - 90 - amtWidth - 25
+	if barW > 20 {
+		barY := y + 3
+		barH := 4
+
+		// Bar background
+		barBg := &views.UIPanel{X: barX, Y: barY, Width: barW, Height: barH,
+			BgColor: utils.PanelBg, BorderColor: utils.PanelBorder}
+		barBg.Draw(screen)
+
+		// Bar fill
+		if storage.Capacity > 0 {
+			fillW := int(float64(barW) * float64(storage.Amount) / float64(storage.Capacity))
+			if fillW > 0 {
+				fillColor := utils.SystemGreen
+				pct := float64(storage.Amount) / float64(storage.Capacity)
+				if pct > 0.8 {
+					fillColor = utils.SystemOrange
+				}
+				if pct > 0.95 {
+					fillColor = utils.SystemRed
+				}
+				barFill := &views.UIPanel{X: barX + 1, Y: barY + 1, Width: fillW - 2, Height: barH - 2,
+					BgColor: fillColor, BorderColor: fillColor}
+				barFill.Draw(screen)
+			}
+		}
+	}
 }
 
 // IsVisible returns whether the UI should be visible
