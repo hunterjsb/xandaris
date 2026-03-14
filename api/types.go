@@ -275,4 +275,5 @@ type ResourceSummary struct {
 	Trend        float64 `json:"trend"`
 	ImportFee    float64 `json:"import_fee"`    // dynamic fee rate (0.05-0.20)
 	Scarcity     string  `json:"scarcity"`      // "Abundant", "Moderate", "Scarce", "Critical", "Depleted"
+	PriceRatio   float64 `json:"price_ratio"`   // current/base price (1.0 = at equilibrium)
 }

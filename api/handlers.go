@@ -577,6 +577,9 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 			rs.Demand = rm.TotalDemand
 			rs.Trend = rm.PriceVelocity
 			rs.ImportFee = economy.ComputeImportFee(rm.TotalSupply, rm.TotalDemand)
+			if rm.BasePrice > 0 {
+				rs.PriceRatio = rm.CurrentPrice / rm.BasePrice
+			}
 
 			// Compute scarcity level from supply/demand ratio
 			if rm.TotalSupply <= 0 {
