@@ -60,6 +60,12 @@ type ShipMoveCommandData struct {
 	TargetSystemID int // system to jump to
 }
 
+// UpgradeCommandData is the payload for upgrading a building.
+type UpgradeCommandData struct {
+	PlanetID      int // planet the building is on
+	BuildingIndex int // index in planet.Buildings array
+}
+
 // NewState creates a new empty game state
 func NewState() *State {
 	return &State{

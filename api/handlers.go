@@ -161,13 +161,16 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 	}
 
 	buildings := make([]BuildingInfo, 0)
-	for _, be := range planet.Buildings {
+	for i, be := range planet.Buildings {
 		if b, ok := be.(*entities.Building); ok {
 			buildings = append(buildings, BuildingInfo{
+				Index:         i,
 				Type:          b.BuildingType,
 				Level:         b.Level,
+				MaxLevel:      b.MaxLevel,
 				IsOperational: b.IsOperational,
 				Staffing:      b.GetStaffingRatio(),
+				UpgradeCost:   b.GetUpgradeCost(),
 			})
 		}
 	}

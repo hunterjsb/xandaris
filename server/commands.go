@@ -41,6 +41,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 
 	case "move_ship":
 		gs.handleMoveShipCommand(cmd)
+
+	case "upgrade":
+		gs.handleUpgradeCommand(cmd)
 	}
 }
 
@@ -326,6 +329,58 @@ func (gs *GameServer) handleMoveShipCommand(cmd game.GameCommand) {
 		}
 	} else {
 		sendResult(cmd, fmt.Errorf("cannot move to system %d (no route or insufficient fuel)", md.TargetSystemID))
+	}
+}
+
+func (gs *GameServer) handleUpgradeCommand(cmd game.GameCommand) {
+	ud, ok := cmd.Data.(game.UpgradeCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid upgrade data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	planet := gs.CargoCommander.FindPlanetByID(ud.PlanetID)
+	if planet == nil || planet.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("planet not found or not owned"))
+		return
+	}
+
+	if ud.BuildingIndex < 0 || ud.BuildingIndex >= len(planet.Buildings) {
+		sendResult(cmd, fmt.Errorf("invalid building index"))
+		return
+	}
+
+	building, ok := planet.Buildings[ud.BuildingIndex].(*entities.Building)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid building"))
+		return
+	}
+	if !building.CanUpgrade() {
+		sendResult(cmd, fmt.Errorf("building cannot be upgraded (max level or not operational)"))
+		return
+	}
+
+	cost := building.GetUpgradeCost()
+	if human.Credits < cost {
+		sendResult(cmd, fmt.Errorf("insufficient credits (need %d, have %d)", cost, human.Credits))
+		return
+	}
+
+	human.Credits -= cost
+	building.Upgrade()
+
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"building":  building.BuildingType,
+			"new_level": building.Level,
+			"cost":      cost,
+		}
+		close(cmd.Result)
 	}
 }
 

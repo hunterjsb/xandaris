@@ -89,10 +89,13 @@ type ResourceDeposit struct {
 
 // BuildingInfo represents a building with its operational details.
 type BuildingInfo struct {
+	Index         int     `json:"index"` // position in buildings array (for upgrade API)
 	Type          string  `json:"type"`
 	Level         int     `json:"level"`
+	MaxLevel      int     `json:"max_level"`
 	IsOperational bool    `json:"is_operational"`
-	Staffing      float64 `json:"staffing"` // 0.0-1.0
+	Staffing      float64 `json:"staffing"`     // 0.0-1.0
+	UpgradeCost   int     `json:"upgrade_cost"` // 0 if max level
 }
 
 // ConstructionQueueItem represents an item being constructed.
@@ -193,6 +196,12 @@ type ShipBuildRequest struct {
 type ShipMoveRequest struct {
 	ShipID         int `json:"ship_id"`
 	TargetSystemID int `json:"target_system_id"`
+}
+
+// UpgradeRequest is the body for POST /api/upgrade.
+type UpgradeRequest struct {
+	PlanetID      int `json:"planet_id"`
+	BuildingIndex int `json:"building_index"` // index in the buildings array
 }
 
 // EconomyOverview is a galaxy-wide economic summary.
