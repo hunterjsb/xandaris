@@ -689,6 +689,15 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	// Draw resource type label below
 	labelY := centerY + radius + 12
 	DrawCenteredText(screen, resource.ResourceType, centerX, labelY)
+
+	// Show abundance below label
+	abundanceStr := fmt.Sprintf("a:%d", resource.Abundance)
+	abundanceColor := utils.TextSecondary
+	if resource.Abundance < 20 {
+		abundanceColor = utils.SystemOrange
+	}
+	aWidth := len(abundanceStr) * 6
+	DrawText(screen, abundanceStr, centerX-aWidth/2, labelY+12, abundanceColor)
 }
 
 // drawBuildings draws all building entities
@@ -709,9 +718,19 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	// Use the building renderer with attachment support
 	pv.buildingRenderer.RenderBuildingWithAttachments(screen, building, centerX, centerY)
 
-	// Draw building type label below
+	// Draw building label with level
 	labelY := centerY + building.Size + 12
-	DrawCenteredText(screen, building.BuildingType, centerX, labelY)
+	label := building.BuildingType
+	if building.Level > 1 {
+		label = fmt.Sprintf("%s L%d", building.BuildingType, building.Level)
+	}
+	DrawCenteredText(screen, label, centerX, labelY)
+
+	// Show operational status if not operational
+	if !building.IsOperational {
+		offWidth := len("OFFLINE") * 6
+		DrawText(screen, "OFFLINE", centerX-offWidth/2, labelY+12, utils.SystemRed)
+	}
 }
 
 func (pv *PlanetView) getOwnerColor(owner string) (color.RGBA, bool) {
