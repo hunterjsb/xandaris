@@ -472,7 +472,11 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 		hints = append(hints, "Build a Refinery to convert Oil into Fuel (needed for ships)")
 	}
 
-	// Check if player has excess credits
+	// Post-infrastructure progression hints
+	if hasShipyard && len(human.OwnedShips) <= 1 && len(human.OwnedFleets) == 0 {
+		hints = append(hints, "Build a Cargo ship at your Shipyard — POST /api/ships/build {ship_type: \"Cargo\"}")
+	}
+
 	if human.Credits > 50000 {
 		hints = append(hints, "Excess credits — invest in mine upgrades or new buildings")
 	}

@@ -701,6 +701,28 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 	} else if !hasRefinery && hasOil && !hasFuel {
 		hints = append(hints, "Build a Refinery (1500cr) to convert Oil into Fuel")
 	}
+	// Post-infrastructure hints
+	if hasShipyard && len(humanPlayer.OwnedShips) <= 1 && len(humanPlayer.OwnedFleets) == 0 {
+		hints = append(hints, "Build a Cargo ship at your Shipyard for trade routes")
+	}
+	if totalMines > 0 && hasShipyard && hasRefinery {
+		// Check for upgradeable mines
+		for _, planet := range humanPlayer.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" && b.CanUpgrade() {
+					cost := b.GetUpgradeCost()
+					if humanPlayer.Credits >= cost {
+						hints = append(hints, fmt.Sprintf("Upgrade mines (%dcr) to boost production", cost))
+					}
+					break
+				}
+			}
+			break
+		}
+	}
 	if humanPlayer.Credits > 50000 {
 		hints = append(hints, "Excess credits — invest in upgrades or buildings")
 	}
