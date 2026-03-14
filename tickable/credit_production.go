@@ -62,10 +62,16 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 			player.Credits += production
 		}
 
-		// Minimum credit floor: players below 1000cr get a small subsidy.
-		// Prevents permanent poverty spirals where AI can never invest.
-		if player.Credits < 1000 {
-			player.Credits += 5
+		// Subsistence income: when broke, population generates minimal credits
+		// from barter/labor — scales with population, not a fixed handout.
+		if player.Credits < 500 {
+			for _, planet := range player.OwnedPlanets {
+				subsistence := int(planet.Population / 500) // 1cr per 500 pop
+				if subsistence < 1 {
+					subsistence = 1
+				}
+				player.Credits += subsistence
+			}
 		}
 	}
 }
