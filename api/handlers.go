@@ -673,10 +673,33 @@ func handleGetSystemPrices(p GameStateProvider) interface{} {
 		return []SystemPrices{}
 	}
 
+	// Only include systems with owned planets (active markets)
+	systemHasPlanets := make(map[int]bool)
+	for _, player := range p.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			for _, sys := range p.GetSystems() {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok && pl.GetID() == planet.GetID() {
+						systemHasPlanets[sys.ID] = true
+					}
+				}
+			}
+		}
+	}
+
 	result := make([]SystemPrices, 0)
 	snap := market.GetSnapshot()
 
 	for _, sys := range p.GetSystems() {
+		if !systemHasPlanets[sys.ID] {
+			continue
+		}
 		prices := make(map[string]float64)
 		for name := range snap.Resources {
 			prices[name] = market.GetLocalBuyPrice(name, sys.ID)
