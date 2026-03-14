@@ -678,10 +678,21 @@ func (mv *MarketView) refreshData() {
 				row.trend = s.trend
 				row.importFee = economy.ComputeImportFee(float64(s.totalSupply), s.demand)
 
-				// Find cheapest price across galaxy
+				// Find cheapest price across inhabited systems
 				bestPrice := row.buyPrice
 				bestSys := ""
 				for _, sys := range mv.ctx.GetSystems() {
+					// Only check systems with owned planets
+					hasOwned := false
+					for _, e := range sys.Entities {
+						if p, ok := e.(*entities.Planet); ok && p.Owner != "" {
+							hasOwned = true
+							break
+						}
+					}
+					if !hasOwned {
+						continue
+					}
 					lp := market.GetLocalBuyPrice(resource, sys.ID)
 					if lp < bestPrice {
 						bestPrice = lp
