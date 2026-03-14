@@ -358,26 +358,25 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		}
 		DrawText(screen, fmt.Sprintf("%.0f", row.demand), colDemand, y, demandColor)
 
-		// Scarcity indicator (matches /api/economy scarcity field)
+		// Scarcity indicator (uses economy.ComputeScarcity, same thresholds as API)
+		scarcity := economy.ComputeScarcity(float64(row.galaxySupply), row.demand)
 		scarcityStr := "OK"
 		scarcityColor := utils.TextSecondary
-		if row.galaxySupply <= 0 {
+		switch scarcity {
+		case "Abundant":
+			scarcityStr = "Full"
+			scarcityColor = utils.SystemGreen
+		case "Moderate":
+			scarcityStr = "OK"
+		case "Scarce":
+			scarcityStr = "Low"
+			scarcityColor = utils.SystemOrange
+		case "Critical":
+			scarcityStr = "Crit"
+			scarcityColor = utils.SystemRed
+		case "Depleted":
 			scarcityStr = "GONE"
 			scarcityColor = utils.SystemRed
-		} else if row.demand > 0 {
-			ratio := float64(row.galaxySupply) / (row.demand * 10)
-			if ratio > 3.0 {
-				scarcityStr = "Full"
-				scarcityColor = utils.SystemGreen
-			} else if ratio > 1.0 {
-				scarcityStr = "OK"
-			} else if ratio > 0.3 {
-				scarcityStr = "Low"
-				scarcityColor = utils.SystemOrange
-			} else {
-				scarcityStr = "Crit"
-				scarcityColor = utils.SystemRed
-			}
 		}
 		DrawText(screen, scarcityStr, colTrend, y, scarcityColor)
 

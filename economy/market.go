@@ -401,6 +401,31 @@ func ComputeImportFee(totalSupply float64, totalDemand float64) float64 {
 	return fee
 }
 
+// ComputeScarcity returns a human-readable scarcity label for a resource.
+// Single source of truth — used by API and UI.
+func ComputeScarcity(totalSupply, totalDemand float64) string {
+	if totalSupply <= 0 {
+		return "Depleted"
+	}
+	if totalDemand > 0 {
+		ratio := totalSupply / (totalDemand * 10)
+		if ratio > 3.0 {
+			return "Abundant"
+		}
+		if ratio > 1.0 {
+			return "Moderate"
+		}
+		if ratio > 0.3 {
+			return "Scarce"
+		}
+		return "Critical"
+	}
+	if totalSupply > 500 {
+		return "Abundant"
+	}
+	return "Moderate"
+}
+
 // GetTradeVolume returns total recent trade volume across all resources.
 func (m *Market) GetTradeVolume() float64 {
 	m.mu.RLock()

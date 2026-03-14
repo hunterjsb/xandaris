@@ -612,27 +612,7 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 				rs.PriceRatio = rm.CurrentPrice / rm.BasePrice
 			}
 
-			// Compute scarcity level from supply/demand ratio
-			if rm.TotalSupply <= 0 {
-				rs.Scarcity = "Depleted"
-			} else if rm.TotalDemand > 0 {
-				ratio := rm.TotalSupply / (rm.TotalDemand * 10)
-				if ratio > 3.0 {
-					rs.Scarcity = "Abundant"
-				} else if ratio > 1.0 {
-					rs.Scarcity = "Moderate"
-				} else if ratio > 0.3 {
-					rs.Scarcity = "Scarce"
-				} else {
-					rs.Scarcity = "Critical"
-				}
-			} else {
-				if rm.TotalSupply > 500 {
-					rs.Scarcity = "Abundant"
-				} else {
-					rs.Scarcity = "Moderate"
-				}
-			}
+			rs.Scarcity = economy.ComputeScarcity(rm.TotalSupply, rm.TotalDemand)
 			overview.Resources[name] = rs
 		}
 	}
