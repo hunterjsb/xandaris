@@ -207,6 +207,19 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+22, utils.TextPrimary)
 	DrawText(screen, subtitle, mv.headerPanel.X+20, mv.headerPanel.Y+40, utils.TextSecondary)
 
+	// Stock on this planet (right-aligned)
+	if mv.tradingPlanet != nil {
+		totalStock := 0
+		for _, s := range mv.tradingPlanet.StoredResources {
+			if s != nil {
+				totalStock += s.Amount
+			}
+		}
+		stockInfo := fmt.Sprintf("Stock: %d  Pop: %d", totalStock, mv.tradingPlanet.Population)
+		stockWidth := len(stockInfo) * 6
+		DrawText(screen, stockInfo, mv.headerPanel.X+mv.headerPanel.Width-stockWidth-20, mv.headerPanel.Y+22, utils.TextSecondary)
+	}
+
 	// Show trade mode (local vs galaxy-wide) with fee info
 	tradeMode := "Galaxy-wide trading (import/export fees apply)"
 	tradeModeColor := utils.SystemOrange
