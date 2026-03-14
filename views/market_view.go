@@ -269,7 +269,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	DrawText(screen, "Sell @", colSell, headerY, utils.SystemOrange)
 	DrawText(screen, "Base", colBase, headerY, utils.TextSecondary)
 	DrawText(screen, "Demand", colDemand, headerY, utils.TextSecondary)
-	DrawText(screen, "Trend", colTrend, headerY, utils.TextPrimary)
+	DrawText(screen, "Status", colTrend, headerY, utils.TextPrimary)
 	DrawText(screen, "Fee", colFee, headerY, utils.TextSecondary)
 	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
 
@@ -341,23 +341,28 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		}
 		DrawText(screen, fmt.Sprintf("%.0f", row.demand), colDemand, y, demandColor)
 
-		// Trend indicator
-		trendStr := "--"
-		trendColor := utils.TextSecondary
-		if row.trend > 1.0 {
-			trendStr = "^^"
-			trendColor = utils.SystemGreen
-		} else if row.trend > 0.1 {
-			trendStr = "^"
-			trendColor = utils.SystemGreen
-		} else if row.trend < -1.0 {
-			trendStr = "vv"
-			trendColor = utils.SystemRed
-		} else if row.trend < -0.1 {
-			trendStr = "v"
-			trendColor = utils.SystemRed
+		// Scarcity indicator (matches /api/economy scarcity field)
+		scarcityStr := "OK"
+		scarcityColor := utils.TextSecondary
+		if row.galaxySupply <= 0 {
+			scarcityStr = "GONE"
+			scarcityColor = utils.SystemRed
+		} else if row.demand > 0 {
+			ratio := float64(row.galaxySupply) / (row.demand * 10)
+			if ratio > 3.0 {
+				scarcityStr = "Full"
+				scarcityColor = utils.SystemGreen
+			} else if ratio > 1.0 {
+				scarcityStr = "OK"
+			} else if ratio > 0.3 {
+				scarcityStr = "Low"
+				scarcityColor = utils.SystemOrange
+			} else {
+				scarcityStr = "Crit"
+				scarcityColor = utils.SystemRed
+			}
 		}
-		DrawText(screen, trendStr, colTrend, y, trendColor)
+		DrawText(screen, scarcityStr, colTrend, y, scarcityColor)
 
 		// Import/export fee indicator
 		feeStr := fmt.Sprintf("%.0f%%", row.importFee*100)
