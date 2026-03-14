@@ -573,6 +573,40 @@ func StartServer(provider GameStateProvider) {
 	})
 
 	// Fleet management endpoints
+	mux.HandleFunc("/api/fleets/move", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req FleetMoveRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.FleetID <= 0 || req.TargetSystemID < 0 {
+			writeErr(w, http.StatusBadRequest, "fleet_id and target_system_id required")
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "fleet_move",
+			Data:   game.FleetMoveCommandData{FleetID: req.FleetID, TargetSystemID: req.TargetSystemID},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
 	mux.HandleFunc("/api/fleets/create", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeErr(w, http.StatusMethodNotAllowed, "POST only")
@@ -707,6 +741,33 @@ func StartServer(provider GameStateProvider) {
 		case <-time.After(5 * time.Second):
 			writeErr(w, http.StatusGatewayTimeout, "timed out")
 		}
+	})
+
+	// Hyperlane/route info
+	mux.HandleFunc("/api/routes/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/routes/")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid system ID")
+			return
+		}
+		p := getProvider()
+		connected := make([]int, 0)
+		for _, hl := range p.GetHyperlanes() {
+			if hl.From == id {
+				connected = append(connected, hl.To)
+			} else if hl.To == id {
+				connected = append(connected, hl.From)
+			}
+		}
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"system_id": id,
+			"connected": connected,
+		}})
 	})
 
 	mux.HandleFunc("/api/game/speed", func(w http.ResponseWriter, r *http.Request) {

@@ -51,6 +51,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 	case "colonize":
 		gs.handleColonizeCommand(cmd)
 
+	case "fleet_move":
+		gs.handleFleetMoveCommand(cmd)
+
 	case "fleet_create":
 		gs.handleFleetCreateCommand(cmd)
 
@@ -544,6 +547,38 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 			"planet_id": planet.GetID(),
 			"system_id": systemID,
 			"colonists": planet.Population,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleFleetMoveCommand(cmd game.GameCommand) {
+	fd, ok := cmd.Data.(game.FleetMoveCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid fleet move data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	fleet, owner := game.FindFleetByID(gs.State.Players, fd.FleetID)
+	if fleet == nil || owner != human {
+		sendResult(cmd, fmt.Errorf("fleet not found or not owned"))
+		return
+	}
+	success, fail := gs.FleetCmdExecutor.MoveFleetToSystem(fleet, fd.TargetSystemID)
+	if success == 0 {
+		sendResult(cmd, fmt.Errorf("no ships could move (no route or insufficient fuel)"))
+		return
+	}
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"fleet_id": fd.FleetID,
+			"target":   fd.TargetSystemID,
+			"moved":    success,
+			"failed":   fail,
 		}
 		close(cmd.Result)
 	}

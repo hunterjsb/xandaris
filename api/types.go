@@ -219,6 +219,12 @@ type UpgradeRequest struct {
 	BuildingIndex int `json:"building_index"` // index in the buildings array
 }
 
+// FleetMoveRequest is the body for POST /api/fleets/move.
+type FleetMoveRequest struct {
+	FleetID        int `json:"fleet_id"`
+	TargetSystemID int `json:"target_system_id"`
+}
+
 // FleetCreateRequest is the body for POST /api/fleets/create.
 type FleetCreateRequest struct {
 	ShipID int `json:"ship_id"` // ship to promote to a fleet

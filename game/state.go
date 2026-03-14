@@ -79,6 +79,12 @@ type ShipRefuelCommandData struct {
 	Amount   int // amount of Fuel to transfer (0 = fill up)
 }
 
+// FleetMoveCommandData is the payload for moving a fleet to another system.
+type FleetMoveCommandData struct {
+	FleetID        int // fleet to move
+	TargetSystemID int // system to jump to
+}
+
 // FleetCreateCommandData is the payload for creating a fleet from a ship.
 type FleetCreateCommandData struct {
 	ShipID int // ship to promote to fleet
