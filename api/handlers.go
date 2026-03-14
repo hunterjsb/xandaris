@@ -468,6 +468,28 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 		}
 	}
 
+	// Resource depletion warnings
+	for _, planet := range human.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		for _, resEntity := range planet.Resources {
+			if res, ok := resEntity.(*entities.Resource); ok && res.Abundance > 0 && res.Abundance < 15 {
+				hints = append(hints, fmt.Sprintf("%s deposit on %s nearly depleted (abundance %d)", res.ResourceType, planet.Name, res.Abundance))
+			}
+		}
+	}
+
+	// Price-driven investment hints
+	if totalMines > 0 {
+		for name, r := range econ.Resources {
+			if r.PriceRatio > 2.0 {
+				hints = append(hints, fmt.Sprintf("%s at %.0fx base price — build mines or sell stock", name, r.PriceRatio))
+				break
+			}
+		}
+	}
+
 	return hints
 }
 

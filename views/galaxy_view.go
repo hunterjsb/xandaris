@@ -664,6 +664,19 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 		hints = append(hints, "Excess credits — invest in upgrades or buildings")
 	}
 
+	// Resource depletion warning
+	for _, planet := range humanPlayer.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		for _, resEntity := range planet.Resources {
+			if res, ok := resEntity.(*entities.Resource); ok && res.Abundance > 0 && res.Abundance < 15 {
+				hints = append(hints, fmt.Sprintf("%s deposit on %s nearly depleted (a:%d)", res.ResourceType, planet.Name, res.Abundance))
+				break
+			}
+		}
+	}
+
 	// Low fuel ship
 	for _, ship := range humanPlayer.OwnedShips {
 		if ship != nil && ship.CurrentFuel < ship.MaxFuel/4 {
