@@ -131,9 +131,9 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 					}
 				}
 
-				// Buy if price is < 50% of base (bargain) and we have room
+				// Buy if price is < 50% of base (bargain) and below surplus threshold
 				ratio := float64(storage.Amount) / float64(storage.Capacity)
-				if ratio < 0.5 {
+				if ratio < aiSurplusThreshold {
 					buyPrice := market.GetBuyPrice(resType)
 					if buyPrice < basePrice*0.5 && player.Credits > int(buyPrice)*20 {
 						qty := 20
