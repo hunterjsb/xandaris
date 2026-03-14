@@ -381,6 +381,16 @@ func RestoreMarket(snap *MarketSnapshot) *Market {
 	return m
 }
 
+// getResourceMarket returns the market data for a resource (read-only, thread-safe).
+func (m *Market) getResourceMarket(resourceType string) *ResourceMarket {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if rm, ok := m.resources[resourceType]; ok {
+		return rm
+	}
+	return nil
+}
+
 func (m *Market) getOrCreate(resourceType string) *ResourceMarket {
 	rm, ok := m.resources[resourceType]
 	if !ok {

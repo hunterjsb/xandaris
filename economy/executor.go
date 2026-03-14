@@ -123,10 +123,27 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		return TradeRecord{}, fmt.Errorf("insufficient market stock (need %d, available %d)", quantity, npcAvail)
 	}
 
-	// Apply import markup for galaxy-wide human trades (simulates shipping cost)
+	// Dynamic import fee for galaxy-wide human trades.
+	// Fee scales with scarcity: 5% when plentiful (supply > demand*20),
+	// up to 20% when scarce (supply < demand*5). Simulates shipping difficulty.
 	if player.IsHuman() && !useSystemScope {
-		importMarkup := int(math.Round(float64(total) * 0.10)) // 15% markup
-		total += importMarkup
+		feeRate := 0.10 // default 10%
+		rm := te.market.getResourceMarket(resource)
+		if rm != nil && rm.TotalDemand > 0 {
+			ratio := rm.TotalSupply / (rm.TotalDemand * 10)
+			if ratio > 2.0 {
+				feeRate = 0.05 // plentiful: cheap shipping
+			} else if ratio < 0.5 {
+				feeRate = 0.20 // scarce: expensive to source
+			} else {
+				feeRate = 0.15 - ratio*0.05 // linear interpolation
+				if feeRate < 0.05 {
+					feeRate = 0.05
+				}
+			}
+		}
+		importFee := int(math.Round(float64(total) * feeRate))
+		total += importFee
 		if player.Credits < total {
 			return TradeRecord{}, fmt.Errorf("insufficient credits with import fee (need %d, have %d)", total, player.Credits)
 		}
@@ -233,9 +250,24 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 				}
 			}
 		}
-		// Apply export discount for galaxy-wide sells (shipping cost)
+		// Dynamic export fee (mirrors import fee logic)
 		if !localSell {
-			exportFee := int(math.Round(float64(total) * 0.10))
+			feeRate := 0.10
+			rm := te.market.getResourceMarket(resource)
+			if rm != nil && rm.TotalDemand > 0 {
+				ratio := rm.TotalSupply / (rm.TotalDemand * 10)
+				if ratio > 2.0 {
+					feeRate = 0.05
+				} else if ratio < 0.5 {
+					feeRate = 0.20
+				} else {
+					feeRate = 0.15 - ratio*0.05
+					if feeRate < 0.05 {
+						feeRate = 0.05
+					}
+				}
+			}
+			exportFee := int(math.Round(float64(total) * feeRate))
 			total -= exportFee
 			if total < 1 {
 				total = 1
