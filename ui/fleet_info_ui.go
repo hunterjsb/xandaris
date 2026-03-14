@@ -876,16 +876,27 @@ func (fui *FleetInfoUI) drawShipList(screen *ebiten.Image, startY int) {
 			fuelColor = utils.SystemOrange
 		}
 
-		views.DrawText(screen, fmt.Sprintf("Fuel: %.0f%%", fuelPercent), nameX, statsY, fuelColor)
-		healthPercent := ship.GetHealthPercentage()
-		healthColor := utils.TextPrimary
-		if healthPercent < 50 {
-			healthColor = utils.SystemOrange
+		views.DrawText(screen, fmt.Sprintf("Fuel: %d/%d", ship.CurrentFuel, ship.MaxFuel), nameX, statsY, fuelColor)
+
+		// Cargo usage
+		if ship.MaxCargo > 0 {
+			cargoUsed := ship.GetTotalCargo()
+			cargoColor := utils.TextSecondary
+			if cargoUsed > 0 {
+				cargoColor = utils.TextPrimary
+			}
+			views.DrawText(screen, fmt.Sprintf("Cargo: %d/%d", cargoUsed, ship.MaxCargo), nameX+100, statsY, cargoColor)
+		} else {
+			healthPercent := ship.GetHealthPercentage()
+			healthColor := utils.TextPrimary
+			if healthPercent < 50 {
+				healthColor = utils.SystemOrange
+			}
+			if healthPercent < 25 {
+				healthColor = utils.SystemRed
+			}
+			views.DrawText(screen, fmt.Sprintf("HP: %.0f%%", healthPercent), nameX+100, statsY, healthColor)
 		}
-		if healthPercent < 25 {
-			healthColor = utils.SystemRed
-		}
-		views.DrawText(screen, fmt.Sprintf("HP: %.0f%%", healthPercent), nameX+90, statsY, healthColor)
 
 		// Status indicator
 		statusX := fui.x + fui.width - 80
