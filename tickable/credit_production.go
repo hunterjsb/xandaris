@@ -74,16 +74,9 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 			player.Credits += production
 		}
 
-		// Subsistence income: when broke, population generates minimal credits
-		// from barter/labor — scales with population, not a fixed handout.
-		if player.Credits < 500 {
-			for _, planet := range player.OwnedPlanets {
-				subsistence := int(planet.Population / 500) // 1cr per 500 pop
-				if subsistence < 1 {
-					subsistence = 1
-				}
-				player.Credits += subsistence
-			}
-		}
+		// No subsistence bailout — credits must come from population labor
+		// (1cr per 100 pop) or Trading Post trade revenue. If credits hit 0,
+		// buildings shut down (consumption.go) and drain stops, allowing
+		// natural recovery from population-based income.
 	}
 }
