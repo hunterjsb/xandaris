@@ -205,6 +205,27 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 				DrawText(screen, line, 10, infoY, color)
 				infoY += 15
 			}
+
+			// Compact resource storage summary
+			if len(planet.StoredResources) > 0 {
+				infoY += 5
+				DrawText(screen, "Storage:", 10, infoY, utils.TextPrimary)
+				infoY += 15
+				for resType, storage := range planet.StoredResources {
+					if storage == nil {
+						continue
+					}
+					label := fmt.Sprintf("  %s: %d/%d", resType, storage.Amount, storage.Capacity)
+					resColor := utils.TextSecondary
+					if storage.Amount == 0 {
+						resColor = utils.SystemRed
+					} else if storage.Capacity > 0 && float64(storage.Amount)/float64(storage.Capacity) > 0.8 {
+						resColor = utils.SystemGreen
+					}
+					DrawText(screen, label, 10, infoY, resColor)
+					infoY += 13
+				}
+			}
 		} else if provider, ok := selected.(ContextMenuProvider); ok {
 			DrawText(screen, provider.GetContextMenuTitle(), 10, infoY, utils.TextPrimary)
 			infoY += 15

@@ -112,13 +112,17 @@ type ConstructionQueueItem struct {
 
 // PlayerInfo represents a player in the directory endpoint.
 type PlayerInfo struct {
-	ID       int      `json:"id"`
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Credits  int      `json:"credits"`
-	Planets  int      `json:"planets"`
-	Ships    int      `json:"ships"`
-	Fleets   int      `json:"fleets"`
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Credits    int    `json:"credits"`
+	Planets    int    `json:"planets"`
+	Ships      int    `json:"ships"`
+	Fleets     int    `json:"fleets"`
+	Mines      int    `json:"mines"`
+	Buildings  int    `json:"buildings"`
+	Population int64  `json:"population"`
+	Stock      int    `json:"stock"`
 }
 
 // GameInfo represents the game state endpoint.

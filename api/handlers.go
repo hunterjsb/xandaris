@@ -245,14 +245,39 @@ func handleGetPlayers(p GameStateProvider) interface{} {
 		if pl.IsHuman() {
 			pType = "human"
 		}
+		mines := 0
+		bldgs := 0
+		stock := 0
+		var pop int64
+		for _, planet := range pl.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			pop += planet.Population
+			bldgs += len(planet.Buildings)
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" {
+					mines++
+				}
+			}
+			for _, s := range planet.StoredResources {
+				if s != nil {
+					stock += s.Amount
+				}
+			}
+		}
 		result = append(result, PlayerInfo{
-			ID:      pl.ID,
-			Name:    pl.Name,
-			Type:    pType,
-			Credits: pl.Credits,
-			Planets: len(pl.OwnedPlanets),
-			Ships:   len(pl.OwnedShips),
-			Fleets:  len(pl.OwnedFleets),
+			ID:         pl.ID,
+			Name:       pl.Name,
+			Type:       pType,
+			Credits:    pl.Credits,
+			Planets:    len(pl.OwnedPlanets),
+			Ships:      len(pl.OwnedShips),
+			Fleets:     len(pl.OwnedFleets),
+			Mines:      mines,
+			Buildings:  bldgs,
+			Population: pop,
+			Stock:      stock,
 		})
 	}
 	return result
