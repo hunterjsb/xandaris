@@ -148,13 +148,9 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		return
 	}
 
-	// Look up build cost
-	costs := map[string]int{
-		"Mine": 500, "Trading Post": 1200, "Refinery": 1500,
-		"Habitat": 800, "Shipyard": 2000,
-	}
-	cost, valid := costs[bd.BuildingType]
-	if !valid {
+	// Look up build cost from entity generator (single source of truth)
+	cost := game.GetBuildingCost(bd.BuildingType)
+	if cost == 0 {
 		sendResult(cmd, fmt.Errorf("unknown building type: %s", bd.BuildingType))
 		return
 	}

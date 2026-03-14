@@ -212,12 +212,22 @@ func findSystemIDForPlanet(planet *entities.Planet, systems []*entities.System) 
 	return 0
 }
 
+// getBasePrice returns the equilibrium price for a resource.
+// Duplicated from economy.BasePrices — can't import economy from tickable (cycle).
 func getBasePrice(resourceType string) float64 {
-	prices := map[string]float64{
-		"Iron": 75, "Water": 100, "Oil": 150, "Fuel": 200, "Helium-3": 600, "Rare Metals": 500,
-	}
-	if p, ok := prices[resourceType]; ok {
-		return p
+	switch resourceType {
+	case "Iron":
+		return 75
+	case "Water":
+		return 100
+	case "Oil":
+		return 150
+	case "Fuel":
+		return 200
+	case "Rare Metals":
+		return 500
+	case "Helium-3":
+		return 600
 	}
 	return 100
 }

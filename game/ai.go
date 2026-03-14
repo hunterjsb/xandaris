@@ -166,6 +166,21 @@ func PlanetHasTradingPost(planet *entities.Planet) bool {
 	return false
 }
 
+// GetBuildingCost returns the credit cost for a building type by querying the generator.
+func GetBuildingCost(buildingType string) int {
+	generators := entities.GetGeneratorsByType(entities.EntityTypeBuilding)
+	for _, gen := range generators {
+		if gen.GetSubType() == buildingType {
+			// Generate a temporary building to read its cost
+			params := entities.GenerationParams{SystemID: 0, SystemSeed: 1}
+			if b, ok := gen.Generate(params).(*entities.Building); ok {
+				return b.BuildCost
+			}
+		}
+	}
+	return 500 // default fallback
+}
+
 // AddTradingPostToPlanet creates and attaches a Trading Post to a planet.
 func AddTradingPostToPlanet(planet *entities.Planet, owner string, systemID int) {
 	AddBuildingToPlanet(planet, "Trading Post", owner, systemID)
