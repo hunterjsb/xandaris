@@ -169,6 +169,9 @@ func (gs *GameServer) GetTradeExecutor() *economy.TradeExecutor {
 func (gs *GameServer) GetCargoCommander() *game.CargoCommandExecutor {
 	return gs.CargoCommander
 }
+func (gs *GameServer) GetFleetManagementSystem() *game.FleetManagementSystem {
+	return gs.FleetMgmtSystem
+}
 func (gs *GameServer) GetCommandChannel() chan game.GameCommand {
 	return gs.State.Commands
 }

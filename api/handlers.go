@@ -20,6 +20,7 @@ type GameStateProvider interface {
 	GetMarket() *economy.Market
 	GetTradeExecutor() *economy.TradeExecutor
 	GetCargoCommander() *game.CargoCommandExecutor
+	GetFleetManagementSystem() *game.FleetManagementSystem
 	GetTickInfo() (tick int64, gameTime string, speed string, paused bool)
 	GetCommandChannel() chan game.GameCommand
 }

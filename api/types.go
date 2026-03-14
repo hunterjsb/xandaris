@@ -219,6 +219,28 @@ type UpgradeRequest struct {
 	BuildingIndex int `json:"building_index"` // index in the buildings array
 }
 
+// FleetCreateRequest is the body for POST /api/fleets/create.
+type FleetCreateRequest struct {
+	ShipID int `json:"ship_id"` // ship to promote to a fleet
+}
+
+// FleetDisbandRequest is the body for POST /api/fleets/disband.
+type FleetDisbandRequest struct {
+	FleetID int `json:"fleet_id"`
+}
+
+// FleetAddShipRequest is the body for POST /api/fleets/add-ship.
+type FleetAddShipRequest struct {
+	ShipID  int `json:"ship_id"`
+	FleetID int `json:"fleet_id"`
+}
+
+// FleetRemoveShipRequest is the body for POST /api/fleets/remove-ship.
+type FleetRemoveShipRequest struct {
+	ShipID  int `json:"ship_id"`
+	FleetID int `json:"fleet_id"`
+}
+
 // SystemPrices shows local prices for a system (for trade route planning).
 type SystemPrices struct {
 	SystemID   int                `json:"system_id"`

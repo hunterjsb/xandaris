@@ -572,6 +572,143 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetConstructionQueue(getProvider())})
 	})
 
+	// Fleet management endpoints
+	mux.HandleFunc("/api/fleets/create", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req FleetCreateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.ShipID <= 0 {
+			writeErr(w, http.StatusBadRequest, "ship_id required")
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "fleet_create",
+			Data:   game.FleetCreateCommandData{ShipID: req.ShipID},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
+	mux.HandleFunc("/api/fleets/disband", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req FleetDisbandRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.FleetID <= 0 {
+			writeErr(w, http.StatusBadRequest, "fleet_id required")
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "fleet_disband",
+			Data:   game.FleetDisbandCommandData{FleetID: req.FleetID},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
+	mux.HandleFunc("/api/fleets/add-ship", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req FleetAddShipRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.ShipID <= 0 || req.FleetID <= 0 {
+			writeErr(w, http.StatusBadRequest, "ship_id and fleet_id required")
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "fleet_add_ship",
+			Data:   game.FleetAddShipCommandData{ShipID: req.ShipID, FleetID: req.FleetID},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
+	mux.HandleFunc("/api/fleets/remove-ship", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req FleetRemoveShipRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.ShipID <= 0 || req.FleetID <= 0 {
+			writeErr(w, http.StatusBadRequest, "ship_id and fleet_id required")
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "fleet_remove_ship",
+			Data:   game.FleetRemoveShipCommandData{ShipID: req.ShipID, FleetID: req.FleetID},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
 	mux.HandleFunc("/api/game/speed", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeErr(w, http.StatusMethodNotAllowed, "POST only")

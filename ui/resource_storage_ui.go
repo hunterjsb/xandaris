@@ -225,11 +225,14 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 	label := resourceType
 	views.DrawText(screen, label, textX, y, amtColor)
 
-	// Net flow indicator after the name
+	// Net flow indicator after the name (show rate per interval)
+	flowX := textX + len(label)*6 + 2
 	if flow > 0.5 {
-		views.DrawText(screen, "+", textX+len(label)*6+2, y, utils.SystemGreen)
+		flowStr := fmt.Sprintf("+%.0f", flow)
+		views.DrawText(screen, flowStr, flowX, y, utils.SystemGreen)
 	} else if flow < -0.5 {
-		views.DrawText(screen, "-", textX+len(label)*6+2, y, utils.SystemRed)
+		flowStr := fmt.Sprintf("%.0f", flow)
+		views.DrawText(screen, flowStr, flowX, y, utils.SystemRed)
 	}
 
 	// Amount / capacity on the right
@@ -238,8 +241,8 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 	views.DrawText(screen, amtStr, rsu.x+rsu.width-amtWidth-15, y, amtColor)
 
 	// Small capacity bar
-	barX := textX + 90
-	barW := rsu.width - 90 - amtWidth - 25
+	barX := textX + 100
+	barW := rsu.width - 100 - amtWidth - 25
 	if barW > 20 {
 		barY := y + 3
 		barH := 4

@@ -162,6 +162,21 @@ func FindShipByID(players []*entities.Player, shipID int) *entities.Ship {
 	return nil
 }
 
+// FindFleetByID looks up a fleet by ID across all players.
+func FindFleetByID(players []*entities.Player, fleetID int) (*entities.Fleet, *entities.Player) {
+	for _, player := range players {
+		if player == nil {
+			continue
+		}
+		for _, fleet := range player.OwnedFleets {
+			if fleet != nil && fleet.ID == fleetID {
+				return fleet, player
+			}
+		}
+	}
+	return nil, nil
+}
+
 // GetSystemForPlanet returns the system ID that contains the given planet.
 func (cce *CargoCommandExecutor) GetSystemForPlanet(planet *entities.Planet) int {
 	for _, system := range cce.systems {

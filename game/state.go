@@ -79,6 +79,28 @@ type ShipRefuelCommandData struct {
 	Amount   int // amount of Fuel to transfer (0 = fill up)
 }
 
+// FleetCreateCommandData is the payload for creating a fleet from a ship.
+type FleetCreateCommandData struct {
+	ShipID int // ship to promote to fleet
+}
+
+// FleetDisbandCommandData is the payload for disbanding a fleet.
+type FleetDisbandCommandData struct {
+	FleetID int // fleet to disband
+}
+
+// FleetAddShipCommandData is the payload for adding a ship to a fleet.
+type FleetAddShipCommandData struct {
+	ShipID  int // ship to add
+	FleetID int // fleet to add to
+}
+
+// FleetRemoveShipCommandData is the payload for removing a ship from a fleet.
+type FleetRemoveShipCommandData struct {
+	ShipID  int // ship to remove
+	FleetID int // fleet to remove from
+}
+
 // NewState creates a new empty game state
 func NewState() *State {
 	return &State{

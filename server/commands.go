@@ -50,6 +50,18 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 
 	case "colonize":
 		gs.handleColonizeCommand(cmd)
+
+	case "fleet_create":
+		gs.handleFleetCreateCommand(cmd)
+
+	case "fleet_disband":
+		gs.handleFleetDisbandCommand(cmd)
+
+	case "fleet_add_ship":
+		gs.handleFleetAddShipCommand(cmd)
+
+	case "fleet_remove_ship":
+		gs.handleFleetRemoveShipCommand(cmd)
 	}
 }
 
@@ -532,6 +544,139 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 			"planet_id": planet.GetID(),
 			"system_id": systemID,
 			"colonists": planet.Population,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleFleetCreateCommand(cmd game.GameCommand) {
+	fd, ok := cmd.Data.(game.FleetCreateCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid fleet create data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, fd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+	fleet, err := gs.FleetMgmtSystem.CreateFleetFromShip(ship, human)
+	if err != nil {
+		sendResult(cmd, err)
+		return
+	}
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"fleet_id": fleet.ID,
+			"ship_id":  fd.ShipID,
+			"size":     fleet.Size(),
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleFleetDisbandCommand(cmd game.GameCommand) {
+	fd, ok := cmd.Data.(game.FleetDisbandCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid fleet disband data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	fleet, owner := game.FindFleetByID(gs.State.Players, fd.FleetID)
+	if fleet == nil || owner != human {
+		sendResult(cmd, fmt.Errorf("fleet not found or not owned"))
+		return
+	}
+	shipCount := len(fleet.Ships)
+	err := gs.FleetMgmtSystem.DisbandFleet(fleet, human)
+	if err != nil {
+		sendResult(cmd, err)
+		return
+	}
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"fleet_id":       fd.FleetID,
+			"ships_released": shipCount,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleFleetAddShipCommand(cmd game.GameCommand) {
+	fd, ok := cmd.Data.(game.FleetAddShipCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid fleet add ship data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, fd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+	fleet, owner := game.FindFleetByID(gs.State.Players, fd.FleetID)
+	if fleet == nil || owner != human {
+		sendResult(cmd, fmt.Errorf("fleet not found or not owned"))
+		return
+	}
+	err := gs.FleetMgmtSystem.AddShipToFleet(ship, fleet, human)
+	if err != nil {
+		sendResult(cmd, err)
+		return
+	}
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"fleet_id": fd.FleetID,
+			"ship_id":  fd.ShipID,
+			"size":     fleet.Size(),
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleFleetRemoveShipCommand(cmd game.GameCommand) {
+	fd, ok := cmd.Data.(game.FleetRemoveShipCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid fleet remove ship data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, fd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+	fleet, owner := game.FindFleetByID(gs.State.Players, fd.FleetID)
+	if fleet == nil || owner != human {
+		sendResult(cmd, fmt.Errorf("fleet not found or not owned"))
+		return
+	}
+	err := gs.FleetMgmtSystem.RemoveShipFromFleet(ship, fleet, human)
+	if err != nil {
+		sendResult(cmd, err)
+		return
+	}
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"fleet_id": fd.FleetID,
+			"ship_id":  fd.ShipID,
 		}
 		close(cmd.Result)
 	}
