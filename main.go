@@ -28,8 +28,9 @@ const (
 
 func main() {
 	headless := flag.Bool("headless", false, "Run as headless server (no GUI)")
-	playerName := flag.String("player", "Player", "Player name for headless mode new game")
-	loadPath := flag.String("load", "", "Path to save file to load (headless mode)")
+	autoStart := flag.Bool("auto", false, "Skip menu and start new game immediately (GUI mode)")
+	playerName := flag.String("player", "Player", "Player name")
+	loadPath := flag.String("load", "", "Path to save file to load")
 	flag.Parse()
 
 	if *headless {
@@ -37,11 +38,11 @@ func main() {
 		return
 	}
 
-	runGUI()
+	runGUI(*autoStart, *playerName)
 }
 
 // runGUI starts the game with the Ebiten graphical client.
-func runGUI() {
+func runGUI(autoStart bool, playerName string) {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Xandaris II - Space Trading Game")
 	ebiten.SetFullscreen(true)
@@ -50,6 +51,13 @@ func runGUI() {
 
 	if err := app.InitializeForMenu(); err != nil {
 		log.Fatalf("Failed to initialize app: %v", err)
+	}
+
+	// Auto-start: skip menu and start a new game immediately
+	if autoStart {
+		if err := app.InitializeNewGame(playerName); err != nil {
+			log.Fatalf("Failed to auto-start game: %v", err)
+		}
 	}
 
 	if err := ebiten.RunGame(app); err != nil {
