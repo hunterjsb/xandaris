@@ -252,15 +252,15 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 
 	headerY := mv.tablePanel.Y + 18
 	colResource := mv.tablePanel.X + 20
-	colStock := mv.tablePanel.X + 140
-	colGalSupply := mv.tablePanel.X + 210
-	colBuy := mv.tablePanel.X + 300
-	colSell := mv.tablePanel.X + 400
-	colBase := mv.tablePanel.X + 500
-	colDemand := mv.tablePanel.X + 580
-	colTrend := mv.tablePanel.X + 650
-	colFee := mv.tablePanel.X + 720
-	colAction := mv.tablePanel.X + mv.tablePanel.Width - 130
+	colStock := mv.tablePanel.X + 130
+	colGalSupply := mv.tablePanel.X + 195
+	colBuy := mv.tablePanel.X + 275
+	colSell := mv.tablePanel.X + 365
+	colBase := mv.tablePanel.X + 450
+	colDemand := mv.tablePanel.X + 520
+	colTrend := mv.tablePanel.X + 595
+	colFee := mv.tablePanel.X + 645
+	colAction := mv.tablePanel.X + mv.tablePanel.Width - 120
 
 	DrawText(screen, "Commodity", colResource, headerY, utils.TextPrimary)
 	DrawText(screen, "Stock", colStock, headerY, utils.TextPrimary)
