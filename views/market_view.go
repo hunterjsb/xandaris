@@ -8,6 +8,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/utils"
 )
@@ -638,22 +639,7 @@ func (mv *MarketView) refreshData() {
 				row.demand = s.demand
 				row.trend = s.trend
 
-				// Compute dynamic import fee rate (matches executor logic)
-				if s.demand > 0 {
-					ratio := float64(s.totalSupply) / (s.demand * 10)
-					if ratio > 2.0 {
-						row.importFee = 0.05
-					} else if ratio < 0.5 {
-						row.importFee = 0.20
-					} else {
-						row.importFee = 0.15 - ratio*0.05
-						if row.importFee < 0.05 {
-							row.importFee = 0.05
-						}
-					}
-				} else {
-					row.importFee = 0.10
-				}
+				row.importFee = economy.ComputeImportFee(float64(s.totalSupply), s.demand)
 			}
 		}
 

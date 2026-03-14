@@ -381,6 +381,26 @@ func RestoreMarket(snap *MarketSnapshot) *Market {
 	return m
 }
 
+// ComputeImportFee calculates the dynamic import/export fee rate for a resource.
+// Returns 0.05-0.20 based on supply/demand ratio. Single source of truth.
+func ComputeImportFee(totalSupply float64, totalDemand float64) float64 {
+	if totalDemand <= 0 {
+		return 0.10
+	}
+	ratio := totalSupply / (totalDemand * 10)
+	if ratio > 2.0 {
+		return 0.05
+	}
+	if ratio < 0.5 {
+		return 0.20
+	}
+	fee := 0.15 - ratio*0.05
+	if fee < 0.05 {
+		return 0.05
+	}
+	return fee
+}
+
 // getResourceMarket returns the market data for a resource (read-only, thread-safe).
 func (m *Market) getResourceMarket(resourceType string) *ResourceMarket {
 	m.mu.RLock()

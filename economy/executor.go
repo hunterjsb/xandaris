@@ -124,23 +124,10 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 	}
 
 	// Dynamic import fee for galaxy-wide human trades.
-	// Fee scales with scarcity: 5% when plentiful (supply > demand*20),
-	// up to 20% when scarce (supply < demand*5). Simulates shipping difficulty.
 	if player.IsHuman() && !useSystemScope {
-		feeRate := 0.10 // default 10%
-		rm := te.market.getResourceMarket(resource)
-		if rm != nil && rm.TotalDemand > 0 {
-			ratio := rm.TotalSupply / (rm.TotalDemand * 10)
-			if ratio > 2.0 {
-				feeRate = 0.05 // plentiful: cheap shipping
-			} else if ratio < 0.5 {
-				feeRate = 0.20 // scarce: expensive to source
-			} else {
-				feeRate = 0.15 - ratio*0.05 // linear interpolation
-				if feeRate < 0.05 {
-					feeRate = 0.05
-				}
-			}
+		feeRate := 0.10
+		if rm := te.market.getResourceMarket(resource); rm != nil {
+			feeRate = ComputeImportFee(rm.TotalSupply, rm.TotalDemand)
 		}
 		importFee := int(math.Round(float64(total) * feeRate))
 		total += importFee
@@ -250,22 +237,11 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 				}
 			}
 		}
-		// Dynamic export fee (mirrors import fee logic)
+		// Dynamic export fee
 		if !localSell {
 			feeRate := 0.10
-			rm := te.market.getResourceMarket(resource)
-			if rm != nil && rm.TotalDemand > 0 {
-				ratio := rm.TotalSupply / (rm.TotalDemand * 10)
-				if ratio > 2.0 {
-					feeRate = 0.05
-				} else if ratio < 0.5 {
-					feeRate = 0.20
-				} else {
-					feeRate = 0.15 - ratio*0.05
-					if feeRate < 0.05 {
-						feeRate = 0.05
-					}
-				}
+			if rm := te.market.getResourceMarket(resource); rm != nil {
+				feeRate = ComputeImportFee(rm.TotalSupply, rm.TotalDemand)
 			}
 			exportFee := int(math.Round(float64(total) * feeRate))
 			total -= exportFee
