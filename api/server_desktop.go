@@ -210,7 +210,26 @@ func StartServer(provider GameStateProvider) {
 				limit = n
 			}
 		}
-		writeJSON(w, APIResponse{OK: true, Data: handleGetTradeHistory(getProvider(), limit)})
+		filterResource := r.URL.Query().Get("resource")
+		filterPlayer := r.URL.Query().Get("player")
+		result := handleGetTradeHistory(getProvider(), limit)
+		// Apply filters if provided
+		if filterResource != "" || filterPlayer != "" {
+			if entries, ok := result.([]TradeHistoryEntry); ok {
+				filtered := make([]TradeHistoryEntry, 0)
+				for _, e := range entries {
+					if filterResource != "" && !strings.EqualFold(e.Resource, filterResource) {
+						continue
+					}
+					if filterPlayer != "" && !strings.EqualFold(e.Player, filterPlayer) {
+						continue
+					}
+					filtered = append(filtered, e)
+				}
+				result = filtered
+			}
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
 	})
 
 	mux.HandleFunc("/api/galaxy", func(w http.ResponseWriter, r *http.Request) {
