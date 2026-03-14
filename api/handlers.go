@@ -754,6 +754,40 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 	return nil, false
 }
 
+func handleGetCatalog() interface{} {
+	buildings := []CatalogBuilding{
+		{Type: "Mine", Cost: game.GetBuildingCost("Mine"), MaxLevel: 5, Workers: 80},
+		{Type: "Trading Post", Cost: game.GetBuildingCost("Trading Post"), MaxLevel: 5, Workers: 150},
+		{Type: "Refinery", Cost: game.GetBuildingCost("Refinery"), MaxLevel: 5, Workers: 250},
+		{Type: "Habitat", Cost: game.GetBuildingCost("Habitat"), MaxLevel: 10, Workers: 200},
+		{Type: "Shipyard", Cost: game.GetBuildingCost("Shipyard"), MaxLevel: 5, Workers: 400},
+	}
+
+	shipTypes := []entities.ShipType{
+		entities.ShipTypeScout,
+		entities.ShipTypeCargo,
+		entities.ShipTypeColony,
+		entities.ShipTypeFrigate,
+		entities.ShipTypeDestroyer,
+		entities.ShipTypeCruiser,
+	}
+
+	ships := make([]CatalogShip, 0, len(shipTypes))
+	for _, st := range shipTypes {
+		ships = append(ships, CatalogShip{
+			Type:      string(st),
+			Cost:      entities.GetShipBuildCost(st),
+			BuildTime: entities.GetShipBuildTime(st),
+			Resources: entities.GetShipResourceRequirements(st),
+			MaxFuel:   entities.GetShipMaxFuel(st),
+			MaxCargo:  entities.GetShipMaxCargo(st),
+			MaxHealth: entities.GetShipMaxHealth(st),
+		})
+	}
+
+	return Catalog{Buildings: buildings, Ships: ships}
+}
+
 func handleGetConstructionQueue(p GameStateProvider) interface{} {
 	constructionSystem := tickable.GetSystemByName("Construction")
 	if constructionSystem == nil {

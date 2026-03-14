@@ -247,6 +247,31 @@ type FleetRemoveShipRequest struct {
 	FleetID int `json:"fleet_id"`
 }
 
+// CatalogBuilding describes an available building type.
+type CatalogBuilding struct {
+	Type      string `json:"type"`
+	Cost      int    `json:"cost"`
+	MaxLevel  int    `json:"max_level"`
+	Workers   int    `json:"workers"`
+}
+
+// CatalogShip describes an available ship type.
+type CatalogShip struct {
+	Type         string         `json:"type"`
+	Cost         int            `json:"cost"`
+	BuildTime    int            `json:"build_time"`
+	Resources    map[string]int `json:"resources"`
+	MaxFuel      int            `json:"max_fuel"`
+	MaxCargo     int            `json:"max_cargo"`
+	MaxHealth    int            `json:"max_health"`
+}
+
+// Catalog lists all available buildings and ships with costs.
+type Catalog struct {
+	Buildings []CatalogBuilding `json:"buildings"`
+	Ships     []CatalogShip     `json:"ships"`
+}
+
 // SystemPrices shows local prices for a system (for trade route planning).
 type SystemPrices struct {
 	SystemID   int                `json:"system_id"`

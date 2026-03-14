@@ -408,3 +408,22 @@ func GetShipResourceRequirements(shipType ShipType) map[string]int {
 
 	return requirements
 }
+
+// shipStats holds base stats for each ship type.
+var shipStats = map[ShipType]struct{ Fuel, Cargo, Health int }{
+	ShipTypeScout:     {200, 50, 50},
+	ShipTypeColony:    {300, 100, 100},
+	ShipTypeCargo:     {250, 500, 80},
+	ShipTypeFrigate:   {180, 100, 120},
+	ShipTypeDestroyer: {220, 150, 200},
+	ShipTypeCruiser:   {300, 200, 350},
+}
+
+// GetShipMaxFuel returns the max fuel for a ship type.
+func GetShipMaxFuel(st ShipType) int { return shipStats[st].Fuel }
+
+// GetShipMaxCargo returns the max cargo for a ship type.
+func GetShipMaxCargo(st ShipType) int { return shipStats[st].Cargo }
+
+// GetShipMaxHealth returns the max health for a ship type.
+func GetShipMaxHealth(st ShipType) int { return shipStats[st].Health }
