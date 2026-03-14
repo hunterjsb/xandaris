@@ -692,11 +692,14 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 		}
 	}
 
-	if !hasShipyard && humanPlayer.Credits > 2000 {
-		hints = append(hints, "Build a Shipyard to construct ships")
-	}
-	if !hasRefinery && hasOil && !hasFuel {
-		hints = append(hints, "Build a Refinery to convert Oil into Fuel")
+	if !hasShipyard {
+		if humanPlayer.Credits >= 2000 {
+			hints = append(hints, "Build a Shipyard (2000cr) to construct ships")
+		} else {
+			hints = append(hints, fmt.Sprintf("Need Shipyard (2000cr) — have %dcr", humanPlayer.Credits))
+		}
+	} else if !hasRefinery && hasOil && !hasFuel {
+		hints = append(hints, "Build a Refinery (1500cr) to convert Oil into Fuel")
 	}
 	if humanPlayer.Credits > 50000 {
 		hints = append(hints, "Excess credits — invest in upgrades or buildings")
