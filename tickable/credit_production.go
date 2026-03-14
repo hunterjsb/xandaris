@@ -45,16 +45,28 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 		return
 	}
 
+	// Get trade volume from market for Trading Post revenue
+	var totalTradeVolume float64
+	if mp, ok := context.GetGame().(interface{ GetMarketEngine() interface{ GetTradeVolume() float64 } }); ok {
+		me := mp.GetMarketEngine()
+		if me != nil {
+			totalTradeVolume = me.GetTradeVolume()
+		}
+	}
+
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {
 			// Base production: 1 credit per 100 population per interval
 			production := int(planet.Population / 100)
 
-			// Trading Post bonus: 3 credits per level per interval
+			// Trading Post revenue: earns from galaxy trade volume
+			// Each TP level captures a share of total trade activity
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok {
 					if b.BuildingType == "Trading Post" && b.IsOperational {
-						production += 3 * b.Level
+						// Base: 2cr per level + share of trade volume
+						tradeShare := int(totalTradeVolume * 0.01 * float64(b.Level))
+						production += 2*b.Level + tradeShare
 					}
 				}
 			}

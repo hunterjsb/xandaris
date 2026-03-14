@@ -401,6 +401,17 @@ func ComputeImportFee(totalSupply float64, totalDemand float64) float64 {
 	return fee
 }
 
+// GetTradeVolume returns total recent trade volume across all resources.
+func (m *Market) GetTradeVolume() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	total := 0.0
+	for _, rm := range m.resources {
+		total += rm.TradeVolumeBuy + rm.TradeVolumeSell
+	}
+	return total
+}
+
 // getResourceMarket returns the market data for a resource (read-only, thread-safe).
 func (m *Market) getResourceMarket(resourceType string) *ResourceMarket {
 	m.mu.RLock()
