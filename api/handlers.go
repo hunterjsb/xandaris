@@ -394,21 +394,37 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 		}
 	}
 
-	// Check if player has no shipyard
+	// Check buildings
 	hasShipyard := false
-	for _, p := range player.Planets {
-		for _, planet := range human.OwnedPlanets {
-			if planet != nil && planet.GetID() == p.ID {
-				for _, be := range planet.Buildings {
-					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Shipyard" {
-						hasShipyard = true
-					}
+	hasRefinery := false
+	hasFuel := false
+	hasOil := false
+	for _, planet := range human.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		if planet.GetStoredAmount("Fuel") > 0 {
+			hasFuel = true
+		}
+		if planet.GetStoredAmount("Oil") > 20 {
+			hasOil = true
+		}
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok {
+				if b.BuildingType == "Shipyard" {
+					hasShipyard = true
+				}
+				if b.BuildingType == "Refinery" {
+					hasRefinery = true
 				}
 			}
 		}
 	}
 	if !hasShipyard && human.Credits > 2000 {
 		hints = append(hints, "Build a Shipyard to construct ships for trade and exploration")
+	}
+	if !hasRefinery && hasOil && !hasFuel {
+		hints = append(hints, "Build a Refinery to convert Oil into Fuel (needed for ships)")
 	}
 
 	// Check if player has excess credits
