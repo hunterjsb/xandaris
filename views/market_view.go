@@ -338,7 +338,52 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		DrawText(screen, scrollText, mv.tablePanel.X+20, mv.tablePanel.Y+mv.tablePanel.Height-24, utils.TextSecondary)
 	}
 
+	// Trade history section (below commodity rows)
+	mv.drawTradeHistory(screen, y+10)
+
 	mv.drawInstructions(screen)
+}
+
+func (mv *MarketView) drawTradeHistory(screen *ebiten.Image, startY int) {
+	exec := mv.ctx.GetTradeExecutor()
+	if exec == nil {
+		return
+	}
+
+	history := exec.GetHistory(8)
+	if len(history) == 0 {
+		return
+	}
+
+	maxY := mv.tablePanel.Y + mv.tablePanel.Height - 10
+
+	// Section header
+	if startY+15 > maxY {
+		return
+	}
+	DrawLine(screen, mv.tablePanel.X+15, startY, mv.tablePanel.X+mv.tablePanel.Width-15, startY, utils.PanelBorder)
+	startY += 8
+	DrawText(screen, "Recent Trades", mv.tablePanel.X+20, startY, utils.TextSecondary)
+	startY += 18
+
+	// Draw trades (newest first)
+	for i := len(history) - 1; i >= 0; i-- {
+		if startY+14 > maxY {
+			break
+		}
+		t := history[i]
+		actionColor := utils.SystemGreen
+		actionStr := "bought"
+		if t.Action == "sell" {
+			actionColor = utils.SystemRed
+			actionStr = "sold"
+		}
+
+		line := fmt.Sprintf("%s %s %d %s @ %.0f = %dcr",
+			t.Player, actionStr, t.Quantity, t.Resource, t.UnitPrice, t.Total)
+		DrawText(screen, line, mv.tablePanel.X+25, startY, actionColor)
+		startY += 16
+	}
 }
 
 func (mv *MarketView) handleTrade(resource string, buy bool) {
