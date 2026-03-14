@@ -221,6 +221,35 @@ type PlanetRates struct {
 	NetFlow     map[string]float64     `json:"net_flow"`    // production - consumption
 }
 
+// GameStatus is a comprehensive snapshot for agents — everything needed in one call.
+type GameStatus struct {
+	Tick        int64          `json:"tick"`
+	GameTime    string         `json:"game_time"`
+	Speed       string         `json:"speed"`
+	Paused      bool           `json:"paused"`
+	Player      PlayerStatus   `json:"player"`
+	Economy     EconomyOverview `json:"economy"`
+}
+
+// PlayerStatus is the human player's state in the GameStatus response.
+type PlayerStatus struct {
+	Name    string         `json:"name"`
+	Credits int            `json:"credits"`
+	Planets []PlanetBrief  `json:"planets"`
+	Ships   int            `json:"ships"`
+}
+
+// PlanetBrief is a compact planet summary for GameStatus.
+type PlanetBrief struct {
+	ID         int            `json:"id"`
+	Name       string         `json:"name"`
+	SystemID   int            `json:"system_id"`
+	Population int64          `json:"population"`
+	Storage    map[string]int `json:"storage"`
+	Buildings  int            `json:"buildings"`
+	Mines      int            `json:"mines"`
+}
+
 // EconomyOverview is a galaxy-wide economic summary.
 type EconomyOverview struct {
 	TotalPopulation int64                      `json:"total_population"`

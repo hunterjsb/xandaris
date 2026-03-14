@@ -304,6 +304,70 @@ func handleGetPlayerMe(p GameStateProvider) interface{} {
 	}
 }
 
+func handleGetStatus(p GameStateProvider) interface{} {
+	tick, gameTime, speed, paused := p.GetTickInfo()
+
+	// Player info
+	var playerStatus PlayerStatus
+	human := p.GetHumanPlayer()
+	if human != nil {
+		playerStatus.Name = human.Name
+		playerStatus.Credits = human.Credits
+		playerStatus.Ships = len(human.OwnedShips)
+		playerStatus.Planets = make([]PlanetBrief, 0)
+
+		for _, planet := range human.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			storage := make(map[string]int)
+			for resType, s := range planet.StoredResources {
+				if s != nil {
+					storage[resType] = s.Amount
+				}
+			}
+			mines := 0
+			bldgCount := 0
+			sysID := 0
+			for _, be := range planet.Buildings {
+				bldgCount++
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" {
+					mines++
+				}
+			}
+			for _, sys := range p.GetSystems() {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok && pl.GetID() == planet.GetID() {
+						sysID = sys.ID
+						break
+					}
+				}
+			}
+			playerStatus.Planets = append(playerStatus.Planets, PlanetBrief{
+				ID:         planet.GetID(),
+				Name:       planet.Name,
+				SystemID:   sysID,
+				Population: planet.Population,
+				Storage:    storage,
+				Buildings:  bldgCount,
+				Mines:      mines,
+			})
+		}
+	}
+
+	// Economy
+	econ := handleGetEconomy(p).(EconomyOverview)
+
+	return GameStatus{
+		Tick:     tick,
+		GameTime: gameTime,
+		Speed:    speed,
+		Paused:   paused,
+		Player:   playerStatus,
+		Economy:  econ,
+	}
+}
+
 func handleGetGame(p GameStateProvider) interface{} {
 	tick, gameTime, speed, paused := p.GetTickInfo()
 	return GameInfo{
