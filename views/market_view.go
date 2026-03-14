@@ -456,11 +456,19 @@ func (mv *MarketView) drawTradeHistory(screen *ebiten.Image, startY int) {
 			break
 		}
 		t := history[i]
-		actionColor := utils.SystemGreen
+		actionColor := utils.TextSecondary
 		actionStr := "bought"
 		if t.Action == "sell" {
-			actionColor = utils.SystemRed
 			actionStr = "sold"
+		}
+		// Highlight human player's trades
+		human := mv.ctx.GetHumanPlayer()
+		if human != nil && t.Player == human.Name {
+			if t.Action == "sell" {
+				actionColor = utils.SystemRed
+			} else {
+				actionColor = utils.SystemGreen
+			}
 		}
 
 		line := fmt.Sprintf("%s %s %d %s @ %.0f = %dcr",
