@@ -54,13 +54,15 @@ type TradeResult struct {
 
 // SystemSummary is a compact system representation for the galaxy endpoint.
 type SystemSummary struct {
-	ID       int       `json:"id"`
-	Name     string    `json:"name"`
-	X        float64   `json:"x"`
-	Y        float64   `json:"y"`
-	StarType string    `json:"star_type"`
-	Planets  int       `json:"planets"`
-	Links    []int     `json:"links,omitempty"`
+	ID        int      `json:"id"`
+	Name      string   `json:"name"`
+	X         float64  `json:"x"`
+	Y         float64  `json:"y"`
+	StarType  string   `json:"star_type"`
+	Planets   int      `json:"planets"`
+	Links     []int    `json:"links,omitempty"`
+	Owner     string   `json:"owner,omitempty"`    // faction that owns a planet here
+	Resources []string `json:"resources,omitempty"` // resource types available
 }
 
 // PlanetDetail is the detailed planet endpoint representation.

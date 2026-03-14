@@ -83,17 +83,29 @@ func handleGetGalaxy(p GameStateProvider) interface{} {
 	for _, sys := range systems {
 		starType := ""
 		planets := 0
+		owner := ""
+		resSet := make(map[string]bool)
 		for _, e := range sys.Entities {
-			switch e.(type) {
+			switch v := e.(type) {
 			case *entities.Star:
-				if s, ok := e.(*entities.Star); ok {
-					starType = s.StarType
-				}
+				starType = v.StarType
 			case *entities.Planet:
 				planets++
+				if v.Owner != "" && owner == "" {
+					owner = v.Owner
+				}
+				for _, resEntity := range v.Resources {
+					if res, ok := resEntity.(*entities.Resource); ok {
+						resSet[res.ResourceType] = true
+					}
+				}
 			}
 		}
-		result = append(result, SystemSummary{
+		resources := make([]string, 0, len(resSet))
+		for r := range resSet {
+			resources = append(resources, r)
+		}
+		summary := SystemSummary{
 			ID:       sys.ID,
 			Name:     sys.Name,
 			X:        sys.X,
@@ -101,7 +113,14 @@ func handleGetGalaxy(p GameStateProvider) interface{} {
 			StarType: starType,
 			Planets:  planets,
 			Links:    links[sys.ID],
-		})
+		}
+		if owner != "" {
+			summary.Owner = owner
+		}
+		if len(resources) > 0 {
+			summary.Resources = resources
+		}
+		result = append(result, summary)
 	}
 	return result
 }
