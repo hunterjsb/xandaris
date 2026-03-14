@@ -565,8 +565,11 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 		}
 	}
 
-	// Add market price data
+	// Add market price data and trade volume
 	market := p.GetMarket()
+	if market != nil {
+		overview.TradeVolume = market.GetTradeVolume()
+	}
 	if market != nil {
 		snap := market.GetSnapshot()
 		for name, rm := range snap.Resources {

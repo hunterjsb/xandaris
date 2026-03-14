@@ -262,6 +262,7 @@ type PlanetBrief struct {
 type EconomyOverview struct {
 	TotalPopulation int64                      `json:"total_population"`
 	TotalCredits    int                        `json:"total_credits"`
+	TradeVolume     float64                    `json:"trade_volume"` // recent trade activity
 	Resources       map[string]ResourceSummary `json:"resources"`
 }
 
