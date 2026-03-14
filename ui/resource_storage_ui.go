@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/views"
 	"github.com/hunterjsb/xandaris/utils"
@@ -190,23 +191,17 @@ func (rsu *ResourceStorageUI) computeNetFlow(planet *entities.Planet) map[string
 		}
 	}
 
-	// Population consumption
-	popRates := map[string]float64{"Water": 250, "Iron": 500, "Oil": 800, "Rare Metals": 5000, "Helium-3": 10000}
-	for res, div := range popRates {
-		flow[res] -= float64(planet.Population) / div
+	// Population consumption (from economy.PopulationConsumption — single source of truth)
+	for _, rate := range economy.PopulationConsumption {
+		flow[rate.ResourceType] -= float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
 	}
 
-	// Building upkeep
-	upkeep := map[string]map[string]float64{
-		"Mine": {"Iron": 1}, "Trading Post": {"Oil": 1},
-		"Refinery": {"Oil": 2, "Iron": 1}, "Shipyard": {"Fuel": 2, "Iron": 1, "Rare Metals": 1},
-		"Habitat": {"Water": 1, "Fuel": 1}, "Base": {"Fuel": 1},
-	}
+	// Building upkeep (from economy.BuildingResourceUpkeep — single source of truth)
 	for _, be := range planet.Buildings {
 		if b, ok := be.(*entities.Building); ok && b.IsOperational {
-			if u, found := upkeep[b.BuildingType]; found {
-				for res, amt := range u {
-					flow[res] -= amt
+			if upkeeps, found := economy.BuildingResourceUpkeep[b.BuildingType]; found {
+				for _, u := range upkeeps {
+					flow[u.ResourceType] -= float64(u.Amount)
 				}
 			}
 		}

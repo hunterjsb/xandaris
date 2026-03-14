@@ -514,29 +514,17 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 				}
 			}
 
-			// Population consumption
-			popRates := map[string]float64{
-				"Water": 250, "Iron": 500, "Oil": 800,
-				"Rare Metals": 5000, "Helium-3": 10000,
-			}
-			for res, div := range popRates {
-				consumption[res] += float64(planet.Population) / div
+			// Population consumption (from economy.PopulationConsumption)
+			for _, rate := range economy.PopulationConsumption {
+				consumption[rate.ResourceType] += float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
 			}
 
-			// Building upkeep consumption
-			bldgUpkeep := map[string]map[string]float64{
-				"Mine":         {"Iron": 1},
-				"Trading Post": {"Oil": 1},
-				"Refinery":     {"Oil": 2, "Iron": 1},
-				"Shipyard":     {"Fuel": 2, "Iron": 1, "Rare Metals": 1},
-				"Habitat":      {"Water": 1, "Fuel": 1},
-				"Base":         {"Fuel": 1},
-			}
+			// Building upkeep (from economy.BuildingResourceUpkeep)
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok && b.IsOperational {
-					if upkeeps, found := bldgUpkeep[b.BuildingType]; found {
-						for res, amt := range upkeeps {
-							consumption[res] += amt
+					if upkeeps, found := economy.BuildingResourceUpkeep[b.BuildingType]; found {
+						for _, u := range upkeeps {
+							consumption[u.ResourceType] += float64(u.Amount)
 						}
 					}
 				}

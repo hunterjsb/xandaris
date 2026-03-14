@@ -173,6 +173,12 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 	// Deduct cost and queue construction
 	human.Credits -= cost
 
+	// Build time scales with cost: 1 tick per 2 credits, minimum 100 ticks
+	buildTicks := cost / 2
+	if buildTicks < 100 {
+		buildTicks = 100
+	}
+
 	item := &tickable.ConstructionItem{
 		ID:             fmt.Sprintf("api_%d_%d", bd.PlanetID, gs.TickManager.GetCurrentTick()),
 		Type:           "Building",
@@ -180,8 +186,8 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		Location:       attachmentID,
 		Owner:          human.Name,
 		Progress:       0,
-		TotalTicks:     600,
-		RemainingTicks: 600,
+		TotalTicks:     buildTicks,
+		RemainingTicks: buildTicks,
 		Cost:           cost,
 		Started:        gs.TickManager.GetCurrentTick(),
 	}
@@ -197,7 +203,7 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 			"building":  bd.BuildingType,
 			"planet_id": bd.PlanetID,
 			"cost":      cost,
-			"ticks":     600,
+			"ticks":     buildTicks,
 		}
 		close(cmd.Result)
 	}
