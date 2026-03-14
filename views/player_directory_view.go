@@ -154,12 +154,13 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 
 	headerY := pd.tablePanel.Y + 18
 	DrawText(screen, "Name", pd.tablePanel.X+20, headerY, utils.TextPrimary)
-	DrawText(screen, "Type", pd.tablePanel.X+210, headerY, utils.TextPrimary)
-	DrawText(screen, "Credits", pd.tablePanel.X+280, headerY, utils.TextPrimary)
-	DrawText(screen, "Planets", pd.tablePanel.X+370, headerY, utils.TextPrimary)
-	DrawText(screen, "Ships", pd.tablePanel.X+440, headerY, utils.TextPrimary)
-	DrawText(screen, "Stock", pd.tablePanel.X+510, headerY, utils.TextPrimary)
-	DrawText(screen, "Home", pd.tablePanel.X+590, headerY, utils.TextPrimary)
+	DrawText(screen, "Type", pd.tablePanel.X+190, headerY, utils.TextPrimary)
+	DrawText(screen, "Credits", pd.tablePanel.X+250, headerY, utils.TextPrimary)
+	DrawText(screen, "Pop", pd.tablePanel.X+330, headerY, utils.TextPrimary)
+	DrawText(screen, "Ships", pd.tablePanel.X+400, headerY, utils.TextPrimary)
+	DrawText(screen, "Bldgs", pd.tablePanel.X+460, headerY, utils.TextPrimary)
+	DrawText(screen, "Stock", pd.tablePanel.X+530, headerY, utils.TextPrimary)
+	DrawText(screen, "Home", pd.tablePanel.X+610, headerY, utils.TextPrimary)
 
 	DrawLine(screen, pd.tablePanel.X+15, headerY+12, pd.tablePanel.X+pd.tablePanel.Width-15, headerY+12, utils.PanelBorder)
 
@@ -184,21 +185,39 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 			if entry.isHuman {
 				playerType = "Human"
 			}
-			DrawText(screen, playerType, pd.tablePanel.X+210, y, utils.TextSecondary)
+			DrawText(screen, playerType, pd.tablePanel.X+190, y, utils.TextSecondary)
 			credColor := utils.TextPrimary
 			if entry.player.Credits < 1000 {
 				credColor = utils.SystemRed
 			}
-			DrawText(screen, fmt.Sprintf("%d", entry.player.Credits), pd.tablePanel.X+280, y, credColor)
-			DrawText(screen, fmt.Sprintf("%d", entry.planets), pd.tablePanel.X+370, y, utils.TextPrimary)
-			DrawText(screen, fmt.Sprintf("%d", len(entry.player.OwnedShips)), pd.tablePanel.X+440, y, utils.TextPrimary)
-			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+510, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", entry.player.Credits), pd.tablePanel.X+250, y, credColor)
+
+			// Population
+			pop := entry.player.GetTotalPopulation()
+			popStr := fmt.Sprintf("%d", pop)
+			if pop >= 1000 {
+				popStr = fmt.Sprintf("%.1fk", float64(pop)/1000.0)
+			}
+			DrawText(screen, popStr, pd.tablePanel.X+330, y, utils.TextPrimary)
+
+			DrawText(screen, fmt.Sprintf("%d", len(entry.player.OwnedShips)), pd.tablePanel.X+400, y, utils.TextPrimary)
+
+			// Building count
+			bldgCount := 0
+			for _, planet := range entry.player.OwnedPlanets {
+				if planet != nil {
+					bldgCount += len(planet.Buildings)
+				}
+			}
+			DrawText(screen, fmt.Sprintf("%d", bldgCount), pd.tablePanel.X+460, y, utils.TextPrimary)
+
+			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+530, y, utils.TextPrimary)
 
 			homeName := "Unknown"
 			if entry.player.HomeSystem != nil {
 				homeName = entry.player.HomeSystem.Name
 			}
-			DrawText(screen, homeName, pd.tablePanel.X+590, y, utils.TextSecondary)
+			DrawText(screen, homeName, pd.tablePanel.X+610, y, utils.TextSecondary)
 
 			y += rowHeight
 		}
