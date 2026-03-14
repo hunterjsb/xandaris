@@ -325,7 +325,14 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 				buyColor = utils.SystemOrange // above average
 			}
 		}
-		DrawText(screen, fmt.Sprintf("%.0f", row.buyPrice), colBuy, y, buyColor)
+		buyStr := fmt.Sprintf("%.0f", row.buyPrice)
+		DrawText(screen, buyStr, colBuy, y, buyColor)
+		// Trend arrow after buy price
+		if row.trend > 1.0 {
+			DrawText(screen, "^", colBuy+len(buyStr)*6+2, y, utils.SystemRed)
+		} else if row.trend < -1.0 {
+			DrawText(screen, "v", colBuy+len(buyStr)*6+2, y, utils.SystemGreen)
+		}
 
 		// Sell price colored by ratio to base: green=profitable, orange=below base
 		sellColor := utils.TextPrimary

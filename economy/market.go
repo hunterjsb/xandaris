@@ -1,7 +1,6 @@
 package economy
 
 import (
-	"fmt"
 	"math"
 	"sync"
 
@@ -346,10 +345,6 @@ func (m *Market) ExecuteTrade(resourceType string, quantity int, buy bool) (int,
 	if total <= 0 {
 		total = quantity
 	}
-
-	fmt.Printf("[Market] Price check: %s %d %s @ %.0f = %d credits\n",
-		map[bool]string{true: "BUY", false: "SELL"}[buy],
-		quantity, resourceType, price, total)
 
 	return total, true
 }
