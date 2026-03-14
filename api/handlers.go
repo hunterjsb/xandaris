@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
@@ -937,7 +938,7 @@ func handleGetWorkforce(p GameStateProvider, planetID int) (interface{}, bool) {
 	return nil, false
 }
 
-func handleGetDeposits(p GameStateProvider) interface{} {
+func handleGetDeposits(p GameStateProvider, filterResource string, filterUnmined bool, filterOwner string) interface{} {
 	type DepositInfo struct {
 		SystemID     int     `json:"system_id"`
 		SystemName   string  `json:"system_name"`
@@ -972,6 +973,16 @@ func handleGetDeposits(p GameStateProvider) interface{} {
 							break
 						}
 					}
+				}
+				// Apply filters
+				if filterResource != "" && !strings.EqualFold(res.ResourceType, filterResource) {
+					continue
+				}
+				if filterUnmined && hasMine {
+					continue
+				}
+				if filterOwner != "" && !strings.EqualFold(planet.Owner, filterOwner) {
+					continue
 				}
 				deposits = append(deposits, DepositInfo{
 					SystemID:     sys.ID,

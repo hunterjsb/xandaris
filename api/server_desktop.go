@@ -368,7 +368,20 @@ func StartServer(provider GameStateProvider) {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
 			return
 		}
-		writeJSON(w, APIResponse{OK: true, Data: handleGetShips(getProvider())})
+		result := handleGetShips(getProvider())
+		filterOwner := r.URL.Query().Get("owner")
+		if filterOwner != "" {
+			if ships, ok := result.([]ShipInfo); ok {
+				filtered := make([]ShipInfo, 0)
+				for _, s := range ships {
+					if strings.EqualFold(s.Owner, filterOwner) {
+						filtered = append(filtered, s)
+					}
+				}
+				result = filtered
+			}
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
 	})
 
 	mux.HandleFunc("/api/fleets", func(w http.ResponseWriter, r *http.Request) {
@@ -588,7 +601,10 @@ func StartServer(provider GameStateProvider) {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
 			return
 		}
-		writeJSON(w, APIResponse{OK: true, Data: handleGetDeposits(getProvider())})
+		filterResource := r.URL.Query().Get("resource")
+		filterUnmined := r.URL.Query().Get("unmined") == "true"
+		filterOwner := r.URL.Query().Get("owner")
+		writeJSON(w, APIResponse{OK: true, Data: handleGetDeposits(getProvider(), filterResource, filterUnmined, filterOwner)})
 	})
 
 	mux.HandleFunc("/api/planets/workforce/", func(w http.ResponseWriter, r *http.Request) {
