@@ -204,6 +204,16 @@ type UpgradeRequest struct {
 	BuildingIndex int `json:"building_index"` // index in the buildings array
 }
 
+// PlanetRates shows production and consumption for a planet.
+type PlanetRates struct {
+	PlanetID    int                    `json:"planet_id"`
+	PlanetName  string                 `json:"planet_name"`
+	Population  int64                  `json:"population"`
+	Production  map[string]float64     `json:"production"`  // resource -> units/interval
+	Consumption map[string]float64     `json:"consumption"` // resource -> units/interval
+	NetFlow     map[string]float64     `json:"net_flow"`    // production - consumption
+}
+
 // EconomyOverview is a galaxy-wide economic summary.
 type EconomyOverview struct {
 	TotalPopulation int64                      `json:"total_population"`

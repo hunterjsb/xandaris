@@ -465,6 +465,108 @@ func handleGetPlanetStorage(p GameStateProvider, planetID int) (interface{}, boo
 	return nil, false
 }
 
+func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool) {
+	for _, sys := range p.GetSystems() {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok || planet.GetID() != planetID {
+				continue
+			}
+
+			production := make(map[string]float64)
+			consumption := make(map[string]float64)
+			netFlow := make(map[string]float64)
+
+			// Calculate mine production
+			for _, resEntity := range planet.Resources {
+				res, ok := resEntity.(*entities.Resource)
+				if !ok || res.Abundance <= 0 {
+					continue
+				}
+				resIDStr := fmt.Sprintf("%d", res.GetID())
+				multiplier := 0.0
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok {
+						if b.BuildingType == "Mine" && b.AttachedTo == resIDStr && b.IsOperational {
+							multiplier += b.GetStaffingRatio() * b.ProductionBonus
+						}
+					}
+				}
+				if multiplier > 0 {
+					abundanceFactor := float64(res.Abundance) / 70.0
+					if abundanceFactor > 1.0 {
+						abundanceFactor = 1.0
+					}
+					if abundanceFactor < 0.1 {
+						abundanceFactor = 0.1
+					}
+					amt := 8.0 * res.ExtractionRate * multiplier * abundanceFactor
+					production[res.ResourceType] += amt
+				}
+			}
+
+			// Calculate refinery production
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Refinery" && b.IsOperational {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					production["Fuel"] += 3.0 * levelMult
+					consumption["Oil"] += 2.0 * levelMult
+				}
+			}
+
+			// Population consumption
+			popRates := map[string]float64{
+				"Water": 250, "Iron": 500, "Oil": 800,
+				"Rare Metals": 5000, "Helium-3": 10000,
+			}
+			for res, div := range popRates {
+				consumption[res] += float64(planet.Population) / div
+			}
+
+			// Building upkeep consumption
+			bldgUpkeep := map[string]map[string]float64{
+				"Mine":         {"Iron": 1},
+				"Trading Post": {"Oil": 1},
+				"Refinery":     {"Oil": 2, "Iron": 1},
+				"Shipyard":     {"Fuel": 2, "Iron": 1, "Rare Metals": 1},
+				"Habitat":      {"Water": 1, "Fuel": 1},
+				"Base":         {"Fuel": 1},
+			}
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.IsOperational {
+					if upkeeps, found := bldgUpkeep[b.BuildingType]; found {
+						for res, amt := range upkeeps {
+							consumption[res] += amt
+						}
+					}
+				}
+			}
+
+			// Net flow
+			allRes := make(map[string]bool)
+			for r := range production {
+				allRes[r] = true
+			}
+			for r := range consumption {
+				allRes[r] = true
+			}
+			for r := range allRes {
+				netFlow[r] = production[r] - consumption[r]
+			}
+
+			return PlanetRates{
+				PlanetID:    planet.GetID(),
+				PlanetName:  planet.Name,
+				Population:  planet.Population,
+				Production:  production,
+				Consumption: consumption,
+				NetFlow:     netFlow,
+			}, true
+		}
+	}
+	return nil, false
+}
+
 func handleGetConstructionQueue(p GameStateProvider) interface{} {
 	constructionSystem := tickable.GetSystemByName("Construction")
 	if constructionSystem == nil {

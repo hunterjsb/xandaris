@@ -352,6 +352,25 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetFleets(getProvider())})
 	})
 
+	mux.HandleFunc("/api/planets/rates/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/planets/rates/")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid planet ID")
+			return
+		}
+		data, found := handleGetPlanetRates(getProvider(), id)
+		if !found {
+			writeErr(w, http.StatusNotFound, "planet not found")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: data})
+	})
+
 	mux.HandleFunc("/api/planets/storage/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
