@@ -103,8 +103,9 @@ func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, re
 	}
 }
 
-// GetRefineryInfo returns information about refinery production
-func (rps *RefineryProductionSystem) GetRefineryInfo(planet *entities.Planet) (count int, oilPerSec int, fuelPerSec int) {
+// GetRefineryInfo returns information about refinery production per interval.
+// Values match processRefinery: base 2 Oil → 3 Fuel, +30% per level.
+func (rps *RefineryProductionSystem) GetRefineryInfo(planet *entities.Planet) (count int, oilPerInterval int, fuelPerInterval int) {
 	count = 0
 	totalOil := 0
 	totalFuel := 0
@@ -113,12 +114,9 @@ func (rps *RefineryProductionSystem) GetRefineryInfo(planet *entities.Planet) (c
 		if building, ok := buildingEntity.(*entities.Building); ok {
 			if building.BuildingType == "Refinery" && building.IsOperational {
 				count++
-				// Calculate rate per second (10 ticks per second)
-				levelMultiplier := 1.0 + float64(building.Level-1)*0.2
-				oilRate := int(10.0 * levelMultiplier) // 10 oil/sec base
-				fuelRate := int(5.0 * levelMultiplier) // 5 fuel/sec base
-				totalOil += oilRate
-				totalFuel += fuelRate
+				levelMultiplier := 1.0 + float64(building.Level-1)*0.3
+				totalOil += int(2.0 * levelMultiplier)
+				totalFuel += int(3.0 * levelMultiplier)
 			}
 		}
 	}
