@@ -311,19 +311,35 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		// Galaxy supply (total across all players)
 		DrawText(screen, fmt.Sprintf("%d", row.galaxySupply), colGalSupply, y, utils.TextSecondary)
 
-		// Buy price — green if below base (good deal), red if above (expensive)
-		buyColor := utils.SystemGreen
-		if row.basePrice > 0 && row.buyPrice > row.basePrice*1.2 {
-			buyColor = utils.SystemRed
-		} else if row.basePrice > 0 && row.buyPrice > row.basePrice {
-			buyColor = utils.SystemOrange
+		// Buy price colored by ratio to base: green=cheap, orange=fair, red=expensive
+		buyColor := utils.TextPrimary
+		if row.basePrice > 0 {
+			ratio := row.buyPrice / row.basePrice
+			if ratio < 0.5 {
+				buyColor = utils.SystemGreen // bargain
+			} else if ratio < 0.9 {
+				buyColor = utils.SystemGreen // good deal
+			} else if ratio > 2.0 {
+				buyColor = utils.SystemRed // very expensive
+			} else if ratio > 1.2 {
+				buyColor = utils.SystemOrange // above average
+			}
 		}
 		DrawText(screen, fmt.Sprintf("%.0f", row.buyPrice), colBuy, y, buyColor)
 
-		// Sell price — green if above base (profit), orange if below
-		sellColor := utils.SystemOrange
-		if row.basePrice > 0 && row.sellPrice > row.basePrice {
-			sellColor = utils.SystemGreen
+		// Sell price colored by ratio to base: green=profitable, orange=below base
+		sellColor := utils.TextPrimary
+		if row.basePrice > 0 {
+			ratio := row.sellPrice / row.basePrice
+			if ratio > 1.5 {
+				sellColor = utils.SystemGreen // very profitable
+			} else if ratio > 0.9 {
+				sellColor = utils.SystemGreen // profitable
+			} else if ratio < 0.3 {
+				sellColor = utils.SystemRed // terrible price
+			} else {
+				sellColor = utils.SystemOrange // below base
+			}
 		}
 		DrawText(screen, fmt.Sprintf("%.0f", row.sellPrice), colSell, y, sellColor)
 
