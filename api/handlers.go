@@ -871,6 +871,44 @@ func handleGetCatalog() interface{} {
 	return Catalog{Buildings: buildings, Ships: ships, PopulationConsumption: popConsumption}
 }
 
+func handleGetWorkforce(p GameStateProvider, planetID int) (interface{}, bool) {
+	for _, sys := range p.GetSystems() {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok || planet.GetID() != planetID {
+				continue
+			}
+
+			buildings := make([]WorkforceEntry, 0)
+			for i, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok {
+					buildings = append(buildings, WorkforceEntry{
+						Index:    i,
+						Type:     b.BuildingType,
+						Level:    b.Level,
+						Assigned: int64(b.WorkersAssigned),
+						Required: int64(b.WorkersRequired),
+						Staffing: b.GetStaffingRatio(),
+						Online:   b.IsOperational,
+					})
+				}
+			}
+
+			return WorkforceInfo{
+				PlanetID:       planet.GetID(),
+				PlanetName:     planet.Name,
+				Population:     planet.Population,
+				PopulationCap:  planet.GetTotalPopulationCapacity(),
+				WorkforceTotal: planet.WorkforceTotal,
+				WorkforceUsed:  planet.WorkforceUsed,
+				WorkforceFree:  planet.GetAvailableWorkforce(),
+				Buildings:      buildings,
+			}, true
+		}
+	}
+	return nil, false
+}
+
 func handleGetGalaxyFlows(p GameStateProvider) interface{} {
 	production := make(map[string]float64)
 	consumption := make(map[string]float64)

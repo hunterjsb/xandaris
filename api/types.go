@@ -299,6 +299,29 @@ type GalaxyFlows struct {
 	Population  int64              `json:"population"`
 }
 
+// WorkforceInfo shows workforce allocation for a planet.
+type WorkforceInfo struct {
+	PlanetID       int              `json:"planet_id"`
+	PlanetName     string           `json:"planet_name"`
+	Population     int64            `json:"population"`
+	PopulationCap  int64            `json:"population_cap"`
+	WorkforceTotal int64            `json:"workforce_total"`
+	WorkforceUsed  int64            `json:"workforce_used"`
+	WorkforceFree  int64            `json:"workforce_free"`
+	Buildings      []WorkforceEntry `json:"buildings"`
+}
+
+// WorkforceEntry shows workforce allocation for a single building.
+type WorkforceEntry struct {
+	Index    int     `json:"index"`
+	Type     string  `json:"type"`
+	Level    int     `json:"level"`
+	Assigned int64   `json:"assigned"`
+	Required int64   `json:"required"`
+	Staffing float64 `json:"staffing"` // 0.0-1.0
+	Online   bool    `json:"online"`
+}
+
 // SystemPrices shows local prices for a system (for trade route planning).
 type SystemPrices struct {
 	SystemID   int                `json:"system_id"`
