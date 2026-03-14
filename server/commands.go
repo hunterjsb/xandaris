@@ -51,6 +51,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 	case "colonize":
 		gs.handleColonizeCommand(cmd)
 
+	case "cancel_construction":
+		gs.handleCancelConstructionCommand(cmd)
+
 	case "fleet_move":
 		gs.handleFleetMoveCommand(cmd)
 
@@ -547,6 +550,64 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 			"planet_id": planet.GetID(),
 			"system_id": systemID,
 			"colonists": planet.Population,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleCancelConstructionCommand(cmd game.GameCommand) {
+	cd, ok := cmd.Data.(game.CancelConstructionCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid cancel construction data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	constructionSystem := tickable.GetSystemByName("Construction")
+	if constructionSystem == nil {
+		sendResult(cmd, fmt.Errorf("construction system not found"))
+		return
+	}
+	cs, ok := constructionSystem.(*tickable.ConstructionSystem)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("construction system type error"))
+		return
+	}
+
+	// Find the construction item
+	items := cs.GetConstructionsByOwner(human.Name)
+	var target *tickable.ConstructionItem
+	for _, item := range items {
+		if item.ID == cd.ConstructionID {
+			target = item
+			break
+		}
+	}
+	if target == nil {
+		sendResult(cmd, fmt.Errorf("construction not found: %s", cd.ConstructionID))
+		return
+	}
+
+	// Refund partial cost based on progress
+	target.Mutex.RLock()
+	progress := target.Progress
+	cost := target.Cost
+	location := target.Location
+	target.Mutex.RUnlock()
+
+	refund := int(float64(cost) * (1.0 - float64(progress)/100.0))
+	human.Credits += refund
+	cs.RemoveFromQueue(location, cd.ConstructionID)
+
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"cancelled": cd.ConstructionID,
+			"refund":    refund,
+			"progress":  progress,
 		}
 		close(cmd.Result)
 	}

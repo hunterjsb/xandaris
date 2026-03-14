@@ -79,6 +79,11 @@ type ShipRefuelCommandData struct {
 	Amount   int // amount of Fuel to transfer (0 = fill up)
 }
 
+// CancelConstructionCommandData is the payload for cancelling a construction.
+type CancelConstructionCommandData struct {
+	ConstructionID string // ID of the construction item
+}
+
 // FleetMoveCommandData is the payload for moving a fleet to another system.
 type FleetMoveCommandData struct {
 	FleetID        int // fleet to move

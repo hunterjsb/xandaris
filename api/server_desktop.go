@@ -580,6 +580,40 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetCatalog()})
 	})
 
+	mux.HandleFunc("/api/construction/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req CancelConstructionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if req.ConstructionID == "" {
+			writeErr(w, http.StatusBadRequest, "construction_id required")
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "cancel_construction",
+			Data:   game.CancelConstructionCommandData{ConstructionID: req.ConstructionID},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
 	mux.HandleFunc("/api/construction", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")

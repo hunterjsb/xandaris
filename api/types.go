@@ -223,6 +223,11 @@ type UpgradeRequest struct {
 	BuildingIndex int `json:"building_index"` // index in the buildings array
 }
 
+// CancelConstructionRequest is the body for POST /api/construction/cancel.
+type CancelConstructionRequest struct {
+	ConstructionID string `json:"construction_id"`
+}
+
 // FleetMoveRequest is the body for POST /api/fleets/move.
 type FleetMoveRequest struct {
 	FleetID        int `json:"fleet_id"`
