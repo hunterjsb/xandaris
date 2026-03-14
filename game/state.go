@@ -66,6 +66,13 @@ type UpgradeCommandData struct {
 	BuildingIndex int // index in planet.Buildings array
 }
 
+// ShipRefuelCommandData is the payload for refueling a ship.
+type ShipRefuelCommandData struct {
+	ShipID   int // ship to refuel
+	PlanetID int // planet to take Fuel from
+	Amount   int // amount of Fuel to transfer (0 = fill up)
+}
+
 // NewState creates a new empty game state
 func NewState() *State {
 	return &State{

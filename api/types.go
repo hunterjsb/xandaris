@@ -198,6 +198,13 @@ type ShipMoveRequest struct {
 	TargetSystemID int `json:"target_system_id"`
 }
 
+// ShipRefuelRequest is the body for POST /api/ships/refuel.
+type ShipRefuelRequest struct {
+	ShipID   int `json:"ship_id"`
+	PlanetID int `json:"planet_id"`
+	Amount   int `json:"amount"` // 0 = fill up
+}
+
 // UpgradeRequest is the body for POST /api/upgrade.
 type UpgradeRequest struct {
 	PlanetID      int `json:"planet_id"`

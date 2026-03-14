@@ -44,6 +44,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 
 	case "upgrade":
 		gs.handleUpgradeCommand(cmd)
+
+	case "refuel":
+		gs.handleRefuelCommand(cmd)
 	}
 }
 
@@ -381,6 +384,69 @@ func (gs *GameServer) handleUpgradeCommand(cmd game.GameCommand) {
 			"building":  building.BuildingType,
 			"new_level": building.Level,
 			"cost":      cost,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
+	rd, ok := cmd.Data.(game.ShipRefuelCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid refuel data"))
+		return
+	}
+
+	ship := game.FindShipByID(gs.State.Players, rd.ShipID)
+	if ship == nil {
+		sendResult(cmd, fmt.Errorf("ship not found"))
+		return
+	}
+	if ship.Owner != gs.State.HumanPlayer.Name {
+		sendResult(cmd, fmt.Errorf("not your ship"))
+		return
+	}
+
+	planet := gs.CargoCommander.FindPlanetByID(rd.PlanetID)
+	if planet == nil || planet.Owner != ship.Owner {
+		sendResult(cmd, fmt.Errorf("planet not found or not owned"))
+		return
+	}
+
+	// Check ship is at this planet
+	if ship.Status == entities.ShipStatusMoving {
+		sendResult(cmd, fmt.Errorf("ship is moving"))
+		return
+	}
+
+	needed := ship.MaxFuel - ship.CurrentFuel
+	if needed <= 0 {
+		sendResult(cmd, fmt.Errorf("ship fuel is already full"))
+		return
+	}
+
+	amount := rd.Amount
+	if amount <= 0 || amount > needed {
+		amount = needed
+	}
+
+	available := planet.GetStoredAmount("Fuel")
+	if available <= 0 {
+		sendResult(cmd, fmt.Errorf("no Fuel on planet"))
+		return
+	}
+	if amount > available {
+		amount = available
+	}
+
+	planet.RemoveStoredResource("Fuel", amount)
+	ship.Refuel(amount)
+
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"ship_id":  rd.ShipID,
+			"refueled": amount,
+			"fuel_now": ship.CurrentFuel,
+			"fuel_max": ship.MaxFuel,
 		}
 		close(cmd.Result)
 	}
