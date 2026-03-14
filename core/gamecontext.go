@@ -65,3 +65,8 @@ func (a *App) LoadCargo(ship *entities.Ship, planet *entities.Planet, resource s
 func (a *App) UnloadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error) {
 	return a.Server.UnloadCargo(ship, planet, resource, qty)
 }
+
+// StartShipJourney delegates to server (for tickable.ShipJourney)
+func (a *App) StartShipJourney(ship *entities.Ship, targetSystemID int) bool {
+	return a.Server.StartShipJourney(ship, targetSystemID)
+}

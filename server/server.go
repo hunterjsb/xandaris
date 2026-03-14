@@ -224,6 +224,12 @@ func (gs *GameServer) GetSystemByID(systemID int) *entities.System {
 	return gs.FleetCmdExecutor.GetSystemByID(systemID)
 }
 
+// StartShipJourney moves a single ship to a target system (for AI logistics).
+func (gs *GameServer) StartShipJourney(ship *entities.Ship, targetSystemID int) bool {
+	helper := tickable.NewShipMovementHelper(gs.GetSystemsMap(), gs.State.Hyperlanes)
+	return helper.StartJourney(ship, targetSystemID)
+}
+
 // GetSystemsMap returns systems indexed by ID.
 func (gs *GameServer) GetSystemsMap() map[int]*entities.System {
 	return gs.State.GetSystemsMap()

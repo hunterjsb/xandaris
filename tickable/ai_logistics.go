@@ -70,7 +70,21 @@ func (als *AILogisticsSystem) OnTick(tick int64) {
 	}
 }
 
+// FleetMover lets AI move ships without importing game package.
+type FleetMover interface {
+	GetConnectedSystems(fromSystemID int) []int
+}
+
+// ShipJourney starts a ship moving via ShipMovementHelper.
+type ShipJourney interface {
+	StartShipJourney(ship *entities.Ship, targetSystemID int) bool
+}
+
 func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoOp CargoOperator, systems []*entities.System) {
+	gameObj := als.GetContext().GetGame()
+	mover, hasMover := gameObj.(FleetMover)
+	journeyer, hasJourney := gameObj.(ShipJourney)
+
 	for _, ship := range player.OwnedShips {
 		if ship == nil || ship.ShipType != entities.ShipTypeCargo {
 			continue
@@ -81,20 +95,62 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			continue
 		}
 
-		// Find the planet this ship is orbiting (if any)
+		// Find the planet this ship is orbiting
 		planet := findPlanetAtShipOrbit(ship, systems)
+		isHome := planet != nil && planet.Owner == ship.Owner
 
-		if planet != nil && planet.Owner == ship.Owner {
-			// Ship is at an owned planet
+		if isHome {
 			if ship.GetTotalCargo() > 0 {
-				// Has cargo — unload everything
+				// Returned home with cargo — unload
 				als.unloadAllCargo(ship, planet, cargoOp)
 			} else {
-				// Empty — load surplus resources
+				// Empty at home — load surplus and send to another system
 				als.loadSurplus(ship, planet, cargoOp)
+				if ship.GetTotalCargo() > 0 && hasMover && hasJourney {
+					// Pick a connected system and go there
+					connected := mover.GetConnectedSystems(ship.CurrentSystem)
+					if len(connected) > 0 {
+						// Pick the first connected system
+						target := connected[0]
+						if journeyer.StartShipJourney(ship, target) {
+							fmt.Printf("[AILogistics] %s dispatched %s to SYS-%d with cargo\n",
+								player.Name, ship.Name, target)
+						}
+					}
+				}
+			}
+		} else {
+			// At a foreign system or not at a planet — head home
+			if hasJourney {
+				homeSys := als.findHomeSystem(player, systems)
+				if homeSys >= 0 && homeSys != ship.CurrentSystem {
+					if journeyer.StartShipJourney(ship, homeSys) {
+						fmt.Printf("[AILogistics] %s returning %s home to SYS-%d\n",
+							player.Name, ship.Name, homeSys)
+					}
+				}
 			}
 		}
 	}
+}
+
+func (als *AILogisticsSystem) findHomeSystem(player *entities.Player, systems []*entities.System) int {
+	if player.HomeSystem != nil {
+		return player.HomeSystem.ID
+	}
+	for _, planet := range player.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		for _, sys := range systems {
+			for _, e := range sys.Entities {
+				if p, ok := e.(*entities.Planet); ok && p.GetID() == planet.GetID() {
+					return sys.ID
+				}
+			}
+		}
+	}
+	return -1
 }
 
 func (als *AILogisticsSystem) unloadAllCargo(ship *entities.Ship, planet *entities.Planet, cargoOp CargoOperator) {
@@ -110,21 +166,34 @@ func (als *AILogisticsSystem) unloadAllCargo(ship *entities.Ship, planet *entiti
 }
 
 func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.Planet, cargoOp CargoOperator) {
+	// Find the resource with highest stock ratio and load some of it
+	var bestRes string
+	bestRatio := 0.0
 	for resType, storage := range planet.StoredResources {
-		if storage == nil || storage.Capacity <= 0 {
+		if storage == nil || storage.Capacity <= 0 || storage.Amount < 30 {
 			continue
 		}
 		ratio := float64(storage.Amount) / float64(storage.Capacity)
-		if ratio > 0.60 {
-			excess := storage.Amount - int(float64(storage.Capacity)*0.50)
-			if excess <= 0 {
-				continue
-			}
-			loaded, err := cargoOp.LoadCargo(ship, planet, resType, excess)
-			if err == nil && loaded > 0 {
-				fmt.Printf("[AILogistics] %s loaded %d %s from %s\n", ship.Name, loaded, resType, planet.Name)
-			}
+		if ratio > bestRatio {
+			bestRatio = ratio
+			bestRes = resType
 		}
+	}
+	if bestRes == "" || bestRatio < 0.20 {
+		return // nothing worth transporting
+	}
+	storage := planet.StoredResources[bestRes]
+	// Load up to 100 units, keeping at least 20% on planet
+	qty := storage.Amount - int(float64(storage.Capacity)*0.20)
+	if qty > 100 {
+		qty = 100
+	}
+	if qty <= 0 {
+		return
+	}
+	loaded, err := cargoOp.LoadCargo(ship, planet, bestRes, qty)
+	if err == nil && loaded > 0 {
+		fmt.Printf("[AILogistics] %s loaded %d %s from %s\n", ship.Name, loaded, bestRes, planet.Name)
 	}
 }
 
