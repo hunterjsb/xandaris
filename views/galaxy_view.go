@@ -9,6 +9,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/utils"
 )
 
@@ -622,8 +623,37 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 	}
 
 	if totalMines == 0 {
-		hints = append(hints, "Build mines on resource deposits to start producing")
+		// Check if under construction
+		constructing := false
+		if cs := tickable.GetSystemByName("Construction"); cs != nil {
+			if csys, ok := cs.(*tickable.ConstructionSystem); ok {
+				for _, item := range csys.GetConstructionsByOwner(humanPlayer.Name) {
+					if item.Name == "Mine" {
+						constructing = true
+						break
+					}
+				}
+			}
+		}
+		if constructing {
+			hints = append(hints, "Mines under construction — production will begin soon")
+		} else {
+			hints = append(hints, "Build mines on resource deposits to start producing")
+		}
 	}
+
+	// Market-driven suggestions using price ratios
+	market := gv.ctx.GetMarket()
+	if market != nil && totalMines > 0 {
+		snap := market.GetSnapshot()
+		for name, rm := range snap.Resources {
+			if rm.BasePrice > 0 && rm.CurrentPrice/rm.BasePrice > 2.0 {
+				hints = append(hints, fmt.Sprintf("%s price at %.0fx base — build more mines", name, rm.CurrentPrice/rm.BasePrice))
+				break // only show one price hint
+			}
+		}
+	}
+
 	if !hasShipyard && humanPlayer.Credits > 2000 {
 		hints = append(hints, "Build a Shipyard to construct ships")
 	}
