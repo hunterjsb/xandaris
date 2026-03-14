@@ -31,7 +31,8 @@ var BuildingResourceUpkeep = map[string][]struct {
 	"Trading Post": {{"Oil", 1}},
 	"Refinery":     {{"Oil", 2}, {"Iron", 1}},
 	"Shipyard":     {{"Fuel", 2}, {"Iron", 1}, {"Rare Metals", 1}},
-	"Habitat":      {{"Water", 1}},
+	"Habitat":      {{"Water", 1}, {"Fuel", 1}},
+	"Base":         {{"Fuel", 1}},
 }
 
 // BuildingCreditUpkeep defines the credit cost per building per interval (+ level - 1).
