@@ -102,6 +102,30 @@ var tools = []openai.Tool{
 			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_index":{"type":"integer"}},"required":["planet_id","building_index"]}`),
 		},
 	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "get_construction",
+			Description: "Check construction queue — see what's being built and progress",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "move_ship",
+			Description: "Move a ship to an adjacent system via hyperlane",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"target_system_id":{"type":"integer"}},"required":["ship_id","target_system_id"]}`),
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "get_routes",
+			Description: "Get connected systems (hyperlanes) from a system — for planning ship routes",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"}},"required":["system_id"]}`),
+		},
+	},
 }
 
 func callAPI(method, endpoint string, body string) (string, error) {
@@ -195,6 +219,29 @@ func executeTool(name string, args string) string {
 	case "upgrade":
 		body, _ := json.Marshal(params)
 		result, err := callAPI("POST", "/api/upgrade", string(body))
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+
+	case "get_construction":
+		result, err := callAPI("GET", "/api/construction", "")
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+
+	case "move_ship":
+		body, _ := json.Marshal(params)
+		result, err := callAPI("POST", "/api/ships/move", string(body))
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+
+	case "get_routes":
+		sysID := int(params["system_id"].(float64))
+		result, err := callAPI("GET", fmt.Sprintf("/api/routes/%d", sysID), "")
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
