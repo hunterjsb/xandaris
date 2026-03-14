@@ -88,6 +88,10 @@ func (b *Building) GetContextMenuItems() []string {
 	items = append(items, fmt.Sprintf("Type: %s", b.BuildingType))
 	items = append(items, fmt.Sprintf("Level: %d/%d", b.Level, b.MaxLevel))
 
+	if b.CanUpgrade() {
+		items = append(items, fmt.Sprintf("Upgrade: %d credits", b.GetUpgradeCost()))
+	}
+
 	if b.IsOperational {
 		items = append(items, "Status: Operational")
 	} else {
@@ -105,7 +109,8 @@ func (b *Building) GetContextMenuItems() []string {
 	}
 
 	if b.WorkersRequired > 0 {
-		items = append(items, fmt.Sprintf("Workforce: %d/%d", b.WorkersAssigned, b.WorkersRequired))
+		staffPct := b.GetStaffingRatio() * 100
+		items = append(items, fmt.Sprintf("Workforce: %d/%d (%.0f%%)", b.WorkersAssigned, b.WorkersRequired, staffPct))
 	}
 
 	if b.Owner != "" {
