@@ -249,10 +249,12 @@ type FleetRemoveShipRequest struct {
 
 // CatalogBuilding describes an available building type.
 type CatalogBuilding struct {
-	Type      string `json:"type"`
-	Cost      int    `json:"cost"`
-	MaxLevel  int    `json:"max_level"`
-	Workers   int    `json:"workers"`
+	Type           string         `json:"type"`
+	Cost           int            `json:"cost"`
+	MaxLevel       int            `json:"max_level"`
+	Workers        int            `json:"workers"`
+	CreditUpkeep   int            `json:"credit_upkeep"`           // credits per interval (base)
+	ResourceUpkeep map[string]int `json:"resource_upkeep"`         // resources consumed per interval
 }
 
 // CatalogShip describes an available ship type.
@@ -266,10 +268,26 @@ type CatalogShip struct {
 	MaxHealth    int            `json:"max_health"`
 }
 
+// PopConsumptionRate describes per-population resource consumption.
+type PopConsumptionRate struct {
+	Resource      string  `json:"resource"`
+	PerPopulation float64 `json:"per_population"` // units consumed
+	PopDivisor    float64 `json:"pop_divisor"`     // per this many population
+}
+
 // Catalog lists all available buildings and ships with costs.
 type Catalog struct {
-	Buildings []CatalogBuilding `json:"buildings"`
-	Ships     []CatalogShip     `json:"ships"`
+	Buildings             []CatalogBuilding    `json:"buildings"`
+	Ships                 []CatalogShip        `json:"ships"`
+	PopulationConsumption []PopConsumptionRate  `json:"population_consumption"`
+}
+
+// GalaxyFlows shows galaxy-wide aggregate production and consumption rates.
+type GalaxyFlows struct {
+	Production  map[string]float64 `json:"production"`  // total production per interval
+	Consumption map[string]float64 `json:"consumption"` // total consumption per interval
+	NetFlow     map[string]float64 `json:"net_flow"`     // production - consumption
+	Population  int64              `json:"population"`
 }
 
 // SystemPrices shows local prices for a system (for trade route planning).

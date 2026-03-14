@@ -755,12 +755,38 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 }
 
 func handleGetCatalog() interface{} {
-	buildings := []CatalogBuilding{
-		{Type: "Mine", Cost: game.GetBuildingCost("Mine"), MaxLevel: 5, Workers: 80},
-		{Type: "Trading Post", Cost: game.GetBuildingCost("Trading Post"), MaxLevel: 5, Workers: 150},
-		{Type: "Refinery", Cost: game.GetBuildingCost("Refinery"), MaxLevel: 5, Workers: 250},
-		{Type: "Habitat", Cost: game.GetBuildingCost("Habitat"), MaxLevel: 10, Workers: 200},
-		{Type: "Shipyard", Cost: game.GetBuildingCost("Shipyard"), MaxLevel: 5, Workers: 400},
+	buildingTypes := []struct {
+		name     string
+		maxLevel int
+		workers  int
+	}{
+		{"Mine", 5, 80},
+		{"Trading Post", 5, 150},
+		{"Refinery", 5, 250},
+		{"Habitat", 10, 200},
+		{"Shipyard", 5, 400},
+	}
+
+	buildings := make([]CatalogBuilding, 0, len(buildingTypes))
+	for _, bt := range buildingTypes {
+		resUpkeep := make(map[string]int)
+		if upkeeps, found := economy.BuildingResourceUpkeep[bt.name]; found {
+			for _, u := range upkeeps {
+				resUpkeep[u.ResourceType] = u.Amount
+			}
+		}
+		creditUpkeep := 0
+		if cu, found := economy.BuildingCreditUpkeep[bt.name]; found {
+			creditUpkeep = cu
+		}
+		buildings = append(buildings, CatalogBuilding{
+			Type:           bt.name,
+			Cost:           game.GetBuildingCost(bt.name),
+			MaxLevel:       bt.maxLevel,
+			Workers:        bt.workers,
+			CreditUpkeep:   creditUpkeep,
+			ResourceUpkeep: resUpkeep,
+		})
 	}
 
 	shipTypes := []entities.ShipType{
@@ -785,7 +811,107 @@ func handleGetCatalog() interface{} {
 		})
 	}
 
-	return Catalog{Buildings: buildings, Ships: ships}
+	// Population consumption rates
+	popConsumption := make([]PopConsumptionRate, 0, len(economy.PopulationConsumption))
+	for _, rate := range economy.PopulationConsumption {
+		popConsumption = append(popConsumption, PopConsumptionRate{
+			Resource:      rate.ResourceType,
+			PerPopulation: rate.PerPopulation,
+			PopDivisor:    rate.PopDivisor,
+		})
+	}
+
+	return Catalog{Buildings: buildings, Ships: ships, PopulationConsumption: popConsumption}
+}
+
+func handleGetGalaxyFlows(p GameStateProvider) interface{} {
+	production := make(map[string]float64)
+	consumption := make(map[string]float64)
+	var totalPop int64
+
+	for _, player := range p.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			totalPop += planet.Population
+
+			// Mine production
+			for _, resEntity := range planet.Resources {
+				res, ok := resEntity.(*entities.Resource)
+				if !ok || res.Abundance <= 0 {
+					continue
+				}
+				resIDStr := fmt.Sprintf("%d", res.GetID())
+				multiplier := 0.0
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok {
+						if b.BuildingType == "Mine" && b.AttachedTo == resIDStr && b.IsOperational {
+							multiplier += b.GetStaffingRatio() * b.ProductionBonus
+						}
+					}
+				}
+				if multiplier > 0 {
+					af := float64(res.Abundance) / 70.0
+					if af > 1.0 {
+						af = 1.0
+					}
+					if af < 0.1 {
+						af = 0.1
+					}
+					production[res.ResourceType] += 8.0 * res.ExtractionRate * multiplier * af
+				}
+			}
+
+			// Refinery production
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Refinery" && b.IsOperational {
+					lm := 1.0 + float64(b.Level-1)*0.3
+					production["Fuel"] += 3.0 * lm
+					consumption["Oil"] += 2.0 * lm
+				}
+			}
+
+			// Population consumption
+			for _, rate := range economy.PopulationConsumption {
+				consumption[rate.ResourceType] += float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
+			}
+
+			// Building upkeep
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.IsOperational {
+					if upkeeps, found := economy.BuildingResourceUpkeep[b.BuildingType]; found {
+						for _, u := range upkeeps {
+							consumption[u.ResourceType] += float64(u.Amount)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Net flow
+	netFlow := make(map[string]float64)
+	allRes := make(map[string]bool)
+	for r := range production {
+		allRes[r] = true
+	}
+	for r := range consumption {
+		allRes[r] = true
+	}
+	for r := range allRes {
+		netFlow[r] = production[r] - consumption[r]
+	}
+
+	return GalaxyFlows{
+		Production:  production,
+		Consumption: consumption,
+		NetFlow:     netFlow,
+		Population:  totalPop,
+	}
 }
 
 func handleGetConstructionQueue(p GameStateProvider) interface{} {
