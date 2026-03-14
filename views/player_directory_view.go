@@ -17,6 +17,7 @@ type playerDirectoryEntry struct {
 	planets      int
 	tradingPosts int
 	totalStock   int
+	mines        int
 	bounds       struct {
 		X, Y, W, H int
 	}
@@ -153,14 +154,18 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 	DrawTextCentered(screen, summary, pd.headerPanel.X+pd.headerPanel.Width/2, titleY+40, utils.TextSecondary, 1.2)
 
 	headerY := pd.tablePanel.Y + 18
+	// Refresh data every draw (lightweight)
+	pd.refreshEntries()
+
 	DrawText(screen, "Name", pd.tablePanel.X+20, headerY, utils.TextPrimary)
-	DrawText(screen, "Type", pd.tablePanel.X+190, headerY, utils.TextPrimary)
-	DrawText(screen, "Credits", pd.tablePanel.X+250, headerY, utils.TextPrimary)
-	DrawText(screen, "Pop", pd.tablePanel.X+330, headerY, utils.TextPrimary)
+	DrawText(screen, "Type", pd.tablePanel.X+170, headerY, utils.TextPrimary)
+	DrawText(screen, "Credits", pd.tablePanel.X+220, headerY, utils.TextPrimary)
+	DrawText(screen, "Pop", pd.tablePanel.X+290, headerY, utils.TextPrimary)
+	DrawText(screen, "Mines", pd.tablePanel.X+350, headerY, utils.TextPrimary)
 	DrawText(screen, "Ships", pd.tablePanel.X+400, headerY, utils.TextPrimary)
-	DrawText(screen, "Bldgs", pd.tablePanel.X+460, headerY, utils.TextPrimary)
-	DrawText(screen, "Stock", pd.tablePanel.X+530, headerY, utils.TextPrimary)
-	DrawText(screen, "Home", pd.tablePanel.X+610, headerY, utils.TextPrimary)
+	DrawText(screen, "Bldgs", pd.tablePanel.X+450, headerY, utils.TextPrimary)
+	DrawText(screen, "Stock", pd.tablePanel.X+510, headerY, utils.TextPrimary)
+	DrawText(screen, "Home", pd.tablePanel.X+580, headerY, utils.TextPrimary)
 
 	DrawLine(screen, pd.tablePanel.X+15, headerY+12, pd.tablePanel.X+pd.tablePanel.Width-15, headerY+12, utils.PanelBorder)
 
@@ -185,12 +190,12 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 			if entry.isHuman {
 				playerType = "Human"
 			}
-			DrawText(screen, playerType, pd.tablePanel.X+190, y, utils.TextSecondary)
+			DrawText(screen, playerType, pd.tablePanel.X+170, y, utils.TextSecondary)
 			credColor := utils.TextPrimary
 			if entry.player.Credits < 1000 {
 				credColor = utils.SystemRed
 			}
-			DrawText(screen, fmt.Sprintf("%d", entry.player.Credits), pd.tablePanel.X+250, y, credColor)
+			DrawText(screen, fmt.Sprintf("%d", entry.player.Credits), pd.tablePanel.X+220, y, credColor)
 
 			// Population
 			pop := entry.player.GetTotalPopulation()
@@ -198,7 +203,14 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 			if pop >= 1000 {
 				popStr = fmt.Sprintf("%.1fk", float64(pop)/1000.0)
 			}
-			DrawText(screen, popStr, pd.tablePanel.X+330, y, utils.TextPrimary)
+			DrawText(screen, popStr, pd.tablePanel.X+290, y, utils.TextPrimary)
+
+			// Mines
+			mineColor := utils.TextSecondary
+			if entry.mines > 0 {
+				mineColor = utils.TextPrimary
+			}
+			DrawText(screen, fmt.Sprintf("%d", entry.mines), pd.tablePanel.X+350, y, mineColor)
 
 			DrawText(screen, fmt.Sprintf("%d", len(entry.player.OwnedShips)), pd.tablePanel.X+400, y, utils.TextPrimary)
 
@@ -209,15 +221,15 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 					bldgCount += len(planet.Buildings)
 				}
 			}
-			DrawText(screen, fmt.Sprintf("%d", bldgCount), pd.tablePanel.X+460, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", bldgCount), pd.tablePanel.X+450, y, utils.TextPrimary)
 
-			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+530, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+510, y, utils.TextPrimary)
 
 			homeName := "Unknown"
 			if entry.player.HomeSystem != nil {
 				homeName = entry.player.HomeSystem.Name
 			}
-			DrawText(screen, homeName, pd.tablePanel.X+610, y, utils.TextSecondary)
+			DrawText(screen, homeName, pd.tablePanel.X+580, y, utils.TextSecondary)
 
 			y += rowHeight
 		}
@@ -240,12 +252,24 @@ func (pd *PlayerDirectoryView) refreshEntries() {
 			continue
 		}
 
+		mineCount := 0
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" {
+					mineCount++
+				}
+			}
+		}
 		entry := &playerDirectoryEntry{
 			player:       player,
 			isHuman:      player.IsHuman(),
 			planets:      len(player.OwnedPlanets),
 			tradingPosts: countTradingPosts(player.OwnedPlanets),
 			totalStock:   totalStoredResources(player.OwnedPlanets),
+			mines:        mineCount,
 		}
 		pd.entries = append(pd.entries, entry)
 	}
