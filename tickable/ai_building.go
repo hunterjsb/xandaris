@@ -112,7 +112,12 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			}
 
 			// Build additional mine if resource is very expensive (price > 2x base)
-			if buyPrice > basePrice*2.0 && mineCount < 3 && player.Credits >= 500 {
+			// Allow more mines during severe crises (> 3x base)
+			maxMines := 3
+			if buyPrice > basePrice*3.0 {
+				maxMines = 4
+			}
+			if buyPrice > basePrice*2.0 && mineCount < maxMines && player.Credits >= 500 {
 				player.Credits -= 500
 				builder.AIBuildOnPlanet(planet, "Mine", player.Name, systemID)
 				// Attach the new mine to this resource

@@ -564,6 +564,14 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/deposits", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: handleGetDeposits(getProvider())})
+	})
+
 	mux.HandleFunc("/api/planets/workforce/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")

@@ -932,6 +932,60 @@ func handleGetWorkforce(p GameStateProvider, planetID int) (interface{}, bool) {
 	return nil, false
 }
 
+func handleGetDeposits(p GameStateProvider) interface{} {
+	type DepositInfo struct {
+		SystemID     int     `json:"system_id"`
+		SystemName   string  `json:"system_name"`
+		PlanetID     int     `json:"planet_id"`
+		PlanetName   string  `json:"planet_name"`
+		Owner        string  `json:"owner"`
+		ResourceType string  `json:"resource_type"`
+		ResourceID   int     `json:"resource_id"`
+		Abundance    int     `json:"abundance"`
+		Rate         float64 `json:"extraction_rate"`
+		HasMine      bool    `json:"has_mine"`
+	}
+
+	deposits := make([]DepositInfo, 0)
+	for _, sys := range p.GetSystems() {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok {
+				continue
+			}
+			for _, resEntity := range planet.Resources {
+				res, ok := resEntity.(*entities.Resource)
+				if !ok || res.Abundance <= 0 {
+					continue
+				}
+				hasMine := false
+				resIDStr := fmt.Sprintf("%d", res.GetID())
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok {
+						if b.BuildingType == "Mine" && b.AttachedTo == resIDStr {
+							hasMine = true
+							break
+						}
+					}
+				}
+				deposits = append(deposits, DepositInfo{
+					SystemID:     sys.ID,
+					SystemName:   sys.Name,
+					PlanetID:     planet.GetID(),
+					PlanetName:   planet.Name,
+					Owner:        planet.Owner,
+					ResourceType: res.ResourceType,
+					ResourceID:   res.GetID(),
+					Abundance:    res.Abundance,
+					Rate:         res.ExtractionRate,
+					HasMine:      hasMine,
+				})
+			}
+		}
+	}
+	return deposits
+}
+
 func handleGetGalaxyFlows(p GameStateProvider) interface{} {
 	production := make(map[string]float64)
 	consumption := make(map[string]float64)
