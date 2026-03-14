@@ -155,10 +155,11 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 	headerY := pd.tablePanel.Y + 18
 	DrawText(screen, "Name", pd.tablePanel.X+20, headerY, utils.TextPrimary)
 	DrawText(screen, "Type", pd.tablePanel.X+210, headerY, utils.TextPrimary)
-	DrawText(screen, "Planets", pd.tablePanel.X+280, headerY, utils.TextPrimary)
-	DrawText(screen, "Trading Posts", pd.tablePanel.X+360, headerY, utils.TextPrimary)
-	DrawText(screen, "Stored Goods", pd.tablePanel.X+500, headerY, utils.TextPrimary)
-	DrawText(screen, "Home System", pd.tablePanel.X+630, headerY, utils.TextPrimary)
+	DrawText(screen, "Credits", pd.tablePanel.X+280, headerY, utils.TextPrimary)
+	DrawText(screen, "Planets", pd.tablePanel.X+370, headerY, utils.TextPrimary)
+	DrawText(screen, "Ships", pd.tablePanel.X+440, headerY, utils.TextPrimary)
+	DrawText(screen, "Stock", pd.tablePanel.X+510, headerY, utils.TextPrimary)
+	DrawText(screen, "Home", pd.tablePanel.X+590, headerY, utils.TextPrimary)
 
 	DrawLine(screen, pd.tablePanel.X+15, headerY+12, pd.tablePanel.X+pd.tablePanel.Width-15, headerY+12, utils.PanelBorder)
 
@@ -184,15 +185,20 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 				playerType = "Human"
 			}
 			DrawText(screen, playerType, pd.tablePanel.X+210, y, utils.TextSecondary)
-			DrawText(screen, fmt.Sprintf("%d", entry.planets), pd.tablePanel.X+280, y, utils.TextPrimary)
-			DrawText(screen, fmt.Sprintf("%d", entry.tradingPosts), pd.tablePanel.X+360, y, utils.TextPrimary)
-			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+500, y, utils.TextPrimary)
+			credColor := utils.TextPrimary
+			if entry.player.Credits < 1000 {
+				credColor = utils.SystemRed
+			}
+			DrawText(screen, fmt.Sprintf("%d", entry.player.Credits), pd.tablePanel.X+280, y, credColor)
+			DrawText(screen, fmt.Sprintf("%d", entry.planets), pd.tablePanel.X+370, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", len(entry.player.OwnedShips)), pd.tablePanel.X+440, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+510, y, utils.TextPrimary)
 
 			homeName := "Unknown"
 			if entry.player.HomeSystem != nil {
 				homeName = entry.player.HomeSystem.Name
 			}
-			DrawText(screen, homeName, pd.tablePanel.X+630, y, utils.TextSecondary)
+			DrawText(screen, homeName, pd.tablePanel.X+590, y, utils.TextSecondary)
 
 			y += rowHeight
 		}
