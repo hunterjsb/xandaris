@@ -107,9 +107,13 @@ func (mmv *MainMenuView) handleTextInput() {
 		}
 	}
 
-	// Handle enter to confirm input
+	// Handle enter to confirm input and trigger selected action
 	if kb.IsActionJustPressed(ActionMenuConfirm) {
 		mmv.inputActive = false
+		// Also trigger the menu action (e.g. start game) after confirming name
+		if mmv.selectedOption == 0 {
+			mmv.startNewGame()
+		}
 	}
 
 	// Handle escape to cancel input
