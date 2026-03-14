@@ -16,7 +16,7 @@ func InitializePlayer(player *Player, systems []*System) {
 				if planet.Owner != "" {
 					continue
 				}
-				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasWaterResource(planet) && hasIronResource(planet) {
+				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasWaterResource(planet) && hasIronResource(planet) && hasOilResource(planet) {
 					validSystems = append(validSystems, system)
 					break
 				}
@@ -100,7 +100,7 @@ func InitializePlayer(player *Player, systems []*System) {
 				score += 50
 			}
 			if hasOilResource(planet) {
-				score += 30
+				score += 80 // Oil is critical for Fuel production
 			}
 			if score > bestScore {
 				bestPlanet = planet
