@@ -205,6 +205,29 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+22, utils.TextPrimary)
 	DrawText(screen, subtitle, mv.headerPanel.X+20, mv.headerPanel.Y+40, utils.TextSecondary)
 
+	// Show trade mode (local vs galaxy-wide) with fee info
+	tradeMode := "Galaxy-wide trading (import/export fees apply)"
+	tradeModeColor := utils.SystemOrange
+	// Check if there's an NPC in the same system for local trading
+	if mv.tradingPlanet != nil {
+		for _, sys := range mv.ctx.GetSystems() {
+			for _, e := range sys.Entities {
+				if p, ok := e.(*entities.Planet); ok && p.GetID() == mv.tradingPlanet.GetID() {
+					// Check for NPC planets in this system
+					for _, e2 := range sys.Entities {
+						if p2, ok := e2.(*entities.Planet); ok && p2.Owner != "" && p2.Owner != mv.tradingPlanet.Owner {
+							tradeMode = "Local market (no fees)"
+							tradeModeColor = utils.SystemGreen
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+	DrawText(screen, tradeMode, mv.headerPanel.X+300, mv.headerPanel.Y+40, tradeModeColor)
+
 	// Show status message or commodity count
 	if mv.statusMsg != "" {
 		DrawText(screen, mv.statusMsg, mv.headerPanel.X+20, mv.headerPanel.Y+58, mv.statusColor)
