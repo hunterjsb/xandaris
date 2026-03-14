@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
@@ -213,7 +214,7 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 				ID:             res.GetID(),
 				ResourceType:   res.ResourceType,
 				Abundance:      res.Abundance,
-				ExtractionRate: res.ExtractionRate,
+				ExtractionRate: math.Round(res.ExtractionRate*10) / 10,
 				HasMine:        hasMine,
 			})
 		}
@@ -981,7 +982,7 @@ func handleGetDeposits(p GameStateProvider) interface{} {
 					ResourceType: res.ResourceType,
 					ResourceID:   res.GetID(),
 					Abundance:    res.Abundance,
-					Rate:         res.ExtractionRate,
+					Rate:         math.Round(res.ExtractionRate*10) / 10,
 					HasMine:      hasMine,
 				})
 			}
