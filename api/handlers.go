@@ -606,6 +606,29 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 	return overview
 }
 
+func handleGetSystemPrices(p GameStateProvider) interface{} {
+	market := p.GetMarket()
+	if market == nil {
+		return []SystemPrices{}
+	}
+
+	result := make([]SystemPrices, 0)
+	snap := market.GetSnapshot()
+
+	for _, sys := range p.GetSystems() {
+		prices := make(map[string]float64)
+		for name := range snap.Resources {
+			prices[name] = market.GetLocalBuyPrice(name, sys.ID)
+		}
+		result = append(result, SystemPrices{
+			SystemID:   sys.ID,
+			SystemName: sys.Name,
+			Prices:     prices,
+		})
+	}
+	return result
+}
+
 func handleGetPlanetStorage(p GameStateProvider, planetID int) (interface{}, bool) {
 	for _, sys := range p.GetSystems() {
 		for _, e := range sys.Entities {

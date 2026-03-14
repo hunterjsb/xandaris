@@ -211,6 +211,13 @@ type UpgradeRequest struct {
 	BuildingIndex int `json:"building_index"` // index in the buildings array
 }
 
+// SystemPrices shows local prices for a system (for trade route planning).
+type SystemPrices struct {
+	SystemID   int                `json:"system_id"`
+	SystemName string             `json:"system_name"`
+	Prices     map[string]float64 `json:"prices"` // resource -> local buy price
+}
+
 // PlanetRates shows production and consumption for a planet.
 type PlanetRates struct {
 	PlanetID    int                    `json:"planet_id"`
