@@ -223,12 +223,13 @@ type PlanetRates struct {
 
 // GameStatus is a comprehensive snapshot for agents — everything needed in one call.
 type GameStatus struct {
-	Tick        int64          `json:"tick"`
-	GameTime    string         `json:"game_time"`
-	Speed       string         `json:"speed"`
-	Paused      bool           `json:"paused"`
-	Player      PlayerStatus   `json:"player"`
+	Tick        int64           `json:"tick"`
+	GameTime    string          `json:"game_time"`
+	Speed       string          `json:"speed"`
+	Paused      bool            `json:"paused"`
+	Player      PlayerStatus    `json:"player"`
 	Economy     EconomyOverview `json:"economy"`
+	Hints       []string        `json:"hints"` // actionable suggestions
 }
 
 // PlayerStatus is the human player's state in the GameStatus response.

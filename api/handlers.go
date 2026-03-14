@@ -358,6 +358,9 @@ func handleGetStatus(p GameStateProvider) interface{} {
 	// Economy
 	econ := handleGetEconomy(p).(EconomyOverview)
 
+	// Generate actionable hints based on state
+	hints := generateHints(human, &playerStatus, &econ)
+
 	return GameStatus{
 		Tick:     tick,
 		GameTime: gameTime,
@@ -365,7 +368,63 @@ func handleGetStatus(p GameStateProvider) interface{} {
 		Paused:   paused,
 		Player:   playerStatus,
 		Economy:  econ,
+		Hints:    hints,
 	}
+}
+
+func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOverview) []string {
+	var hints []string
+	if human == nil {
+		return hints
+	}
+
+	// Check if player has no mines
+	totalMines := 0
+	for _, p := range player.Planets {
+		totalMines += p.Mines
+	}
+	if totalMines == 0 {
+		hints = append(hints, "Build mines on resource deposits to start producing")
+	}
+
+	// Check for critical/depleted resources
+	for name, r := range econ.Resources {
+		if r.Scarcity == "Critical" || r.Scarcity == "Depleted" {
+			hints = append(hints, fmt.Sprintf("%s is %s — find deposits and build mines", name, r.Scarcity))
+		}
+	}
+
+	// Check if player has no shipyard
+	hasShipyard := false
+	for _, p := range player.Planets {
+		for _, planet := range human.OwnedPlanets {
+			if planet != nil && planet.GetID() == p.ID {
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Shipyard" {
+						hasShipyard = true
+					}
+				}
+			}
+		}
+	}
+	if !hasShipyard && human.Credits > 2000 {
+		hints = append(hints, "Build a Shipyard to construct ships for trade and exploration")
+	}
+
+	// Check if player has excess credits
+	if human.Credits > 50000 {
+		hints = append(hints, "Excess credits — invest in mine upgrades or new buildings")
+	}
+
+	// Check low fuel on ships
+	for _, ship := range human.OwnedShips {
+		if ship != nil && ship.CurrentFuel < ship.MaxFuel/4 {
+			hints = append(hints, fmt.Sprintf("Ship %s is low on fuel — orbit a planet with Fuel to refuel", ship.Name))
+			break
+		}
+	}
+
+	return hints
 }
 
 func handleGetGame(p GameStateProvider) interface{} {
