@@ -11,6 +11,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/core"
 	"github.com/hunterjsb/xandaris/server"
+	"github.com/hunterjsb/xandaris/views"
 
 	// Register entity generators and tickable systems (side-effect imports)
 	_ "github.com/hunterjsb/xandaris/entities/building"
@@ -29,6 +30,7 @@ const (
 func main() {
 	headless := flag.Bool("headless", false, "Run as headless server (no GUI)")
 	autoStart := flag.Bool("auto", false, "Skip menu and start new game immediately (GUI mode)")
+	startView := flag.String("view", "", "Start in specific view: market, players, galaxy (requires --auto)")
 	playerName := flag.String("player", "Player", "Player name")
 	loadPath := flag.String("load", "", "Path to save file to load")
 	flag.Parse()
@@ -38,11 +40,11 @@ func main() {
 		return
 	}
 
-	runGUI(*autoStart, *playerName)
+	runGUI(*autoStart, *playerName, *startView)
 }
 
 // runGUI starts the game with the Ebiten graphical client.
-func runGUI(autoStart bool, playerName string) {
+func runGUI(autoStart bool, playerName string, startView string) {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Xandaris II - Space Trading Game")
 	ebiten.SetFullscreen(true)
@@ -57,6 +59,13 @@ func runGUI(autoStart bool, playerName string) {
 	if autoStart {
 		if err := app.InitializeNewGame(playerName); err != nil {
 			log.Fatalf("Failed to auto-start game: %v", err)
+		}
+		// Optionally switch to a specific view
+		switch startView {
+		case "market":
+			app.GetViewManager().SwitchTo(views.ViewTypeMarket)
+		case "players":
+			app.GetViewManager().SwitchTo(views.ViewTypePlayers)
 		}
 	}
 
