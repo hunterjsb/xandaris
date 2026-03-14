@@ -13,15 +13,16 @@ import (
 )
 
 type marketResourceRow struct {
-	resource      string
-	humanStock    int
-	npcStock      int
-	buyPrice      float64
-	sellPrice     float64
-	localBuyPrice float64 // per-system price
+	resource       string
+	humanStock     int
+	galaxySupply   int     // total supply galaxy-wide (all players)
+	buyPrice       float64
+	sellPrice      float64
+	basePrice      float64 // base/equilibrium price
+	localBuyPrice  float64 // per-system price
 	localSellPrice float64
-	demand        float64
-	trend         float64
+	demand         float64
+	trend          float64
 }
 
 // MarketView presents a simplified trading interface
@@ -213,20 +214,22 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 
 	headerY := mv.tablePanel.Y + 18
 	colResource := mv.tablePanel.X + 20
-	colHuman := mv.tablePanel.X + 150
-	colNpc := mv.tablePanel.X + 220
-	colBuy := mv.tablePanel.X + 290
-	colSell := mv.tablePanel.X + 370
-	colGalaxy := mv.tablePanel.X + 450
-	colTrend := mv.tablePanel.X + 530
-	colAction := mv.tablePanel.X + mv.tablePanel.Width - 140
+	colStock := mv.tablePanel.X + 140
+	colGalSupply := mv.tablePanel.X + 210
+	colBuy := mv.tablePanel.X + 300
+	colSell := mv.tablePanel.X + 400
+	colBase := mv.tablePanel.X + 500
+	colDemand := mv.tablePanel.X + 580
+	colTrend := mv.tablePanel.X + 660
+	colAction := mv.tablePanel.X + mv.tablePanel.Width - 130
 
 	DrawText(screen, "Commodity", colResource, headerY, utils.TextPrimary)
-	DrawText(screen, "Stock", colHuman, headerY, utils.TextPrimary)
-	DrawText(screen, "Supply", colNpc, headerY, utils.TextPrimary)
-	DrawText(screen, "Buy @", colBuy, headerY, utils.TextPrimary)
-	DrawText(screen, "Sell @", colSell, headerY, utils.TextPrimary)
-	DrawText(screen, "Galaxy", colGalaxy, headerY, utils.TextPrimary)
+	DrawText(screen, "Stock", colStock, headerY, utils.TextPrimary)
+	DrawText(screen, "Galaxy", colGalSupply, headerY, utils.TextSecondary)
+	DrawText(screen, "Buy @", colBuy, headerY, utils.SystemGreen)
+	DrawText(screen, "Sell @", colSell, headerY, utils.SystemOrange)
+	DrawText(screen, "Base", colBase, headerY, utils.TextSecondary)
+	DrawText(screen, "Demand", colDemand, headerY, utils.TextSecondary)
 	DrawText(screen, "Trend", colTrend, headerY, utils.TextPrimary)
 	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
 
@@ -257,41 +260,46 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		rowPanel.Draw(screen)
 
 		DrawText(screen, row.resource, colResource, y, utils.TextPrimary)
-		DrawText(screen, fmt.Sprintf("%d", row.humanStock), colHuman, y, utils.TextPrimary)
-		DrawText(screen, fmt.Sprintf("%d", row.npcStock), colNpc, y, utils.TextSecondary)
 
-		// Show effective local prices (fallback to galaxy if no local data)
-		displayBuy := row.buyPrice
-		displaySell := row.sellPrice
-		hasLocal := row.localBuyPrice > 0
-		if hasLocal {
-			displayBuy = row.localBuyPrice
-			displaySell = row.localSellPrice
+		// Stock: player's stock on trading planet (white = plenty, red = low)
+		stockColor := utils.TextPrimary
+		if row.humanStock < 20 {
+			stockColor = utils.SystemRed
 		}
+		DrawText(screen, fmt.Sprintf("%d", row.humanStock), colStock, y, stockColor)
 
-		// Color: green = favorable vs galaxy avg, red = unfavorable
-		buyColor := utils.TextPrimary
-		if hasLocal {
-			if displayBuy < row.buyPrice*0.95 {
-				buyColor = utils.SystemGreen // cheap locally
-			} else if displayBuy > row.buyPrice*1.05 {
-				buyColor = utils.SystemRed // expensive locally
-			}
+		// Galaxy supply (total across all players)
+		DrawText(screen, fmt.Sprintf("%d", row.galaxySupply), colGalSupply, y, utils.TextSecondary)
+
+		// Buy price — green if below base (good deal), red if above (expensive)
+		buyColor := utils.SystemGreen
+		if row.basePrice > 0 && row.buyPrice > row.basePrice*1.2 {
+			buyColor = utils.SystemRed
+		} else if row.basePrice > 0 && row.buyPrice > row.basePrice {
+			buyColor = utils.SystemOrange
 		}
-		DrawText(screen, fmt.Sprintf("%.0f", displayBuy), colBuy, y, buyColor)
+		DrawText(screen, fmt.Sprintf("%.0f", row.buyPrice), colBuy, y, buyColor)
 
-		sellColor := utils.TextPrimary
-		if hasLocal {
-			if displaySell > row.sellPrice*1.05 {
-				sellColor = utils.SystemGreen // good sell price
-			} else if displaySell < row.sellPrice*0.95 {
-				sellColor = utils.SystemRed // bad sell price
-			}
+		// Sell price — green if above base (profit), orange if below
+		sellColor := utils.SystemOrange
+		if row.basePrice > 0 && row.sellPrice > row.basePrice {
+			sellColor = utils.SystemGreen
 		}
-		DrawText(screen, fmt.Sprintf("%.0f", displaySell), colSell, y, sellColor)
+		DrawText(screen, fmt.Sprintf("%.0f", row.sellPrice), colSell, y, sellColor)
 
-		// Galaxy average as reference
-		DrawText(screen, fmt.Sprintf("%.0f", row.buyPrice), colGalaxy, y, utils.TextSecondary)
+		// Base price for reference
+		baseStr := fmt.Sprintf("%.0f", row.basePrice)
+		if row.basePrice == 0 {
+			baseStr = "--"
+		}
+		DrawText(screen, baseStr, colBase, y, utils.TextSecondary)
+
+		// Demand signal
+		demandColor := utils.TextSecondary
+		if row.demand > 30 {
+			demandColor = utils.SystemOrange
+		}
+		DrawText(screen, fmt.Sprintf("%.0f", row.demand), colDemand, y, demandColor)
 
 		// Trend indicator
 		trendStr := "--"
@@ -433,6 +441,8 @@ func (mv *MarketView) refreshData() {
 	type priceInfo struct {
 		buyPrice       float64
 		sellPrice      float64
+		basePrice      float64
+		totalSupply    int
 		localBuyPrice  float64
 		localSellPrice float64
 		demand         float64
@@ -443,7 +453,7 @@ func (mv *MarketView) refreshData() {
 		snap := market.GetSnapshot()
 		snapshot = make(map[string]priceInfo, len(snap.Resources))
 		for name, rm := range snap.Resources {
-			pi := priceInfo{rm.BuyPrice, rm.SellPrice, 0, 0, rm.TotalDemand, rm.PriceVelocity}
+			pi := priceInfo{rm.BuyPrice, rm.SellPrice, rm.BasePrice, int(rm.TotalSupply), 0, 0, rm.TotalDemand, rm.PriceVelocity}
 			if tradingSystemID >= 0 {
 				pi.localBuyPrice = market.GetLocalBuyPrice(name, tradingSystemID)
 				pi.localSellPrice = market.GetLocalSellPrice(name, tradingSystemID)
@@ -531,15 +541,17 @@ func (mv *MarketView) refreshData() {
 
 	for resource, entry := range acc {
 		row := marketResourceRow{
-			resource:   resource,
-			humanStock: entry.human,
-			npcStock:   entry.npc,
+			resource:     resource,
+			humanStock:   entry.human,
+			galaxySupply: entry.human + entry.npc,
 		}
 
 		if snapshot != nil {
 			if s, ok := snapshot[resource]; ok {
 				row.buyPrice = s.buyPrice
 				row.sellPrice = s.sellPrice
+				row.basePrice = s.basePrice
+				row.galaxySupply = s.totalSupply
 				row.localBuyPrice = s.localBuyPrice
 				row.localSellPrice = s.localSellPrice
 				row.demand = s.demand
@@ -556,12 +568,10 @@ func (mv *MarketView) refreshData() {
 	}
 
 	sort.Slice(mv.rows, func(i, j int) bool {
-		totalI := mv.rows[i].humanStock + mv.rows[i].npcStock
-		totalJ := mv.rows[j].humanStock + mv.rows[j].npcStock
-		if totalI == totalJ {
+		if mv.rows[i].galaxySupply == mv.rows[j].galaxySupply {
 			return mv.rows[i].resource < mv.rows[j].resource
 		}
-		return totalI > totalJ
+		return mv.rows[i].galaxySupply > mv.rows[j].galaxySupply
 	})
 }
 
