@@ -172,6 +172,9 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	DrawText(screen, "Double-click system to view", 10, 25, utils.TextSecondary)
 	DrawText(screen, "Press ESC to quit", 10, 40, utils.TextSecondary)
 
+	// Draw hints below header
+	gv.drawHints(screen)
+
 	// Draw player info
 	gv.drawPlayerInfo(screen)
 }
@@ -576,6 +579,88 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		}
 	}
 
+}
+
+// drawHints renders actionable suggestions in the bottom-center of the screen.
+func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
+	humanPlayer := gv.ctx.GetHumanPlayer()
+	if humanPlayer == nil {
+		return
+	}
+
+	var hints []string
+
+	// Check mines
+	totalMines := 0
+	hasShipyard := false
+	hasRefinery := false
+	hasFuel := false
+	hasOil := false
+	for _, planet := range humanPlayer.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		if planet.GetStoredAmount("Fuel") > 0 {
+			hasFuel = true
+		}
+		if planet.GetStoredAmount("Oil") > 20 {
+			hasOil = true
+		}
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok {
+				if b.BuildingType == "Mine" {
+					totalMines++
+				}
+				if b.BuildingType == "Shipyard" {
+					hasShipyard = true
+				}
+				if b.BuildingType == "Refinery" {
+					hasRefinery = true
+				}
+			}
+		}
+	}
+
+	if totalMines == 0 {
+		hints = append(hints, "Build mines on resource deposits to start producing")
+	}
+	if !hasShipyard && humanPlayer.Credits > 2000 {
+		hints = append(hints, "Build a Shipyard to construct ships")
+	}
+	if !hasRefinery && hasOil && !hasFuel {
+		hints = append(hints, "Build a Refinery to convert Oil into Fuel")
+	}
+	if humanPlayer.Credits > 50000 {
+		hints = append(hints, "Excess credits — invest in upgrades or buildings")
+	}
+
+	// Low fuel ship
+	for _, ship := range humanPlayer.OwnedShips {
+		if ship != nil && ship.CurrentFuel < ship.MaxFuel/4 {
+			hints = append(hints, fmt.Sprintf("%s is low on fuel", ship.Name))
+			break
+		}
+	}
+
+	if len(hints) == 0 {
+		return
+	}
+
+	// Show up to 2 hints in the bottom-center
+	screenH := screen.Bounds().Dy()
+	hintY := screenH - 80
+	maxHints := 2
+	if len(hints) < maxHints {
+		maxHints = len(hints)
+	}
+
+	for i := 0; i < maxHints; i++ {
+		text := hints[i]
+		textW := len(text) * 6
+		x := (screen.Bounds().Dx() - textW) / 2
+		DrawText(screen, text, x, hintY, utils.SystemYellow)
+		hintY += 14
+	}
 }
 
 func countTradingPosts(planets []*entities.Planet) int {
