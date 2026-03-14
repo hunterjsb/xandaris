@@ -45,6 +45,7 @@ type MarketView struct {
 	statusColor       color.RGBA
 	statusTicks       int
 	tradingPlanet     *entities.Planet // the planet trades are scoped to
+	refreshCounter    int
 }
 
 type tableRowHit struct {
@@ -148,7 +149,11 @@ func (mv *MarketView) selectTradingPlanet() {
 func (mv *MarketView) OnExit() {}
 
 func (mv *MarketView) Update() error {
-	mv.refreshData()
+	// Throttle refresh to every 30 frames (~0.5s) to avoid per-frame galaxy flow computation
+	mv.refreshCounter++
+	if mv.refreshCounter%30 == 0 {
+		mv.refreshData()
+	}
 
 	if mv.statusTicks > 0 {
 		mv.statusTicks--
