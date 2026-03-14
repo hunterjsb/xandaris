@@ -690,14 +690,14 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	labelY := centerY + radius + 12
 	DrawCenteredText(screen, resource.ResourceType, centerX, labelY)
 
-	// Show abundance below label
-	abundanceStr := fmt.Sprintf("a:%d", resource.Abundance)
-	abundanceColor := utils.TextSecondary
+	// Show abundance and extraction rate below label
+	detailStr := fmt.Sprintf("a:%d  x%.1f", resource.Abundance, resource.ExtractionRate)
+	detailColor := utils.TextSecondary
 	if resource.Abundance < 20 {
-		abundanceColor = utils.SystemOrange
+		detailColor = utils.SystemOrange
 	}
-	aWidth := len(abundanceStr) * 6
-	DrawText(screen, abundanceStr, centerX-aWidth/2, labelY+12, abundanceColor)
+	dWidth := len(detailStr) * 6
+	DrawText(screen, detailStr, centerX-dWidth/2, labelY+12, detailColor)
 }
 
 // drawBuildings draws all building entities
@@ -726,10 +726,14 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	}
 	DrawCenteredText(screen, label, centerX, labelY)
 
-	// Show operational status if not operational
+	// Show operational status or upgrade cost
 	if !building.IsOperational {
 		offWidth := len("OFFLINE") * 6
 		DrawText(screen, "OFFLINE", centerX-offWidth/2, labelY+12, utils.SystemRed)
+	} else if building.CanUpgrade() {
+		costStr := fmt.Sprintf("↑%dcr", building.GetUpgradeCost())
+		costWidth := len(costStr) * 6
+		DrawText(screen, costStr, centerX-costWidth/2, labelY+12, utils.SystemGreen)
 	}
 }
 
