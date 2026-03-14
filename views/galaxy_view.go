@@ -401,8 +401,62 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 		}
 	}
 
+	// Draw trade route lines for cargo ships carrying goods
+	gv.drawTradeRoutes(screen)
+
 	// Draw ships in transit along hyperlanes
 	gv.drawTransitShips(screen)
+}
+
+// drawTradeRoutes draws colored lines for cargo ships actively transporting goods.
+func (gv *GalaxyView) drawTradeRoutes(screen *ebiten.Image) {
+	for _, system := range gv.ctx.GetSystems() {
+		for _, entity := range system.Entities {
+			ship, ok := entity.(*entities.Ship)
+			if !ok || ship.Status != entities.ShipStatusMoving || ship.TargetSystem < 0 {
+				continue
+			}
+			if ship.GetTotalCargo() == 0 {
+				continue // only show routes for laden cargo ships
+			}
+
+			// Find target system
+			var targetSys *entities.System
+			for _, sys := range gv.ctx.GetSystems() {
+				if sys.ID == ship.TargetSystem {
+					targetSys = sys
+					break
+				}
+			}
+			if targetSys == nil {
+				continue
+			}
+
+			// Draw a dashed trade route line in the owner's color (faded)
+			routeColor := color.RGBA{100, 180, 255, 80} // default blue
+			for _, p := range gv.ctx.GetPlayers() {
+				if p != nil && p.Name == ship.Owner {
+					routeColor = p.Color
+					routeColor.A = 60
+					break
+				}
+			}
+
+			// Draw dashed line from source to target
+			sx, sy := system.X, system.Y
+			tx, ty := targetSys.X, targetSys.Y
+			segments := 12
+			for i := 0; i < segments; i += 2 {
+				t1 := float64(i) / float64(segments)
+				t2 := float64(i+1) / float64(segments)
+				x1 := sx + (tx-sx)*t1
+				y1 := sy + (ty-sy)*t1
+				x2 := sx + (tx-sx)*t2
+				y2 := sy + (ty-sy)*t2
+				DrawLine(screen, int(x1), int(y1), int(x2), int(y2), routeColor)
+			}
+		}
+	}
 }
 
 // drawTransitShips draws ships that are in transit between systems
