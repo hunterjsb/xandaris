@@ -356,10 +356,18 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		}
 		DrawText(screen, fmt.Sprintf("%.0f", row.sellPrice), colSell, y, sellColor)
 
-		// Best price across galaxy (shows where cheapest)
-		if row.bestBuyPrice > 0 && row.bestBuyPrice < row.buyPrice*0.8 {
-			// Significantly cheaper elsewhere — show in green
-			DrawText(screen, fmt.Sprintf("%.0f", row.bestBuyPrice), colBase, y, utils.SystemGreen)
+		// Best price across galaxy (shows where cheapest + system name)
+		if row.bestBuyPrice > 0 && row.bestSystem != "" && row.bestBuyPrice < row.buyPrice*0.8 {
+			bestStr := fmt.Sprintf("%.0f", row.bestBuyPrice)
+			DrawText(screen, bestStr, colBase, y, utils.SystemGreen)
+			// Show system name in smaller text after price
+			sysLabel := row.bestSystem
+			if len(sysLabel) > 5 {
+				sysLabel = sysLabel[:5]
+			}
+			DrawText(screen, sysLabel, colBase+len(bestStr)*6+3, y, utils.TextSecondary)
+		} else if row.bestBuyPrice > 0 {
+			DrawText(screen, fmt.Sprintf("%.0f", row.bestBuyPrice), colBase, y, utils.TextSecondary)
 		} else {
 			DrawText(screen, fmt.Sprintf("%.0f", row.basePrice), colBase, y, utils.TextSecondary)
 		}
