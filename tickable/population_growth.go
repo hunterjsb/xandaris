@@ -12,13 +12,12 @@ func init() {
 	})
 }
 
-// PopulationGrowthSystem adjusts planetary populations toward their effective capacity.
+// PopulationGrowthSystem adjusts planetary populations based on capacity AND resource availability.
 type PopulationGrowthSystem struct {
 	*BaseSystem
 	tickCounter int64
 }
 
-// OnTick updates population levels at a cadence tied to system priority.
 func (pgs *PopulationGrowthSystem) OnTick(tick int64) {
 	pgs.tickCounter++
 
@@ -63,13 +62,39 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 	if capacity <= 0 {
 		if planet.Population > 0 {
 			loss := int64(math.Ceil(float64(planet.Population) * 0.05))
-			if loss < 1 {
-				loss = 1
-			}
 			planet.Population -= loss
 			if planet.Population < 0 {
 				planet.Population = 0
 			}
+		}
+		return
+	}
+
+	// Resource-dependent growth: population only grows if essential resources are available.
+	// Water is the critical life-support resource.
+	waterAvail := planet.GetStoredAmount("Water")
+	foodSufficiency := 1.0
+	if planet.Population > 0 {
+		// How many intervals of Water consumption can we sustain?
+		// Consumption: 1 per 100 pop per interval
+		waterNeeded := float64(planet.Population) / 100.0
+		if waterNeeded > 0 {
+			foodSufficiency = float64(waterAvail) / (waterNeeded * 5) // 5 intervals of buffer
+			if foodSufficiency > 1.0 {
+				foodSufficiency = 1.0
+			}
+		}
+	}
+
+	// If starving (less than 1 interval of water), population declines slowly
+	if foodSufficiency < 0.2 {
+		loss := int64(math.Ceil(float64(planet.Population) * 0.002)) // 0.2% decline per interval
+		if loss < 1 {
+			loss = 1
+		}
+		planet.Population -= loss
+		if planet.Population < 500 {
+			planet.Population = 500 // Colony core survives
 		}
 		return
 	}
@@ -83,11 +108,11 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 		return
 	}
 
-	growthRate := 0.005 * habitability
+	// Logarithmic growth: fast when small, slows as population grows.
+	// At 2000 pop: ~6/interval. At 5000: ~8. At 10000: ~9. At 20000: ~10.
+	// This prevents exponential growth from overwhelming fixed resource production.
 	if planet.Population == 0 {
-		initialGrowth := math.Round(float64(capacity) * 0.0005)
-		growth := int64(math.Max(1, initialGrowth))
-		planet.Population = growth
+		planet.Population = 100
 		return
 	}
 
@@ -96,11 +121,16 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 		return
 	}
 
+	logFactor := math.Log10(float64(planet.Population)+1) / math.Log10(50000)
+	growthRate := 0.004 * habitability * foodSufficiency * (1.0 - logFactor)
+	if growthRate < 0.0005 {
+		growthRate = 0.0005
+	}
+
 	growth := int64(math.Round(float64(planet.Population) * growthRate))
 	if growth < 1 {
 		growth = 1
 	}
-
 	if growth > deficit {
 		growth = deficit
 	}

@@ -12,14 +12,11 @@ func init() {
 	})
 }
 
-// ResourceAccumulationSystem handles resource generation from planets
 type ResourceAccumulationSystem struct {
 	*BaseSystem
 }
 
-// OnTick processes resource accumulation each tick
 func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
-	// Only accumulate resources every 10 ticks (once per second at 1x speed)
 	if tick%10 != 0 {
 		return
 	}
@@ -29,7 +26,6 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 		return
 	}
 
-	// Get players from context
 	playersInterface := context.GetPlayers()
 	if playersInterface == nil {
 		return
@@ -42,10 +38,8 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {
-			// Process each resource deposit on the planet
 			for _, resourceEntity := range planet.Resources {
 				if resource, ok := resourceEntity.(*entities.Resource); ok {
-					// Only accumulate from owned resources
 					if resource.Owner != player.Name {
 						continue
 					}
@@ -55,18 +49,13 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 						continue
 					}
 
-					actualAmount := planet.AddStoredResource(resource.ResourceType, extractionAmount)
+					planet.AddStoredResource(resource.ResourceType, extractionAmount)
 
-					// Update abundance based on extraction
-					if actualAmount > 0 && resource.Abundance > 0 {
-						// Reduce abundance by a small amount (resources deplete slowly)
-						depletionRate := 0.001 * float64(actualAmount)
-						if depletionRate > 0 {
-							resource.Abundance = int(float64(resource.Abundance) - depletionRate)
-							if resource.Abundance < 0 {
-								resource.Abundance = 0
-							}
-						}
+					// Depletion: lose 1 abundance per 10,000 ticks (~17 min at 1x).
+					// Deposits bottom out at 10 (still produce, just slower).
+					// This means a deposit lasts 60×17 = ~1000 minutes from 70→10.
+					if resource.Abundance > 10 && tick%10000 == 0 {
+						resource.Abundance--
 					}
 				}
 			}
@@ -75,7 +64,7 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 }
 
 func computeResourceExtraction(resource *entities.Resource, planet *entities.Planet) int {
-	if resource == nil || planet == nil {
+	if resource == nil || planet == nil || resource.Abundance <= 0 {
 		return 0
 	}
 
@@ -84,13 +73,7 @@ func computeResourceExtraction(resource *entities.Resource, planet *entities.Pla
 
 	for _, buildingEntity := range planet.Buildings {
 		building, ok := buildingEntity.(*entities.Building)
-		if !ok {
-			continue
-		}
-		if building.BuildingType != "Mine" {
-			continue
-		}
-		if !building.IsOperational {
+		if !ok || building.BuildingType != "Mine" || !building.IsOperational {
 			continue
 		}
 		if building.AttachmentType != "Resource" || building.AttachedTo != resourceID {
@@ -109,125 +92,19 @@ func computeResourceExtraction(resource *entities.Resource, planet *entities.Pla
 		return 0
 	}
 
-	amount := float64(10) * resource.ExtractionRate * multiplier
-	if amount < 0 {
-		return 0
+	// Scale by abundance: full rate at 70+, ~14% rate at 10
+	abundanceFactor := float64(resource.Abundance) / 70.0
+	if abundanceFactor > 1.0 {
+		abundanceFactor = 1.0
+	}
+	if abundanceFactor < 0.1 {
+		abundanceFactor = 0.1
+	}
+
+	amount := float64(8) * resource.ExtractionRate * multiplier * abundanceFactor
+	if amount < 1 && multiplier > 0 {
+		amount = 1
 	}
 
 	return int(amount)
-}
-
-// calculateProduction calculates total resource production value for a planet (in credits/second)
-func (ras *ResourceAccumulationSystem) calculateProduction(planetInterface interface{}) int64 {
-	planet, ok := planetInterface.(*entities.Planet)
-	if !ok {
-		return 0
-	}
-
-	production := int64(0)
-
-	// Base production: 1 credit per 100 population per interval
-	if planet.Population > 0 {
-		production += planet.Population / 100
-	}
-
-	// Calculate production from resource extraction
-	for _, resourceEntity := range planet.Resources {
-		if resource, ok := resourceEntity.(*entities.Resource); ok {
-			if resource.Owner != planet.Owner {
-				continue
-			}
-
-			extractionAmount := computeResourceExtraction(resource, planet)
-			if extractionAmount <= 0 {
-				continue
-			}
-
-			resourceValue := int64(float64(extractionAmount) * float64(resource.Value))
-			production += resourceValue
-		}
-	}
-
-	// Building production bonuses
-	for _, buildingEntity := range planet.Buildings {
-		if building, ok := buildingEntity.(*entities.Building); ok {
-			// Some buildings might provide direct production bonuses
-			if building.BuildingType == "Factory" && building.IsOperational {
-				production = int64(float64(production) * building.ProductionBonus)
-			}
-		}
-	}
-
-	return production
-}
-
-// GetProductionRate returns the current production rate per second for a player (in credits/second)
-func (ras *ResourceAccumulationSystem) GetProductionRate(playerInterface interface{}) int64 {
-	player, ok := playerInterface.(*entities.Player)
-	if !ok {
-		return 0
-	}
-
-	totalProduction := int64(0)
-
-	// Sum production from all owned planets
-	for _, planet := range player.OwnedPlanets {
-		totalProduction += ras.calculateProduction(planet)
-	}
-
-	return totalProduction
-}
-
-// GetProductionBreakdown returns detailed production info per planet (planet name -> credits/second)
-func (ras *ResourceAccumulationSystem) GetProductionBreakdown(playerInterface interface{}) map[string]int64 {
-	player, ok := playerInterface.(*entities.Player)
-	if !ok {
-		return make(map[string]int64)
-	}
-
-	breakdown := make(map[string]int64)
-
-	// Calculate production for each owned planet
-	for _, planet := range player.OwnedPlanets {
-		production := ras.calculateProduction(planet)
-		breakdown[planet.Name] = production
-	}
-
-	return breakdown
-}
-
-// GetResourceBreakdown returns detailed resource extraction info per planet
-func (ras *ResourceAccumulationSystem) GetResourceBreakdown(playerInterface interface{}) map[string]map[string]int {
-	player, ok := playerInterface.(*entities.Player)
-	if !ok {
-		return make(map[string]map[string]int)
-	}
-
-	breakdown := make(map[string]map[string]int)
-
-	// Calculate resource extraction for each owned planet
-	for _, planet := range player.OwnedPlanets {
-		planetResources := make(map[string]int)
-
-		for _, resourceEntity := range planet.Resources {
-			if resource, ok := resourceEntity.(*entities.Resource); ok {
-				if resource.Owner != planet.Owner {
-					continue
-				}
-
-				extractionAmount := computeResourceExtraction(resource, planet)
-				if extractionAmount <= 0 {
-					continue
-				}
-
-				planetResources[resource.ResourceType] = extractionAmount
-			}
-		}
-
-		if len(planetResources) > 0 {
-			breakdown[planet.Name] = planetResources
-		}
-	}
-
-	return breakdown
 }

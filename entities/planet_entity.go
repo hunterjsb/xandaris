@@ -5,7 +5,7 @@ import (
 	"image/color"
 )
 
-const DEFAULT_RESOURCE_CAPACITY = 10_000
+const DEFAULT_RESOURCE_CAPACITY = 1_000
 
 // ResourceStorage tracks stored resources on a planet
 type ResourceStorage struct {

@@ -5,64 +5,64 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/game"
+	"github.com/hunterjsb/xandaris/server"
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/views"
 )
 
-// App orchestrates all game components and implements ebiten.Game
+// App is the Ebiten GUI client. It embeds a GameServer for simulation
+// and adds rendering, input handling, and view management on top.
 type App struct {
-	state             *game.State
-	viewManager       *views.ViewManager
-	tickManager       *systems.TickManager
-	keyBindings       *systems.KeyBindings
-	fleetCmdExecutor  *game.FleetCommandExecutor
-	fleetMgmtSystem   *game.FleetManagementSystem
+	Server *server.GameServer
+
+	viewManager *views.ViewManager
+	keyBindings *systems.KeyBindings
 
 	// Screen dimensions
 	screenWidth  int
 	screenHeight int
 }
 
-// New creates a new App instance
+// New creates a new App instance with an in-process server.
 func New(screenWidth, screenHeight int) *App {
 	return &App{
-		state:        game.NewState(),
+		Server:       server.New(screenWidth, screenHeight),
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
 	}
 }
 
-// GetState returns the game state
+// GetState returns the game state (delegates to server).
 func (a *App) GetState() *game.State {
-	return a.state
+	return a.Server.State
 }
 
-// GetViewManager returns the view manager
+// GetViewManager returns the view manager.
 func (a *App) GetViewManager() views.ViewManagerInterface {
 	return a.viewManager
 }
 
-// GetTickManager returns the tick manager
+// GetTickManager returns the tick manager (delegates to server).
 func (a *App) GetTickManager() views.TickManagerInterface {
-	return a.tickManager
+	return a.Server.TickManager
 }
 
-// GetKeyBindings returns the key bindings
+// GetKeyBindings returns the key bindings.
 func (a *App) GetKeyBindings() views.KeyBindingsInterface {
 	return a.keyBindings
 }
 
-// GetFleetCommander returns the fleet command interface (App implements it)
+// GetFleetCommander returns the fleet command interface (delegates to server).
 func (a *App) GetFleetCommander() views.FleetCommandInterface {
-	return a
+	return a.Server
 }
 
-// GetFleetManagementSystem returns the fleet management system
+// GetFleetManagementSystem returns the fleet management system (delegates to server).
 func (a *App) GetFleetManagementSystem() *game.FleetManagementSystem {
-	return a.fleetMgmtSystem
+	return a.Server.FleetMgmtSystem
 }
 
-// SaveKeyBindings saves the current key bindings to config file
+// SaveKeyBindings saves the current key bindings to config file.
 func (a *App) SaveKeyBindings() error {
 	if a.keyBindings == nil {
 		return fmt.Errorf("key bindings not initialized")
@@ -70,29 +70,28 @@ func (a *App) SaveKeyBindings() error {
 	return a.keyBindings.SaveToFile(systems.GetKeyBindingsConfigPath())
 }
 
-// Update updates the app state (implements ebiten.Game)
+// Update updates the app state (implements ebiten.Game).
 func (a *App) Update() error {
-	// Handle global keyboard shortcuts
+	// Handle global keyboard shortcuts (client-side input)
 	a.handleGlobalInput()
 
-	// Update tick system (this will also update tickable systems)
-	if a.tickManager != nil {
-		a.tickManager.Update()
+	// Drain commands and advance simulation (in-process server)
+	a.Server.DrainCommands()
+	if a.Server.TickManager != nil {
+		a.Server.TickManager.Update()
 	}
 
-	// Update current view
+	// Update current view (client-side rendering)
 	return a.viewManager.Update()
 }
 
-// Draw draws the game screen (implements ebiten.Game)
+// Draw draws the game screen (implements ebiten.Game).
 func (a *App) Draw(screen *ebiten.Image) {
 	a.viewManager.Draw(screen)
-
-	// Draw tick info overlay
 	a.drawTickInfo(screen)
 }
 
-// Layout returns the game's screen size (implements ebiten.Game)
+// Layout returns the game's screen size (implements ebiten.Game).
 func (a *App) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return a.screenWidth, a.screenHeight
 }

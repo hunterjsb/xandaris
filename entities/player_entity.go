@@ -36,7 +36,7 @@ func NewPlayer(id int, name string, playerColor color.RGBA, playerType PlayerTyp
 		Name:          name,
 		Color:         playerColor,
 		Type:          playerType,
-		Credits:       1000, // Starting credits
+		Credits:       8000, // Starting credits
 		OwnedPlanets:  make([]*Planet, 0),
 		OwnedStations: make([]*Station, 0),
 		OwnedShips:    make([]*Ship, 0),

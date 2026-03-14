@@ -17,7 +17,11 @@ type RefineryProductionSystem struct {
 
 // OnTick processes refinery production each tick
 func (rps *RefineryProductionSystem) OnTick(tick int64) {
-	// Process refineries every tick (10 ticks per second)
+	// Process refineries every 10 ticks (once per second) to match resource accumulation rate
+	if tick%10 != 0 {
+		return
+	}
+
 	context := rps.GetContext()
 	if context == nil {
 		return
@@ -55,18 +59,15 @@ func (rps *RefineryProductionSystem) processRefineries(planet *entities.Planet) 
 
 // processRefinery processes a single refinery
 func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, refinery *entities.Building) {
-	// Base conversion rate: 10 Oil per second → 5 Fuel per second
-	// At 10 ticks per second: 1 Oil per tick → 0.5 Fuel per tick
-	baseOilConsumption := 1
-	baseFuelProduction := 0.5
+	// Base: consumes 2 Oil, produces 3 Fuel per interval (10-tick cycle).
+	// More efficient conversion that can run with less Oil stockpile.
+	baseOilConsumption := 2
+	baseFuelProduction := 3
 
-	// Apply building level bonus (each level adds 20% efficiency)
-	levelMultiplier := 1.0 + float64(refinery.Level-1)*0.2
+	// Each level adds 30% throughput
+	levelMultiplier := 1.0 + float64(refinery.Level-1)*0.3
 	oilNeeded := int(float64(baseOilConsumption) * levelMultiplier)
-	fuelProduced := int(baseFuelProduction * levelMultiplier)
-	if fuelProduced < 1 {
-		fuelProduced = 1 // Always produce at least 1 fuel per tick
-	}
+	fuelProduced := int(float64(baseFuelProduction) * levelMultiplier)
 
 	// Ensure Fuel storage exists
 	if _, hasFuel := planet.StoredResources["Fuel"]; !hasFuel {

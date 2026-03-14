@@ -9,7 +9,7 @@ import (
 // drawTickInfo draws tick information overlay
 func (a *App) drawTickInfo(screen *ebiten.Image) {
 	// Don't draw in main menu or if tick manager is not initialized
-	if a.viewManager.GetCurrentView().GetType() == views.ViewTypeMainMenu || a.tickManager == nil {
+	if a.viewManager.GetCurrentView().GetType() == views.ViewTypeMainMenu || a.Server.TickManager == nil {
 		return
 	}
 
@@ -25,8 +25,8 @@ func (a *App) drawTickInfo(screen *ebiten.Image) {
 	textX := x + 10
 	textY := y + 15
 
-	speedStr := a.tickManager.GetSpeedString()
+	speedStr := a.Server.TickManager.GetSpeedString()
 	views.DrawText(screen, "Speed: "+speedStr, textX, textY, utils.TextPrimary)
-	views.DrawText(screen, a.tickManager.GetGameTimeFormatted(), textX, textY+15, utils.TextSecondary)
+	views.DrawText(screen, a.Server.TickManager.GetGameTimeFormatted(), textX, textY+15, utils.TextSecondary)
 	views.DrawText(screen, "[Space] Pause  [F5] Save", textX, textY+30, utils.TextSecondary)
 }

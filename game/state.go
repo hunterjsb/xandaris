@@ -1,6 +1,7 @@
 package game
 
 import (
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -11,6 +12,52 @@ type State struct {
 	Players     []*entities.Player
 	HumanPlayer *entities.Player
 	Seed        int64
+	Market        *economy.Market
+	TradeExec     *economy.TradeExecutor
+	Commands      chan GameCommand
+}
+
+// GameCommand represents a command to be executed on the main goroutine.
+type GameCommand struct {
+	Type   string
+	Data   interface{}
+	Result chan interface{} // optional: for synchronous API responses
+}
+
+// TradeCommandData is the shared trade command payload used by both API and UI.
+type TradeCommandData struct {
+	Resource string
+	Quantity int
+	Buy      bool
+	PlanetID int // optional: specific planet for the trade (0 = auto-select)
+}
+
+// CargoCommandData is the payload for cargo load/unload commands.
+type CargoCommandData struct {
+	ShipID   int
+	PlanetID int
+	Resource string
+	Quantity int
+	Load     bool // true = load onto ship, false = unload from ship
+}
+
+// BuildCommandData is the payload for starting construction.
+type BuildCommandData struct {
+	PlanetID     int    // planet to build on
+	BuildingType string // "Mine", "Trading Post", "Refinery", "Habitat", "Shipyard"
+	ResourceID   int    // for mines: which resource node to attach to (0 = auto)
+}
+
+// ShipBuildCommandData is the payload for building a ship.
+type ShipBuildCommandData struct {
+	PlanetID int    // planet with shipyard
+	ShipType string // "Scout", "Cargo", "Colony", "Frigate", "Destroyer", "Cruiser"
+}
+
+// ShipMoveCommandData is the payload for moving a ship.
+type ShipMoveCommandData struct {
+	ShipID         int // ship to move
+	TargetSystemID int // system to jump to
 }
 
 // NewState creates a new empty game state
@@ -19,6 +66,7 @@ func NewState() *State {
 		Systems:    make([]*entities.System, 0),
 		Hyperlanes: make([]entities.Hyperlane, 0),
 		Players:    make([]*entities.Player, 0),
+		Commands:   make(chan GameCommand, 64),
 	}
 }
 
@@ -63,4 +111,7 @@ func (gs *State) Reset() {
 	gs.Players = make([]*entities.Player, 0)
 	gs.HumanPlayer = nil
 	gs.Seed = 0
+	gs.Market = nil
+	gs.TradeExec = nil
+	gs.Commands = make(chan GameCommand, 64)
 }

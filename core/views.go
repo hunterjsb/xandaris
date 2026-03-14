@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/hunterjsb/xandaris/ui"
 	"github.com/hunterjsb/xandaris/views"
 )
 
@@ -12,23 +11,4 @@ func (a *App) initializeViews() {
 
 	a.viewManager.RegisterView(mainMenuView)
 	a.viewManager.RegisterView(settingsView)
-}
-
-// initializeGameViews creates and registers all game views
-// This must be called after UI components are created
-func (a *App) initializeGameViews(buildMenu *ui.BuildMenu, constructionQueue *ui.ConstructionQueueUI,
-	resourceStorage *ui.ResourceStorageUI, shipyardUI *ui.ShipyardUI, fleetInfoUI *ui.FleetInfoUI) {
-
-	// Create and register views (pass App as GameContext)
-	galaxyView := views.NewGalaxyView(a)
-	systemView := views.NewSystemView(a, fleetInfoUI)
-	planetView := views.NewPlanetView(a, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
-	marketView := views.NewMarketView(a)
-	playerDirectory := views.NewPlayerDirectoryView(a)
-
-	a.viewManager.RegisterView(galaxyView)
-	a.viewManager.RegisterView(systemView)
-	a.viewManager.RegisterView(planetView)
-	a.viewManager.RegisterView(marketView)
-	a.viewManager.RegisterView(playerDirectory)
 }

@@ -26,11 +26,16 @@ type FleetInfoUI struct {
 	scrollOffset          int
 	showMoveMenu          bool
 	showJoinFleetMenu     bool
+	showCargoMenu         bool
 	nearbyFleets          []*entities.Fleet
 	connectedSystems      []int
 	currentSystemEntities []entities.Entity
 	moveMenuScrollOffset  int
 	joinMenuScrollOffset  int
+	cargoMenuScrollOffset int
+	cargoOrbitPlanet      *entities.Planet // planet the ship is orbiting (for cargo ops)
+	cargoStatusMsg        string
+	cargoStatusTicks      int
 }
 
 // NewFleetInfoUI creates a new fleet info UI
@@ -62,8 +67,11 @@ func (fui *FleetInfoUI) ShowShip(ship *entities.Ship) {
 	fui.scrollOffset = 0
 	fui.showMoveMenu = false
 	fui.showJoinFleetMenu = false
+	fui.showCargoMenu = false
 	fui.moveMenuScrollOffset = 0
 	fui.joinMenuScrollOffset = 0
+	fui.cargoMenuScrollOffset = 0
+	fui.cargoStatusMsg = ""
 }
 
 // Hide closes the fleet info UI
@@ -119,7 +127,7 @@ func (fui *FleetInfoUI) Update() {
 		}
 
 		// Handle button clicks based on whether showing fleet or ship
-		if !fui.showMoveMenu && !fui.showJoinFleetMenu {
+		if !fui.showMoveMenu && !fui.showJoinFleetMenu && !fui.showCargoMenu {
 			buttonY := fui.y + fui.height - 40
 			buttonH := 30
 
@@ -143,10 +151,16 @@ func (fui *FleetInfoUI) Update() {
 				}
 
 			} else if fui.ship != nil {
-				// Ship has 3 buttons: Move, Create, Join
-				buttonW := (fui.width - 40) / 3
+				atPlanet := fui.isFleetAtPlanet()
+				var numButtons int
+				if atPlanet {
+					numButtons = 4 // Move, Create, Join, Cargo
+				} else {
+					numButtons = 3 // Move, Create, Join
+				}
+				buttonW := (fui.width - 10*(numButtons+1)) / numButtons
 
-				// Move button (left)
+				// Move button
 				if mx >= fui.x+10 && mx <= fui.x+10+buttonW &&
 					my >= buttonY && my <= buttonY+buttonH {
 					fui.showMoveMenu = true
@@ -154,19 +168,32 @@ func (fui *FleetInfoUI) Update() {
 					return
 				}
 
-				// Create Fleet button (middle)
-				if mx >= fui.x+20+buttonW && mx <= fui.x+20+buttonW+buttonW &&
+				// Create Fleet button
+				createX := fui.x + 20 + buttonW
+				if mx >= createX && mx <= createX+buttonW &&
 					my >= buttonY && my <= buttonY+buttonH {
 					fui.createFleetFromShip()
 					return
 				}
 
-				// Join Fleet button (right)
-				if mx >= fui.x+30+buttonW*2 && mx <= fui.x+30+buttonW*2+buttonW &&
+				// Join Fleet button
+				joinX := fui.x + 30 + buttonW*2
+				if mx >= joinX && mx <= joinX+buttonW &&
 					my >= buttonY && my <= buttonY+buttonH {
 					fui.showJoinFleetMenu = true
 					fui.initializeJoinFleetMenu()
 					return
+				}
+
+				// Cargo button (only when at planet)
+				if atPlanet {
+					cargoX := fui.x + 40 + buttonW*3
+					if mx >= cargoX && mx <= cargoX+buttonW &&
+						my >= buttonY && my <= buttonY+buttonH {
+						fui.showCargoMenu = true
+						fui.initializeCargoMenu()
+						return
+					}
 				}
 			}
 		}
@@ -280,6 +307,23 @@ func (fui *FleetInfoUI) Update() {
 				}
 			}
 		}
+
+		// Handle cargo menu clicks
+		if fui.showCargoMenu {
+			// Back button
+			backButtonX := fui.x + 10
+			backButtonY := fui.y + fui.height - 40
+			backButtonW := 60
+			backButtonH := 30
+			if mx >= backButtonX && mx <= backButtonX+backButtonW &&
+				my >= backButtonY && my <= backButtonY+backButtonH {
+				fui.showCargoMenu = false
+				return
+			}
+
+			// Cargo action buttons (Load/Unload per resource row)
+			fui.handleCargoMenuClick(mx, my)
+		}
 	}
 
 	// Handle scroll for move menu
@@ -321,6 +365,32 @@ func (fui *FleetInfoUI) Update() {
 			if fui.joinMenuScrollOffset > maxScroll {
 				fui.joinMenuScrollOffset = maxScroll
 			}
+		}
+	}
+
+	// Handle scroll for cargo menu
+	if fui.showCargoMenu {
+		_, dy := ebiten.Wheel()
+		if dy != 0 {
+			fui.cargoMenuScrollOffset -= int(dy * 20)
+			if fui.cargoMenuScrollOffset < 0 {
+				fui.cargoMenuScrollOffset = 0
+			}
+			maxScroll := fui.getCargoMenuContentHeight() - (fui.height - 200)
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if fui.cargoMenuScrollOffset > maxScroll {
+				fui.cargoMenuScrollOffset = maxScroll
+			}
+		}
+	}
+
+	// Decay cargo status message
+	if fui.cargoStatusTicks > 0 {
+		fui.cargoStatusTicks--
+		if fui.cargoStatusTicks <= 0 {
+			fui.cargoStatusMsg = ""
 		}
 	}
 }
@@ -398,11 +468,13 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 	separatorY := fuelY + 35
 	views.DrawLine(screen, fui.x+10, separatorY, fui.x+fui.width-10, separatorY, utils.PanelBorder)
 
-	// Show either the ship list, move menu, or join fleet menu
+	// Show either the ship list, move menu, join fleet menu, or cargo menu
 	if fui.showMoveMenu {
 		fui.drawMoveMenu(screen)
 	} else if fui.showJoinFleetMenu {
 		fui.drawJoinFleetMenu(screen)
+	} else if fui.showCargoMenu {
+		fui.drawCargoMenu(screen)
 	} else {
 		// Ship list header
 		listHeaderY := separatorY + 10
@@ -477,8 +549,15 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 		views.DrawTextCentered(screen, "Disband", fui.x+20+buttonW+buttonW/2, buttonY+10, utils.TextPrimary, 1.0)
 
 	} else if fui.ship != nil {
-		// For ships: 3 buttons (Move, Create, Join)
-		buttonW := (fui.width - 40) / 3
+		// For ships: 3 or 4 buttons depending on whether ship is at a planet
+		atPlanet := fui.isFleetAtPlanet()
+		var numButtons int
+		if atPlanet {
+			numButtons = 4 // Move, Create, Join, Cargo
+		} else {
+			numButtons = 3 // Move, Create, Join
+		}
+		buttonW := (fui.width - 10*(numButtons+1)) / numButtons
 
 		// Move button
 		movePanel := &views.UIPanel{
@@ -493,8 +572,9 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 		views.DrawTextCentered(screen, moveButtonText, fui.x+10+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
 
 		// Create Fleet button
+		createX := fui.x + 20 + buttonW
 		createPanel := &views.UIPanel{
-			X:           fui.x + 20 + buttonW,
+			X:           createX,
 			Y:           buttonY,
 			Width:       buttonW,
 			Height:      buttonH,
@@ -502,11 +582,12 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 			BorderColor: utils.Highlight,
 		}
 		createPanel.Draw(screen)
-		views.DrawTextCentered(screen, "Create", fui.x+20+buttonW+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+		views.DrawTextCentered(screen, "Create", createX+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
 
 		// Join Fleet button
+		joinX := fui.x + 30 + buttonW*2
 		joinPanel := &views.UIPanel{
-			X:           fui.x + 30 + buttonW*2,
+			X:           joinX,
 			Y:           buttonY,
 			Width:       buttonW,
 			Height:      buttonH,
@@ -514,7 +595,22 @@ func (fui *FleetInfoUI) drawMoveButton(screen *ebiten.Image) {
 			BorderColor: utils.Highlight,
 		}
 		joinPanel.Draw(screen)
-		views.DrawTextCentered(screen, "Join", fui.x+30+buttonW*2+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+		views.DrawTextCentered(screen, "Join", joinX+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+
+		// Cargo button (only when at planet)
+		if atPlanet {
+			cargoX := fui.x + 40 + buttonW*3
+			cargoPanel := &views.UIPanel{
+				X:           cargoX,
+				Y:           buttonY,
+				Width:       buttonW,
+				Height:      buttonH,
+				BgColor:     color.RGBA{100, 80, 30, 255},
+				BorderColor: utils.Highlight,
+			}
+			cargoPanel.Draw(screen)
+			views.DrawTextCentered(screen, "Cargo", cargoX+buttonW/2, buttonY+10, utils.TextPrimary, 0.9)
+		}
 	}
 }
 
@@ -1020,4 +1116,270 @@ func (fui *FleetInfoUI) joinSelectedFleet(fleet *entities.Fleet) {
 
 	// Update the UI to show the fleet the ship just joined
 	fui.ShowFleet(fleet)
+}
+
+// initializeCargoMenu finds the planet the ship is orbiting for cargo ops
+func (fui *FleetInfoUI) initializeCargoMenu() {
+	fui.cargoOrbitPlanet = nil
+	fui.cargoMenuScrollOffset = 0
+	fui.cargoStatusMsg = ""
+
+	ship := fui.ship
+	if ship == nil {
+		return
+	}
+
+	systems := fui.ctx.GetSystemsMap()
+	currentSystem := systems[ship.CurrentSystem]
+	if currentSystem == nil {
+		return
+	}
+
+	// Find the planet the ship is orbiting
+	for _, entity := range currentSystem.Entities {
+		if planet, ok := entity.(*entities.Planet); ok {
+			if math.Abs(ship.GetOrbitDistance()-planet.GetOrbitDistance()) < 1.0 {
+				fui.cargoOrbitPlanet = planet
+				return
+			}
+		}
+	}
+}
+
+const cargoLot = 10 // units per load/unload click
+
+// drawCargoMenu draws the cargo management interface
+func (fui *FleetInfoUI) drawCargoMenu(screen *ebiten.Image) {
+	ship := fui.ship
+	if ship == nil {
+		return
+	}
+
+	// Title
+	menuTitleY := fui.y + 100
+	if fui.cargoOrbitPlanet != nil {
+		views.DrawText(screen, fmt.Sprintf("Cargo at %s", fui.cargoOrbitPlanet.Name), fui.x+10, menuTitleY, utils.SystemLightBlue)
+	} else {
+		views.DrawText(screen, "Cargo Management", fui.x+10, menuTitleY, utils.SystemLightBlue)
+	}
+
+	// Cargo capacity bar
+	capacityY := menuTitleY + 18
+	totalCargo := ship.GetTotalCargo()
+	capacityText := fmt.Sprintf("Hold: %d/%d", totalCargo, ship.MaxCargo)
+	views.DrawText(screen, capacityText, fui.x+10, capacityY, utils.TextPrimary)
+
+	// Draw capacity bar
+	barX := fui.x + 10
+	barY := capacityY + 14
+	barW := fui.width - 20
+	barH := 6
+	barPanel := &views.UIPanel{X: barX, Y: barY, Width: barW, Height: barH, BgColor: utils.PanelBg, BorderColor: utils.PanelBorder}
+	barPanel.Draw(screen)
+	if ship.MaxCargo > 0 {
+		fillW := int(float64(barW) * float64(totalCargo) / float64(ship.MaxCargo))
+		if fillW > 0 {
+			fillColor := color.RGBA{180, 150, 50, 255}
+			if totalCargo >= ship.MaxCargo {
+				fillColor = utils.SystemRed
+			}
+			fillPanel := &views.UIPanel{X: barX + 1, Y: barY + 1, Width: fillW - 2, Height: barH - 2, BgColor: fillColor, BorderColor: fillColor}
+			fillPanel.Draw(screen)
+		}
+	}
+
+	// Status message
+	if fui.cargoStatusMsg != "" {
+		views.DrawText(screen, fui.cargoStatusMsg, fui.x+10, barY+12, utils.SystemGreen)
+	}
+
+	// Content area starts after header
+	contentStartY := barY + 28
+	itemHeight := 28
+	visibleBottom := fui.y + fui.height - 60
+	currentY := contentStartY - fui.cargoMenuScrollOffset
+
+	// Section 1: Planet Resources (loadable)
+	if fui.cargoOrbitPlanet != nil && fui.cargoOrbitPlanet.Owner == ship.Owner {
+		if currentY >= contentStartY-20 && currentY <= visibleBottom {
+			views.DrawText(screen, "Planet Stock:", fui.x+10, currentY, utils.TextPrimary)
+		}
+		currentY += 18
+
+		hasResources := false
+		for resType, storage := range fui.cargoOrbitPlanet.StoredResources {
+			if storage == nil || storage.Amount <= 0 {
+				continue
+			}
+			hasResources = true
+			if currentY >= contentStartY-itemHeight && currentY <= visibleBottom {
+				// Resource name and amount
+				views.DrawText(screen, fmt.Sprintf("%s: %d", resType, storage.Amount), fui.x+15, currentY+4, utils.TextPrimary)
+
+				// [Load] button
+				loadX := fui.x + fui.width - 65
+				views.DrawText(screen, "[Load]", loadX, currentY+4, utils.SystemGreen)
+			}
+			currentY += itemHeight
+		}
+		if !hasResources {
+			if currentY >= contentStartY-15 && currentY <= visibleBottom {
+				views.DrawText(screen, "  No resources", fui.x+20, currentY+4, utils.TextSecondary)
+			}
+			currentY += 18
+		}
+		currentY += 8
+	}
+
+	// Section 2: Ship Cargo (unloadable)
+	if currentY >= contentStartY-20 && currentY <= visibleBottom {
+		views.DrawText(screen, "Ship Cargo:", fui.x+10, currentY, utils.TextPrimary)
+	}
+	currentY += 18
+
+	if len(ship.CargoHold) == 0 {
+		if currentY >= contentStartY-15 && currentY <= visibleBottom {
+			views.DrawText(screen, "  Empty", fui.x+20, currentY+4, utils.TextSecondary)
+		}
+		currentY += 18
+	} else {
+		for resType, amount := range ship.CargoHold {
+			if amount <= 0 {
+				continue
+			}
+			if currentY >= contentStartY-itemHeight && currentY <= visibleBottom {
+				views.DrawText(screen, fmt.Sprintf("%s: %d", resType, amount), fui.x+15, currentY+4, utils.TextPrimary)
+
+				// [Unload] button (only if at owned planet)
+				if fui.cargoOrbitPlanet != nil && fui.cargoOrbitPlanet.Owner == ship.Owner {
+					unloadX := fui.x + fui.width - 80
+					views.DrawText(screen, "[Unload]", unloadX, currentY+4, utils.SystemOrange)
+				}
+			}
+			currentY += itemHeight
+		}
+	}
+
+	// Back button
+	backButtonX := fui.x + 10
+	backButtonY := fui.y + fui.height - 40
+	backButtonW := 60
+	backButtonH := 30
+
+	backPanel := &views.UIPanel{
+		X:           backButtonX,
+		Y:           backButtonY,
+		Width:       backButtonW,
+		Height:      backButtonH,
+		BgColor:     utils.ButtonActive,
+		BorderColor: utils.Highlight,
+	}
+	backPanel.Draw(screen)
+	views.DrawTextCentered(screen, "Back", backButtonX+backButtonW/2, backButtonY+10, utils.TextPrimary, 1.0)
+}
+
+// handleCargoMenuClick processes clicks in the cargo menu
+func (fui *FleetInfoUI) handleCargoMenuClick(mx, my int) {
+	ship := fui.ship
+	if ship == nil {
+		return
+	}
+
+	barY := fui.y + 100 + 18 + 14 // matches draw layout
+	contentStartY := barY + 28
+	itemHeight := 28
+	visibleBottom := fui.y + fui.height - 60
+	currentY := contentStartY - fui.cargoMenuScrollOffset
+
+	cargoCommander := fui.ctx.GetCargoCommander()
+	if cargoCommander == nil {
+		return
+	}
+
+	// Section 1: Planet resources — [Load] buttons
+	if fui.cargoOrbitPlanet != nil && fui.cargoOrbitPlanet.Owner == ship.Owner {
+		currentY += 18 // header
+
+		for resType, storage := range fui.cargoOrbitPlanet.StoredResources {
+			if storage == nil || storage.Amount <= 0 {
+				continue
+			}
+			if currentY >= contentStartY-itemHeight && currentY <= visibleBottom {
+				loadX := fui.x + fui.width - 65
+				loadW := 50
+				if mx >= loadX && mx <= loadX+loadW && my >= currentY && my <= currentY+itemHeight {
+					loaded, err := cargoCommander.LoadCargo(ship, fui.cargoOrbitPlanet, resType, cargoLot)
+					if err != nil {
+						fui.cargoStatusMsg = err.Error()
+					} else {
+						fui.cargoStatusMsg = fmt.Sprintf("Loaded %d %s", loaded, resType)
+					}
+					fui.cargoStatusTicks = 120
+					return
+				}
+			}
+			currentY += itemHeight
+		}
+		currentY += 8
+	}
+
+	// Section 2: Ship cargo — [Unload] buttons
+	currentY += 18 // header
+
+	if fui.cargoOrbitPlanet != nil && fui.cargoOrbitPlanet.Owner == ship.Owner {
+		for resType, amount := range ship.CargoHold {
+			if amount <= 0 {
+				continue
+			}
+			if currentY >= contentStartY-itemHeight && currentY <= visibleBottom {
+				unloadX := fui.x + fui.width - 80
+				unloadW := 65
+				if mx >= unloadX && mx <= unloadX+unloadW && my >= currentY && my <= currentY+itemHeight {
+					unloaded, err := cargoCommander.UnloadCargo(ship, fui.cargoOrbitPlanet, resType, cargoLot)
+					if err != nil {
+						fui.cargoStatusMsg = err.Error()
+					} else {
+						fui.cargoStatusMsg = fmt.Sprintf("Unloaded %d %s", unloaded, resType)
+					}
+					fui.cargoStatusTicks = 120
+					return
+				}
+			}
+			currentY += itemHeight
+		}
+	}
+}
+
+// getCargoMenuContentHeight calculates total height of cargo menu content
+func (fui *FleetInfoUI) getCargoMenuContentHeight() int {
+	itemHeight := 28
+	total := 0
+
+	// Planet section
+	if fui.cargoOrbitPlanet != nil && fui.ship != nil && fui.cargoOrbitPlanet.Owner == fui.ship.Owner {
+		total += 18 // header
+		count := 0
+		for _, storage := range fui.cargoOrbitPlanet.StoredResources {
+			if storage != nil && storage.Amount > 0 {
+				count++
+			}
+		}
+		if count == 0 {
+			total += 18
+		} else {
+			total += count * itemHeight
+		}
+		total += 8 // spacing
+	}
+
+	// Ship cargo section
+	total += 18 // header
+	cargoCount := len(fui.ship.CargoHold)
+	if cargoCount == 0 {
+		total += 18
+	} else {
+		total += cargoCount * itemHeight
+	}
+
+	return total
 }

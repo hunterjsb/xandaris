@@ -46,11 +46,26 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 	}
 
 	for _, player := range players {
-		// Each planet produces credits based on population
 		for _, planet := range player.OwnedPlanets {
 			// Base production: 1 credit per 100 population per interval
 			production := int(planet.Population / 100)
+
+			// Trading Post bonus: 3 credits per level per interval
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok {
+					if b.BuildingType == "Trading Post" && b.IsOperational {
+						production += 3 * b.Level
+					}
+				}
+			}
+
 			player.Credits += production
+		}
+
+		// Minimum credit floor: players below 1000cr get a small subsidy.
+		// Prevents permanent poverty spirals where AI can never invest.
+		if player.Credits < 1000 {
+			player.Credits += 5
 		}
 	}
 }

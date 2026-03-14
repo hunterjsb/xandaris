@@ -16,7 +16,7 @@ func InitializePlayer(player *Player, systems []*System) {
 				if planet.Owner != "" {
 					continue
 				}
-				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasOilResource(planet) && hasIronResource(planet) {
+				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasWaterResource(planet) && hasIronResource(planet) {
 					validSystems = append(validSystems, system)
 					break
 				}
@@ -24,7 +24,7 @@ func InitializePlayer(player *Player, systems []*System) {
 		}
 	}
 
-	// Fallback: Find any habitable terrestrial planet (without Oil requirement)
+	// Fallback: habitable terrestrial with at least Water
 	if len(validSystems) == 0 {
 		for _, system := range systems {
 			for _, entity := range system.GetEntities() {
@@ -32,7 +32,7 @@ func InitializePlayer(player *Player, systems []*System) {
 					if planet.Owner != "" {
 						continue
 					}
-					if planet.PlanetType == "Terrestrial" && planet.IsHabitable() {
+					if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasWaterResource(planet) {
 						validSystems = append(validSystems, system)
 						break
 					}
@@ -41,7 +41,24 @@ func InitializePlayer(player *Player, systems []*System) {
 		}
 	}
 
-	// Second fallback: use any system with a habitable planet
+	// Second fallback: any habitable planet with Water
+	if len(validSystems) == 0 {
+		for _, system := range systems {
+			for _, entity := range system.GetEntitiesByType(EntityTypePlanet) {
+				if planet, ok := entity.(*Planet); ok {
+					if planet.Owner != "" {
+						continue
+					}
+					if planet.IsHabitable() && hasWaterResource(planet) {
+						validSystems = append(validSystems, system)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Last resort: any habitable planet at all
 	if len(validSystems) == 0 {
 		for _, system := range systems {
 			for _, entity := range system.GetEntitiesByType(EntityTypePlanet) {
@@ -66,51 +83,37 @@ func InitializePlayer(player *Player, systems []*System) {
 	homeSystem := validSystems[rand.Intn(len(validSystems))]
 	player.HomeSystem = homeSystem
 
-	// Find the best terrestrial planet with Oil and Iron in that system
+	// Find the best habitable planet — prefer one with Water + Iron
 	var bestPlanet *Planet
-	bestHabitability := -1
+	bestScore := -1
 
 	for _, entity := range homeSystem.GetEntities() {
 		if planet, ok := entity.(*Planet); ok {
-			if planet.Owner != "" {
+			if planet.Owner != "" || !planet.IsHabitable() {
 				continue
 			}
-			if !planet.IsHabitable() {
-				continue
+			score := planet.Habitability
+			if hasWaterResource(planet) {
+				score += 100 // Strongly prefer Water
 			}
-			if planet.PlanetType == "Terrestrial" && hasOilResource(planet) && hasIronResource(planet) && planet.Habitability > bestHabitability {
+			if hasIronResource(planet) {
+				score += 50
+			}
+			if hasOilResource(planet) {
+				score += 30
+			}
+			if score > bestScore {
 				bestPlanet = planet
-				bestHabitability = planet.Habitability
+				bestScore = score
 			}
 		}
 	}
 
-	// Fallback: Find best terrestrial planet without Oil requirement
+	// Fallback: any habitable planet in this system
 	if bestPlanet == nil {
 		for _, entity := range homeSystem.GetEntities() {
 			if planet, ok := entity.(*Planet); ok {
-				if planet.Owner != "" {
-					continue
-				}
-				if !planet.IsHabitable() {
-					continue
-				}
-				if planet.PlanetType == "Terrestrial" && planet.Habitability > bestHabitability {
-					bestPlanet = planet
-					bestHabitability = planet.Habitability
-				}
-			}
-		}
-	}
-
-	// If no terrestrial planet, pick any habitable planet
-	if bestPlanet == nil {
-		for _, entity := range homeSystem.GetEntities() {
-			if planet, ok := entity.(*Planet); ok {
-				if planet.Owner != "" {
-					continue
-				}
-				if planet.IsHabitable() {
+				if planet.Owner == "" && planet.IsHabitable() {
 					bestPlanet = planet
 					break
 				}
@@ -124,7 +127,7 @@ func InitializePlayer(player *Player, systems []*System) {
 
 	// Set up the home planet
 	player.HomePlanet = bestPlanet
-	bestPlanet.Population = 1000 // 1,000 starting population
+	bestPlanet.Population = 2000 // 2,000 starting colonists
 	bestPlanet.Owner = player.Name
 	bestPlanet.SetBaseOwner(player.Name)
 
@@ -162,6 +165,18 @@ func hasOilResource(planet *Planet) bool {
 	for _, resourceEntity := range planet.Resources {
 		if resource, ok := resourceEntity.(*Resource); ok {
 			if resource.ResourceType == "Oil" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasWaterResource checks if a planet has a Water resource deposit
+func hasWaterResource(planet *Planet) bool {
+	for _, resourceEntity := range planet.Resources {
+		if resource, ok := resourceEntity.(*Resource); ok {
+			if resource.ResourceType == "Water" {
 				return true
 			}
 		}

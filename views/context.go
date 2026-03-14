@@ -4,7 +4,9 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/game"
 )
 
 // GameContext provides the minimal interface that views need to interact with the game
@@ -31,6 +33,13 @@ type GameContext interface {
 
 	// Fleet command interface - for issuing commands to fleets
 	GetFleetCommander() FleetCommandInterface
+
+	// Cargo command interface - for loading/unloading cargo
+	GetCargoCommander() *game.CargoCommandExecutor
+
+	// Market access
+	GetMarket() *economy.Market
+	GetTradeExecutor() *economy.TradeExecutor
 
 	// Game lifecycle methods (primarily for main menu)
 	// These update the current game state in-place rather than replacing it

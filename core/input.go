@@ -16,27 +16,27 @@ func (a *App) handleGlobalInput() {
 
 	// Toggle pause
 	if a.keyBindings.IsActionJustPressed(views.ActionPauseToggle) {
-		a.tickManager.TogglePause()
+		a.Server.TickManager.TogglePause()
 	}
 
 	// Speed control
 	if a.keyBindings.IsActionJustPressed(views.ActionSpeedSlow) {
-		a.tickManager.SetSpeed(systems.TickSpeed1x)
+		a.Server.TickManager.SetSpeed(systems.TickSpeed1x)
 	}
 	if a.keyBindings.IsActionJustPressed(views.ActionSpeedNormal) {
-		a.tickManager.SetSpeed(systems.TickSpeed2x)
+		a.Server.TickManager.SetSpeed(systems.TickSpeed2x)
 	}
 	if a.keyBindings.IsActionJustPressed(views.ActionSpeedFast) {
-		a.tickManager.SetSpeed(systems.TickSpeed4x)
+		a.Server.TickManager.SetSpeed(systems.TickSpeed4x)
 	}
 	if a.keyBindings.IsActionJustPressed(views.ActionSpeedVeryFast) {
-		a.tickManager.SetSpeed(systems.TickSpeed8x)
+		a.Server.TickManager.SetSpeed(systems.TickSpeed8x)
 	}
 
 	// Quick save
 	if a.keyBindings.IsActionJustPressed(views.ActionQuickSave) {
-		if a.state.HumanPlayer != nil {
-			err := a.SaveGameToFile(a.state.HumanPlayer.Name)
+		if a.Server.State.HumanPlayer != nil {
+			err := a.SaveGameToFile(a.Server.State.HumanPlayer.Name)
 			if err != nil {
 				fmt.Printf("Failed to save game: %v\n", err)
 			} else {

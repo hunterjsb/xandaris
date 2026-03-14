@@ -13,10 +13,15 @@ import (
 )
 
 type marketResourceRow struct {
-	resource   string
-	humanStock int
-	npcStock   int
-	avgValue   float64
+	resource      string
+	humanStock    int
+	npcStock      int
+	buyPrice      float64
+	sellPrice     float64
+	localBuyPrice float64 // per-system price
+	localSellPrice float64
+	demand        float64
+	trend         float64
 }
 
 // MarketView presents a simplified trading interface
@@ -32,6 +37,10 @@ type MarketView struct {
 	instructionsPanel *UIPanel
 	rowHits           map[string]tableRowHit
 	humanCredits      int
+	statusMsg         string
+	statusColor       color.RGBA
+	statusTicks       int
+	tradingPlanet     *entities.Planet // the planet trades are scoped to
 }
 
 type tableRowHit struct {
@@ -98,13 +107,51 @@ func (mv *MarketView) GetType() ViewType { return ViewTypeMarket }
 
 func (mv *MarketView) OnEnter() {
 	mv.scrollOffset = 0
+	mv.statusMsg = ""
+	mv.selectTradingPlanet()
 	mv.refreshData()
+}
+
+// selectTradingPlanet auto-selects the player's first planet with a Trading Post.
+func (mv *MarketView) selectTradingPlanet() {
+	player := mv.ctx.GetHumanPlayer()
+	if player == nil {
+		mv.tradingPlanet = nil
+		return
+	}
+	// Prefer a planet with a Trading Post
+	for _, planet := range player.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok {
+				if b.BuildingType == "Trading Post" && b.IsOperational {
+					mv.tradingPlanet = planet
+					return
+				}
+			}
+		}
+	}
+	// Fallback: home planet or first owned planet
+	if player.HomePlanet != nil {
+		mv.tradingPlanet = player.HomePlanet
+	} else if len(player.OwnedPlanets) > 0 {
+		mv.tradingPlanet = player.OwnedPlanets[0]
+	}
 }
 
 func (mv *MarketView) OnExit() {}
 
 func (mv *MarketView) Update() error {
 	mv.refreshData()
+
+	if mv.statusTicks > 0 {
+		mv.statusTicks--
+		if mv.statusTicks <= 0 {
+			mv.statusMsg = ""
+		}
+	}
 
 	kb := mv.ctx.GetKeyBindings()
 	if kb != nil && kb.IsActionJustPressed(ActionEscape) {
@@ -150,28 +197,43 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	mv.instructionsPanel.Draw(screen)
 
 	title := "Market Directory"
-	subtitle := fmt.Sprintf("Credits Available: %d", mv.humanCredits)
+	if mv.tradingPlanet != nil {
+		title = fmt.Sprintf("Market at %s", mv.tradingPlanet.Name)
+	}
+	subtitle := fmt.Sprintf("Credits: %d", mv.humanCredits)
 	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+22, utils.TextPrimary)
 	DrawText(screen, subtitle, mv.headerPanel.X+20, mv.headerPanel.Y+40, utils.TextSecondary)
-	DrawText(screen, fmt.Sprintf("Commodities Listed: %d", len(mv.rows)), mv.headerPanel.X+20, mv.headerPanel.Y+58, utils.TextSecondary)
+
+	// Show status message or commodity count
+	if mv.statusMsg != "" {
+		DrawText(screen, mv.statusMsg, mv.headerPanel.X+20, mv.headerPanel.Y+58, mv.statusColor)
+	} else {
+		DrawText(screen, fmt.Sprintf("Commodities: %d", len(mv.rows)), mv.headerPanel.X+20, mv.headerPanel.Y+58, utils.TextSecondary)
+	}
 
 	headerY := mv.tablePanel.Y + 18
 	colResource := mv.tablePanel.X + 20
-	colHuman := mv.tablePanel.X + 220
-	colNpc := mv.tablePanel.X + 320
-	colValue := mv.tablePanel.X + 420
-	colAction := mv.tablePanel.X + mv.tablePanel.Width - 180
+	colHuman := mv.tablePanel.X + 150
+	colNpc := mv.tablePanel.X + 220
+	colBuy := mv.tablePanel.X + 290
+	colSell := mv.tablePanel.X + 370
+	colGalaxy := mv.tablePanel.X + 450
+	colTrend := mv.tablePanel.X + 530
+	colAction := mv.tablePanel.X + mv.tablePanel.Width - 140
 
 	DrawText(screen, "Commodity", colResource, headerY, utils.TextPrimary)
-	DrawText(screen, "Your Stock", colHuman, headerY, utils.TextPrimary)
-	DrawText(screen, "NPC Stock", colNpc, headerY, utils.TextPrimary)
-	DrawText(screen, "Avg Value", colValue, headerY, utils.TextPrimary)
+	DrawText(screen, "Stock", colHuman, headerY, utils.TextPrimary)
+	DrawText(screen, "Supply", colNpc, headerY, utils.TextPrimary)
+	DrawText(screen, "Buy @", colBuy, headerY, utils.TextPrimary)
+	DrawText(screen, "Sell @", colSell, headerY, utils.TextPrimary)
+	DrawText(screen, "Galaxy", colGalaxy, headerY, utils.TextPrimary)
+	DrawText(screen, "Trend", colTrend, headerY, utils.TextPrimary)
 	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
 
 	DrawLine(screen, mv.tablePanel.X+15, headerY+12, mv.tablePanel.X+mv.tablePanel.Width-15, headerY+12, utils.PanelBorder)
 
 	if len(mv.rows) == 0 {
-		DrawText(screen, "No tradable inventory available yet. Build Trading Posts and accumulate goods to access the market.",
+		DrawText(screen, "No tradable inventory available yet. Build Trading Posts and accumulate goods.",
 			mv.tablePanel.X+20, headerY+40, utils.TextSecondary)
 		mv.drawInstructions(screen)
 		return
@@ -196,8 +258,58 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 
 		DrawText(screen, row.resource, colResource, y, utils.TextPrimary)
 		DrawText(screen, fmt.Sprintf("%d", row.humanStock), colHuman, y, utils.TextPrimary)
-		DrawText(screen, fmt.Sprintf("%d", row.npcStock), colNpc, y, utils.TextPrimary)
-		DrawText(screen, fmt.Sprintf("%.0f", row.avgValue), colValue, y, utils.TextSecondary)
+		DrawText(screen, fmt.Sprintf("%d", row.npcStock), colNpc, y, utils.TextSecondary)
+
+		// Show effective local prices (fallback to galaxy if no local data)
+		displayBuy := row.buyPrice
+		displaySell := row.sellPrice
+		hasLocal := row.localBuyPrice > 0
+		if hasLocal {
+			displayBuy = row.localBuyPrice
+			displaySell = row.localSellPrice
+		}
+
+		// Color: green = favorable vs galaxy avg, red = unfavorable
+		buyColor := utils.TextPrimary
+		if hasLocal {
+			if displayBuy < row.buyPrice*0.95 {
+				buyColor = utils.SystemGreen // cheap locally
+			} else if displayBuy > row.buyPrice*1.05 {
+				buyColor = utils.SystemRed // expensive locally
+			}
+		}
+		DrawText(screen, fmt.Sprintf("%.0f", displayBuy), colBuy, y, buyColor)
+
+		sellColor := utils.TextPrimary
+		if hasLocal {
+			if displaySell > row.sellPrice*1.05 {
+				sellColor = utils.SystemGreen // good sell price
+			} else if displaySell < row.sellPrice*0.95 {
+				sellColor = utils.SystemRed // bad sell price
+			}
+		}
+		DrawText(screen, fmt.Sprintf("%.0f", displaySell), colSell, y, sellColor)
+
+		// Galaxy average as reference
+		DrawText(screen, fmt.Sprintf("%.0f", row.buyPrice), colGalaxy, y, utils.TextSecondary)
+
+		// Trend indicator
+		trendStr := "--"
+		trendColor := utils.TextSecondary
+		if row.trend > 1.0 {
+			trendStr = "^^"
+			trendColor = utils.SystemGreen
+		} else if row.trend > 0.1 {
+			trendStr = "^"
+			trendColor = utils.SystemGreen
+		} else if row.trend < -1.0 {
+			trendStr = "vv"
+			trendColor = utils.SystemRed
+		} else if row.trend < -0.1 {
+			trendStr = "v"
+			trendColor = utils.SystemRed
+		}
+		DrawText(screen, trendStr, colTrend, y, trendColor)
 
 		buyLabel := "[Buy]"
 		sellLabel := "[Sell]"
@@ -213,8 +325,8 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	}
 
 	if len(mv.rows) > mv.maxVisibleRows {
-		scrollText := fmt.Sprintf("Showing %d-%d of %d commodities",
-			mv.scrollOffset+1, mv.scrollOffset+endIndex-mv.scrollOffset, len(mv.rows))
+		scrollText := fmt.Sprintf("Showing %d-%d of %d",
+			mv.scrollOffset+1, endIndex, len(mv.rows))
 		DrawText(screen, scrollText, mv.tablePanel.X+20, mv.tablePanel.Y+mv.tablePanel.Height-24, utils.TextSecondary)
 	}
 
@@ -222,59 +334,42 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 }
 
 func (mv *MarketView) handleTrade(resource string, buy bool) {
-	row := mv.getRow(resource)
-	if row == nil {
+	exec := mv.ctx.GetTradeExecutor()
+	if exec == nil {
+		mv.setStatus("Market not available", utils.SystemRed)
 		return
 	}
+
+	human := mv.ctx.GetHumanPlayer()
+	players := mv.ctx.GetPlayers()
 	qty := tradeLot
+
 	if buy {
-		if row.npcStock < qty {
-			fmt.Println("[Market] Not enough NPC stock")
+		record, err := exec.Buy(human, players, resource, qty, mv.tradingPlanet)
+		if err != nil {
+			mv.setStatus(err.Error(), utils.SystemRed)
 			return
 		}
-		cost := int(row.avgValue * float64(qty))
-		if cost <= 0 {
-			cost = qty * 50
-		}
-		human := mv.ctx.GetHumanPlayer()
-		if human == nil || human.Credits < cost {
-			fmt.Println("[Market] Insufficient credits")
-			return
-		}
-		if !mv.transferStock(resource, qty, false) {
-			fmt.Println("[Market] Failed to obtain stock from NPCs")
-			return
-		}
-		if !mv.transferStock(resource, qty, true) {
-			fmt.Println("[Market] Failed to add stock to human colony")
-			return
-		}
-		human.Credits -= cost
-		fmt.Printf("[Market] Purchased %d units of %s for %d credits\n", qty, resource, cost)
+		mv.setStatus(fmt.Sprintf("Bought %d %s for %d credits", record.Quantity, record.Resource, record.Total), utils.SystemGreen)
 	} else {
-		if row.humanStock < qty {
-			fmt.Println("[Market] Not enough stock to sell")
+		record, err := exec.Sell(human, players, resource, qty, mv.tradingPlanet)
+		if err != nil {
+			mv.setStatus(err.Error(), utils.SystemRed)
 			return
 		}
-		revenue := int(row.avgValue * float64(qty))
-		if revenue <= 0 {
-			revenue = qty * 40
-		}
-		if !mv.removeFromHuman(resource, qty) {
-			fmt.Println("[Market] Failed to remove stock from player")
-			return
-		}
-		mv.transferToNPC(resource, qty)
-		if human := mv.ctx.GetHumanPlayer(); human != nil {
-			human.Credits += revenue
-		}
-		fmt.Printf("[Market] Sold %d units of %s for %d credits\n", qty, resource, revenue)
+		mv.setStatus(fmt.Sprintf("Sold %d %s for %d credits", record.Quantity, record.Resource, record.Total), utils.SystemGreen)
 	}
 	mv.refreshData()
 }
 
+func (mv *MarketView) setStatus(msg string, c color.RGBA) {
+	mv.statusMsg = msg
+	mv.statusColor = c
+	mv.statusTicks = 180 // ~3 seconds at 60fps
+}
+
 func (mv *MarketView) drawInstructions(screen *ebiten.Image) {
-	instr := fmt.Sprintf("Click [Buy] or [Sell] to trade %d units. Scroll with the mouse wheel. Press [Tab] to focus home; press [Esc] to return.", tradeLot)
+	instr := fmt.Sprintf("[Buy]/[Sell] trades %d units. Scroll with mouse wheel. [Esc] to return.", tradeLot)
 	DrawText(screen, instr, mv.instructionsPanel.X+20, mv.instructionsPanel.Y+20, utils.TextSecondary)
 }
 
@@ -285,101 +380,6 @@ func (mv *MarketView) getRow(resource string) *marketResourceRow {
 		}
 	}
 	return nil
-}
-
-func (mv *MarketView) transferStock(resource string, qty int, toHuman bool) bool {
-	players := mv.ctx.GetPlayers()
-	if len(players) == 0 {
-		return false
-	}
-	if toHuman {
-		human := mv.ctx.GetHumanPlayer()
-		if human == nil {
-			return false
-		}
-		planet := firstPlanetWithTradingPost(human)
-		if planet == nil {
-			return false
-		}
-		planet.AddStoredResource(resource, qty)
-		return true
-	}
-
-	for _, player := range players {
-		if player == nil || player.IsHuman() {
-			continue
-		}
-		for _, planet := range player.OwnedPlanets {
-			if planet == nil {
-				continue
-			}
-            if storage := planet.StoredResources[resource]; storage != nil && storage.Amount >= qty {
-                planet.RemoveStoredResource(resource, qty)
-                return true
-            }
-		}
-	}
-	return false
-}
-
-func (mv *MarketView) removeFromHuman(resource string, qty int) bool {
-	human := mv.ctx.GetHumanPlayer()
-	if human == nil {
-		return false
-	}
-	for _, planet := range human.OwnedPlanets {
-		if planet == nil {
-			continue
-		}
-		if storage := planet.StoredResources[resource]; storage != nil && storage.Amount >= qty {
-			removed := planet.RemoveStoredResource(resource, qty)
-			return removed == qty
-		}
-	}
-	return false
-}
-
-func (mv *MarketView) transferToNPC(resource string, qty int) {
-	players := mv.ctx.GetPlayers()
-	for _, player := range players {
-		if player == nil || player.IsHuman() {
-			continue
-		}
-		planet := firstPlanetWithTradingPost(player)
-		if planet != nil {
-			planet.AddStoredResource(resource, qty)
-			return
-		}
-	}
-}
-
-func firstPlanetWithTradingPost(player *entities.Player) *entities.Planet {
-	if player == nil {
-		return nil
-	}
-	for _, planet := range player.OwnedPlanets {
-		if planet == nil {
-			continue
-		}
-		if hasTradingPost(planet) {
-			return planet
-		}
-	}
-	if len(player.OwnedPlanets) > 0 {
-		return player.OwnedPlanets[0]
-	}
-	return nil
-}
-
-func hasTradingPost(planet *entities.Planet) bool {
-	for _, buildingEntity := range planet.Buildings {
-		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == "Trading Post" && building.IsOperational {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (mv *MarketView) refreshData() {
@@ -397,55 +397,162 @@ func (mv *MarketView) refreshData() {
 		return
 	}
 
+	// Find the system ID of the trading planet for NPC stock scoping and local prices
+	tradingSystemID := -1
+	if mv.tradingPlanet != nil {
+		for _, sys := range mv.ctx.GetSystems() {
+			for _, entity := range sys.Entities {
+				if p, ok := entity.(*entities.Planet); ok && p.GetID() == mv.tradingPlanet.GetID() {
+					tradingSystemID = sys.ID
+					break
+				}
+			}
+			if tradingSystemID >= 0 {
+				break
+			}
+		}
+	}
+
+	// Build set of planet IDs in the trading system for NPC stock scoping
+	systemPlanetIDs := make(map[int]bool)
+	if tradingSystemID >= 0 {
+		for _, sys := range mv.ctx.GetSystems() {
+			if sys.ID == tradingSystemID {
+				for _, entity := range sys.Entities {
+					if p, ok := entity.(*entities.Planet); ok {
+						systemPlanetIDs[p.GetID()] = true
+					}
+				}
+				break
+			}
+		}
+	}
+
+	// Get market snapshot for dynamic prices (after tradingSystemID is known)
+	market := mv.ctx.GetMarket()
+	type priceInfo struct {
+		buyPrice       float64
+		sellPrice      float64
+		localBuyPrice  float64
+		localSellPrice float64
+		demand         float64
+		trend          float64
+	}
+	var snapshot map[string]priceInfo
+	if market != nil {
+		snap := market.GetSnapshot()
+		snapshot = make(map[string]priceInfo, len(snap.Resources))
+		for name, rm := range snap.Resources {
+			pi := priceInfo{rm.BuyPrice, rm.SellPrice, 0, 0, rm.TotalDemand, rm.PriceVelocity}
+			if tradingSystemID >= 0 {
+				pi.localBuyPrice = market.GetLocalBuyPrice(name, tradingSystemID)
+				pi.localSellPrice = market.GetLocalSellPrice(name, tradingSystemID)
+			}
+			snapshot[name] = pi
+		}
+	}
+
 	type stockAccumulator struct {
 		human int
 		npc   int
-		value float64
-		count int
 	}
 	acc := make(map[string]*stockAccumulator)
 
-	for _, player := range players {
-		if player == nil {
+	for _, p := range players {
+		if p == nil {
 			continue
 		}
-		for _, planet := range player.OwnedPlanets {
-			if planet == nil {
-				continue
+		if p.IsHuman() {
+			// "You" column: show only the trading planet's stock
+			if mv.tradingPlanet != nil {
+				for resourceType, storage := range mv.tradingPlanet.StoredResources {
+					if storage == nil || storage.Amount <= 0 {
+						continue
+					}
+					entry, exists := acc[resourceType]
+					if !exists {
+						entry = &stockAccumulator{}
+						acc[resourceType] = entry
+					}
+					entry.human += storage.Amount
+				}
+			} else {
+				// Fallback: aggregate all human planets
+				for _, planet := range p.OwnedPlanets {
+					if planet == nil {
+						continue
+					}
+					for resourceType, storage := range planet.StoredResources {
+						if storage == nil || storage.Amount <= 0 {
+							continue
+						}
+						entry, exists := acc[resourceType]
+						if !exists {
+							entry = &stockAccumulator{}
+							acc[resourceType] = entry
+						}
+						entry.human += storage.Amount
+					}
+				}
 			}
-			for resourceType, storage := range planet.StoredResources {
-				if storage == nil || storage.Amount <= 0 {
+		} else {
+			// NPC column: only planets in the same system as the trading planet
+			for _, planet := range p.OwnedPlanets {
+				if planet == nil {
 					continue
 				}
-				entry, exists := acc[resourceType]
-				if !exists {
-					entry = &stockAccumulator{}
-					acc[resourceType] = entry
+				// If we have system scoping, only count planets in the same system
+				if tradingSystemID >= 0 && !systemPlanetIDs[planet.GetID()] {
+					continue
 				}
-				if player.IsHuman() {
-					entry.human += storage.Amount
-				} else {
+				for resourceType, storage := range planet.StoredResources {
+					if storage == nil || storage.Amount <= 0 {
+						continue
+					}
+					entry, exists := acc[resourceType]
+					if !exists {
+						entry = &stockAccumulator{}
+						acc[resourceType] = entry
+					}
 					entry.npc += storage.Amount
 				}
-				if value := lookupResourceValue(planet, resourceType); value > 0 {
-					entry.value += float64(value)
-					entry.count++
-				}
+			}
+		}
+	}
+
+	// Include resources with market prices but no stock
+	if snapshot != nil {
+		for name := range snapshot {
+			if _, exists := acc[name]; !exists {
+				acc[name] = &stockAccumulator{}
 			}
 		}
 	}
 
 	for resource, entry := range acc {
-		avg := 0.0
-		if entry.count > 0 {
-			avg = entry.value / float64(entry.count)
-		}
-		mv.rows = append(mv.rows, marketResourceRow{
+		row := marketResourceRow{
 			resource:   resource,
 			humanStock: entry.human,
 			npcStock:   entry.npc,
-			avgValue:   avg,
-		})
+		}
+
+		if snapshot != nil {
+			if s, ok := snapshot[resource]; ok {
+				row.buyPrice = s.buyPrice
+				row.sellPrice = s.sellPrice
+				row.localBuyPrice = s.localBuyPrice
+				row.localSellPrice = s.localSellPrice
+				row.demand = s.demand
+				row.trend = s.trend
+			}
+		}
+
+		if row.buyPrice == 0 {
+			row.buyPrice = 50
+			row.sellPrice = 40
+		}
+
+		mv.rows = append(mv.rows, row)
 	}
 
 	sort.Slice(mv.rows, func(i, j int) bool {
@@ -456,21 +563,6 @@ func (mv *MarketView) refreshData() {
 		}
 		return totalI > totalJ
 	})
-}
-
-// helper for pricing lookup
-func lookupResourceValue(planet *entities.Planet, resourceType string) int {
-	if planet == nil {
-		return 0
-	}
-	for _, resEntity := range planet.Resources {
-		if resource, ok := resEntity.(*entities.Resource); ok {
-			if resource.ResourceType == resourceType {
-				return resource.Value
-			}
-		}
-	}
-	return 0
 }
 
 // SetReturnView configures which view to go back to when exiting the market

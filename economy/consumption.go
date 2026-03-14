@@ -1,0 +1,154 @@
+package economy
+
+import (
+	"github.com/hunterjsb/xandaris/entities"
+)
+
+// ConsumptionRate defines per-resource consumption per tick-interval.
+type ConsumptionRate struct {
+	ResourceType  string
+	PerPopulation float64 // Units consumed per PopDivisor population
+	PopDivisor    float64
+}
+
+// PopulationConsumption defines resource drain from population.
+// These rates apply per 10-tick interval (~1 second at 1x speed).
+var PopulationConsumption = []ConsumptionRate{
+	{"Water", 1, 250},         // 1 per 250 pop — life support (heaviest)
+	{"Iron", 1, 500},          // 1 per 500 pop — infrastructure
+	{"Oil", 1, 800},           // 1 per 800 pop — industry
+	{"Rare Metals", 1, 5000},  // 1 per 5000 pop — electronics (luxury)
+	{"Helium-3", 1, 10000},    // 1 per 10000 pop — fusion (luxury)
+	// Fuel consumed by buildings only (Shipyard: 2/interval, Refinery upkeep)
+}
+
+// BuildingResourceUpkeep maps building type -> resources consumed per interval.
+var BuildingResourceUpkeep = map[string][]struct {
+	ResourceType string
+	Amount       int
+}{
+	"Mine":         {{"Iron", 1}},
+	"Trading Post": {{"Oil", 1}},
+	"Refinery":     {{"Oil", 2}, {"Iron", 1}},
+	"Shipyard":     {{"Fuel", 2}, {"Iron", 1}, {"Rare Metals", 1}},
+	"Habitat":      {{"Water", 1}},
+}
+
+// BuildingCreditUpkeep defines the credit cost per building per interval (+ level - 1).
+var BuildingCreditUpkeep = map[string]int{
+	"Mine":         2,
+	"Trading Post": 3,
+	"Habitat":      1,
+	"Refinery":     4,
+	"Shipyard":     6,
+}
+
+// ConsumptionResult contains both demand signals and credit drain info.
+type ConsumptionResult struct {
+	Demand      map[string]float64 // resource type -> consumed amount (demand signal)
+	CreditDrain int                // total credits drained from building upkeep
+}
+
+// ProcessConsumption drains resources from all planets and returns demand + credit drain.
+func ProcessConsumption(players []*entities.Player) ConsumptionResult {
+	result := ConsumptionResult{
+		Demand: make(map[string]float64),
+	}
+
+	for _, player := range players {
+		if player == nil {
+			continue
+		}
+		playerCreditDrain := 0
+
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+
+			// Population consumption
+			for _, rate := range PopulationConsumption {
+				needed := float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
+				if needed < 0.5 {
+					continue
+				}
+				result.Demand[rate.ResourceType] += needed
+				planet.RemoveStoredResource(rate.ResourceType, int(needed))
+			}
+
+			// Building upkeep (resources)
+			for _, buildingEntity := range planet.Buildings {
+				building, ok := buildingEntity.(*entities.Building)
+				if !ok || !building.IsOperational {
+					continue
+				}
+				if upkeeps, found := BuildingResourceUpkeep[building.BuildingType]; found {
+					for _, upkeep := range upkeeps {
+						result.Demand[upkeep.ResourceType] += float64(upkeep.Amount)
+						planet.RemoveStoredResource(upkeep.ResourceType, upkeep.Amount)
+					}
+				}
+
+				if cost, found := BuildingCreditUpkeep[building.BuildingType]; found {
+					// Upkeep scales gradually with level
+					playerCreditDrain += cost + (building.Level - 1)
+				}
+			}
+		}
+
+		// Population administration costs (1 credit per 1000 population)
+		for _, planet := range player.OwnedPlanets {
+			if planet != nil {
+				playerCreditDrain += int(planet.Population / 1000)
+			}
+		}
+
+		// Wealth tax: 0.1% per interval on credits above 50,000
+		if player.Credits > 50000 {
+			tax := (player.Credits - 50000) / 1000
+			if tax > 0 {
+				playerCreditDrain += tax
+			}
+		}
+
+		// Deduct credit upkeep - if can't afford, shut down non-essential buildings
+		if playerCreditDrain > 0 {
+			if player.Credits >= playerCreditDrain {
+				player.Credits -= playerCreditDrain
+			} else {
+				player.Credits = 0
+				for _, planet := range player.OwnedPlanets {
+					if planet == nil {
+						continue
+					}
+					for _, be := range planet.Buildings {
+						if b, ok := be.(*entities.Building); ok {
+							if b.BuildingType != "Base" && b.IsOperational {
+								b.IsOperational = false
+							}
+						}
+					}
+				}
+			}
+			result.CreditDrain += playerCreditDrain
+		}
+
+		// Re-enable buildings once credits recover
+		if player.Credits > 500 {
+			for _, planet := range player.OwnedPlanets {
+				if planet == nil {
+					continue
+				}
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok {
+						if !b.IsOperational && b.BuildingType != "Base" {
+							b.IsOperational = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}

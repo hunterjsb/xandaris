@@ -19,4 +19,7 @@ type UIContext interface {
 	GetFleetCommander() views.FleetCommandInterface
 	GetFleetManagementSystem() *game.FleetManagementSystem
 	GetKeyBindings() views.KeyBindingsInterface
+
+	// Cargo command executor for loading/unloading cargo
+	GetCargoCommander() *game.CargoCommandExecutor
 }
