@@ -20,8 +20,8 @@ type marketResourceRow struct {
 	buyPrice       float64
 	sellPrice      float64
 	basePrice      float64 // base/equilibrium price
-	localBuyPrice  float64 // per-system price
-	localSellPrice float64
+	bestBuyPrice   float64 // cheapest price anywhere in the galaxy
+	bestSystem     string  // system with cheapest price
 	demand         float64
 	trend          float64
 	importFee      float64 // dynamic fee rate (0.05-0.20)
@@ -267,7 +267,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	DrawText(screen, "Galaxy", colGalSupply, headerY, utils.TextSecondary)
 	DrawText(screen, "Buy @", colBuy, headerY, utils.SystemGreen)
 	DrawText(screen, "Sell @", colSell, headerY, utils.SystemOrange)
-	DrawText(screen, "Base", colBase, headerY, utils.TextSecondary)
+	DrawText(screen, "Best@", colBase, headerY, utils.SystemGreen)
 	DrawText(screen, "Demand", colDemand, headerY, utils.TextSecondary)
 	DrawText(screen, "Status", colTrend, headerY, utils.TextPrimary)
 	DrawText(screen, "Fee", colFee, headerY, utils.TextSecondary)
@@ -343,12 +343,13 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		}
 		DrawText(screen, fmt.Sprintf("%.0f", row.sellPrice), colSell, y, sellColor)
 
-		// Base price for reference
-		baseStr := fmt.Sprintf("%.0f", row.basePrice)
-		if row.basePrice == 0 {
-			baseStr = "--"
+		// Best price across galaxy (shows where cheapest)
+		if row.bestBuyPrice > 0 && row.bestBuyPrice < row.buyPrice*0.8 {
+			// Significantly cheaper elsewhere — show in green
+			DrawText(screen, fmt.Sprintf("%.0f", row.bestBuyPrice), colBase, y, utils.SystemGreen)
+		} else {
+			DrawText(screen, fmt.Sprintf("%.0f", row.basePrice), colBase, y, utils.TextSecondary)
 		}
-		DrawText(screen, baseStr, colBase, y, utils.TextSecondary)
 
 		// Demand signal
 		demandColor := utils.TextSecondary
@@ -555,26 +556,19 @@ func (mv *MarketView) refreshData() {
 	// Get market snapshot for dynamic prices (after tradingSystemID is known)
 	market := mv.ctx.GetMarket()
 	type priceInfo struct {
-		buyPrice       float64
-		sellPrice      float64
-		basePrice      float64
-		totalSupply    int
-		localBuyPrice  float64
-		localSellPrice float64
-		demand         float64
-		trend          float64
+		buyPrice    float64
+		sellPrice   float64
+		basePrice   float64
+		totalSupply int
+		demand      float64
+		trend       float64
 	}
 	var snapshot map[string]priceInfo
 	if market != nil {
 		snap := market.GetSnapshot()
 		snapshot = make(map[string]priceInfo, len(snap.Resources))
 		for name, rm := range snap.Resources {
-			pi := priceInfo{rm.BuyPrice, rm.SellPrice, rm.BasePrice, int(rm.TotalSupply), 0, 0, rm.TotalDemand, rm.PriceVelocity}
-			if tradingSystemID >= 0 {
-				pi.localBuyPrice = market.GetLocalBuyPrice(name, tradingSystemID)
-				pi.localSellPrice = market.GetLocalSellPrice(name, tradingSystemID)
-			}
-			snapshot[name] = pi
+			snapshot[name] = priceInfo{rm.BuyPrice, rm.SellPrice, rm.BasePrice, int(rm.TotalSupply), rm.TotalDemand, rm.PriceVelocity}
 		}
 	}
 
@@ -668,12 +662,22 @@ func (mv *MarketView) refreshData() {
 				row.sellPrice = s.sellPrice
 				row.basePrice = s.basePrice
 				row.galaxySupply = s.totalSupply
-				row.localBuyPrice = s.localBuyPrice
-				row.localSellPrice = s.localSellPrice
 				row.demand = s.demand
 				row.trend = s.trend
-
 				row.importFee = economy.ComputeImportFee(float64(s.totalSupply), s.demand)
+
+				// Find cheapest price across galaxy
+				bestPrice := row.buyPrice
+				bestSys := ""
+				for _, sys := range mv.ctx.GetSystems() {
+					lp := market.GetLocalBuyPrice(resource, sys.ID)
+					if lp < bestPrice {
+						bestPrice = lp
+						bestSys = sys.Name
+					}
+				}
+				row.bestBuyPrice = bestPrice
+				row.bestSystem = bestSys
 			}
 		}
 
