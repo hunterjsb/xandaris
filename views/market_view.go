@@ -23,6 +23,7 @@ type marketResourceRow struct {
 	localSellPrice float64
 	demand         float64
 	trend          float64
+	importFee      float64 // dynamic fee rate (0.05-0.20)
 }
 
 // MarketView presents a simplified trading interface
@@ -243,7 +244,8 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	colSell := mv.tablePanel.X + 400
 	colBase := mv.tablePanel.X + 500
 	colDemand := mv.tablePanel.X + 580
-	colTrend := mv.tablePanel.X + 660
+	colTrend := mv.tablePanel.X + 650
+	colFee := mv.tablePanel.X + 720
 	colAction := mv.tablePanel.X + mv.tablePanel.Width - 130
 
 	DrawText(screen, "Commodity", colResource, headerY, utils.TextPrimary)
@@ -254,6 +256,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	DrawText(screen, "Base", colBase, headerY, utils.TextSecondary)
 	DrawText(screen, "Demand", colDemand, headerY, utils.TextSecondary)
 	DrawText(screen, "Trend", colTrend, headerY, utils.TextPrimary)
+	DrawText(screen, "Fee", colFee, headerY, utils.TextSecondary)
 	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
 
 	DrawLine(screen, mv.tablePanel.X+15, headerY+12, mv.tablePanel.X+mv.tablePanel.Width-15, headerY+12, utils.PanelBorder)
@@ -341,6 +344,16 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 			trendColor = utils.SystemRed
 		}
 		DrawText(screen, trendStr, colTrend, y, trendColor)
+
+		// Import/export fee indicator
+		feeStr := fmt.Sprintf("%.0f%%", row.importFee*100)
+		feeColor := utils.TextSecondary
+		if row.importFee >= 0.15 {
+			feeColor = utils.SystemRed
+		} else if row.importFee <= 0.05 {
+			feeColor = utils.SystemGreen
+		}
+		DrawText(screen, feeStr, colFee, y, feeColor)
 
 		buyLabel := "[Buy]"
 		sellLabel := "[Sell]"
@@ -624,6 +637,23 @@ func (mv *MarketView) refreshData() {
 				row.localSellPrice = s.localSellPrice
 				row.demand = s.demand
 				row.trend = s.trend
+
+				// Compute dynamic import fee rate (matches executor logic)
+				if s.demand > 0 {
+					ratio := float64(s.totalSupply) / (s.demand * 10)
+					if ratio > 2.0 {
+						row.importFee = 0.05
+					} else if ratio < 0.5 {
+						row.importFee = 0.20
+					} else {
+						row.importFee = 0.15 - ratio*0.05
+						if row.importFee < 0.05 {
+							row.importFee = 0.05
+						}
+					}
+				} else {
+					row.importFee = 0.10
+				}
 			}
 		}
 

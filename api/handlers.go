@@ -437,6 +437,22 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 			rs.BasePrice = rm.BasePrice
 			rs.Demand = rm.TotalDemand
 			rs.Trend = rm.PriceVelocity
+			// Compute dynamic import fee rate
+			if rm.TotalDemand > 0 {
+				ratio := rm.TotalSupply / (rm.TotalDemand * 10)
+				if ratio > 2.0 {
+					rs.ImportFee = 0.05
+				} else if ratio < 0.5 {
+					rs.ImportFee = 0.20
+				} else {
+					rs.ImportFee = 0.15 - ratio*0.05
+					if rs.ImportFee < 0.05 {
+						rs.ImportFee = 0.05
+					}
+				}
+			} else {
+				rs.ImportFee = 0.10
+			}
 			overview.Resources[name] = rs
 		}
 	}

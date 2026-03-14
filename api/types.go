@@ -236,4 +236,5 @@ type ResourceSummary struct {
 	BasePrice    float64 `json:"base_price"`
 	Demand       float64 `json:"demand"`
 	Trend        float64 `json:"trend"`
+	ImportFee    float64 `json:"import_fee"` // dynamic fee rate (0.05-0.20)
 }
