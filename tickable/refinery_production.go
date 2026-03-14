@@ -74,10 +74,20 @@ func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, re
 		planet.AddStoredResource("Fuel", 0)
 	}
 
+	// Market-responsive: if Fuel storage is over 80% capacity, idle the refinery.
+	// This prevents overproduction and conserves Oil for other uses.
+	// The refinery restarts when Fuel drops below 60%.
+	fuelStorage := planet.StoredResources["Fuel"]
+	if fuelStorage != nil && fuelStorage.Capacity > 0 {
+		fuelRatio := float64(fuelStorage.Amount) / float64(fuelStorage.Capacity)
+		if fuelRatio > 0.8 {
+			return // Storage nearly full — idle to conserve Oil
+		}
+	}
+
 	// Check if planet has enough oil
 	storedOil, hasOil := planet.StoredResources["Oil"]
 	if !hasOil || storedOil.Amount < oilNeeded {
-		// Not enough oil - refinery is idle
 		return
 	}
 
