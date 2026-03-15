@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -220,8 +221,31 @@ func runFactionTurn(client *openai.Client, model string, faction *Faction, turn 
 	// Append rolling history (previous turns' context)
 	messages = append(messages, faction.History...)
 
-	// Add turn prompt with a summary request to maintain context
-	turnPrompt := fmt.Sprintf("Turn %d. Check your status and take 1-3 strategic actions as %s. Build on what you did last turn.", turn, faction.Name)
+	// Read recent chat messages for context
+	chatContext := ""
+	if chatResult, err := callAPI("GET", "/api/chat/messages", "", faction.Name); err == nil {
+		var chatResp struct {
+			OK   bool `json:"ok"`
+			Data []struct {
+				Player  string `json:"player"`
+				Message string `json:"message"`
+				Time    string `json:"time"`
+			} `json:"data"`
+		}
+		if json.Unmarshal([]byte(chatResult), &chatResp) == nil && len(chatResp.Data) > 0 {
+			var lines []string
+			for _, m := range chatResp.Data {
+				if len(lines) >= 8 {
+					break
+				}
+				lines = append(lines, fmt.Sprintf("[%s] %s: %s", m.Time, m.Player, m.Message))
+			}
+			chatContext = "\n\nRecent chat:\n" + strings.Join(lines, "\n")
+		}
+	}
+
+	// Add turn prompt with chat context
+	turnPrompt := fmt.Sprintf("Turn %d. Check your status and take 1-3 strategic actions as %s. Build on what you did last turn.%s\n\nAfter your actions, write a SHORT chat message (1 sentence) to the other factions — brag, warn, propose a deal, or comment on the market. Respond with your message in the format: CHAT: <your message>", turn, faction.Name, chatContext)
 	messages = append(messages, openai.ChatCompletionMessage{
 		Role: openai.ChatMessageRoleUser, Content: turnPrompt,
 	})
@@ -276,6 +300,24 @@ func runFactionTurn(client *openai.Client, model string, faction *Faction, turn 
 			})
 		}
 		break
+	}
+
+	// Extract CHAT: message from the LLM's final response and send it
+	for _, msg := range turnMessages {
+		if msg.Role == openai.ChatMessageRoleAssistant && msg.Content != "" {
+			if idx := strings.Index(msg.Content, "CHAT:"); idx >= 0 {
+				chatMsg := strings.TrimSpace(msg.Content[idx+5:])
+				// Take first line only
+				if nl := strings.IndexByte(chatMsg, '\n'); nl >= 0 {
+					chatMsg = chatMsg[:nl]
+				}
+				if len(chatMsg) > 0 && len(chatMsg) <= 200 {
+					body := fmt.Sprintf(`{"message":"%s"}`, strings.ReplaceAll(chatMsg, `"`, `\"`))
+					callAPI("POST", "/api/chat/send", body, faction.Name)
+					fmt.Printf("  [%s] 💬 %s\n", faction.Name, truncate(chatMsg, 80))
+				}
+			}
+		}
 	}
 
 	// Add this turn's messages to rolling history, keep last 20 messages
@@ -364,6 +406,11 @@ func main() {
 	fmt.Printf("\n   Controlling %d factions\n\n", len(factions))
 
 	for cycle := 1; cycle <= *turns; cycle++ {
+		// Randomize turn order each cycle
+		rand.Shuffle(len(factions), func(i, j int) {
+			factions[i], factions[j] = factions[j], factions[i]
+		})
+
 		fmt.Printf("━━━ Cycle %d ━━━\n", cycle)
 
 		for _, faction := range factions {
