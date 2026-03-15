@@ -133,8 +133,11 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			continue
 		}
 
-		// Skip ships that are currently moving
+		// Skip ships that are currently moving or on a delivery mission
 		if ship.Status == entities.ShipStatusMoving {
+			continue
+		}
+		if ship.DeliveryID != 0 {
 			continue
 		}
 

@@ -205,3 +205,46 @@ func (smh *ShipMovementHelper) CanReachSystem(ship *entities.Ship, targetSystemI
 	// Check connection
 	return smh.hasHyperlaneConnection(ship.CurrentSystem, targetSystemID)
 }
+
+// FindPath returns a multi-hop path from one system to another via hyperlanes.
+// Returns the path as a slice of system IDs (excluding source, including destination).
+// Returns nil if no path exists.
+func (smh *ShipMovementHelper) FindPath(fromID, toID int) []int {
+	if fromID == toID {
+		return []int{}
+	}
+
+	visited := make(map[int]bool)
+	parent := make(map[int]int)
+	queue := []int{fromID}
+	visited[fromID] = true
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if current == toID {
+			// Reconstruct path
+			path := []int{}
+			for n := toID; n != fromID; n = parent[n] {
+				path = append([]int{n}, path...)
+			}
+			return path
+		}
+
+		for _, neighbor := range smh.GetConnectedSystems(current) {
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				parent[neighbor] = current
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+
+	return nil // no path exists
+}
+
+// AreSystemsConnected checks if two systems are reachable via any hyperlane path.
+func (smh *ShipMovementHelper) AreSystemsConnected(fromID, toID int) bool {
+	return smh.FindPath(fromID, toID) != nil
+}

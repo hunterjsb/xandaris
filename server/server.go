@@ -25,6 +25,7 @@ type GameServer struct {
 	CargoCommander   *game.CargoCommandExecutor
 	Events           *game.EventLog
 	Registry         *game.PlayerRegistry
+	DeliveryMgr      *economy.DeliveryManager
 	// Remote is set when connected to a remote server (desktop only, not WASM)
 	remoteSync interface{}
 
@@ -117,8 +118,13 @@ func (gs *GameServer) initSimulation() {
 	gs.FleetMgmtSystem = game.NewFleetManagementSystem(gs.State)
 	gs.CargoCommander = game.NewCargoCommandExecutor(gs.State.Systems)
 
+	// Wire delivery system for cargo-based trade
+	gs.DeliveryMgr = economy.NewDeliveryManager()
+
 	if gs.State.TradeExec != nil {
 		gs.State.TradeExec.SetSystems(gs.State.Systems)
+		gs.State.TradeExec.Deliveries = gs.DeliveryMgr
+		gs.State.TradeExec.Dispatcher = gs
 	}
 
 	// Initialize tickable systems
@@ -373,6 +379,62 @@ func (gs *GameServer) ExecuteStandingOrderTrade(order tickable.StandingOrderInfo
 		_, err = gs.State.TradeExec.Sell(player, gs.State.Players, order.Resource, order.Quantity, planet)
 	}
 	return err
+}
+
+// --- economy.ShipDispatcher implementation ---
+
+// FindAvailableCargoShip finds an idle cargo ship owned by the player, preferring the given system.
+func (gs *GameServer) FindAvailableCargoShip(owner string, systemID int) *entities.Ship {
+	for _, p := range gs.State.Players {
+		if p == nil || p.Name != owner {
+			continue
+		}
+		// Prefer ships in the requested system
+		for _, ship := range p.OwnedShips {
+			if ship == nil || ship.ShipType != entities.ShipTypeCargo {
+				continue
+			}
+			if ship.Status == entities.ShipStatusMoving || ship.DeliveryID != 0 {
+				continue
+			}
+			if ship.CurrentSystem == systemID {
+				return ship
+			}
+		}
+		// Fallback: any idle cargo ship
+		for _, ship := range p.OwnedShips {
+			if ship == nil || ship.ShipType != entities.ShipTypeCargo {
+				continue
+			}
+			if ship.Status == entities.ShipStatusMoving || ship.DeliveryID != 0 {
+				continue
+			}
+			return ship
+		}
+	}
+	return nil
+}
+
+// DispatchShipToSystem sends a ship to a target system via hyperlane.
+func (gs *GameServer) DispatchShipToSystem(ship *entities.Ship, targetSystemID int) bool {
+	return gs.StartShipJourney(ship, targetSystemID)
+}
+
+// AreSystemsConnected checks if there's a hyperlane path between two systems.
+func (gs *GameServer) AreSystemsConnected(fromID, toID int) bool {
+	helper := tickable.NewShipMovementHelper(gs.GetSystemsMap(), gs.State.Hyperlanes)
+	return helper.AreSystemsConnected(fromID, toID)
+}
+
+// FindPath returns the multi-hop route between two systems.
+func (gs *GameServer) FindPath(fromID, toID int) []int {
+	helper := tickable.NewShipMovementHelper(gs.GetSystemsMap(), gs.State.Hyperlanes)
+	return helper.FindPath(fromID, toID)
+}
+
+// GetDeliveryManager returns the delivery manager (for tickable systems).
+func (gs *GameServer) GetDeliveryManager() *economy.DeliveryManager {
+	return gs.DeliveryMgr
 }
 
 // --- serverSystemContext implements tickable.SystemContext ---

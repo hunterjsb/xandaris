@@ -22,14 +22,24 @@ type TradeRecord struct {
 // TradeCallback is called after every successful trade (for event logging).
 type TradeCallback func(record TradeRecord)
 
+// ShipDispatcher provides cargo ship operations for cross-system trade.
+type ShipDispatcher interface {
+	FindAvailableCargoShip(owner string, systemID int) *entities.Ship
+	DispatchShipToSystem(ship *entities.Ship, targetSystemID int) bool
+	AreSystemsConnected(fromID, toID int) bool
+	FindPath(fromID, toID int) []int
+}
+
 // TradeExecutor provides the single code path for all trades.
 // Both the UI and API call into this to execute trades.
 type TradeExecutor struct {
-	market   *Market
-	history  []TradeRecord
-	mu       sync.Mutex
-	tick     int64
-	OnTrade  TradeCallback // optional callback for event logging
+	market     *Market
+	history    []TradeRecord
+	mu         sync.Mutex
+	tick       int64
+	OnTrade    TradeCallback // optional callback for event logging
+	Deliveries *DeliveryManager
+	Dispatcher ShipDispatcher // for cross-system cargo ship dispatch
 
 	// Systems reference for system-scoped trading.
 	// When set, human trades are scoped to the trading planet's system.
@@ -127,28 +137,95 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		return TradeRecord{}, fmt.Errorf("insufficient market stock (need %d, available %d)", quantity, npcAvail)
 	}
 
-	// Dynamic import fee for galaxy-wide human trades.
-	if player.IsHuman() && !useSystemScope {
-		feeRate := 0.10
-		if rm := te.market.getResourceMarket(resource); rm != nil {
-			feeRate = ComputeImportFee(rm.TotalSupply, rm.TotalDemand)
-		}
-		importFee := int(math.Round(float64(total) * feeRate))
-		total += importFee
-		if player.Credits < total {
-			return TradeRecord{}, fmt.Errorf("insufficient credits with import fee (need %d, have %d)", total, player.Credits)
-		}
-	}
+	// Cross-system trade requires cargo ship delivery
+	if !useSystemScope {
+		// Check if dispatcher is available
+		if te.Dispatcher == nil || te.Deliveries == nil {
+			// Fallback: allow instant trade (no logistics system wired)
+			feeRate := 0.10
+			if rm := te.market.getResourceMarket(resource); rm != nil {
+				feeRate = ComputeImportFee(rm.TotalSupply, rm.TotalDemand)
+			}
+			importFee := int(math.Round(float64(total) * feeRate))
+			total += importFee
+			if player.Credits < total {
+				return TradeRecord{}, fmt.Errorf("insufficient credits with import fee (need %d, have %d)", total, player.Credits)
+			}
+			removeFromOthers(players, player, resource, quantity)
+			destPlanet.AddStoredResource(resource, quantity)
+			player.Credits -= total
+		} else {
+			// Find a source system with stock
+			sourceSystemID := te.findSourceSystem(players, player, resource, quantity)
+			if sourceSystemID < 0 {
+				return TradeRecord{}, fmt.Errorf("no system has %d %s available", quantity, resource)
+			}
 
-	if useSystemScope {
-		removeFromOthersInSystem(players, player, resource, quantity, systemID, te.systems)
+			// Check hyperlane connectivity
+			if !te.Dispatcher.AreSystemsConnected(systemID, sourceSystemID) {
+				return TradeRecord{}, fmt.Errorf("no trade route to %s supply (systems not connected)", resource)
+			}
+
+			// Apply distance-based import fee
+			path := te.Dispatcher.FindPath(sourceSystemID, systemID)
+			hops := len(path)
+			feeRate := 0.05 * float64(hops) // 5% per hop
+			if feeRate > 0.30 {
+				feeRate = 0.30
+			}
+			importFee := int(math.Round(float64(total) * feeRate))
+			total += importFee
+			if player.Credits < total {
+				return TradeRecord{}, fmt.Errorf("insufficient credits with import fee (need %d, have %d)", total, player.Credits)
+			}
+
+			// Find available cargo ship
+			ship := te.Dispatcher.FindAvailableCargoShip(player.Name, systemID)
+			if ship == nil {
+				// Also check source system
+				ship = te.Dispatcher.FindAvailableCargoShip(player.Name, sourceSystemID)
+			}
+			if ship == nil {
+				return TradeRecord{}, fmt.Errorf("no cargo ship available for cross-system trade (build one at a Shipyard)")
+			}
+
+			// Check cargo capacity
+			totalCargo := ship.GetTotalCargo()
+			if totalCargo+quantity > ship.MaxCargo {
+				avail := ship.MaxCargo - totalCargo
+				return TradeRecord{}, fmt.Errorf("cargo ship only has %d/%d space (need %d)", avail, ship.MaxCargo, quantity)
+			}
+
+			// Execute: deduct credits, remove from seller, load cargo, dispatch
+			player.Credits -= total
+			removeFromOthersInSystem(players, player, resource, quantity, sourceSystemID, te.systems)
+			ship.CargoHold[resource] += quantity
+
+			// Set up delivery route
+			if ship.CurrentSystem == systemID {
+				// Ship is at destination — route: go to source, pick up (already loaded), come back
+				routePath := te.Dispatcher.FindPath(systemID, sourceSystemID)
+				returnPath := te.Dispatcher.FindPath(sourceSystemID, systemID)
+				ship.RoutePath = append(routePath, returnPath...)
+			} else {
+				// Ship is elsewhere — route to destination
+				ship.RoutePath = te.Dispatcher.FindPath(ship.CurrentSystem, systemID)
+			}
+
+			delivery := te.Deliveries.CreateDelivery(te.tick, player.Name, "", resource, quantity, price, total, destPlanet.GetID(), systemID, sourceSystemID, ship.GetID())
+			ship.DeliveryID = delivery.ID
+
+			// Dispatch ship to first hop
+			if len(ship.RoutePath) > 0 {
+				te.Dispatcher.DispatchShipToSystem(ship, ship.RoutePath[0])
+			}
+		}
 	} else {
-		removeFromOthers(players, player, resource, quantity)
+		// Same-system trade — instant, no fee
+		removeFromOthersInSystem(players, player, resource, quantity, systemID, te.systems)
+		destPlanet.AddStoredResource(resource, quantity)
+		player.Credits -= total
 	}
-
-	// Add to buyer's trading planet
-	destPlanet.AddStoredResource(resource, quantity)
-	player.Credits -= total
 
 	// Bump trade volume on market
 	te.market.AddTradeVolume(resource, quantity, true)
@@ -504,6 +581,20 @@ func firstPlanetWithTradingPost(player *entities.Player) *entities.Planet {
 		return player.OwnedPlanets[0]
 	}
 	return nil
+}
+
+// findSourceSystem finds a system with sufficient NPC stock of a resource.
+func (te *TradeExecutor) findSourceSystem(players []*entities.Player, exclude *entities.Player, resource string, qty int) int {
+	if te.systems == nil {
+		return -1
+	}
+	for _, system := range te.systems {
+		stock := aggregateOtherStockInSystem(players, exclude, resource, system.ID, te.systems)
+		if stock >= qty {
+			return system.ID
+		}
+	}
+	return -1
 }
 
 // getPlanetIDsInSystem returns a set of planet IDs in the given system.

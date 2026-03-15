@@ -57,6 +57,10 @@ type Ship struct {
 	// Movement
 	Speed      float64 // Movement speed multiplier (1.0 = normal)
 	IsSelected bool    // Whether this ship is selected in UI
+
+	// Delivery mission
+	DeliveryID int   // Active delivery mission ID (0 = none)
+	RoutePath  []int // Multi-hop path for delivery (system IDs)
 }
 
 // NewShip creates a new ship entity
