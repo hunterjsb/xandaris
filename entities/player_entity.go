@@ -27,6 +27,13 @@ type Player struct {
 	OwnedStations []*Station
 	OwnedShips    []*Ship
 	OwnedFleets   []*Fleet
+
+	// Remote sync fields (used when planets aren't synced locally)
+	SyncedPopulation int64 `json:"-"`
+	SyncedPlanets    int   `json:"-"`
+	SyncedMines      int   `json:"-"`
+	SyncedBuildings  int   `json:"-"`
+	SyncedStock      int   `json:"-"`
 }
 
 // NewPlayer creates a new player
@@ -104,11 +111,15 @@ func (p *Player) RemoveOwnedPlanet(planet *Planet) {
 	}
 }
 
-// GetTotalPopulation returns the player's total population across all planets
+// GetTotalPopulation returns the player's total population across all planets.
+// Falls back to SyncedPopulation for remote players whose planets aren't local.
 func (p *Player) GetTotalPopulation() int64 {
 	total := int64(0)
 	for _, planet := range p.OwnedPlanets {
 		total += planet.Population
+	}
+	if total == 0 && p.SyncedPopulation > 0 {
+		return p.SyncedPopulation
 	}
 	return total
 }

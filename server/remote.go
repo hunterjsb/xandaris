@@ -251,12 +251,16 @@ func (rs *RemoteSync) syncFactions() {
 	var resp struct {
 		OK   bool `json:"ok"`
 		Data []struct {
-			ID      int    `json:"id"`
-			Name    string `json:"name"`
-			Type    string `json:"type"`
-			Credits int    `json:"credits"`
-			Planets int    `json:"planets"`
-			Ships   int    `json:"ships"`
+			ID         int    `json:"id"`
+			Name       string `json:"name"`
+			Type       string `json:"type"`
+			Credits    int    `json:"credits"`
+			Planets    int    `json:"planets"`
+			Ships      int    `json:"ships"`
+			Population int64  `json:"population"`
+			Mines      int    `json:"mines"`
+			Buildings  int    `json:"buildings"`
+			Stock      int    `json:"stock"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil || !resp.OK {
@@ -277,6 +281,11 @@ func (rs *RemoteSync) syncFactions() {
 		for _, lp := range rs.gs.State.Players {
 			if lp.Name == rp.Name {
 				lp.Credits = rp.Credits
+				lp.SyncedPopulation = rp.Population
+				lp.SyncedPlanets = rp.Planets
+				lp.SyncedMines = rp.Mines
+				lp.SyncedBuildings = rp.Buildings
+				lp.SyncedStock = rp.Stock
 				found = true
 				break
 			}
@@ -299,6 +308,11 @@ func (rs *RemoteSync) syncFactions() {
 		}
 		newPlayer := entities.NewPlayer(rp.ID, rp.Name, pColor, pType)
 		newPlayer.Credits = rp.Credits
+		newPlayer.SyncedPopulation = rp.Population
+		newPlayer.SyncedPlanets = rp.Planets
+		newPlayer.SyncedMines = rp.Mines
+		newPlayer.SyncedBuildings = rp.Buildings
+		newPlayer.SyncedStock = rp.Stock
 		rs.gs.State.Players = append(rs.gs.State.Players, newPlayer)
 		fmt.Printf("[Sync] Discovered faction: %s (%s)\n", rp.Name, rp.Type)
 	}
