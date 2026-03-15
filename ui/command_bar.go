@@ -590,9 +590,9 @@ func (cb *CommandBar) showLeaderboard() {
 			}
 			pop += planet.Population
 			bldgs += len(planet.Buildings)
-			for resType, s := range planet.StoredResources {
-				if s != nil && state.Market != nil {
-					stockValue += int(float64(s.Amount) * state.Market.GetSellPrice(resType))
+			for _, s := range planet.StoredResources {
+				if s != nil {
+					stockValue += s.Amount // Simple count — base prices vary too much for a quick calc
 				}
 			}
 		}

@@ -255,7 +255,6 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 
 func handleGetLeaderboard(p GameStateProvider) interface{} {
 	players := p.GetPlayers()
-	market := p.GetMarket()
 
 	entries := make([]LeaderboardEntry, 0, len(players))
 	for _, pl := range players {
@@ -276,14 +275,15 @@ func handleGetLeaderboard(p GameStateProvider) interface{} {
 			}
 			pop += planet.Population
 			bldgs += len(planet.Buildings)
+			// Use BASE prices for stable scoring (not volatile market prices)
 			for resType, s := range planet.StoredResources {
-				if s != nil && market != nil {
-					stockValue += int(float64(s.Amount) * market.GetSellPrice(resType))
+				if s != nil {
+					stockValue += int(float64(s.Amount) * economy.GetBasePrice(resType))
 				}
 			}
 		}
 
-		// Score: credits + stock market value + population/10 + buildings*200 + ships*500 + planets*2000
+		// Score: credits + stock base value + population/10 + buildings*200 + ships*500 + planets*2000
 		score := pl.Credits + stockValue + int(pop/10) + bldgs*200 + len(pl.OwnedShips)*500 + len(pl.OwnedPlanets)*2000
 
 		entries = append(entries, LeaderboardEntry{
