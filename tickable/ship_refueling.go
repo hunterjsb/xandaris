@@ -1,8 +1,6 @@
 package tickable
 
 import (
-	"math"
-
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -55,10 +53,10 @@ func (srs *ShipRefuelingSystem) OnTick(tick int64) {
 				continue // already full
 			}
 
-			// Find planet at ship's orbit
+			// Find owned planet in this system
 			planet := findPlanetAtOrbit(ship, systems)
-			if planet == nil || planet.Owner != player.Name {
-				continue // not at an owned planet
+			if planet == nil {
+				continue // no owned planet in this system
 			}
 
 			// Refuel from planet's Fuel storage
@@ -88,19 +86,13 @@ func findPlanetAtOrbit(ship *entities.Ship, systems []*entities.System) *entitie
 		if sys.ID != ship.CurrentSystem {
 			continue
 		}
-		// Find the closest owned planet in this system
-		var best *entities.Planet
-		bestDist := 999.0
+		// Find any owned planet in this system (for refueling, exact orbit doesn't matter)
 		for _, e := range sys.Entities {
-			if planet, ok := e.(*entities.Planet); ok {
-				dist := math.Abs(ship.GetOrbitDistance() - planet.GetOrbitDistance())
-				if dist < bestDist {
-					bestDist = dist
-					best = planet
-				}
+			if planet, ok := e.(*entities.Planet); ok && planet.Owner == ship.Owner {
+				return planet
 			}
 		}
-		return best // return closest planet in the system
+		break
 	}
 	return nil
 }
