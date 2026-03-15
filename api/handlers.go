@@ -1070,6 +1070,16 @@ func handleGetGalaxyFlows(p GameStateProvider) interface{} {
 				}
 			}
 
+			// Factory production
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Factory" && b.IsOperational {
+					lm := 1.0 + float64(b.Level-1)*0.3
+					production["Electronics"] += 2.0 * lm
+					consumption["Rare Metals"] += 2.0 * lm
+					consumption["Iron"] += 1.0 * lm
+				}
+			}
+
 			// Population consumption
 			for _, rate := range economy.PopulationConsumption {
 				consumption[rate.ResourceType] += float64(planet.Population) / rate.PopDivisor * rate.PerPopulation

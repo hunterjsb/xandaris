@@ -157,11 +157,15 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		Color:          color.RGBA{210, 175, 95, 255},
 	})
 
-	// Future: Add more planet buildings here
-	// - Research Lab
-	// - Barracks
-	// - Trade Port
-	// - Defense Grid
+	// Factory
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Factory",
+		Name:           "Electronics Factory",
+		Description:    "Converts Rare Metals + Iron into Electronics",
+		Cost:           2000,
+		AttachmentType: "Planet",
+		Color:          color.RGBA{180, 130, 255, 255},
+	})
 }
 
 // loadResourceBuildings populates menu with buildings that can be built on resources

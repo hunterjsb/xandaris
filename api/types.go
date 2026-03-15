@@ -189,7 +189,7 @@ type PlanetStorageInfo struct {
 // BuildRequest is the body for POST /api/build.
 type BuildRequest struct {
 	PlanetID     int    `json:"planet_id"`
-	BuildingType string `json:"building_type"` // "Mine", "Trading Post", "Refinery", "Habitat", "Shipyard"
+	BuildingType string `json:"building_type"` // "Mine", "Trading Post", "Refinery", "Factory", "Habitat", "Shipyard"
 	ResourceID   int    `json:"resource_id"`   // for mines: which resource node
 }
 

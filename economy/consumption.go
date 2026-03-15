@@ -17,8 +17,9 @@ var PopulationConsumption = []ConsumptionRate{
 	{"Water", 1, 250},         // 1 per 250 pop — life support (heaviest)
 	{"Iron", 1, 500},          // 1 per 500 pop — infrastructure
 	{"Oil", 1, 800},           // 1 per 800 pop — industry
-	{"Rare Metals", 1, 5000},  // 1 per 5000 pop — electronics (luxury)
+	{"Rare Metals", 1, 5000},  // 1 per 5000 pop — raw materials (luxury)
 	{"Helium-3", 1, 10000},    // 1 per 10000 pop — fusion (luxury)
+	{"Electronics", 1, 3000},  // 1 per 3000 pop — technology goods
 	// Fuel consumed by buildings only (Shipyard: 2/interval, Refinery upkeep)
 }
 
@@ -30,7 +31,8 @@ var BuildingResourceUpkeep = map[string][]struct {
 	"Mine":         {{"Iron", 1}},
 	"Trading Post": {{"Oil", 1}},
 	"Refinery":     {{"Oil", 2}, {"Iron", 1}},
-	"Shipyard":     {{"Fuel", 2}, {"Iron", 1}, {"Rare Metals", 1}},
+	"Factory":      {{"Iron", 1}, {"Oil", 1}},
+	"Shipyard":     {{"Fuel", 2}, {"Iron", 1}, {"Electronics", 1}},
 	"Habitat":      {{"Water", 1}, {"Fuel", 1}},
 	"Base":         {{"Fuel", 1}},
 }
@@ -41,6 +43,7 @@ var BuildingCreditUpkeep = map[string]int{
 	"Trading Post": 3,
 	"Habitat":      1,
 	"Refinery":     4,
+	"Factory":      5,
 	"Shipyard":     6,
 }
 

@@ -181,8 +181,22 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			return
 		}
 
-		// Strategy 5: Build Shipyard if we don't have one and can afford it
-		if !hasBuilding(planet, "Shipyard") && player.Credits >= 3000 {
+		// Strategy 5: Build Factory if Electronics is expensive and we have Rare Metals mines
+		elecPrice := market.GetBuyPrice("Electronics")
+		rmPrice := market.GetBuyPrice("Rare Metals")
+		factoryCount := countBuildings(planet, "Factory")
+		if elecPrice > 500 && rmPrice < 800 && factoryCount < 2 && player.Credits >= 2000 {
+			if planet.GetStoredAmount("Rare Metals") > 20 && planet.GetStoredAmount("Iron") > 30 {
+				player.Credits -= 2000
+				builder.AIBuildOnPlanet(planet, "Factory", player.Name, systemID)
+				fmt.Printf("[AIBuild] %s built factory #%d at %s (elec@%.0f, rm@%.0f)\n",
+					player.Name, factoryCount+1, planet.Name, elecPrice, rmPrice)
+				return
+			}
+		}
+
+		// Strategy 6: Build Shipyard if we don't have one and can afford it
+		if !hasBuilding(planet, "Shipyard") && player.Credits >= 3500 {
 			player.Credits -= 2000
 			builder.AIBuildOnPlanet(planet, "Shipyard", player.Name, systemID)
 			msg := fmt.Sprintf("%s built Shipyard at %s", player.Name, planet.Name)
@@ -191,7 +205,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			return
 		}
 
-		// Strategy 6: Build Colony ship and expand if we have a Shipyard,
+		// Strategy 7: Build Colony ship and expand if we have a Shipyard,
 		// only 1 planet, enough resources, and enough credits
 		if len(player.OwnedPlanets) < 3 && hasBuilding(planet, "Shipyard") && player.Credits >= 4000 {
 			// Check if we already have a colony ship
@@ -287,6 +301,8 @@ func getBasePrice(resourceType string) float64 {
 		return 500
 	case "Helium-3":
 		return 600
+	case "Electronics":
+		return 800
 	}
 	return 100
 }

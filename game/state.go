@@ -44,7 +44,7 @@ type CargoCommandData struct {
 // BuildCommandData is the payload for starting construction.
 type BuildCommandData struct {
 	PlanetID     int    // planet to build on
-	BuildingType string // "Mine", "Trading Post", "Refinery", "Habitat", "Shipyard"
+	BuildingType string // "Mine", "Trading Post", "Refinery", "Factory", "Habitat", "Shipyard"
 	ResourceID   int    // for mines: which resource node to attach to (0 = auto)
 }
 

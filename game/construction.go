@@ -52,11 +52,17 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 					if building != nil {
 						planet.Buildings = append(planet.Buildings, building)
 
-						// Initialize Fuel storage when a refinery is built
-						if b, ok := building.(*entities.Building); ok && b.BuildingType == "Refinery" {
-							// Ensure the planet has Fuel storage initialized
-							if _, exists := planet.StoredResources["Fuel"]; !exists {
-								planet.AddStoredResource("Fuel", 0) // Initialize with 0 fuel
+						// Initialize product storage when production buildings are built
+						if b, ok := building.(*entities.Building); ok {
+							switch b.BuildingType {
+							case "Refinery":
+								if _, exists := planet.StoredResources["Fuel"]; !exists {
+									planet.AddStoredResource("Fuel", 0)
+								}
+							case "Factory":
+								if _, exists := planet.StoredResources["Electronics"]; !exists {
+									planet.AddStoredResource("Electronics", 0)
+								}
 							}
 						}
 						planet.RebalanceWorkforce()

@@ -9,6 +9,7 @@ var BasePrices = map[string]float64{
 	"Helium-3":    600,
 	"Rare Metals": 500,
 	"Fuel":        200,
+	"Electronics": 800,
 }
 
 // GetBasePrice returns the base price for a resource, defaulting to 100.
