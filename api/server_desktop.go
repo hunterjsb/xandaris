@@ -1197,8 +1197,8 @@ if(s.cargo_used>0){
 X.strokeStyle=hexA(c,0.15);X.lineWidth=4;X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
 X.strokeStyle=hexA(c,0.4);X.lineWidth=1;X.setLineDash([8,8]);
 X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();X.setLineDash([])}
-// Animated ship position
-const p=((t*0.3+s.id*0.1)%1);
+// Ship position from actual travel progress
+const p=s.travel_progress||((t*0.3+s.id*0.1)%1);
 const sx=x1+(x2-x1)*p,sy=y1+(y2-y1)*p;
 shipPositions.push({ship:s,x:sx,y:sy});
 // Track highlight

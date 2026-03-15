@@ -338,9 +338,10 @@ func handleGetPlayerMe(p GameStateProvider) interface{} {
 			FuelMax:       ship.MaxFuel,
 			HealthCurrent: ship.CurrentHealth,
 			HealthMax:     ship.MaxHealth,
-			CargoUsed:     ship.GetTotalCargo(),
-			CargoMax:      ship.MaxCargo,
-			CargoHold:     cargo,
+			CargoUsed:      ship.GetTotalCargo(),
+			CargoMax:       ship.MaxCargo,
+			CargoHold:      cargo,
+			TravelProgress: ship.TravelProgress,
 		})
 	}
 
@@ -564,9 +565,10 @@ func handleGetShips(p GameStateProvider) interface{} {
 				FuelMax:       ship.MaxFuel,
 				HealthCurrent: ship.CurrentHealth,
 				HealthMax:     ship.MaxHealth,
-				CargoUsed:     ship.GetTotalCargo(),
-				CargoMax:      ship.MaxCargo,
-				CargoHold:     cargo,
+				CargoUsed:      ship.GetTotalCargo(),
+				CargoMax:       ship.MaxCargo,
+				CargoHold:      cargo,
+				TravelProgress: ship.TravelProgress,
 			})
 		}
 	}
@@ -604,9 +606,10 @@ func handleGetFleets(p GameStateProvider) interface{} {
 					FuelMax:       ship.MaxFuel,
 					HealthCurrent: ship.CurrentHealth,
 					HealthMax:     ship.MaxHealth,
-					CargoUsed:     ship.GetTotalCargo(),
-					CargoMax:      ship.MaxCargo,
-					CargoHold:     cargo,
+					CargoUsed:      ship.GetTotalCargo(),
+					CargoMax:       ship.MaxCargo,
+					CargoHold:      cargo,
+					TravelProgress: ship.TravelProgress,
 				})
 			}
 			result = append(result, FleetInfo{

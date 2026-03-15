@@ -165,9 +165,10 @@ type ShipInfo struct {
 	FuelMax       int            `json:"fuel_max"`
 	HealthCurrent int            `json:"health_current"`
 	HealthMax     int            `json:"health_max"`
-	CargoUsed     int            `json:"cargo_used"`
-	CargoMax      int            `json:"cargo_max"`
-	CargoHold     map[string]int `json:"cargo_hold"`
+	CargoUsed      int            `json:"cargo_used"`
+	CargoMax       int            `json:"cargo_max"`
+	CargoHold      map[string]int `json:"cargo_hold"`
+	TravelProgress float64        `json:"travel_progress"` // 0.0-1.0 for moving ships
 }
 
 // FleetInfo represents a fleet for the API.
