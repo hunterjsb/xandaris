@@ -137,8 +137,10 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			continue
 		}
 
-		// Skip stranded ships (no fuel) — they need manual refueling
-		if ship.CurrentFuel < ship.FuelPerJump+10 {
+		// Skip ships without enough fuel for a round trip
+		// Each jump costs FuelPerJump + ~100 ticks of FuelPerTick
+		fuelPerTrip := ship.FuelPerJump + int(ship.FuelPerTick*120)
+		if ship.CurrentFuel < fuelPerTrip*2 {
 			continue
 		}
 
@@ -153,7 +155,8 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			} else {
 				// Empty at home — load surplus and send to another system
 				// Only dispatch if enough fuel for round trip
-				if ship.CurrentFuel < ship.FuelPerJump*2+50 {
+				fuelNeeded := (ship.FuelPerJump + int(ship.FuelPerTick*120)) * 2
+				if ship.CurrentFuel < fuelNeeded {
 					continue // wait for refueling
 				}
 				als.loadSurplus(ship, planet, cargoOp)
@@ -171,8 +174,9 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 				}
 			}
 		} else {
-			// At a foreign system or not at a planet — head home if enough fuel
-			if hasJourney && ship.CurrentFuel >= ship.FuelPerJump+10 {
+			// At a foreign system — head home if enough fuel for the trip
+			fuelForReturn := ship.FuelPerJump + int(ship.FuelPerTick*120)
+			if hasJourney && ship.CurrentFuel >= fuelForReturn {
 				homeSys := als.findHomeSystem(player, systems)
 				if homeSys >= 0 && homeSys != ship.CurrentSystem {
 					if journeyer.StartShipJourney(ship, homeSys) {
