@@ -936,14 +936,17 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"action": "save_queued"}})
 	})
 
-	// Serve live dashboard at root
+	// Serve pages
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, dashboardHTML)
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprint(w, spectatorHTML)
+		case "/data":
+			fmt.Fprint(w, dashboardHTML)
+		default:
+			http.NotFound(w, r)
+		}
 	})
 
 	// Wrap mux with auth + CORS middleware
@@ -988,6 +991,125 @@ func parseSpeed(s string) (systems.TickSpeed, bool) {
 	}
 	return 0, false
 }
+
+const spectatorHTML = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xandaris II — Live Galaxy</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080a12;overflow:hidden;font-family:'Courier New',monospace}
+canvas{display:block}
+#hud{position:fixed;top:10px;right:10px;background:rgba(12,16,32,0.9);border:1px solid #1e2844;border-radius:6px;padding:12px;color:#c0c8d8;font-size:12px;max-width:280px;max-height:90vh;overflow-y:auto}
+#hud h2{color:#7fdbca;font-size:13px;margin-bottom:8px}
+#hud .row{display:flex;justify-content:space-between;padding:2px 0}
+#hud .g{color:#6c6}#hud .r{color:#c55}#hud .o{color:#ca4}#hud .d{color:#556}
+#hud hr{border:none;border-top:1px solid #1e2844;margin:8px 0}
+#status{position:fixed;bottom:8px;left:10px;color:#4a4;font-size:11px}
+#tooltip{position:fixed;display:none;background:rgba(12,16,32,0.95);border:1px solid #1e2844;border-radius:4px;padding:8px;color:#c0c8d8;font-size:11px;pointer-events:none;z-index:100}
+a{color:#557}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="hud">
+<h2>Xandaris II — Live</h2>
+<div id="players"></div>
+<hr>
+<div id="market"></div>
+<hr>
+<div id="info"></div>
+<p style="margin-top:8px;font-size:10px"><a href="/api/game" target="_blank">API</a> • <a href="https://github.com/hunterjsb/xandaris" target="_blank">GitHub</a></p>
+</div>
+<div id="tooltip"></div>
+<div id="status">Connecting...</div>
+<script>
+const B=location.origin,C=document.getElementById('c'),X=C.getContext('2d');
+let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null;
+const COLORS={Human:'#4caf50','Orion Exchange':'#ff9800','Lyra Cartel':'#f44336','Helios Commodities':'#8bc34a','Ceres Brokers':'#ffc107','Nova Frontier Co.':'#9c27b0'};
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+addEventListener('resize',resize);resize();
+C.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
+function playerColor(name){return COLORS[name]||'#888'}
+async function load(){
+try{
+const[g,s,p,e,f]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows'].map(u=>fetch(B+u).then(r=>r.json())));
+systems=g.data;ships=s.data;players=p.data;economy=e.data;flows=f.data;
+document.getElementById('status').textContent='Live • '+new Date().toLocaleTimeString();
+// HUD
+document.getElementById('players').innerHTML=players.sort((a,b)=>b.credits-a.credits).map(p=>{
+const c=playerColor(p.name);
+return'<div class="row"><span style="color:'+c+'">'+p.name+'</span><span>'+p.credits+'cr</span></div>'}).join('');
+const res=economy.resources||{};
+document.getElementById('market').innerHTML=Object.entries(res).sort().map(([n,r])=>{
+const c=r.price_ratio>1.5?'r':r.price_ratio<0.5?'g':'d';
+return'<div class="row"><span>'+n+'</span><span class="'+c+'">'+r.buy_price.toFixed(0)+' ('+r.price_ratio.toFixed(1)+'x)</span></div>'}).join('');
+document.getElementById('info').innerHTML='<div class="row"><span>Population</span><span>'+economy.total_population?.toLocaleString()+'</span></div><div class="row"><span>Trade Volume</span><span>'+economy.trade_volume?.toFixed(0)+'</span></div>';
+}catch(e){document.getElementById('status').textContent='Disconnected';document.getElementById('status').style.color='#a44'}}
+function sysPos(s){
+const pad=80,sx=(s.x/1280)*(W-pad*2)+pad,sy=(s.y/720)*(H-pad*2)+pad;
+return[sx,sy]}
+function draw(){
+X.fillStyle='#080a12';X.fillRect(0,0,W,H);
+if(!systems.length){requestAnimationFrame(draw);return}
+// Hyperlanes
+X.strokeStyle='rgba(60,70,100,0.3)';X.lineWidth=1;
+systems.forEach(s=>{(s.links||[]).forEach(lid=>{
+const t=systems.find(x=>x.id===lid);if(!t)return;
+const[x1,y1]=sysPos(s),[x2,y2]=sysPos(t);
+X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke()})});
+// Trade routes (moving ships with cargo)
+ships.filter(s=>s.status==='Moving'&&s.cargo_used>0).forEach(s=>{
+const src=systems.find(x=>x.id===s.system_id),tgt=systems.find(x=>x.id===s.target_system);
+if(!src||!tgt)return;
+const[x1,y1]=sysPos(src),[x2,y2]=sysPos(tgt);
+const c=playerColor(s.owner);
+X.strokeStyle=c+'44';X.lineWidth=2;X.setLineDash([6,6]);
+X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
+X.setLineDash([]);
+// Ship dot along route
+const p=0.5+0.3*Math.sin(Date.now()/1000);
+const sx=x1+(x2-x1)*p,sy=y1+(y2-y1)*p;
+X.fillStyle=c;X.beginPath();X.arc(sx,sy,3,0,Math.PI*2);X.fill()});
+// Systems
+hover=null;
+systems.forEach(s=>{
+const[sx,sy]=sysPos(s);
+const owner=s.owner||'';const c=owner?playerColor(owner):'#667';
+// Orbit rings
+const nPlanets=s.planets||1;
+for(let i=0;i<nPlanets;i++){
+X.strokeStyle=owner?c+'44':'rgba(80,80,100,0.2)';X.lineWidth=1;
+X.beginPath();X.arc(sx,sy,8+i*4,0,Math.PI*2);X.stroke()}
+// Star
+X.fillStyle=c;X.beginPath();X.arc(sx,sy,3,0,Math.PI*2);X.fill();
+// Label
+X.fillStyle='#889';X.font='10px monospace';X.textAlign='center';
+X.fillText(s.name,sx,sy+nPlanets*4+14);
+// Owner + stock
+if(owner){
+const pl=players.find(p=>p.name===owner);
+const stock=pl?pl.stock:0;
+X.fillStyle=c+'cc';X.font='9px monospace';
+X.fillText(owner.split(' ')[0]+' '+stock,sx,sy+nPlanets*4+24)}
+// Hover detection
+const dx=mx-sx,dy=my-sy;
+if(dx*dx+dy*dy<400)hover=s});
+// Ships at systems (not moving)
+ships.filter(s=>s.status!=='Moving').forEach(s=>{
+const sys=systems.find(x=>x.id===s.system_id);if(!sys)return;
+const[sx,sy]=sysPos(sys);
+X.fillStyle=playerColor(s.owner)+'88';
+X.fillRect(sx+12,sy-2,4,4)});
+// Tooltip
+const tt=document.getElementById('tooltip');
+if(hover){
+tt.style.display='block';tt.style.left=(mx+15)+'px';tt.style.top=(my-10)+'px';
+let html='<b style="color:#7fdbca">'+hover.name+'</b><br>Planets: '+hover.planets;
+if(hover.owner)html+='<br>Owner: <span style="color:'+playerColor(hover.owner)+'">'+hover.owner+'</span>';
+if(hover.resources?.length)html+='<br>Resources: '+hover.resources.join(', ');
+tt.innerHTML=html}else{tt.style.display='none'}
+requestAnimationFrame(draw)}
+load();setInterval(load,3000);draw();
+</script></body></html>`
 
 const dashboardHTML = `<!DOCTYPE html>
 <html><head>
