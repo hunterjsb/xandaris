@@ -1730,110 +1730,115 @@ const dashboardHTML = `<!DOCTYPE html>
 <title>Xandaris II — Live Economy Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0c14;color:#c0c8d8;font-family:'Courier New',monospace;padding:20px}
-h1{color:#7fdbca;margin-bottom:4px;display:inline}
-.sub{color:#556;margin-bottom:16px;font-size:13px}
-.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;max-width:1500px}
-.wide{grid-column:span 2}.full{grid-column:span 3}
-.panel{background:#12162a;border:1px solid #1e2844;border-radius:6px;padding:12px}
-.panel h2{color:#7fdbca;font-size:12px;margin-bottom:8px;border-bottom:1px solid #1e2844;padding-bottom:4px;display:flex;justify-content:space-between}
-.panel h2 .tag{font-size:10px;color:#445;font-weight:normal}
+body{background:#0a0c14;color:#c0c8d8;font-family:'Courier New',monospace;padding:16px 24px}
+h1{color:#7fdbca;margin-bottom:2px;font-size:1.6em;display:inline}
+.sub{color:#445;font-size:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.wide{grid-column:span 2}
+.panel{background:#10142a;border:1px solid #1a2040;border-radius:5px;padding:10px 12px}
+.panel h2{color:#7fdbca;font-size:11px;margin-bottom:6px;letter-spacing:0.5px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.panel h2 .tag{font-size:9px;color:#334;font-weight:normal;text-transform:none}
 table{width:100%;border-collapse:collapse;font-size:11px}
-th{text-align:left;color:#556;padding:2px 5px;font-weight:normal;font-size:10px}
-td{padding:2px 5px}
-.g{color:#6dcc6d}.r{color:#c55}.o{color:#cca444}.d{color:#445}.b{color:#6688cc}.p{color:#b88fdf}.w{color:#fff}
-.bar-bg{background:#1a1e30;border-radius:3px;overflow:hidden;height:7px;margin:1px 0}
-.bar-fill{height:100%;border-radius:3px;transition:width 0.5s}
-.spark{font-size:10px;letter-spacing:-1px}
-.event{font-size:10px;padding:2px 0;border-bottom:1px solid #0d1020}
-.rank{color:#7fdbca;font-weight:bold}
-.st{position:fixed;bottom:6px;right:10px;font-size:10px;color:#4a4}
-.stats-row{display:flex;gap:16px;margin:12px 0;flex-wrap:wrap}
-.stat{text-align:center;min-width:70px}
-.stat .val{font-size:20px;color:#7fdbca;font-weight:bold}
-.stat .lbl{font-size:9px;color:#445}
-.row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #0d1020;font-size:11px}
-.chain{font-size:10px;color:#556;line-height:1.6;padding:4px 0}
-.chain b{color:#7fdbca}.chain .arr{color:#334}
-.chat{font-size:11px;padding:3px 0;border-bottom:1px solid #0d1020}
-.chat .name{font-weight:bold}
-@media(max-width:1000px){.grid{grid-template-columns:1fr 1fr}.wide,.full{grid-column:span 2}}
-@media(max-width:700px){.grid{grid-template-columns:1fr}.wide,.full{grid-column:span 1}}
+th{text-align:left;color:#445;padding:2px 4px;font-weight:normal;font-size:9px;text-transform:uppercase;letter-spacing:0.3px}
+td{padding:3px 4px}
+.g{color:#5cb85c}.r{color:#d9534f}.o{color:#c8a84e}.d{color:#334}.b{color:#5bc0de}.p{color:#b088df}.w{color:#c0c8d8}
+.bar-bg{background:#0c1020;border-radius:2px;overflow:hidden;height:6px;margin:1px 0}
+.bar-fill{height:100%;border-radius:2px;transition:width 0.5s}
+.spark{font-size:10px;letter-spacing:-1px;color:#5cb85c}
+.event{font-size:10px;padding:3px 0;border-bottom:1px solid #0c1020}
+.rank{color:#7fdbca;font-weight:bold;margin-right:4px}
+.st{position:fixed;bottom:6px;right:10px;font-size:9px;color:#3a5}
+.stats-row{display:flex;gap:24px;margin:10px 0;flex-wrap:wrap}
+.stat{text-align:center}
+.stat .val{font-size:24px;color:#7fdbca;font-weight:bold}
+.stat .lbl{font-size:8px;color:#334;text-transform:uppercase;letter-spacing:0.5px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px}
+.chain{font-size:11px;color:#667;line-height:1.8;padding:2px 0}
+.chain b{color:#7fdbca}.chain .arr{color:#2a3a5a;margin:0 2px}
+.chat{font-size:11px;padding:4px 0;border-bottom:1px solid #0c1020}
+.chat .name{color:#5bc0de;font-weight:bold}
+.res-bar{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:11px}
+.res-bar .lbl{width:80px;color:#889}
+.res-bar .wrap{flex:1;position:relative;height:14px;background:#0c1020;border-radius:2px;overflow:hidden}
+.res-bar .fill{height:100%;border-radius:2px;transition:width 0.5s}
+.res-bar .txt{position:absolute;right:4px;top:0;font-size:9px;line-height:14px;color:#aab}
+.lb-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px}
+.lb-bar{flex:1;height:10px;background:#0c1020;border-radius:2px;overflow:hidden}
+.lb-fill{height:100%;background:#1a5a3a;border-radius:2px;transition:width 0.5s}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
 </style></head><body>
-<h1>XANDARIS II</h1> <span class="sub">&mdash; Live Economy Dashboard</span>
+<h1>XANDARIS II</h1> <span class="sub">&mdash; Live Economy</span>
 <div class="stats-row" id="top"></div>
 <div class="grid">
-<div class="panel"><h2>Leaderboard <span class="tag">by empire score</span></h2><div id="lb"></div></div>
-<div class="panel"><h2>Power Grid <span class="tag">MW generated / consumed</span></h2><div id="pw"></div></div>
-<div class="panel"><h2>Faction Chat <span class="tag">live</span></h2><div id="ch" style="max-height:200px;overflow-y:auto"></div></div>
-<div class="panel full"><h2>Production Chains <span class="tag">how resources flow</span></h2><div class="chain" id="chains"></div></div>
-<div class="panel wide"><h2>Market <span class="tag">buy/sell/trend</span></h2>
-<table><thead><tr><th>Resource</th><th>Buy</th><th>Sell</th><th>Base</th><th>Ratio</th><th>Supply</th><th>Scarcity</th><th>Trend</th></tr></thead><tbody id="m"></tbody></table></div>
-<div class="panel"><h2>Galaxy Flows <span class="tag">prod vs cons</span></h2>
-<table><thead><tr><th>Resource</th><th>Prod</th><th>Cons</th><th>Net</th></tr></thead><tbody id="f"></tbody></table></div>
-<div class="panel wide"><h2>Factions <span class="tag">planets / ships / buildings</span></h2>
-<table><thead><tr><th>Name</th><th>Type</th><th>Credits</th><th>Pop</th><th>Planets</th><th>Ships</th><th>Bldg</th><th>Mines</th><th>Stock</th></tr></thead><tbody id="pl"></tbody></table></div>
-<div class="panel"><h2>Ships <span class="tag">fleet composition</span></h2><div id="sh"></div></div>
-<div class="panel wide"><h2>Events <span class="tag">recent activity</span></h2><div id="ev" style="max-height:180px;overflow-y:auto"></div></div>
+<div class="panel"><h2>Leaderboard <span class="tag">empire score</span></h2><div id="lb"></div></div>
+<div class="panel"><h2>Faction Chat <span class="tag">live</span></h2><div id="ch" style="max-height:220px;overflow-y:auto"></div></div>
+<div class="panel"><h2>Resource Balance <span class="tag">supply vs demand</span></h2><div id="rf"></div></div>
+<div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
+<div class="panel wide"><h2>Market Prices <span class="tag">sparkline trends</span></h2><div id="mk"></div></div>
+<div class="panel wide" style="background:#0d1125;border-color:#152040"><h2 style="color:#556">Production Chains <span class="tag">simulation flow</span></h2><div class="chain" id="chains"></div></div>
+<div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
+<div class="panel"><h2>Fleet <span class="tag">ships by faction</span></h2><div id="sh"></div></div>
 </div>
 <div id="s" class="st">Loading...</div>
 <script>
 const B=location.origin,BL='\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588';
-function sp(h){if(!h||h.length<3)return'';const mn=Math.min(...h),mx=Math.max(...h),rng=mx-mn||1;return'<span class="spark">'+h.slice(-20).map(v=>BL[Math.min(7,Math.max(0,Math.round((v-mn)/rng*7)))]).join('')+'</span>'}
+function sp(h){if(!h||h.length<3)return'';const mn=Math.min(...h),mx=Math.max(...h),rng=mx-mn||1;return'<span class="spark">'+h.slice(-25).map(v=>BL[Math.min(7,Math.max(0,Math.round((v-mn)/rng*7)))]).join('')+'</span>'}
 async function R(){try{
-const[e,p,f,g,lb,pw,ev,sh,ch]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=15','/api/ships','/api/chat/messages'].map(u=>fetch(B+u).then(r=>r.json())));
+const[e,p,f,g,lb,pw,ev,sh,ch]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=20','/api/ships','/api/chat/messages'].map(u=>fetch(B+u).then(r=>r.json())));
 const d=g.data;
-// Top stats
 document.getElementById('top').innerHTML=[
 ['Tick',d.tick],['Time',d.game_time],['Speed',d.speed+(d.paused?' \u23F8':'')],
-['Pop',e.data.total_population.toLocaleString()],['Credits',e.data.total_credits.toLocaleString()],
-['Trade',e.data.trade_volume.toFixed(0)],['Factions',d.players],['Systems',d.systems]
+['Population',e.data.total_population.toLocaleString()],['Credits',e.data.total_credits.toLocaleString()],
+['Trade Vol',e.data.trade_volume.toFixed(0)],['Factions',d.players],['Systems',d.systems]
 ].map(([l,v])=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>').join('');
-// Production chains (static but shows live flow data)
-const fl=f.data,pr=fl.production,co=fl.consumption;
-const fmt=r=>{const v=(pr[r]||0)-(co[r]||0);return'<span class="'+(v>0?'g':v<-1?'r':'d')+'">'+(v>0?'+':'')+v.toFixed(0)+'</span>'};
-document.getElementById('chains').innerHTML=
-'<b>Mining</b> <span class="arr">\u2192</span> Iron '+fmt('Iron')+' | Water '+fmt('Water')+' | Oil '+fmt('Oil')+' | Rare Metals '+fmt('Rare Metals')+' | He-3 '+fmt('Helium-3')+
-'<br><b>Refinery</b>: 2 Oil <span class="arr">\u2192</span> 3 Fuel '+fmt('Fuel')+
-' &nbsp;&bull;&nbsp; <b>Factory</b>: 2 RM + 1 Iron <span class="arr">\u2192</span> 2 Electronics '+fmt('Electronics')+
-'<br><b>Generator</b>: Fuel <span class="arr">\u2192</span> 50MW &nbsp;&bull;&nbsp; <b>Fusion</b>: He-3 <span class="arr">\u2192</span> 200MW'+
-'<br><b>Power</b> <span class="arr">\u2192</span> Buildings operate <span class="arr">\u2192</span> <b>Happiness</b> <span class="arr">\u2192</span> Productivity (0.5x\u20131.5x) <span class="arr">\u2192</span> Credits + Growth'+
-'<br><b>Electronics</b> <span class="arr">\u2192</span> Tech Level <span class="arr">\u2192</span> Mining efficiency bonus';
-// Market
-document.getElementById('m').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
-const c=r.price_ratio>1.5?'r':r.price_ratio>0.8?'w':'g';
-const s=r.scarcity=='Scarce'||r.scarcity=='Critical'?'o':r.scarcity=='Depleted'?'r':'d';
-return'<tr><td>'+n+'</td><td class="'+c+'">'+r.buy_price.toFixed(0)+'</td><td class="'+c+'">'+r.sell_price.toFixed(0)+'</td><td class="d">'+r.base_price+'</td><td class="'+c+'">'+r.price_ratio.toFixed(2)+'x</td><td>'+r.total_supply+'</td><td class="'+s+'">'+r.scarcity+'</td><td>'+sp(r.price_history)+'</td></tr>'}).join('');
-// Leaderboard
+// Leaderboard with bars
+const maxScore=Math.max(...(lb.data||[]).map(x=>x.score),1);
 document.getElementById('lb').innerHTML=(lb.data||[]).map(x=>{
-const c=x.type=='human'?'b':'';
-return'<div class="row"><span><span class="rank">#'+x.rank+'</span> <span class="'+c+'">'+x.name+'</span></span><span class="d">'+x.score.toLocaleString()+'</span></div>'}).join('');
+const c=x.type=='human'?'b':'w';const pct=(x.score/maxScore*100).toFixed(0);
+return'<div class="lb-row"><span class="rank">#'+x.rank+'</span><span class="'+c+'" style="width:90px">'+x.name+'</span><div class="lb-bar"><div class="lb-fill" style="width:'+pct+'%"></div></div><span class="d" style="width:60px;text-align:right;font-size:10px">'+x.score.toLocaleString()+'</span></div>'}).join('');
+// Resource balance with visual bars
+const fl=f.data,pr=fl.production,co=fl.consumption;
+const allRes=[...new Set([...Object.keys(pr),...Object.keys(co)])].sort();
+const maxFlow=Math.max(...allRes.map(r=>Math.max(pr[r]||0,co[r]||0)),1);
+document.getElementById('rf').innerHTML=allRes.map(r=>{
+const pv=pr[r]||0,cv=co[r]||0,nv=pv-cv;
+const pw2=Math.round(pv/maxFlow*100),cw=Math.round(cv/maxFlow*100);
+const nc=nv>1?'g':nv<-1?'r':'d';
+return'<div class="res-bar"><span class="lbl">'+r+'</span><div class="wrap"><div class="fill" style="width:'+pw2+'%;background:#1a4a2a"></div><div class="fill" style="width:'+cw+'%;background:#4a1a1a;position:absolute;top:0;left:0;opacity:0.6"></div><div class="txt '+nc+'">'+(nv>0?'+':'')+nv.toFixed(0)+'/s</div></div></div>'}).join('');
 // Power
 document.getElementById('pw').innerHTML=(pw.data||[]).map(x=>{
 const pct=x.consumed_mw>0?Math.min(1,x.generated_mw/x.consumed_mw):1;
-const c=pct<0.5?'#c55':pct<0.8?'#cca444':'#6dcc6d';
-return'<div style="margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:10px"><span>'+x.owner+'</span><span class="d">'+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+'MW</span></div><div class="bar-bg"><div class="bar-fill" style="width:'+(pct*100).toFixed(0)+'%;background:'+c+'"></div></div></div>'}).join('');
+const c=pct<0.5?'#d9534f':pct<0.8?'#c8a84e':'#5cb85c';
+return'<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px"><span>'+x.owner+'</span><span class="d">'+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+'MW</span></div><div class="bar-bg"><div class="bar-fill" style="width:'+(pct*100).toFixed(0)+'%;background:'+c+'"></div></div></div>'}).join('');
+// Market with bars
+const maxRatio=Math.max(...Object.values(e.data.resources).map(r=>r.price_ratio),1);
+document.getElementById('mk').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
+const c=r.price_ratio>1.5?'r':r.price_ratio>0.8?'w':'g';
+const s=r.scarcity=='Scarce'||r.scarcity=='Critical'?'o':r.scarcity=='Depleted'?'r':'d';
+const bw=Math.min(100,r.price_ratio/5*100).toFixed(0);
+const bc=r.price_ratio>2?'#5a1a1a':r.price_ratio>1?'#3a3a1a':'#1a3a1a';
+return'<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid #0c1020"><span style="width:80px;font-size:11px">'+n+'</span><div style="flex:1;display:flex;align-items:center;gap:6px"><div style="width:120px;height:12px;background:#0c1020;border-radius:2px;overflow:hidden;position:relative"><div style="height:100%;width:'+bw+'%;background:'+bc+';border-radius:2px"></div><span style="position:absolute;left:4px;top:0;font-size:9px;line-height:12px;color:#aab">'+r.price_ratio.toFixed(1)+'x</span></div><span class="'+c+'" style="width:45px;font-size:11px;text-align:right">'+r.buy_price.toFixed(0)+'</span><span class="d" style="width:35px;font-size:10px">/'+r.base_price+'</span><span class="'+s+'" style="width:55px;font-size:10px">'+r.scarcity+'</span>'+sp(r.price_history)+'</div></div>'}).join('');
+// Production chains
+const fmt=r=>{const v=(pr[r]||0)-(co[r]||0);return'<span class="'+(v>0?'g':v<-1?'r':'d')+'" style="font-weight:bold">'+(v>0?'+':'')+v.toFixed(0)+'</span>'};
+document.getElementById('chains').innerHTML=
+'<b>Mining</b> <span class="arr">\u2192</span> Iron '+fmt('Iron')+' \u2502 Water '+fmt('Water')+' \u2502 Oil '+fmt('Oil')+' \u2502 RM '+fmt('Rare Metals')+' \u2502 He-3 '+fmt('Helium-3')+
+'<br><b>Refinery</b>: 2\u00d7Oil <span class="arr">\u2192</span> 3\u00d7Fuel '+fmt('Fuel')+
+' &nbsp;\u2502&nbsp; <b>Factory</b>: 2\u00d7RM + Iron <span class="arr">\u2192</span> 2\u00d7Elec '+fmt('Electronics')+
+'<br><b>Generator</b>: Fuel <span class="arr">\u2192</span> 50MW &nbsp;\u2502&nbsp; <b>Fusion Reactor</b>: He-3 <span class="arr">\u2192</span> 200MW'+
+'<br><b>Power</b> <span class="arr">\u2192</span> Buildings <span class="arr">\u2192</span> <b>Happiness</b> <span class="arr">\u2192</span> Productivity (0.5\u20131.5x) <span class="arr">\u2192</span> Credits + Growth'+
+'<br><b>Electronics</b> <span class="arr">\u2192</span> Tech Level <span class="arr">\u2192</span> +3% mining per level';
 // Chat
 document.getElementById('ch').innerHTML=(ch.data||[]).map(x=>{
-return'<div class="chat"><span class="d">['+x.time+']</span> <span class="name b">'+x.player+':</span> '+x.message+'</div>'}).join('')||'<div class="d" style="padding:8px">No chat yet</div>';
-// Factions table
-document.getElementById('pl').innerHTML=(p.data||[]).sort((a,b)=>b.credits-a.credits).map(x=>{
-const tc=x.type=='human'?'b':'';const cc=x.credits<500?'r':'';
-return'<tr><td class="'+tc+'">'+x.name+'</td><td class="d">'+x.type+'</td><td class="'+cc+'">'+x.credits.toLocaleString()+'</td><td>'+x.population.toLocaleString()+'</td><td>'+x.planets+'</td><td>'+x.ships+'</td><td>'+x.buildings+'</td><td>'+x.mines+'</td><td>'+x.stock+'</td></tr>'}).join('');
-// Ships
-const so={};(sh.data||[]).forEach(s=>{if(!so[s.owner])so[s.owner]=[];so[s.owner].push(s)});
-document.getElementById('sh').innerHTML=Object.entries(so).sort().map(([o,ss])=>{
-const t={};ss.forEach(s=>{t[s.type]=(t[s.type]||0)+1});const mv=ss.filter(s=>s.status==='Moving').length;
-return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).map(([k,v])=>v+'x'+k).join(' ')+(mv?' <span class="o">('+mv+' moving)</span>':'')+'</span></div>'}).join('');
+return'<div class="chat"><span class="d">['+x.time+']</span> <span class="name">'+x.player+'</span> '+x.message+'</div>'}).join('')||'<div class="d" style="padding:20px;text-align:center;font-size:12px">Waiting for factions to chat...</div>';
 // Events
 document.getElementById('ev').innerHTML=(ev.data||[]).map(x=>{
 const c=x.type=='trade'?'g':x.type=='build'?'b':x.type=='alert'?'r':x.type=='event'?'o':x.type=='join'||x.type=='colonize'?'p':'d';
 return'<div class="event"><span class="d">['+x.time+']</span> <span class="'+c+'">'+x.message+'</span></div>'}).join('');
-// Flows
-const a=new Set([...Object.keys(pr),...Object.keys(co)]);
-document.getElementById('f').innerHTML=[...a].sort().map(r=>{
-const pv=(pr[r]||0).toFixed(1),cv=(co[r]||0).toFixed(1),n=(fl.net_flow[r]||0).toFixed(1);
-return'<tr><td>'+r+'</td><td class="g">+'+pv+'</td><td class="r">-'+cv+'</td><td class="'+(n>0?'g':n<-1?'r':'d')+'">'+((n>0?'+':'')+n)+'</td></tr>'}).join('');
+// Ships
+const so={};(sh.data||[]).forEach(s=>{if(!so[s.owner])so[s.owner]=[];so[s.owner].push(s)});
+document.getElementById('sh').innerHTML=Object.entries(so).sort().map(([o,ss])=>{
+const t={};ss.forEach(s=>{t[s.type]=(t[s.type]||0)+1});const mv=ss.filter(s=>s.status==='Moving').length;
+return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).map(([k,v])=>v+'\u00d7'+k).join(' ')+(mv?' <span class="o">('+mv+' moving)</span>':'')+'</span></div>'}).join('');
 document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
 }catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
