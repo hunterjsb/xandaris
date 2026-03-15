@@ -325,6 +325,11 @@ func (sv *SystemView) GetType() ViewType {
 	return ViewTypeSystem
 }
 
+// HasSystem returns whether a system is currently set for viewing.
+func (sv *SystemView) HasSystem() bool {
+	return sv.system != nil
+}
+
 // updateEntityPositions calculates absolute positions for all entities based on their orbits
 func (sv *SystemView) updateEntityPositions() {
 	if sv.system == nil {

@@ -237,7 +237,12 @@ func (pv *PlanetView) Update() error {
 			pv.shipyardUI.Hide()
 			return nil
 		}
-		vm.SwitchTo(ViewTypeSystem)
+		// Go back to system view if a system is set, otherwise galaxy
+		if sysView, ok := vm.GetView(ViewTypeSystem).(interface{ HasSystem() bool }); ok && sysView.HasSystem() {
+			vm.SwitchTo(ViewTypeSystem)
+		} else {
+			vm.SwitchTo(ViewTypeGalaxy)
+		}
 		return nil
 	}
 
