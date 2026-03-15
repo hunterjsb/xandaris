@@ -34,6 +34,7 @@ type GalaxyView struct {
 	playerDirectoryHintRect image.Rectangle
 	playerPanelToggleRect   image.Rectangle
 	playerPanelCollapsed    bool
+	confirmQuit             bool
 }
 
 // NewGalaxyView creates a new galaxy view
@@ -79,10 +80,36 @@ func (gv *GalaxyView) Update() error {
 		gv.focusHomeSystem()
 	}
 
-	// Handle escape to return to main menu
+	// Handle escape — show quit confirmation
 	if kb.IsActionJustPressed(ActionEscape) {
-		vm.SwitchTo(ViewTypeMainMenu)
+		gv.confirmQuit = !gv.confirmQuit
 		return nil
+	}
+
+	// Handle quit confirmation
+	if gv.confirmQuit {
+		if kb.IsActionJustPressed(ActionMenuConfirm) {
+			vm.SwitchTo(ViewTypeMainMenu)
+			gv.confirmQuit = false
+			return nil
+		}
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			x, y := ebiten.CursorPosition()
+			centerX := ScreenWidth / 2
+			centerY := ScreenHeight / 2
+			// Yes button
+			if x >= centerX-180 && x <= centerX-60 && y >= centerY+20 && y <= centerY+60 {
+				vm.SwitchTo(ViewTypeMainMenu)
+				gv.confirmQuit = false
+				return nil
+			}
+			// No button
+			if x >= centerX+60 && x <= centerX+180 && y >= centerY+20 && y <= centerY+60 {
+				gv.confirmQuit = false
+				return nil
+			}
+		}
+		return nil // Block other input while dialog is showing
 	}
 
 	// Handle mouse clicks
@@ -171,13 +198,53 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	// Draw UI info
 	DrawText(screen, "Xandaris II - Galaxy Map", 10, 10, utils.TextPrimary)
 	DrawText(screen, "Double-click system to view", 10, 25, utils.TextSecondary)
-	DrawText(screen, "Press ESC to quit", 10, 40, utils.TextSecondary)
+	DrawText(screen, "Press ESC to return to menu", 10, 40, utils.TextSecondary)
 
 	// Draw hints below header
 	gv.drawHints(screen)
 
 	// Draw player info
 	gv.drawPlayerInfo(screen)
+
+	// Draw quit confirmation dialog
+	if gv.confirmQuit {
+		gv.drawQuitConfirm(screen)
+	}
+}
+
+func (gv *GalaxyView) drawQuitConfirm(screen *ebiten.Image) {
+	centerX := ScreenWidth / 2
+	centerY := ScreenHeight / 2
+
+	overlay := ebiten.NewImage(ScreenWidth, ScreenHeight)
+	overlay.Fill(color.RGBA{0, 0, 0, 150})
+	screen.DrawImage(overlay, nil)
+
+	panel := &UIPanel{
+		X: centerX - 220, Y: centerY - 80, Width: 440, Height: 160,
+		BgColor:     color.RGBA{15, 18, 35, 255},
+		BorderColor: color.RGBA{30, 40, 68, 255},
+	}
+	panel.Draw(screen)
+
+	DrawTextCentered(screen, "Return to Main Menu?", centerX, centerY-50, color.RGBA{127, 219, 202, 255}, 1.2)
+	DrawTextCentered(screen, "Unsaved progress will be lost.", centerX, centerY-15, color.RGBA{102, 119, 136, 255}, 1.0)
+
+	yesPanel := &UIPanel{
+		X: centerX - 180, Y: centerY + 20, Width: 120, Height: 40,
+		BgColor:     color.RGBA{80, 30, 30, 255},
+		BorderColor: color.RGBA{150, 60, 60, 255},
+	}
+	yesPanel.Draw(screen)
+	DrawTextCentered(screen, "Yes (Enter)", centerX-120, centerY+35, color.RGBA{255, 150, 150, 255}, 1.0)
+
+	noPanel := &UIPanel{
+		X: centerX + 60, Y: centerY + 20, Width: 120, Height: 40,
+		BgColor:     color.RGBA{18, 22, 42, 255},
+		BorderColor: color.RGBA{30, 40, 68, 255},
+	}
+	noPanel.Draw(screen)
+	DrawTextCentered(screen, "No (Esc)", centerX+120, centerY+35, color.RGBA{192, 200, 216, 255}, 1.0)
 }
 
 // OnEnter implements View interface

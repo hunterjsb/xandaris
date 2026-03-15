@@ -51,6 +51,7 @@ type GameContext interface {
 	// These update the current game state in-place rather than replacing it
 	InitializeNewGame(playerName string) error
 	LoadGameFromPath(path string) error
+	ConnectToRemote(serverURL, playerName, apiKey string) error
 }
 
 // ViewManagerInterface defines what views need from the view manager

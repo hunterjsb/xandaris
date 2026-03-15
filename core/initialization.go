@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 
+	"github.com/hunterjsb/xandaris/server"
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/ui"
 	"github.com/hunterjsb/xandaris/views"
@@ -90,5 +91,33 @@ func (a *App) LoadGameFromPath(path string) error {
 	// Set up client-side views
 	a.InitializeClientViews()
 
+	return nil
+}
+
+// ConnectToRemote connects to a remote server and sets up the game to mirror it.
+func (a *App) ConnectToRemote(serverURL, playerName, apiKey string) error {
+	remote := server.NewRemoteSync(a.Server, serverURL, apiKey)
+
+	// Fetch the remote galaxy seed so we generate the same universe
+	seed, err := remote.FetchSeed()
+	if err != nil {
+		return fmt.Errorf("failed to fetch galaxy: %v", err)
+	}
+
+	// Generate the same galaxy as the remote server
+	if err := a.Server.NewGameWithSeed(playerName, seed); err != nil {
+		return fmt.Errorf("failed to initialize: %v", err)
+	}
+
+	a.Server.SetRemoteSync(remote)
+	remote.Start()
+
+	// Set up client-side views
+	a.InitializeClientViews()
+
+	// Switch to galaxy view
+	a.viewManager.SwitchTo(views.ViewTypeGalaxy)
+
+	fmt.Printf("Connected to %s as %s\n", serverURL, playerName)
 	return nil
 }

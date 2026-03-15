@@ -157,56 +157,6 @@ func (rs *RemoteSync) ForwardBuild(planetID int, buildingType string, resourceID
 	return rs.apiPost("/api/build", body)
 }
 
-// Register creates an account on the remote server.
-func (rs *RemoteSync) Register(name, password string) (string, error) {
-	body := fmt.Sprintf(`{"name":"%s","password":"%s"}`, name, password)
-	data, err := rs.apiPost("/api/register", body)
-	if err != nil {
-		return "", err
-	}
-	var resp struct {
-		OK    bool   `json:"ok"`
-		Error string `json:"error"`
-		Data  struct {
-			APIKey string `json:"api_key"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return "", err
-	}
-	if !resp.OK {
-		return "", fmt.Errorf("%s", resp.Error)
-	}
-	rs.apiKey = resp.Data.APIKey
-	rs.playerName = name
-	return resp.Data.APIKey, nil
-}
-
-// Login authenticates with the remote server.
-func (rs *RemoteSync) Login(name, password string) (string, error) {
-	body := fmt.Sprintf(`{"name":"%s","password":"%s"}`, name, password)
-	data, err := rs.apiPost("/api/login", body)
-	if err != nil {
-		return "", err
-	}
-	var resp struct {
-		OK    bool   `json:"ok"`
-		Error string `json:"error"`
-		Data  struct {
-			APIKey string `json:"api_key"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return "", err
-	}
-	if !resp.OK {
-		return "", fmt.Errorf("%s", resp.Error)
-	}
-	rs.apiKey = resp.Data.APIKey
-	rs.playerName = name
-	return resp.Data.APIKey, nil
-}
-
 // FetchSeed gets the galaxy seed from the remote server.
 func (rs *RemoteSync) FetchSeed() (int64, error) {
 	data, err := rs.apiGet("/api/game")

@@ -124,6 +124,8 @@ func (kb *KeyBindings) GetKeyName(key ebiten.Key) string {
 		return "Left"
 	case ebiten.KeyRight:
 		return "Right"
+	case ebiten.KeyBackquote:
+		return "`"
 	case ebiten.KeyEqual:
 		return "="
 	case ebiten.KeyMinus:
