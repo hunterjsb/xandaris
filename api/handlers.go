@@ -246,6 +246,9 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 		Happiness:         math.Round(planet.Happiness*100) / 100,
 		ProductivityBonus: math.Round(planet.ProductivityBonus*100) / 100,
 		TechLevel:         math.Round(planet.TechLevel*100) / 100,
+		PowerGenerated:    math.Round(planet.PowerGenerated*10) / 10,
+		PowerConsumed:     math.Round(planet.PowerConsumed*10) / 10,
+		PowerRatio:        math.Round(planet.GetPowerRatio()*100) / 100,
 		Owner:             planet.Owner,
 		StoredResources:   stored,
 		ResourceDeposits:  deposits,
@@ -943,6 +946,8 @@ func handleGetCatalog() interface{} {
 			map[string]int{"Fuel": 3}, map[string]int{"Oil": 2}},
 		{"Factory", "Converts Rare Metals + Iron into Electronics (2 RM + 1 Iron -> 2 Elec)", 5, 300,
 			map[string]int{"Electronics": 2}, map[string]int{"Rare Metals": 2, "Iron": 1}},
+		{"Generator", "Burns Fuel to produce 50 MW power (3 Fuel/interval)", 5, 100, nil, nil},
+		{"Fusion Reactor", "Helium-3 fusion produces 200 MW power (1 He-3/interval)", 5, 200, nil, nil},
 		{"Habitat", "Provides housing for population (+700 capacity per level)", 10, 200, nil, nil},
 		{"Shipyard", "Enables ship construction", 5, 400, nil, nil},
 	}

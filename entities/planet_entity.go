@@ -33,6 +33,9 @@ type Planet struct {
 	Happiness         float64                     // 0.0-1.0 based on resource fulfillment
 	ProductivityBonus float64                     // Multiplier from happiness (0.5-1.5)
 	TechLevel         float64                     // 0.0+ accumulated from Electronics consumption
+	PowerGenerated    float64                     // MW generated this tick
+	PowerConsumed     float64                     // MW demanded this tick
+	PowerRatio        float64                     // 0.0-1.0 generated/consumed
 }
 
 // NewPlanet creates a new planet entity
@@ -232,6 +235,21 @@ func (p *Planet) SetBaseOwner(owner string) {
 // GetTotalPopulationCapacity returns total housing capacity (planet + buildings)
 func (p *Planet) GetTotalPopulationCapacity() int64 {
 	return p.GetBuildingPopulationCapacity()
+}
+
+// GetPowerRatio returns the power supply ratio (0.0-1.0). Returns 1.0 if no power needed.
+func (p *Planet) GetPowerRatio() float64 {
+	if p.PowerConsumed <= 0 {
+		return 1.0
+	}
+	ratio := p.PowerGenerated / p.PowerConsumed
+	if ratio > 1.0 {
+		return 1.0
+	}
+	if ratio < 0 {
+		return 0
+	}
+	return ratio
 }
 
 // GetAvailablePopulationCapacity returns the remaining space before reaching capacity

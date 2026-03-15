@@ -124,7 +124,35 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			}
 		}
 
-		// PRIORITY 2: Build Refinery if we have Oil mines but no refinery
+		// PRIORITY 2: Build Generator for power (critical for productivity)
+		if !hasBuilding(planet, "Generator") && planet.Population > 1000 && player.Credits >= 1000 {
+			player.Credits -= 1000
+			builder.AIBuildOnPlanet(planet, "Generator", player.Name, systemID)
+			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Generator at %s", player.Name, planet.Name))
+			return
+		}
+
+		// PRIORITY 2b: Build Fusion Reactor if we have He-3 and high population
+		hasHe3Mine := false
+		for _, resEntity := range planet.Resources {
+			if res, ok := resEntity.(*entities.Resource); ok && res.ResourceType == "Helium-3" {
+				resIDStr := fmt.Sprintf("%d", res.GetID())
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" && b.AttachedTo == resIDStr {
+						hasHe3Mine = true
+						break
+					}
+				}
+			}
+		}
+		if hasHe3Mine && !hasBuilding(planet, "Fusion Reactor") && planet.Population > 5000 && player.Credits >= 3000 {
+			player.Credits -= 3000
+			builder.AIBuildOnPlanet(planet, "Fusion Reactor", player.Name, systemID)
+			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Fusion Reactor at %s", player.Name, planet.Name))
+			return
+		}
+
+		// PRIORITY 3: Build Refinery if we have Oil mines but no refinery
 		hasOilMine := false
 		for _, resEntity := range planet.Resources {
 			if res, ok := resEntity.(*entities.Resource); ok && res.ResourceType == "Oil" {

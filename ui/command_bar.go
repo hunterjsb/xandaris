@@ -780,6 +780,10 @@ func (cb *CommandBar) handleBuild(what string) {
 		buildingType = "Habitat"
 	case strings.Contains(what, "shipyard"):
 		buildingType = "Shipyard"
+	case strings.Contains(what, "generator") || strings.Contains(what, "power plant"):
+		buildingType = "Generator"
+	case strings.Contains(what, "fusion") || strings.Contains(what, "reactor"):
+		buildingType = "Fusion Reactor"
 	default:
 		cb.addFeedMessage(fmt.Sprintf("Unknown building: %s", what), utils.SystemRed)
 		cb.addFeedMessage("Types: mine, trading post, refinery, factory, habitat, shipyard", utils.TextSecondary)

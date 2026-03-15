@@ -166,6 +166,26 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		AttachmentType: "Planet",
 		Color:          color.RGBA{180, 130, 255, 255},
 	})
+
+	// Fuel Generator
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Generator",
+		Name:           "Fuel Generator",
+		Description:    "Burns Fuel → 50 MW power for buildings + life support",
+		Cost:           1000,
+		AttachmentType: "Planet",
+		Color:          color.RGBA{255, 180, 50, 255},
+	})
+
+	// Fusion Reactor
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Fusion Reactor",
+		Name:           "Fusion Reactor",
+		Description:    "Helium-3 fusion → 200 MW clean power",
+		Cost:           3000,
+		AttachmentType: "Planet",
+		Color:          color.RGBA{100, 220, 255, 255},
+	})
 }
 
 // loadResourceBuildings populates menu with buildings that can be built on resources

@@ -39,12 +39,14 @@ var BuildingResourceUpkeep = map[string][]struct {
 
 // BuildingCreditUpkeep defines the credit cost per building per interval (+ level - 1).
 var BuildingCreditUpkeep = map[string]int{
-	"Mine":         2,
-	"Trading Post": 3,
-	"Habitat":      1,
-	"Refinery":     4,
-	"Factory":      5,
-	"Shipyard":     6,
+	"Mine":           2,
+	"Trading Post":   3,
+	"Habitat":        1,
+	"Refinery":       4,
+	"Factory":        5,
+	"Shipyard":       6,
+	"Generator":      3,
+	"Fusion Reactor": 8,
 }
 
 // ConsumptionResult contains both demand signals and credit drain info.

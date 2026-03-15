@@ -76,6 +76,9 @@ type PlanetDetail struct {
 	Happiness         float64            `json:"happiness"`          // 0.0-1.0
 	ProductivityBonus float64            `json:"productivity_bonus"` // 0.5-1.5
 	TechLevel         float64            `json:"tech_level"`         // 0.0-5.0
+	PowerGenerated    float64            `json:"power_generated"`    // MW
+	PowerConsumed     float64            `json:"power_consumed"`     // MW
+	PowerRatio        float64            `json:"power_ratio"`        // 0.0-1.0
 	Owner             string             `json:"owner,omitempty"`
 	StoredResources   map[string]int     `json:"stored_resources"`
 	ResourceDeposits  []ResourceDeposit  `json:"resource_deposits"`

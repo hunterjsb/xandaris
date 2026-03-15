@@ -22,7 +22,9 @@ IMPORTANT RULES:
 - ALWAYS call get_planet before trading to check your actual stock levels
 - Only sell resources you HAVE (check stored_resources in get_planet response)
 - Only build_ship if your Shipyard construction is COMPLETE (check get_construction)
-- Mine 500cr, Refinery 1500cr, Factory 2000cr, Shipyard 2000cr, Habitat 800cr
+- Mine 500cr, Refinery 1500cr, Factory 2000cr, Generator 1000cr, Fusion Reactor 3000cr, Shipyard 2000cr, Habitat 800cr
+- Buildings and population NEED POWER. Build a Generator (burns Fuel→50MW) early!
+- Fusion Reactor burns Helium-3→200MW (4x more efficient, build when you have He-3 mines)
 
 RESOURCES: Iron(75), Water(100), Oil(150), Fuel(200), Rare Metals(500), Helium-3(600), Electronics(800)
 PRODUCTION CHAINS: Refinery: 2 Oil → 3 Fuel | Factory: 2 Rare Metals + 1 Iron → 2 Electronics
@@ -77,8 +79,8 @@ var tools = []openai.Tool{
 		Type: openai.ToolTypeFunction,
 		Function: &openai.FunctionDefinition{
 			Name:        "build",
-			Description: "Build a structure on your planet. Types: Mine, Trading Post, Refinery, Factory, Habitat, Shipyard. Factory converts Rare Metals + Iron into Electronics. Mines require resource_id.",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_type":{"type":"string","enum":["Mine","Trading Post","Refinery","Factory","Habitat","Shipyard"]},"resource_id":{"type":"integer","description":"Required for mines: the resource deposit ID to attach to"}},"required":["planet_id","building_type"]}`),
+			Description: "Build a structure on your planet. Types: Mine, Trading Post, Refinery, Factory, Generator, Fusion Reactor, Habitat, Shipyard. Generator burns Fuel for power. Fusion Reactor burns He-3 for more power. Mines require resource_id.",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_type":{"type":"string","enum":["Mine","Trading Post","Refinery","Factory","Generator","Fusion Reactor","Habitat","Shipyard"]},"resource_id":{"type":"integer","description":"Required for mines: the resource deposit ID to attach to"}},"required":["planet_id","building_type"]}`),
 		},
 	},
 	{

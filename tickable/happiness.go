@@ -105,6 +105,13 @@ func computeHappiness(planet *entities.Planet) {
 		weightedSum += sufficiency * weight
 	}
 
+	// Power is critical — weighted 4.0 (heavier than water at 3.0)
+	powerRatio := planet.GetPowerRatio()
+	if planet.PowerConsumed > 0 {
+		totalWeight += 4.0
+		weightedSum += powerRatio * 4.0
+	}
+
 	if totalWeight <= 0 {
 		planet.Happiness = 0.5
 		planet.ProductivityBonus = 1.0

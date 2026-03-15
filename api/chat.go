@@ -36,10 +36,10 @@ var chatTools = []map[string]interface{}{
 		}, "required": []string{"planet_id"}},
 	}},
 	{"type": "function", "function": map[string]interface{}{
-		"name": "build", "description": "Build: Mine, Trading Post, Refinery, Factory, Habitat, Shipyard",
+		"name": "build", "description": "Build: Mine, Trading Post, Refinery, Factory, Generator (power from Fuel), Fusion Reactor (power from He-3), Habitat, Shipyard",
 		"parameters": map[string]interface{}{"type": "object", "properties": map[string]interface{}{
 			"planet_id":     map[string]interface{}{"type": "integer"},
-			"building_type": map[string]interface{}{"type": "string", "enum": []string{"Mine", "Trading Post", "Refinery", "Factory", "Habitat", "Shipyard"}},
+			"building_type": map[string]interface{}{"type": "string", "enum": []string{"Mine", "Trading Post", "Refinery", "Factory", "Generator", "Fusion Reactor", "Habitat", "Shipyard"}},
 			"resource_id":   map[string]interface{}{"type": "integer", "description": "For mines: resource deposit ID"},
 		}, "required": []string{"planet_id", "building_type"}},
 	}},

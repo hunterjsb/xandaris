@@ -832,6 +832,19 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		}
 		lines = append(lines, fmt.Sprintf("Happiness: %s (%.0f%%) → %.1fx prod | Tech: %s (%.1f)",
 			happinessLabel, planet.Happiness*100, planet.ProductivityBonus, techLabel, planet.TechLevel))
+
+		// Power status
+		if planet.PowerConsumed > 0 {
+			powerPct := planet.GetPowerRatio() * 100
+			powerStatus := "OK"
+			if powerPct < 50 {
+				powerStatus = "CRITICAL"
+			} else if powerPct < 80 {
+				powerStatus = "Low"
+			}
+			lines = append(lines, fmt.Sprintf("Power: %.0f / %.0f MW (%s)",
+				planet.PowerGenerated, planet.PowerConsumed, powerStatus))
+		}
 	}
 
 	if planet.WorkforceTotal > 0 {
