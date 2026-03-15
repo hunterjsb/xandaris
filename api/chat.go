@@ -124,7 +124,7 @@ func handleChat(p GameStateProvider, playerName string, message string) (string,
 
 func callOpenRouter(apiKey string, messages []map[string]interface{}) (map[string]interface{}, error) {
 	body := map[string]interface{}{
-		"model":    "z-ai/glm-4.7-flash",
+		"model":    "x-ai/grok-4.1-fast",
 		"messages": messages,
 		"tools":    chatTools,
 	}
