@@ -526,7 +526,7 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 		return
 	}
 
-	// Colonize: transfer colonists, claim planet, set up base
+	// Colonize: transfer colonists, claim planet
 	planet.Owner = human.Name
 	planet.Population = int64(ship.Colonists)
 	planet.SetBaseOwner(human.Name)
@@ -539,16 +539,31 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 		}
 	}
 
-	// Seed initial resources and add Trading Post
+	// Set up colony infrastructure: Trading Post, mines, refinery, generator
 	systemID := gs.CargoCommander.GetSystemForPlanet(planet)
-	game.PrepareHomeworld(human, false)
+	game.EnsureResourceDeposit(planet, "Rare Metals", human.Name)
+	game.EnsureResourceDeposit(planet, "Helium-3", human.Name)
+	game.SeedInitialCommodities(planet, human.Name)
+	game.AddBuildingToPlanet(planet, "Trading Post", human.Name, systemID)
+	game.BuildMinesOnResources(planet, human.Name, systemID)
+	game.AddBuildingToPlanet(planet, "Refinery", human.Name, systemID)
+	game.AddBuildingToPlanet(planet, "Generator", human.Name, systemID)
 
-	// Consume the colony ship (colonists are now on the planet)
+	// Give colony starting resources
+	planet.AddStoredResource("Fuel", 100)
+	planet.AddStoredResource("Water", 100)
+
+	// Consume the colony ship (colonists settle)
 	ship.Colonists = 0
 	ship.Status = entities.ShipStatusOrbiting
 
-	// Rebalance workforce
 	planet.RebalanceWorkforce()
+
+	// Log the event
+	if gs.Events != nil {
+		gs.Events.Add(gs.TickManager.GetCurrentTick(), gs.TickManager.GetGameTimeFormatted(),
+			game.EventColonize, human.Name, fmt.Sprintf("%s colonized %s!", human.Name, planet.Name))
+	}
 
 	sendSuccess(cmd, map[string]interface{}{
 		"planet":    planet.Name,
