@@ -32,6 +32,7 @@ type Planet struct {
 	WorkforceUsed     int64                       // Workforce assigned to buildings/ships
 	Happiness         float64                     // 0.0-1.0 based on resource fulfillment
 	ProductivityBonus float64                     // Multiplier from happiness (0.5-1.5)
+	TechLevel         float64                     // 0.0+ accumulated from Electronics consumption
 }
 
 // NewPlanet creates a new planet entity

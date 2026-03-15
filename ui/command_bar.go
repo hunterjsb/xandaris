@@ -285,6 +285,8 @@ func (cb *CommandBar) executeSlashCommand(input string) {
 		cb.showLeaderboard()
 	case lower == "orders":
 		cb.showOrders()
+	case lower == "scarcity" || lower == "economy" || lower == "shortages":
+		cb.showScarcity()
 
 	// Game actions
 	case strings.HasPrefix(lower, "build "):
@@ -562,6 +564,63 @@ func (cb *CommandBar) showHappiness() {
 		}
 		cb.addFeedMessage(fmt.Sprintf("%s: %s (%.0f%%) → %.1fx productivity",
 			planet.Name, label, planet.Happiness*100, planet.ProductivityBonus), c)
+	}
+}
+
+func (cb *CommandBar) showScarcity() {
+	state := cb.ctx.GetState()
+	if state == nil || state.Market == nil {
+		cb.addFeedMessage("Market not available", utils.SystemRed)
+		return
+	}
+
+	snap := state.Market.GetSnapshot()
+
+	type resInfo struct {
+		name     string
+		ratio    float64
+		scarcity string
+	}
+	var items []resInfo
+	for name, rm := range snap.Resources {
+		ratio := 1.0
+		if rm.BasePrice > 0 {
+			ratio = rm.CurrentPrice / rm.BasePrice
+		}
+		scarcity := "OK"
+		if ratio > 3.0 {
+			scarcity = "CRITICAL"
+		} else if ratio > 1.5 {
+			scarcity = "Scarce"
+		} else if ratio < 0.3 {
+			scarcity = "Surplus"
+		}
+		items = append(items, resInfo{name, ratio, scarcity})
+	}
+
+	// Sort by ratio descending (most scarce first)
+	for i := 0; i < len(items); i++ {
+		for j := i + 1; j < len(items); j++ {
+			if items[j].ratio > items[i].ratio {
+				items[i], items[j] = items[j], items[i]
+			}
+		}
+	}
+
+	for _, item := range items {
+		c := utils.TextSecondary
+		advice := ""
+		if item.scarcity == "CRITICAL" {
+			c = utils.SystemRed
+			advice = " — build mines!"
+		} else if item.scarcity == "Scarce" {
+			c = utils.SystemOrange
+			advice = " — opportunity to sell"
+		} else if item.scarcity == "Surplus" {
+			c = utils.SystemGreen
+			advice = " — buy cheap"
+		}
+		cb.addFeedMessage(fmt.Sprintf("%s: %.1fx base (%s)%s", item.name, item.ratio, item.scarcity, advice), c)
 	}
 }
 
@@ -939,6 +998,7 @@ func (cb *CommandBar) showHelp() {
 		{"/price <res>", "Price + sparkline"},
 		{"/happiness", "Planet morale"},
 		{"/leaderboard", "Rankings"},
+		{"/scarcity", "Resource shortages + advice"},
 		{"/building", "Construction queue"},
 		{"/build <type>", "Build (mine/factory/etc)"},
 		{"/buy /sell <n> <res>", "Trade resources"},

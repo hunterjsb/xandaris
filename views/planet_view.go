@@ -806,8 +806,18 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		} else {
 			happinessLabel = "Miserable"
 		}
-		lines = append(lines, fmt.Sprintf("Happiness: %s (%.0f%%) → %.1fx productivity",
-			happinessLabel, planet.Happiness*100, planet.ProductivityBonus))
+		techLabel := "None"
+		if planet.TechLevel >= 3.0 {
+			techLabel = "Advanced"
+		} else if planet.TechLevel >= 2.0 {
+			techLabel = "Developed"
+		} else if planet.TechLevel >= 1.0 {
+			techLabel = "Basic"
+		} else if planet.TechLevel >= 0.3 {
+			techLabel = "Primitive"
+		}
+		lines = append(lines, fmt.Sprintf("Happiness: %s (%.0f%%) → %.1fx prod | Tech: %s (%.1f)",
+			happinessLabel, planet.Happiness*100, planet.ProductivityBonus, techLabel, planet.TechLevel))
 	}
 
 	if planet.WorkforceTotal > 0 {

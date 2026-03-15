@@ -75,6 +75,7 @@ type PlanetDetail struct {
 	Habitability      int                `json:"habitability"`
 	Happiness         float64            `json:"happiness"`          // 0.0-1.0
 	ProductivityBonus float64            `json:"productivity_bonus"` // 0.5-1.5
+	TechLevel         float64            `json:"tech_level"`         // 0.0-5.0
 	Owner             string             `json:"owner,omitempty"`
 	StoredResources   map[string]int     `json:"stored_resources"`
 	ResourceDeposits  []ResourceDeposit  `json:"resource_deposits"`
@@ -371,6 +372,7 @@ type PlanetRates struct {
 	Population        int64              `json:"population"`
 	Happiness         float64            `json:"happiness"`
 	ProductivityBonus float64            `json:"productivity_bonus"`
+	TechLevel         float64            `json:"tech_level"`
 	Production        map[string]float64 `json:"production"`
 	Consumption       map[string]float64 `json:"consumption"`
 	NetFlow           map[string]float64 `json:"net_flow"`
