@@ -236,15 +236,12 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		}
 	}
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"building":  bd.BuildingType,
-			"planet_id": bd.PlanetID,
-			"cost":      cost,
-			"ticks":     buildTicks,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"building":  bd.BuildingType,
+		"planet_id": bd.PlanetID,
+		"cost":      cost,
+		"ticks":     buildTicks,
+	})
 }
 
 func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {

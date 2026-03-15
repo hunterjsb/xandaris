@@ -252,6 +252,22 @@ func (p *Planet) GetPowerRatio() float64 {
 	return ratio
 }
 
+// CountBuildings returns the number of buildings of a given type on this planet.
+func (p *Planet) CountBuildings(buildingType string) int {
+	count := 0
+	for _, be := range p.Buildings {
+		if b, ok := be.(*Building); ok && b.BuildingType == buildingType {
+			count++
+		}
+	}
+	return count
+}
+
+// HasBuilding returns true if the planet has at least one building of the given type.
+func (p *Planet) HasBuilding(buildingType string) bool {
+	return p.CountBuildings(buildingType) > 0
+}
+
 // GetAvailablePopulationCapacity returns the remaining space before reaching capacity
 func (p *Planet) GetAvailablePopulationCapacity() int64 {
 	capacity := p.GetTotalPopulationCapacity()
