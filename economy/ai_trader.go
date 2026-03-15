@@ -40,6 +40,11 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 
 			// Never sell below strategic reserve (needed for ship construction)
 			if reserve, ok := strategicReserve[resType]; ok && storage.Amount <= reserve {
+				continue // skip selling this resource — below construction reserve
+			}
+			// DEBUG: log if we're about to sell Iron below reserve
+			if resType == entities.ResIron && storage.Amount <= 100 {
+				// This should never happen — the reserve check above should catch it
 				continue
 			}
 
