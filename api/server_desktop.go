@@ -1035,7 +1035,7 @@ a{color:#446}
 <div id="status">Connecting...</div>
 <script>
 const B=location.origin,C=document.getElementById('c'),X=C.getContext('2d');
-let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null,selected=null,detail=null,t=0;
+let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null,selected=null,detail=null,tracked=null,hoverShip=null,t=0;
 const COLORS={Human:'#4caf50','Orion Exchange':'#ff9800','Lyra Cartel':'#e84040','Helios Commodities':'#8bc34a','Ceres Brokers':'#ffca28','Nova Frontier Co.':'#ab47bc',Server:'#4caf50'};
 // Background stars
 let stars=[];
@@ -1045,7 +1045,9 @@ function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
 addEventListener('resize',()=>{resize();initStars()});resize();
 C.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
 C.addEventListener('click',e=>{
-if(hover){selected=hover;loadDetail(hover.id)}else{selected=null;document.getElementById('detail').style.display='none'}});
+if(hoverShip){tracked=tracked===hoverShip?null:hoverShip;selected=null;document.getElementById('detail').style.display='none'}
+else if(hover){selected=hover;tracked=null;loadDetail(hover.id)}
+else{selected=null;tracked=null;document.getElementById('detail').style.display='none'}});
 // Zoom
 let zoom=1,panX=0,panY=0,dragging=false,dragX=0,dragY=0;
 C.addEventListener('wheel',e=>{
@@ -1125,24 +1127,35 @@ const tgt=systems.find(x=>x.id===lid);if(!tgt)return;
 const[x1,y1]=sp(s),[x2,y2]=sp(tgt);
 X.strokeStyle='rgba(50,60,90,0.25)';X.lineWidth=1;
 X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke()})});
-// Trade routes
-ships.filter(s=>s.status==='Moving'&&s.cargo_used>0).forEach(s=>{
+// Trade routes + moving ships
+hoverShip=null;
+const shipPositions=[];
+ships.filter(s=>s.status==='Moving').forEach(s=>{
 const src=systems.find(x=>x.id===s.system_id),tgt=systems.find(x=>x.id===s.target_system);
 if(!src||!tgt)return;
 const[x1,y1]=sp(src),[x2,y2]=sp(tgt),c=pc(s.owner);
-// Glowing route line
+// Route line (only for laden ships)
+if(s.cargo_used>0){
 X.strokeStyle=hexA(c,0.15);X.lineWidth=4;X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
 X.strokeStyle=hexA(c,0.4);X.lineWidth=1;X.setLineDash([8,8]);
-X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();X.setLineDash([]);
-// Animated ship
-const p=((t*0.3+s.system_id)%1);
+X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();X.setLineDash([])}
+// Animated ship position
+const p=((t*0.3+s.id*0.1)%1);
 const sx=x1+(x2-x1)*p,sy=y1+(y2-y1)*p;
-X.fillStyle=c;X.shadowColor=c;X.shadowBlur=8;
-X.beginPath();X.arc(sx,sy,3,0,Math.PI*2);X.fill();
+shipPositions.push({ship:s,x:sx,y:sy});
+// Track highlight
+const isTracked=tracked&&tracked.id===s.id;
+const r=isTracked?5:3;
+X.fillStyle=c;X.shadowColor=c;X.shadowBlur=isTracked?15:8;
+X.beginPath();X.arc(sx,sy,r,0,Math.PI*2);X.fill();
 X.shadowBlur=0;
-// Cargo label
+if(isTracked){X.strokeStyle='#7fdbca';X.lineWidth=1.5;X.beginPath();X.arc(sx,sy,10,0,Math.PI*2);X.stroke()}
+// Label
 X.fillStyle=hexA(c,0.7);X.font='8px monospace';X.textAlign='center';
-X.fillText(s.cargo_used+'u',sx,sy-8)});
+if(s.cargo_used>0)X.fillText(s.cargo_used+'u',sx,sy-10);
+if(isTracked)X.fillText(s.name,sx,sy+14);
+// Hover detect
+if((mx-sx)**2+(my-sy)**2<200)hoverShip=s});
 // Systems
 hover=null;
 systems.forEach(s=>{
@@ -1181,20 +1194,58 @@ if((mx-sx)**2+(my-sy)**2<500*zoom)hover=s});
 // Docked ships
 ships.filter(s=>s.status!=='Moving').forEach(s=>{
 const sys=systems.find(x=>x.id===s.system_id);if(!sys)return;
-const[sx,sy]=sp(sys);
-X.fillStyle=hexA(pc(s.owner),0.5);
-const a=t+s.fuel_current;
-X.beginPath();X.arc(sx+15*Math.cos(a),sy+15*Math.sin(a),2,0,Math.PI*2);X.fill()});
+const[bx,by]=sp(sys);
+const a=t+s.id*0.7;const r=18*zoom;
+const sx=bx+r*Math.cos(a),sy=by+r*Math.sin(a);
+const isTracked=tracked&&tracked.id===s.id;
+X.fillStyle=hexA(pc(s.owner),isTracked?0.9:0.5);
+X.beginPath();X.arc(sx,sy,isTracked?4:2,0,Math.PI*2);X.fill();
+if(isTracked){X.strokeStyle='#7fdbca';X.lineWidth=1;X.beginPath();X.arc(sx,sy,8,0,Math.PI*2);X.stroke();
+X.fillStyle='#889';X.font='8px monospace';X.textAlign='center';X.fillText(s.name,sx,sy+14)}
+if((mx-sx)**2+(my-sy)**2<150)hoverShip=s});
+// Tracked ship info panel
+if(tracked){
+const ts=ships.find(s=>s.id===tracked.id);
+if(ts){tracked=ts; // update with fresh data
+const dp=document.getElementById('detail');dp.style.display='block';
+const c=pc(ts.owner);
+document.getElementById('dtitle').innerHTML='<span style="color:'+c+'">'+ts.name+'</span>';
+let h='<div style="color:#556">'+ts.type+' · '+ts.owner+'</div>';
+h+='<div style="margin:6px 0"><span style="color:#889">Status:</span> <span style="color:'+(ts.status==='Moving'?'#5cf':'#6c6')+'">'+ts.status+'</span></div>';
+if(ts.target_system>=0){const tgt=systems.find(x=>x.id===ts.target_system);h+='<div><span style="color:#889">Route:</span> SYS-'+ts.system_id+' → '+(tgt?tgt.name:'SYS-'+ts.target_system)+'</div>'}
+// Fuel bar
+const fp=ts.fuel_current/ts.fuel_max;
+h+='<div style="margin:6px 0"><span style="color:#889">Fuel:</span> '+ts.fuel_current+'/'+ts.fuel_max+'</div>';
+h+='<div style="background:#1a2040;border-radius:3px;height:6px;margin:2px 0"><div style="background:'+(fp>0.5?'#5c5':fp>0.25?'#ca4':'#c44')+';width:'+(fp*100)+'%;height:100%;border-radius:3px"></div></div>';
+// Health bar
+const hp=ts.health_current/ts.health_max;
+h+='<div><span style="color:#889">Health:</span> '+ts.health_current+'/'+ts.health_max+'</div>';
+h+='<div style="background:#1a2040;border-radius:3px;height:6px;margin:2px 0"><div style="background:'+(hp>0.5?'#5c5':'#c44')+';width:'+(hp*100)+'%;height:100%;border-radius:3px"></div></div>';
+// Cargo
+h+='<div style="margin:6px 0"><span style="color:#889">Cargo:</span> '+ts.cargo_used+'/'+ts.cargo_max+'</div>';
+if(ts.cargo_hold&&Object.keys(ts.cargo_hold).length){h+='<div style="font-size:11px">';Object.entries(ts.cargo_hold).forEach(([k,v])=>{h+='<span style="color:#7fdbca;margin-right:8px">'+k+': '+v+'</span>'});h+='</div>'}
+document.getElementById('dbody').innerHTML=h}}
 // Tooltip
 const tt=document.getElementById('tooltip');
-if(hover){
+if(hoverShip){
+tt.style.display='block';tt.style.left=(mx+15)+'px';tt.style.top=Math.min(my-10,H-100)+'px';
+const s=hoverShip,c=pc(s.owner);
+let h='<b style="color:'+c+'">'+s.name+'</b><br><span style="color:#556">'+s.type+' · '+s.owner+'</span>';
+h+='<br>'+s.status+(s.target_system>=0?' → SYS-'+s.target_system:'');
+h+='<br>Fuel: '+s.fuel_current+'/'+s.fuel_max;
+if(s.cargo_used>0)h+='<br>Cargo: '+s.cargo_used+'/'+s.cargo_max;
+h+='<br><span style="color:#556">Click to track</span>';
+tt.innerHTML=h;C.style.cursor='pointer';
+}else if(hover){
 tt.style.display='block';tt.style.left=(mx+15)+'px';tt.style.top=Math.min(my-10,H-120)+'px';
 let h='<b style="color:#7fdbca">'+hover.name+'</b><br>Planets: '+hover.planets;
 if(hover.owner)h+='<br>Owner: <span style="color:'+pc(hover.owner)+'">'+hover.owner+'</span>';
 if(hover.resources?.length)h+='<br>Resources: '+hover.resources.join(', ');
 const ls=ships.filter(x=>x.system_id===hover.id);
 if(ls.length)h+='<br>Ships: '+ls.length;
-tt.innerHTML=h}else{tt.style.display='none'}
+h+='<br><span style="color:#556">Click for details</span>';
+tt.innerHTML=h;C.style.cursor='pointer';
+}else{tt.style.display='none';C.style.cursor=dragging?'grabbing':'default'}
 requestAnimationFrame(draw)}
 load();setInterval(load,3000);draw();
 </script></body></html>`
