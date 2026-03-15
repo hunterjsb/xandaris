@@ -16,7 +16,7 @@ func InitializePlayer(player *Player, systems []*System) {
 				if planet.Owner != "" {
 					continue
 				}
-				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasWaterResource(planet) && hasIronResource(planet) && hasOilResource(planet) {
+				if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasResource(planet, ResWater) && hasResource(planet, ResIron) && hasResource(planet, ResOil) {
 					validSystems = append(validSystems, system)
 					break
 				}
@@ -32,7 +32,7 @@ func InitializePlayer(player *Player, systems []*System) {
 					if planet.Owner != "" {
 						continue
 					}
-					if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasWaterResource(planet) {
+					if planet.PlanetType == "Terrestrial" && planet.IsHabitable() && hasResource(planet, ResWater) {
 						validSystems = append(validSystems, system)
 						break
 					}
@@ -49,7 +49,7 @@ func InitializePlayer(player *Player, systems []*System) {
 					if planet.Owner != "" {
 						continue
 					}
-					if planet.IsHabitable() && hasWaterResource(planet) {
+					if planet.IsHabitable() && hasResource(planet, ResWater) {
 						validSystems = append(validSystems, system)
 						break
 					}
@@ -93,13 +93,13 @@ func InitializePlayer(player *Player, systems []*System) {
 				continue
 			}
 			score := planet.Habitability
-			if hasWaterResource(planet) {
+			if hasResource(planet, ResWater) {
 				score += 100 // Strongly prefer Water
 			}
-			if hasIronResource(planet) {
+			if hasResource(planet, ResIron) {
 				score += 50
 			}
-			if hasOilResource(planet) {
+			if hasResource(planet, ResOil) {
 				score += 80 // Oil is critical for Fuel production
 			}
 			if score > bestScore {
@@ -160,35 +160,11 @@ func InitializePlayer(player *Player, systems []*System) {
 	player.AddOwnedShip(scoutShip)
 }
 
-// hasOilResource checks if a planet has an Oil resource deposit
-func hasOilResource(planet *Planet) bool {
+// hasResource checks if a planet has a resource deposit of the given type.
+func hasResource(planet *Planet, resType string) bool {
 	for _, resourceEntity := range planet.Resources {
 		if resource, ok := resourceEntity.(*Resource); ok {
-			if resource.ResourceType == "Oil" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// hasWaterResource checks if a planet has a Water resource deposit
-func hasWaterResource(planet *Planet) bool {
-	for _, resourceEntity := range planet.Resources {
-		if resource, ok := resourceEntity.(*Resource); ok {
-			if resource.ResourceType == "Water" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// hasIronResource checks if a planet has an Iron resource deposit
-func hasIronResource(planet *Planet) bool {
-	for _, resourceEntity := range planet.Resources {
-		if resource, ok := resourceEntity.(*Resource); ok {
-			if resource.ResourceType == "Iron" {
+			if resource.ResourceType == resType {
 				return true
 			}
 		}
