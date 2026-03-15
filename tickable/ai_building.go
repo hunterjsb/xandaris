@@ -42,6 +42,8 @@ func (abs *AIBuildingSystem) OnTick(tick int64) {
 		return
 	}
 
+	logger, _ := gameObj.(EventLogger)
+
 	playersIface := ctx.GetPlayers()
 	if playersIface == nil {
 		return
@@ -70,11 +72,11 @@ func (abs *AIBuildingSystem) OnTick(tick int64) {
 		if player == nil || player.IsHuman() {
 			continue
 		}
-		abs.evaluateInvestment(player, market, builder, systems)
+		abs.evaluateInvestment(player, market, builder, systems, logger)
 	}
 }
 
-func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market interface{ GetBuyPrice(string) float64 }, builder BuildingAdder, systems []*entities.System) {
+func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market interface{ GetBuyPrice(string) float64 }, builder BuildingAdder, systems []*entities.System, logger EventLogger) {
 	if player.Credits < 500 {
 		return
 	}
@@ -130,8 +132,9 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 						}
 					}
 				}
-				fmt.Printf("[AIBuild] %s built extra mine on %s at %s (price %.0f, base %.0f)\n",
-					player.Name, res.ResourceType, planet.Name, buyPrice, basePrice)
+				msg := fmt.Sprintf("%s built mine on %s at %s", player.Name, res.ResourceType, planet.Name)
+				fmt.Printf("[AIBuild] %s (price %.0f, base %.0f)\n", msg, buyPrice, basePrice)
+				logBuildEvent(logger, player.Name, msg)
 				return
 			}
 
@@ -139,8 +142,9 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			if buyPrice > basePrice*1.5 && bestMine != nil && bestMine.CanUpgrade() && player.Credits >= 300 {
 				player.Credits -= 300
 				bestMine.Upgrade()
-				fmt.Printf("[AIBuild] %s upgraded %s mine to L%d at %s\n",
-					player.Name, res.ResourceType, bestMine.Level, planet.Name)
+				msg := fmt.Sprintf("%s upgraded %s mine to L%d", player.Name, res.ResourceType, bestMine.Level)
+				fmt.Printf("[AIBuild] %s at %s\n", msg, planet.Name)
+				logBuildEvent(logger, player.Name, msg)
 				return
 			}
 		}
@@ -181,7 +185,9 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		if !hasBuilding(planet, "Shipyard") && player.Credits >= 3000 {
 			player.Credits -= 2000
 			builder.AIBuildOnPlanet(planet, "Shipyard", player.Name, systemID)
-			fmt.Printf("[AIBuild] %s built Shipyard at %s\n", player.Name, planet.Name)
+			msg := fmt.Sprintf("%s built Shipyard at %s", player.Name, planet.Name)
+			fmt.Printf("[AIBuild] %s\n", msg)
+			logBuildEvent(logger, player.Name, msg)
 			return
 		}
 
@@ -221,12 +227,20 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 							Started:        abs.GetContext().GetTick(),
 						}
 						cs.AddToQueue(location, item)
-						fmt.Printf("[AIBuild] %s building Colony ship at %s for expansion\n", player.Name, planet.Name)
+						msg := fmt.Sprintf("%s building Colony ship for expansion", player.Name)
+						fmt.Printf("[AIBuild] %s at %s\n", msg, planet.Name)
+						logBuildEvent(logger, player.Name, msg)
 					}
 				}
 				return
 			}
 		}
+	}
+}
+
+func logBuildEvent(logger EventLogger, player, msg string) {
+	if logger != nil {
+		logger.LogEvent("build", player, msg)
 	}
 }
 

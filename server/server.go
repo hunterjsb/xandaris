@@ -242,6 +242,14 @@ func (gs *GameServer) GetSystemByID(systemID int) *entities.System {
 	return gs.FleetCmdExecutor.GetSystemByID(systemID)
 }
 
+// LogEvent implements tickable.EventLogger for game event tracking.
+func (gs *GameServer) LogEvent(eventType string, player string, message string) {
+	if gs.Events != nil {
+		gs.Events.Add(gs.TickManager.GetCurrentTick(), gs.TickManager.GetGameTimeFormatted(),
+			game.EventType(eventType), player, message)
+	}
+}
+
 // StartShipJourney moves a single ship to a target system (for AI logistics).
 func (gs *GameServer) StartShipJourney(ship *entities.Ship, targetSystemID int) bool {
 	helper := tickable.NewShipMovementHelper(gs.GetSystemsMap(), gs.State.Hyperlanes)

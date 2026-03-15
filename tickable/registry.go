@@ -33,6 +33,11 @@ type SystemContext interface {
 	GetTick() int64
 }
 
+// EventLogger allows tickable systems to log game events.
+type EventLogger interface {
+	LogEvent(eventType string, player string, message string)
+}
+
 // Registry holds all registered tickable systems
 var registry []TickableSystem
 

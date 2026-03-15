@@ -109,7 +109,11 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			ship.Colonists = 0
 			ship.Status = entities.ShipStatusOrbiting
 			planet.RebalanceWorkforce()
-			fmt.Printf("[AIColonize] %s colonized %s with %d colonists!\n", player.Name, planet.Name, planet.Population)
+			msg := fmt.Sprintf("%s colonized %s!", player.Name, planet.Name)
+			fmt.Printf("[AIColonize] %s (%d colonists)\n", msg, planet.Population)
+			if logger, ok := als.GetContext().GetGame().(EventLogger); ok {
+				logger.LogEvent("colonize", player.Name, msg)
+			}
 			continue
 		}
 		// Find nearest unclaimed habitable planet and fly there
