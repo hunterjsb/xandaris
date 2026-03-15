@@ -149,6 +149,49 @@ func eventColor(t game.EventType) color.RGBA {
 	}
 }
 
+// drawMinimized renders a slim event ticker at the bottom when closed.
+func (cb *CommandBar) drawMinimized(screen *ebiten.Image) {
+	lineHeight := 13
+	maxLines := 4
+	barX := 0
+	barWidth := cb.screenWidth
+
+	cb.mu.Lock()
+	// Grab the last N event messages
+	var lines []ChatMessage
+	for i := len(cb.feed) - 1; i >= 0 && len(lines) < maxLines; i-- {
+		if cb.feed[i].Type == MsgEvent {
+			lines = append(lines, cb.feed[i])
+		}
+	}
+	cb.mu.Unlock()
+
+	if len(lines) == 0 {
+		return
+	}
+
+	barHeight := len(lines)*lineHeight + 8
+	barY := cb.screenHeight - barHeight
+
+	// Subtle semi-transparent background
+	bgPanel := &views.UIPanel{
+		X: barX, Y: barY, Width: barWidth, Height: barHeight,
+		BgColor:     color.RGBA{5, 7, 15, 180},
+		BorderColor: color.RGBA{20, 28, 45, 150},
+	}
+	bgPanel.Draw(screen)
+
+	// Draw events bottom-up (newest at bottom)
+	y := cb.screenHeight - 6
+	for _, msg := range lines {
+		y -= lineHeight
+		// Dim the color for minimized view
+		dimmed := msg.Color
+		dimmed.A = 150
+		views.DrawText(screen, msg.Text, barX+8, y, dimmed)
+	}
+}
+
 func (cb *CommandBar) SetServerURL(url string) { cb.serverURL = url }
 func (cb *CommandBar) SetAPIKey(key string)     { cb.apiKey = key }
 func (cb *CommandBar) IsOpen() bool             { return cb.isOpen }
@@ -235,6 +278,7 @@ func (cb *CommandBar) Update() {
 
 func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	if !cb.isOpen {
+		cb.drawMinimized(screen)
 		return
 	}
 
