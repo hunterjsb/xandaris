@@ -196,9 +196,10 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	DrawText(screen, "Xandaris II - Galaxy Map", 10, 10, utils.TextPrimary)
-	DrawText(screen, "Double-click system to view", 10, 25, utils.TextSecondary)
-	DrawText(screen, "Press ESC to return to menu", 10, 40, utils.TextSecondary)
+	accentColor := color.RGBA{127, 219, 202, 255}
+	dimColor := color.RGBA{80, 95, 115, 255}
+	DrawText(screen, "XANDARIS II", 10, 10, accentColor)
+	DrawText(screen, "Double-click system to enter  |  Esc to menu", 10, 28, dimColor)
 
 	// Draw hints below header
 	gv.drawHints(screen)
@@ -664,61 +665,78 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	gv.playerPanelRect = image.Rect(panelX, panelY, panelX+panelWidth, panelY+panelHeight)
 
 	// Draw panel background
+	panelBg := color.RGBA{12, 16, 28, 235}
+	panelBorder := color.RGBA{30, 40, 68, 255}
+	accentPanel := color.RGBA{127, 219, 202, 255}
+	dimPanel := color.RGBA{80, 95, 115, 255}
+	textLight := color.RGBA{192, 200, 216, 255}
+
 	panel := NewUIPanel(panelX, panelY, panelWidth, panelHeight)
+	panel.BgColor = panelBg
+	panel.BorderColor = panelBorder
 	panel.Draw(screen)
 
-	// Draw player info
 	textX := panelX + 12
-	textY := panelY + 16
+	textY := panelY + 14
 
 	toggleLabel := "−"
 	if gv.playerPanelCollapsed {
 		toggleLabel = "+"
 	}
-	gv.playerPanelToggleRect = image.Rect(panelX+panelWidth-28, panelY+14, panelX+panelWidth-8, panelY+34)
-	DrawText(screen, fmt.Sprintf("[%s]", toggleLabel), panelX+panelWidth-28, panelY+18, utils.Highlight)
+	gv.playerPanelToggleRect = image.Rect(panelX+panelWidth-28, panelY+10, panelX+panelWidth-8, panelY+30)
+	DrawText(screen, fmt.Sprintf("[%s]", toggleLabel), panelX+panelWidth-28, panelY+14, dimPanel)
 
 	DrawText(screen, humanPlayer.Name, textX, textY, humanPlayer.Color)
-	DrawText(screen, fmt.Sprintf("Credits: %d", humanPlayer.Credits), textX, textY+18, utils.TextPrimary)
+	credStr := formatNumber(humanPlayer.Credits)
+	DrawText(screen, credStr+" cr", textX+len(humanPlayer.Name)*6+10, textY, accentPanel)
 
 	if gv.playerPanelCollapsed {
-		DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+36, utils.TextPrimary)
-		collapsedHint := "Click [+] to expand  |  Press [P] for Directory"
-		hintY := panelY + panelHeight - 18
-		DrawText(screen, collapsedHint, textX, hintY, utils.TextSecondary)
-		hintWidth := len(collapsedHint) * 6
-		gv.playerDirectoryHintRect = image.Rect(textX-2, hintY-12, textX+hintWidth+2, hintY+4)
+		pop := formatPopulation(humanPlayer.GetTotalPopulation())
+		DrawText(screen, fmt.Sprintf("%d planets  %s pop", len(humanPlayer.OwnedPlanets), pop), textX, textY+18, dimPanel)
+		footerY := panelY + panelHeight - 16
+		DrawText(screen, "[+] expand  |  [P] directory", textX, footerY, dimPanel)
+		footerWidth := len("[+] expand  |  [P] directory") * 6
+		gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
 		return
 	}
 
-	DrawText(screen, fmt.Sprintf("Planets: %d", len(humanPlayer.OwnedPlanets)), textX, textY+36, utils.TextPrimary)
-	DrawText(screen, fmt.Sprintf("Population: %d", humanPlayer.GetTotalPopulation()), textX, textY+54, utils.TextPrimary)
-
-	// Ships + construction count on same line
+	// Stats grid
+	pop := formatPopulation(humanPlayer.GetTotalPopulation())
 	shipCount := len(humanPlayer.OwnedShips) + len(humanPlayer.OwnedFleets)
-	shipLine := fmt.Sprintf("Ships: %d", shipCount)
+
+	DrawText(screen, "Planets", textX, textY+22, dimPanel)
+	DrawText(screen, fmt.Sprintf("%d", len(humanPlayer.OwnedPlanets)), textX+60, textY+22, textLight)
+
+	DrawText(screen, "Pop", textX+110, textY+22, dimPanel)
+	DrawText(screen, pop, textX+145, textY+22, textLight)
+
+	DrawText(screen, "Ships", textX, textY+38, dimPanel)
+	DrawText(screen, fmt.Sprintf("%d", shipCount), textX+60, textY+38, textLight)
+
+	// Construction queue
 	if cs := tickable.GetSystemByName("Construction"); cs != nil {
 		if csys, ok := cs.(*tickable.ConstructionSystem); ok {
 			queueItems := csys.GetConstructionsByOwner(humanPlayer.Name)
 			if len(queueItems) > 0 {
-				shipLine += fmt.Sprintf("  Building: %d", len(queueItems))
+				DrawText(screen, "Queue", textX+110, textY+38, dimPanel)
+				DrawText(screen, fmt.Sprintf("%d", len(queueItems)), textX+155, textY+38, utils.SystemOrange)
 			}
 		}
 	}
-	DrawText(screen, shipLine, textX, textY+72, utils.TextPrimary)
 
 	if humanPlayer.HomeSystem != nil {
-		DrawText(screen, fmt.Sprintf("Home: %s", humanPlayer.HomeSystem.Name), textX, textY+90, utils.TextSecondary)
+		DrawText(screen, "Home", textX, textY+54, dimPanel)
+		DrawText(screen, humanPlayer.HomeSystem.Name, textX+60, textY+54, dimPanel)
 	}
 
-	// Separator + footer hint
-	separatorY := textY + 106
-	DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.PanelBorder)
+	// Separator
+	separatorY := textY + 70
+	DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, panelBorder)
 
-	// Footer: Player Directory hint
-	footerY := panelY + panelHeight - 18
-	DrawText(screen, "Press [P] for Player Directory", textX, footerY, utils.TextSecondary)
-	footerWidth := len("Press [P] for Player Directory") * 6
+	// Footer
+	footerY := panelY + panelHeight - 16
+	DrawText(screen, "[P] Player Directory  |  [M] Market", textX, footerY, dimPanel)
+	footerWidth := len("[P] Player Directory  |  [M] Market") * 6
 	gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
 
 	if len(aiSummaries) > 0 {
