@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -47,7 +48,9 @@ func main() {
 func runGUI(autoStart bool, playerName string, startView string) {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
 	ebiten.SetWindowTitle("Xandaris II - Space Trading Game")
-	ebiten.SetFullscreen(true)
+	if runtime.GOARCH != "wasm" {
+		ebiten.SetFullscreen(true)
+	}
 
 	app := core.New(screenWidth, screenHeight)
 

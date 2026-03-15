@@ -31,54 +31,83 @@ jobs:
           <html>
           <head>
           <meta charset="utf-8">
-          <title>Xandaris II</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Xandaris II — Space Trading Game</title>
           <style>
-            body, html {
-              margin: 0;
-              padding: 0;
-              width: 100%;
-              height: 100%;
-              background-color: #111;
-              display: flex;
-              justify-content: center;
-              align-items: center;
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              background: #0a0c14;
+              color: #ccc;
+              font-family: monospace;
+              width: 100vw;
+              height: 100vh;
               overflow: hidden;
             }
-            #game-container {
-              width: 100vw;
-              height: calc(100vw * 9 / 16);
-              max-width: 100%;
-              max-height: 100vh;
-              aspect-ratio: 16 / 9;
-              position: relative;
+            #loading {
+              position: fixed;
+              top: 0; left: 0; right: 0; bottom: 0;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              z-index: 100;
+              background: #0a0c14;
             }
-            canvas {
-              width: 100%;
-              height: 100%;
-              display: block;
+            #loading h1 { color: #7fdbca; font-size: 2em; margin-bottom: 0.5em; }
+            #loading p { color: #666; }
+            #loading .spinner {
+              width: 40px; height: 40px;
+              border: 3px solid #333;
+              border-top: 3px solid #7fdbca;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+              margin: 1em;
             }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            #server-info {
+              position: fixed;
+              bottom: 8px; right: 8px;
+              font-size: 11px;
+              color: #444;
+              z-index: 50;
+            }
+            #server-info a { color: #557; text-decoration: none; }
           </style>
           </head>
           <body>
-          <div id="game-container">
-            <!-- Canvas will be inserted here by wasm_exec.js -->
+          <div id="loading">
+            <h1>Xandaris II</h1>
+            <div class="spinner"></div>
+            <p id="load-status">Loading game...</p>
+          </div>
+          <div id="server-info">
+            Live server: <a href="http://3.84.241.200:8080/api/game" target="_blank">API</a>
           </div>
           <script src="wasm_exec.js"></script>
           <script>
-            if (!WebAssembly.instantiateStreaming) { // polyfill
+            const status = document.getElementById('load-status');
+            if (!WebAssembly.instantiateStreaming) {
                 WebAssembly.instantiateStreaming = async (resp, importObject) => {
                     const source = await (await resp).arrayBuffer();
                     return await WebAssembly.instantiate(source, importObject);
                 };
             }
+            status.textContent = 'Downloading game (~20MB)...';
             const go = new Go();
             WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+                status.textContent = 'Starting...';
                 go.run(result.instance);
-                // Ebitengine appends the canvas to the body, so we move it.
-                const canvas = document.querySelector('canvas');
-                if (canvas) {
-                  document.getElementById('game-container').appendChild(canvas);
-                }
+                // Hide loading screen once canvas appears
+                const check = setInterval(() => {
+                  const canvas = document.querySelector('canvas');
+                  if (canvas) {
+                    document.getElementById('loading').style.display = 'none';
+                    clearInterval(check);
+                  }
+                }, 100);
+            }).catch(err => {
+                status.textContent = 'Failed to load: ' + err.message;
+                status.style.color = '#f66';
             });
           </script>
           </body>
