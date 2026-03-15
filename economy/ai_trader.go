@@ -91,9 +91,9 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 					}
 				}
 
-				// Check credits
-				if player.Credits < 100 {
-					continue // Don't trade when broke
+				// Reserve credits for building infrastructure (don't blow all cash on trades)
+				if player.Credits < 2000 {
+					continue
 				}
 
 				if _, err := executor.Buy(player, allPlayers, resType, qty, planet); err != nil {
@@ -108,7 +108,7 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 
 		// Speculative trading: sell when price is very high (even below surplus threshold)
 		// This creates more dynamic markets — AI acts as price stabilizer
-		if player.Credits > 500 {
+		if player.Credits > 3000 {
 			for resType, storage := range planet.StoredResources {
 				if storage == nil || storage.Amount < 50 {
 					continue // keep minimum buffer
@@ -151,8 +151,8 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 			if planet.GetStoredAmount(resType) > 0 {
 				continue // Already in storage, handled above
 			}
-			if player.Credits < 200 {
-				continue
+			if player.Credits < 2000 {
+				continue // Reserve for building
 			}
 			// Buy a small amount to get started
 			qty := 20
