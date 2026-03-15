@@ -187,53 +187,119 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	title := fmt.Sprintf("System View: %s", sv.system.Name)
-	DrawText(screen, title, 10, 10, utils.TextPrimary)
-	DrawText(screen, "Press ESC to return to galaxy", 10, 25, utils.TextSecondary)
+	accentColor := color.RGBA{127, 219, 202, 255}
+	dimColor := color.RGBA{80, 95, 115, 255}
+	textLight := color.RGBA{192, 200, 216, 255}
+
+	DrawText(screen, sv.system.Name, 10, 10, accentColor)
+	DrawText(screen, "Double-click planet to enter  |  Esc to galaxy", 10, 28, dimColor)
 
 	if selected := sv.clickHandler.GetSelectedObject(); selected != nil {
-		infoY := 45
+		// Info panel background
+		panelBg := color.RGBA{12, 16, 28, 220}
+		panelBorder := color.RGBA{30, 40, 68, 255}
 
 		if planet, ok := selected.(*entities.Planet); ok {
-			DrawText(screen, fmt.Sprintf("Selected Planet: %s", planet.Name), 10, infoY, utils.TextPrimary)
-			infoY += 15
-			for _, line := range formatPlanetDetails(planet) {
-				color := utils.TextSecondary
-				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
-					color = utils.TextPrimary
+			details := formatPlanetDetails(planet)
+			panelHeight := 30 + len(details)*15
+
+			// Add storage height
+			storageCount := 0
+			for _, s := range planet.StoredResources {
+				if s != nil {
+					storageCount++
 				}
-				DrawText(screen, line, 10, infoY, color)
+			}
+			if storageCount > 0 {
+				panelHeight += 20 + storageCount*14
+			}
+
+			infoPanel := NewUIPanel(6, 42, 240, panelHeight)
+			infoPanel.BgColor = panelBg
+			infoPanel.BorderColor = panelBorder
+			infoPanel.Draw(screen)
+
+			infoY := 52
+			DrawText(screen, planet.Name, 14, infoY, accentColor)
+			if planet.Owner != "" {
+				ownerWidth := len(planet.Name)*6 + 10
+				DrawText(screen, planet.Owner, 14+ownerWidth, infoY, dimColor)
+			}
+			infoY += 18
+
+			for _, line := range details {
+				lineColor := dimColor
+				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
+					lineColor = textLight
+				}
+				DrawText(screen, line, 14, infoY, lineColor)
 				infoY += 15
 			}
 
-			// Compact resource storage summary
-			if len(planet.StoredResources) > 0 {
-				infoY += 5
-				DrawText(screen, "Storage:", 10, infoY, utils.TextPrimary)
+			// Storage with fill indicators
+			if storageCount > 0 {
+				infoY += 6
+				DrawText(screen, "Storage", 14, infoY, dimColor)
 				infoY += 15
 				for resType, storage := range planet.StoredResources {
 					if storage == nil {
 						continue
 					}
-					label := fmt.Sprintf("  %s: %d/%d", resType, storage.Amount, storage.Capacity)
-					resColor := utils.TextSecondary
-					if storage.Amount == 0 {
-						resColor = utils.SystemRed
-					} else if storage.Capacity > 0 && float64(storage.Amount)/float64(storage.Capacity) > 0.8 {
-						resColor = utils.SystemGreen
+					resColor := dimColor
+					fillRatio := float64(0)
+					if storage.Capacity > 0 {
+						fillRatio = float64(storage.Amount) / float64(storage.Capacity)
 					}
-					DrawText(screen, label, 10, infoY, resColor)
-					infoY += 13
+					if storage.Amount == 0 {
+						resColor = color.RGBA{150, 60, 60, 255}
+					} else if fillRatio > 0.8 {
+						resColor = color.RGBA{100, 200, 130, 255}
+					} else {
+						resColor = textLight
+					}
+
+					label := fmt.Sprintf("  %s: %d", resType, storage.Amount)
+					DrawText(screen, label, 14, infoY, resColor)
+
+					// Small fill bar
+					barX := 170
+					barW := 60
+					barH := 3
+					barBg := ebiten.NewImage(barW, barH)
+					barBg.Fill(color.RGBA{20, 25, 40, 255})
+					barOpts := &ebiten.DrawImageOptions{}
+					barOpts.GeoM.Translate(float64(barX), float64(infoY+4))
+					screen.DrawImage(barBg, barOpts)
+					if fillRatio > 0 {
+						fillW := int(float64(barW) * fillRatio)
+						if fillW < 1 {
+							fillW = 1
+						}
+						barFill := ebiten.NewImage(fillW, barH)
+						barFill.Fill(resColor)
+						fillOpts := &ebiten.DrawImageOptions{}
+						fillOpts.GeoM.Translate(float64(barX), float64(infoY+4))
+						screen.DrawImage(barFill, fillOpts)
+					}
+
+					infoY += 14
 				}
 			}
 		} else if provider, ok := selected.(ContextMenuProvider); ok {
-			DrawText(screen, provider.GetContextMenuTitle(), 10, infoY, utils.TextPrimary)
-			infoY += 15
-			for _, line := range provider.GetContextMenuItems() {
+			items := provider.GetContextMenuItems()
+			infoPanel := NewUIPanel(6, 42, 240, 20+len(items)*15)
+			infoPanel.BgColor = panelBg
+			infoPanel.BorderColor = panelBorder
+			infoPanel.Draw(screen)
+
+			infoY := 52
+			DrawText(screen, provider.GetContextMenuTitle(), 14, infoY, accentColor)
+			infoY += 18
+			for _, line := range items {
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
-				DrawText(screen, line, 10, infoY, utils.TextSecondary)
+				DrawText(screen, line, 14, infoY, dimColor)
 				infoY += 15
 			}
 		}
