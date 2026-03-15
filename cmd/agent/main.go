@@ -72,8 +72,8 @@ var tools = []openai.Tool{
 		Type: openai.ToolTypeFunction,
 		Function: &openai.FunctionDefinition{
 			Name:        "build",
-			Description: "Build a structure on your planet. Types: Mine, Trading Post, Refinery, Habitat, Shipyard. Mines require resource_id.",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_type":{"type":"string","enum":["Mine","Trading Post","Refinery","Habitat","Shipyard"]},"resource_id":{"type":"integer","description":"Required for mines: the resource deposit ID to attach to"}},"required":["planet_id","building_type"]}`),
+			Description: "Build a structure on your planet. Types: Mine, Trading Post, Refinery, Factory, Habitat, Shipyard. Factory converts Rare Metals + Iron into Electronics. Mines require resource_id.",
+			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_type":{"type":"string","enum":["Mine","Trading Post","Refinery","Factory","Habitat","Shipyard"]},"resource_id":{"type":"integer","description":"Required for mines: the resource deposit ID to attach to"}},"required":["planet_id","building_type"]}`),
 		},
 	},
 	{

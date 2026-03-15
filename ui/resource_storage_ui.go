@@ -108,7 +108,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	}
 
 	count := 0
-	maxVisible := 6
+	maxVisible := 7
 
 	// Create sorted list of resources to prevent flickering
 	var sortedResources []struct {
@@ -188,6 +188,16 @@ func (rsu *ResourceStorageUI) computeNetFlow(planet *entities.Planet) map[string
 			lm := 1.0 + float64(b.Level-1)*0.3
 			flow["Fuel"] += 3.0 * lm
 			flow["Oil"] -= 2.0 * lm
+		}
+	}
+
+	// Factory: +Electronics, -Rare Metals, -Iron
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.BuildingType == "Factory" && b.IsOperational {
+			lm := 1.0 + float64(b.Level-1)*0.3
+			flow["Electronics"] += 2.0 * lm
+			flow["Rare Metals"] -= 2.0 * lm
+			flow["Iron"] -= 1.0 * lm
 		}
 	}
 

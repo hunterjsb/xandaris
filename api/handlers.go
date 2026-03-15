@@ -806,6 +806,16 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 				}
 			}
 
+			// Calculate factory production
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Factory" && b.IsOperational {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					production["Electronics"] += 2.0 * levelMult
+					consumption["Rare Metals"] += 2.0 * levelMult
+					consumption["Iron"] += 1.0 * levelMult
+				}
+			}
+
 			// Population consumption (from economy.PopulationConsumption)
 			for _, rate := range economy.PopulationConsumption {
 				consumption[rate.ResourceType] += float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
