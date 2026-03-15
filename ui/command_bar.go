@@ -30,6 +30,8 @@ type CommandBar struct {
 	maxFeed      int
 	screenWidth  int
 	screenHeight int
+	serverURL    string // base URL for API calls (e.g. "https://api.xandaris.space")
+	apiKey       string // player's API key for authenticated requests
 }
 
 type feedMessage struct {
@@ -44,8 +46,15 @@ func NewCommandBar(ctx UIContext, screenWidth, screenHeight int) *CommandBar {
 		maxFeed:      12,
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
+		serverURL:    "http://localhost:8080",
 	}
 }
+
+// SetServerURL sets the API server URL for chat requests.
+func (cb *CommandBar) SetServerURL(url string) { cb.serverURL = url }
+
+// SetAPIKey sets the authentication key for chat requests.
+func (cb *CommandBar) SetAPIKey(key string) { cb.apiKey = key }
 
 // IsOpen returns whether the command bar is active.
 func (cb *CommandBar) IsOpen() bool {
@@ -327,29 +336,16 @@ func (cb *CommandBar) sendToChat(message string) {
 
 // callChatAPI sends a message to POST /api/chat and returns the response.
 func (cb *CommandBar) callChatAPI(message string) (string, error) {
-	state := cb.ctx.GetState()
-	if state == nil {
-		return "", fmt.Errorf("no game state")
-	}
-
 	// Build the request body
 	body := fmt.Sprintf(`{"message":%q}`, message)
 
-	// Determine server URL — if remote sync is active, use that; otherwise localhost
-	serverURL := "http://localhost:8080"
-	// For remote play, the server URL is embedded in the sync config
-	// For now, try localhost (works for both local and remote since remote server has the endpoint)
-
-	req, err := http.NewRequest("POST", serverURL+"/api/chat", strings.NewReader(body))
+	req, err := http.NewRequest("POST", cb.serverURL+"/api/chat", strings.NewReader(body))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-
-	// Add API key if we have one stored in state
-	if state.HumanPlayer != nil {
-		// The player's API key is stored in the registry, but we don't have easy access from here
-		// For now, no auth header — the chat endpoint will use the player context
+	if cb.apiKey != "" {
+		req.Header.Set("X-API-Key", cb.apiKey)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}

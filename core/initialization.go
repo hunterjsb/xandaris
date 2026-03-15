@@ -62,6 +62,14 @@ func (a *App) InitializeClientViews() {
 	a.commandBar = ui.NewCommandBar(a, a.screenWidth, a.screenHeight)
 }
 
+// ConfigureCommandBar sets server URL and API key for the command bar's chat feature.
+func (a *App) ConfigureCommandBar(serverURL, apiKey string) {
+	if a.commandBar != nil {
+		a.commandBar.SetServerURL(serverURL)
+		a.commandBar.SetAPIKey(apiKey)
+	}
+}
+
 // SwitchToGalaxyView switches the view to the galaxy view. Used for remote play startup.
 func (a *App) SwitchToGalaxyView() {
 	a.viewManager.SwitchTo(views.ViewTypeGalaxy)
@@ -114,6 +122,9 @@ func (a *App) ConnectToRemote(serverURL, playerName, apiKey string) error {
 
 	// Set up client-side views
 	a.InitializeClientViews()
+
+	// Configure command bar for remote play
+	a.ConfigureCommandBar(serverURL, apiKey)
 
 	// Switch to galaxy view
 	a.viewManager.SwitchTo(views.ViewTypeGalaxy)

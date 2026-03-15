@@ -51,6 +51,7 @@ func runRemote(serverURL, playerName, apiKey string) {
 	// Skip InitializeNewGame (which calls NewGame with random seed) —
 	// the GameServer already has the remote seed and state.
 	app.InitializeClientViews()
+	app.ConfigureCommandBar(serverURL, apiKey)
 	app.SwitchToGalaxyView()
 
 	fmt.Printf("Connected to %s! Playing as %s\n", serverURL, playerName)
