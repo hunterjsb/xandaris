@@ -29,6 +29,18 @@ type GameStateProvider interface {
 	GetCommandChannel() chan game.GameCommand
 }
 
+// findPlayer returns the player matching the given name, or falls back to the human player.
+func findPlayer(p GameStateProvider, name string) *entities.Player {
+	if name != "" {
+		for _, player := range p.GetPlayers() {
+			if player != nil && strings.EqualFold(player.Name, name) {
+				return player
+			}
+		}
+	}
+	return p.GetHumanPlayer()
+}
+
 // --- handler logic (pure functions, no net/http) ---
 
 func handleGetMarket(p GameStateProvider) interface{} {
@@ -287,8 +299,8 @@ func handleGetPlayers(p GameStateProvider) interface{} {
 	return result
 }
 
-func handleGetPlayerMe(p GameStateProvider) interface{} {
-	human := p.GetHumanPlayer()
+func handleGetPlayerMe(p GameStateProvider, authPlayer string) interface{} {
+	human := findPlayer(p, authPlayer)
 	if human == nil {
 		return nil
 	}
@@ -354,12 +366,12 @@ func handleGetPlayerMe(p GameStateProvider) interface{} {
 	}
 }
 
-func handleGetStatus(p GameStateProvider) interface{} {
+func handleGetStatus(p GameStateProvider, authPlayer string) interface{} {
 	tick, gameTime, speed, paused := p.GetTickInfo()
 
 	// Player info
 	var playerStatus PlayerStatus
-	human := p.GetHumanPlayer()
+	human := findPlayer(p, authPlayer)
 	if human != nil {
 		playerStatus.Name = human.Name
 		playerStatus.Credits = human.Credits

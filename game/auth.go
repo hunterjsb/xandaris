@@ -3,7 +3,10 @@ package game
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -18,21 +21,37 @@ type PlayerAccount struct {
 	PlayerID     int    `json:"player_id"`
 }
 
+// savedAccount is the on-disk representation (includes password hash).
+type savedAccount struct {
+	Name         string `json:"name"`
+	PasswordHash string `json:"password_hash"`
+	APIKey       string `json:"api_key"`
+	PlayerID     int    `json:"player_id"`
+}
+
 // PlayerRegistry manages player accounts and API key authentication.
 type PlayerRegistry struct {
 	mu       sync.RWMutex
 	accounts map[string]*PlayerAccount // name → account
 	keys     map[string]*PlayerAccount // api_key → account
 	adminKey string                    // global admin key (XANDARIS_API_KEY)
+	filePath string                    // path to accounts.json
 }
 
 // NewPlayerRegistry creates a new registry with an optional admin key.
+// It loads any existing accounts from ~/.xandaris/accounts.json.
 func NewPlayerRegistry(adminKey string) *PlayerRegistry {
-	return &PlayerRegistry{
+	home, _ := os.UserHomeDir()
+	fp := filepath.Join(home, ".xandaris", "accounts.json")
+
+	pr := &PlayerRegistry{
 		accounts: make(map[string]*PlayerAccount),
 		keys:     make(map[string]*PlayerAccount),
 		adminKey: adminKey,
+		filePath: fp,
 	}
+	pr.load()
+	return pr
 }
 
 // Register creates a new player account. Returns the account or error.
@@ -67,6 +86,8 @@ func (pr *PlayerRegistry) Register(name, password string) (*PlayerAccount, error
 
 	pr.accounts[strings.ToLower(name)] = account
 	pr.keys[apiKey] = account
+
+	pr.saveLocked()
 
 	return account, nil
 }
@@ -115,6 +136,58 @@ func (pr *PlayerRegistry) GetAccount(name string) *PlayerAccount {
 	pr.mu.RLock()
 	defer pr.mu.RUnlock()
 	return pr.accounts[strings.ToLower(name)]
+}
+
+// Save persists all accounts to disk. Caller must hold at least a read lock.
+func (pr *PlayerRegistry) saveLocked() {
+	if pr.filePath == "" {
+		return
+	}
+	var saved []savedAccount
+	for _, acc := range pr.accounts {
+		saved = append(saved, savedAccount{
+			Name:         acc.Name,
+			PasswordHash: acc.PasswordHash,
+			APIKey:       acc.APIKey,
+			PlayerID:     acc.PlayerID,
+		})
+	}
+	data, err := json.MarshalIndent(saved, "", "  ")
+	if err != nil {
+		fmt.Printf("[Auth] Failed to marshal accounts: %v\n", err)
+		return
+	}
+	os.MkdirAll(filepath.Dir(pr.filePath), 0700)
+	if err := os.WriteFile(pr.filePath, data, 0600); err != nil {
+		fmt.Printf("[Auth] Failed to save accounts: %v\n", err)
+	}
+}
+
+// load reads accounts from disk. Called once at startup.
+func (pr *PlayerRegistry) load() {
+	if pr.filePath == "" {
+		return
+	}
+	data, err := os.ReadFile(pr.filePath)
+	if err != nil {
+		return // file doesn't exist yet — that's fine
+	}
+	var saved []savedAccount
+	if err := json.Unmarshal(data, &saved); err != nil {
+		fmt.Printf("[Auth] Failed to parse accounts file: %v\n", err)
+		return
+	}
+	for _, s := range saved {
+		acc := &PlayerAccount{
+			Name:         s.Name,
+			PasswordHash: s.PasswordHash,
+			APIKey:       s.APIKey,
+			PlayerID:     s.PlayerID,
+		}
+		pr.accounts[strings.ToLower(s.Name)] = acc
+		pr.keys[s.APIKey] = acc
+	}
+	fmt.Printf("[Auth] Loaded %d accounts from %s\n", len(saved), pr.filePath)
 }
 
 func generateAPIKey() string {

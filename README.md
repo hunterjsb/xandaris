@@ -8,6 +8,8 @@ Xandaris is a space trading and exploration game written in Go using the [Ebiten
 
 ## Controls
 
+All keybindings are configurable via the in-game Settings menu.
+
 ### Global
 | Action | Key |
 | --- | --- |

@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,6 +18,28 @@ import (
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 )
+
+type ctxKey string
+
+const ctxPlayerName ctxKey = "playerName"
+const ctxIsAdmin ctxKey = "isAdmin"
+
+// getAuthPlayer returns the authenticated player name from the request context.
+// Returns empty string for admin keys or unauthenticated requests.
+func getAuthPlayer(r *http.Request) string {
+	if v, ok := r.Context().Value(ctxPlayerName).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// isAdmin returns whether the request was authenticated with the admin key.
+func isAdmin(r *http.Request) bool {
+	if v, ok := r.Context().Value(ctxIsAdmin).(bool); ok {
+		return v
+	}
+	return false
+}
 
 var (
 	serverStarted  atomic.Bool
@@ -291,9 +314,9 @@ func StartServer(provider GameStateProvider) {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
 			return
 		}
-		data := handleGetPlayerMe(getProvider())
+		data := handleGetPlayerMe(getProvider(), getAuthPlayer(r))
 		if data == nil {
-			writeErr(w, http.StatusNotFound, "no human player")
+			writeErr(w, http.StatusNotFound, "no player found")
 			return
 		}
 		writeJSON(w, APIResponse{OK: true, Data: data})
@@ -312,7 +335,7 @@ func StartServer(provider GameStateProvider) {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
 			return
 		}
-		writeJSON(w, APIResponse{OK: true, Data: handleGetStatus(getProvider())})
+		writeJSON(w, APIResponse{OK: true, Data: handleGetStatus(getProvider(), getAuthPlayer(r))})
 	})
 
 	mux.HandleFunc("/api/game", func(w http.ResponseWriter, r *http.Request) {
@@ -1110,22 +1133,31 @@ func StartServer(provider GameStateProvider) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		// Auth for POST — check player registry first, then admin key
+		// Auth — inject player identity into context
+		key := r.Header.Get("X-API-Key")
+		if key != "" {
+			p := getProvider()
+			registry := p.GetRegistry()
+			if registry != nil {
+				playerName, admin, ok := registry.Authenticate(key)
+				if ok {
+					ctx := context.WithValue(r.Context(), ctxPlayerName, playerName)
+					ctx = context.WithValue(ctx, ctxIsAdmin, admin)
+					r = r.WithContext(ctx)
+				}
+			}
+		}
+		// Require auth for POST (except register/login)
 		if r.Method == http.MethodPost {
-			key := r.Header.Get("X-API-Key")
-			// Registration and login don't need auth
 			if r.URL.Path != "/api/register" && r.URL.Path != "/api/login" {
-				p := getProvider()
-				registry := p.GetRegistry()
-				if registry != nil {
-					_, _, ok := registry.Authenticate(key)
-					if !ok {
+				player := getAuthPlayer(r)
+				admin := isAdmin(r)
+				if !admin && player == "" {
+					// Fall back to legacy admin key check
+					if apiKey != "" && key != apiKey {
 						writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
 						return
 					}
-				} else if apiKey != "" && key != apiKey {
-					writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
-					return
 				}
 			}
 		}

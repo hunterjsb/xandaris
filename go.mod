@@ -5,6 +5,8 @@ go 1.25.2
 require (
 	github.com/hajimehoshi/bitmapfont/v4 v4.1.0
 	github.com/hajimehoshi/ebiten/v2 v2.9.1
+	github.com/sashabaranov/go-openai v1.41.2
+	golang.org/x/crypto v0.49.0
 )
 
 require (
@@ -15,8 +17,6 @@ require (
 	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/sashabaranov/go-openai v1.41.2 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/image v0.31.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
