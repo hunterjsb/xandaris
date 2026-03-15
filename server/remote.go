@@ -63,11 +63,41 @@ func (rs *RemoteSync) Stop() {
 
 // syncAll fetches everything from the remote server.
 func (rs *RemoteSync) syncAll() {
+	rs.syncGalaxyPositions()
 	rs.syncFactions()
 	rs.syncPlayer()
 	rs.syncEconomy()
 	rs.SyncOwnership()
 	rs.syncShips()
+}
+
+// syncGalaxyPositions updates local system X,Y from the remote server
+// so the galaxy map matches what the spectator/server shows.
+func (rs *RemoteSync) syncGalaxyPositions() {
+	data, err := rs.apiGet("/api/galaxy")
+	if err != nil {
+		return
+	}
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data []struct {
+			ID int     `json:"id"`
+			X  float64 `json:"x"`
+			Y  float64 `json:"y"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil || !resp.OK {
+		return
+	}
+
+	systemsMap := rs.gs.State.GetSystemsMap()
+	for _, remote := range resp.Data {
+		if local, ok := systemsMap[remote.ID]; ok {
+			local.X = remote.X
+			local.Y = remote.Y
+		}
+	}
+	fmt.Printf("[Sync] Updated %d system positions from server\n", len(resp.Data))
 }
 
 // syncEconomy updates market prices from the remote server.
