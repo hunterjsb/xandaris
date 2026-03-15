@@ -558,9 +558,28 @@ func (cb *CommandBar) callChatAPI(message string) (string, error) {
 }
 
 func (cb *CommandBar) addFeedMessage(text string, c color.RGBA) {
-	cb.userMessages = append(cb.userMessages, feedMessage{Text: text, Color: c})
-	if len(cb.userMessages) > 50 { // keep more history for scroll
-		cb.userMessages = cb.userMessages[len(cb.userMessages)-50:]
+	// Word-wrap long messages to fit the screen
+	maxChars := (cb.screenWidth - 20) / 6 // ~6px per char
+	if maxChars < 40 {
+		maxChars = 40
+	}
+	for len(text) > maxChars {
+		// Find a good break point (space)
+		breakAt := maxChars
+		for i := maxChars; i > maxChars/2; i-- {
+			if text[i] == ' ' {
+				breakAt = i
+				break
+			}
+		}
+		cb.userMessages = append(cb.userMessages, feedMessage{Text: text[:breakAt], Color: c})
+		text = "  " + text[breakAt:] // indent continuation
+	}
+	if text != "" {
+		cb.userMessages = append(cb.userMessages, feedMessage{Text: text, Color: c})
+	}
+	if len(cb.userMessages) > 100 {
+		cb.userMessages = cb.userMessages[len(cb.userMessages)-100:]
 	}
 	cb.scrollOffset = 0 // snap to bottom on new message
 	cb.refreshFeed()
