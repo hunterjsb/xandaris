@@ -126,7 +126,7 @@ func (rs *RemoteSync) syncEconomy() {
 	}
 }
 
-// syncPlayer updates the human player's credits and storage from remote.
+// syncPlayer updates the human player's credits, planets, and all planet state from remote.
 func (rs *RemoteSync) syncPlayer() {
 	data, err := rs.apiGet("/api/player/me")
 	if err != nil {
@@ -138,13 +138,23 @@ func (rs *RemoteSync) syncPlayer() {
 			Credits int `json:"credits"`
 			Planets []struct {
 				ID                int            `json:"id"`
+				Name              string         `json:"name"`
+				PlanetType        string         `json:"planet_type"`
+				Owner             string         `json:"owner"`
 				StoredResources   map[string]int `json:"stored_resources"`
 				Population        int64          `json:"population"`
 				PopulationCap     int64          `json:"population_cap"`
+				Habitability      int            `json:"habitability"`
 				Happiness         float64        `json:"happiness"`
 				ProductivityBonus float64        `json:"productivity_bonus"`
 				PowerGenerated    float64        `json:"power_generated"`
 				PowerConsumed     float64        `json:"power_consumed"`
+				SystemID          int            `json:"system_id"`
+				Buildings         []struct {
+					Type          string `json:"type"`
+					Level         int    `json:"level"`
+					IsOperational bool   `json:"is_operational"`
+				} `json:"buildings"`
 			} `json:"planets"`
 		} `json:"data"`
 	}
@@ -159,24 +169,53 @@ func (rs *RemoteSync) syncPlayer() {
 
 	hp.Credits = resp.Data.Credits
 
-	// Sync each planet's state by matching IDs
+	// Rebuild OwnedPlanets from server data
+	// Create or update planet objects to match what the server says we own
+	newPlanets := make([]*entities.Planet, 0, len(resp.Data.Planets))
+
 	for _, rp := range resp.Data.Planets {
+		// Try to find existing local planet by server ID
+		var planet *entities.Planet
 		for _, lp := range hp.OwnedPlanets {
-			if lp == nil || lp.GetID() != rp.ID {
-				continue
+			if lp != nil && lp.GetID() == rp.ID {
+				planet = lp
+				break
 			}
-			lp.Population = rp.Population
-			lp.Happiness = rp.Happiness
-			lp.ProductivityBonus = rp.ProductivityBonus
-			lp.PowerGenerated = rp.PowerGenerated
-			lp.PowerConsumed = rp.PowerConsumed
-			for resType, amount := range rp.StoredResources {
-				if s, ok := lp.StoredResources[resType]; ok && s != nil {
-					s.Amount = amount
+		}
+
+		// Create a new planet object if not found locally
+		if planet == nil {
+			planet = entities.NewPlanet(rp.ID, rp.Name, rp.PlanetType, 0, 0, color.RGBA{150, 150, 180, 255})
+			planet.Owner = rp.Owner
+			planet.Habitability = rp.Habitability
+		}
+
+		// Update all fields from server
+		planet.Name = rp.Name
+		planet.Population = rp.Population
+		planet.Happiness = rp.Happiness
+		planet.ProductivityBonus = rp.ProductivityBonus
+		planet.PowerGenerated = rp.PowerGenerated
+		planet.PowerConsumed = rp.PowerConsumed
+
+		// Sync stored resources
+		for resType, amount := range rp.StoredResources {
+			if s, ok := planet.StoredResources[resType]; ok && s != nil {
+				s.Amount = amount
+			} else {
+				planet.StoredResources[resType] = &entities.ResourceStorage{
+					Amount:   amount,
+					Capacity: 1000,
 				}
 			}
-			break
 		}
+
+		newPlanets = append(newPlanets, planet)
+	}
+
+	hp.OwnedPlanets = newPlanets
+	if len(newPlanets) > 0 && hp.HomePlanet == nil {
+		hp.HomePlanet = newPlanets[0]
 	}
 }
 

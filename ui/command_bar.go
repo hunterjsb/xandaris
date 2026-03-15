@@ -149,15 +149,12 @@ func eventColor(t game.EventType) color.RGBA {
 	}
 }
 
-// drawMinimized renders a slim event ticker at the bottom when closed.
+// drawMinimized renders a slim event ticker above the status bar when closed.
 func (cb *CommandBar) drawMinimized(screen *ebiten.Image) {
 	lineHeight := 13
-	maxLines := 4
-	barX := 0
-	barWidth := cb.screenWidth
+	maxLines := 3
 
 	cb.mu.Lock()
-	// Grab the last N event messages
 	var lines []ChatMessage
 	for i := len(cb.feed) - 1; i >= 0 && len(lines) < maxLines; i-- {
 		if cb.feed[i].Type == MsgEvent {
@@ -170,25 +167,18 @@ func (cb *CommandBar) drawMinimized(screen *ebiten.Image) {
 		return
 	}
 
-	barHeight := len(lines)*lineHeight + 8
-	barY := cb.screenHeight - barHeight
+	// Position above the status bar (which is at screenHeight-55, 45px tall)
+	statusBarTop := cb.screenHeight - 58
+	barHeight := len(lines)*lineHeight + 6
+	barY := statusBarTop - barHeight
+	barX := 10
 
-	// Subtle semi-transparent background
-	bgPanel := &views.UIPanel{
-		X: barX, Y: barY, Width: barWidth, Height: barHeight,
-		BgColor:     color.RGBA{5, 7, 15, 180},
-		BorderColor: color.RGBA{20, 28, 45, 150},
-	}
-	bgPanel.Draw(screen)
-
-	// Draw events bottom-up (newest at bottom)
-	y := cb.screenHeight - 6
-	for _, msg := range lines {
-		y -= lineHeight
-		// Dim the color for minimized view
+	// Render text directly — no panel, just floats above status bar
+	for i, msg := range lines {
+		y := barY + 3 + i*lineHeight
 		dimmed := msg.Color
-		dimmed.A = 150
-		views.DrawText(screen, msg.Text, barX+8, y, dimmed)
+		dimmed.A = 140
+		views.DrawText(screen, msg.Text, barX, y, dimmed)
 	}
 }
 
