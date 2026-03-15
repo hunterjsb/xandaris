@@ -9,23 +9,23 @@ import (
 )
 
 // commandEndpoints maps command types to their remote API endpoints and body builders.
-var commandEndpoints = map[string]string{
-	"trade":               "/api/market/trade",
-	"build":               "/api/build",
-	"build_ship":          "/api/ships/build",
-	"move_ship":           "/api/ships/move",
-	"upgrade":             "/api/upgrade",
-	"refuel":              "/api/ships/refuel",
-	"cargo_load":          "/api/cargo/load",
-	"cargo_unload":        "/api/cargo/unload",
-	"colonize":            "/api/colonize",
-	"fleet_move":          "/api/fleets/move",
-	"fleet_create":        "/api/fleets/create",
-	"fleet_disband":       "/api/fleets/disband",
-	"fleet_add_ship":      "/api/fleets/add-ship",
-	"fleet_remove_ship":   "/api/fleets/remove-ship",
-	"workforce_assign":    "/api/workforce/assign",
-	"cancel_construction": "/api/construction/cancel",
+var commandEndpoints = map[game.CommandType]string{
+	game.CmdTrade:              "/api/market/trade",
+	game.CmdBuild:              "/api/build",
+	game.CmdBuildShip:          "/api/ships/build",
+	game.CmdMoveShip:           "/api/ships/move",
+	game.CmdUpgrade:            "/api/upgrade",
+	game.CmdRefuel:             "/api/ships/refuel",
+	game.CmdCargoLoad:          "/api/cargo/load",
+	game.CmdCargoUnload:        "/api/cargo/unload",
+	game.CmdColonize:           "/api/colonize",
+	game.CmdFleetMove:          "/api/fleets/move",
+	game.CmdFleetCreate:        "/api/fleets/create",
+	game.CmdFleetDisband:       "/api/fleets/disband",
+	game.CmdFleetAddShip:       "/api/fleets/add-ship",
+	game.CmdFleetRemoveShip:    "/api/fleets/remove-ship",
+	game.CmdWorkforceAssign:    "/api/workforce/assign",
+	game.CmdCancelConstruction: "/api/construction/cancel",
 }
 
 // convertCommandToAPI converts a game command's data to API-compatible JSON.
