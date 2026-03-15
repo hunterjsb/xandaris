@@ -1631,53 +1631,77 @@ load();setInterval(load,3000);draw();
 const dashboardHTML = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Xandaris II — Live Economy</title>
+<title>Xandaris II — Live Economy Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0c14;color:#c0c8d8;font-family:'Courier New',monospace;padding:20px}
 h1{color:#7fdbca;margin-bottom:4px}
 .sub{color:#556;margin-bottom:20px;font-size:14px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1000px}
-.panel{background:#12162a;border:1px solid #1e2844;border-radius:6px;padding:16px}
-.panel h2{color:#7fdbca;font-size:14px;margin-bottom:12px;border-bottom:1px solid #1e2844;padding-bottom:6px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;color:#889;padding:4px 8px}
-td{padding:4px 8px}
-.g{color:#6dcc6d}.r{color:#c55}.o{color:#cca444}.d{color:#556}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:1400px}
+.wide{grid-column:span 2}
+.panel{background:#12162a;border:1px solid #1e2844;border-radius:6px;padding:14px}
+.panel h2{color:#7fdbca;font-size:13px;margin-bottom:10px;border-bottom:1px solid #1e2844;padding-bottom:5px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:#667;padding:3px 6px;font-weight:normal}
+td{padding:3px 6px}
+.g{color:#6dcc6d}.r{color:#c55}.o{color:#cca444}.d{color:#556}.b{color:#6688cc}.p{color:#b88fdf}
+.bar-bg{background:#1a1e30;border-radius:3px;overflow:hidden;height:8px;margin:2px 0}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.5s}
+.spark{font-size:11px;letter-spacing:-1px}
+.event{font-size:11px;padding:2px 0;border-bottom:1px solid #111525}
+.rank{color:#7fdbca;font-weight:bold}
 .st{position:fixed;bottom:8px;right:12px;font-size:11px;color:#4a4}
-@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.stats-row{display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap}
+.stat{text-align:center}
+.stat .val{font-size:22px;color:#7fdbca;font-weight:bold}
+.stat .lbl{font-size:10px;color:#556}
+.row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #111525;font-size:12px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
 </style></head><body>
-<h1>Xandaris II — Live Economy</h1>
-<p class="sub">Real-time data from game server • Auto-refreshes every 3s</p>
+<h1>XANDARIS II</h1>
+<p class="sub">Live Economy Dashboard &bull; Auto-refreshes every 3s</p>
+<div class="stats-row" id="top"></div>
 <div class="grid">
-<div class="panel"><h2>Market Prices</h2>
-<table><thead><tr><th>Resource</th><th>Buy</th><th>Base</th><th>Ratio</th><th>Scarcity</th></tr></thead><tbody id="m"></tbody></table></div>
-<div class="panel"><h2>Players</h2>
-<table><thead><tr><th>Name</th><th>Credits</th><th>Pop</th><th>Mines</th><th>Stock</th></tr></thead><tbody id="p"></tbody></table></div>
+<div class="panel"><h2>Leaderboard</h2><div id="lb"></div></div>
+<div class="panel"><h2>Power Grid</h2><div id="pw"></div></div>
+<div class="panel"><h2>Events</h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
+<div class="panel wide"><h2>Market Prices + Trends</h2>
+<table><thead><tr><th>Resource</th><th>Buy</th><th>Sell</th><th>Base</th><th>Ratio</th><th>Supply</th><th>Scarcity</th><th>Trend</th></tr></thead><tbody id="m"></tbody></table></div>
 <div class="panel"><h2>Galaxy Flows</h2>
 <table><thead><tr><th>Resource</th><th>Prod</th><th>Cons</th><th>Net</th></tr></thead><tbody id="f"></tbody></table></div>
-<div class="panel"><h2>Game Info</h2><div id="g"></div></div>
 </div>
 <div id="s" class="st">Loading...</div>
 <script>
-const B=location.origin;
+const B=location.origin,blocks='\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588';
+function spark(h){if(!h||h.length<3)return'';const mn=Math.min(...h),mx=Math.max(...h),rng=mx-mn||1;return'<span class="spark">'+h.slice(-20).map(v=>blocks[Math.min(7,Math.max(0,Math.round((v-mn)/rng*7)))]).join('')+'</span>'}
 async function R(){try{
-const[e,p,f,g]=await Promise.all([B+'/api/economy',B+'/api/players',B+'/api/flows',B+'/api/game'].map(u=>fetch(u).then(r=>r.json())));
+const[e,p,f,g,lb,pw,ev]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=12'].map(u=>fetch(B+u).then(r=>r.json())));
+const d=g.data;
+document.getElementById('top').innerHTML=[
+['Tick',d.tick],['Time',d.game_time],['Speed',d.speed+(d.paused?' \u23F8':'')],
+['Population',e.data.total_population.toLocaleString()],['Credits',e.data.total_credits.toLocaleString()],
+['Trade Vol',e.data.trade_volume.toFixed(0)],['Players',d.players],['Systems',d.systems]
+].map(([l,v])=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>').join('');
 document.getElementById('m').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
 const c=r.price_ratio>1.5?'r':r.price_ratio>0.8?'':'g';
 const s=r.scarcity=='Scarce'||r.scarcity=='Critical'?'o':r.scarcity=='Depleted'?'r':'d';
-return'<tr><td>'+n+'</td><td class="'+c+'">'+r.buy_price.toFixed(0)+'</td><td class="d">'+r.base_price+'</td><td class="'+c+'">'+r.price_ratio.toFixed(1)+'x</td><td class="'+s+'">'+r.scarcity+'</td></tr>'}).join('');
-document.getElementById('p').innerHTML=p.data.sort((a,b)=>b.credits-a.credits).map(x=>{
-const c=x.credits<100?'r':x.credits<500?'o':'';
-return'<tr><td>'+x.name+'</td><td class="'+c+'">'+x.credits+'</td><td>'+x.population+'</td><td>'+x.mines+'</td><td>'+x.stock+'</td></tr>'}).join('');
+return'<tr><td>'+n+'</td><td class="'+c+'">'+r.buy_price.toFixed(0)+'</td><td class="'+c+'">'+r.sell_price.toFixed(0)+'</td><td class="d">'+r.base_price+'</td><td class="'+c+'">'+r.price_ratio.toFixed(2)+'x</td><td>'+r.total_supply+'</td><td class="'+s+'">'+r.scarcity+'</td><td>'+spark(r.price_history)+'</td></tr>'}).join('');
+document.getElementById('lb').innerHTML=(lb.data||[]).map(x=>{
+const c=x.type=='human'?'b':'';
+return'<div class="row"><span><span class="rank">#'+x.rank+'</span> <span class="'+c+'">'+x.name+'</span></span><span class="d">'+x.score.toLocaleString()+' pts</span></div>'}).join('');
+document.getElementById('pw').innerHTML=(pw.data||[]).map(x=>{
+const pct=x.consumed_mw>0?Math.min(1,x.generated_mw/x.consumed_mw):1;
+const c=pct<0.5?'#c55':pct<0.8?'#cca444':'#6dcc6d';
+return'<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:11px"><span>'+x.owner+'</span><span class="d">'+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+' MW</span></div><div class="bar-bg"><div class="bar-fill" style="width:'+(pct*100).toFixed(0)+'%;background:'+c+'"></div></div></div>'}).join('');
+document.getElementById('ev').innerHTML=(ev.data||[]).map(x=>{
+const c=x.type=='trade'?'g':x.type=='build'?'b':x.type=='alert'?'r':x.type=='event'?'o':x.type=='join'?'p':'d';
+return'<div class="event"><span class="d">['+x.time+']</span> <span class="'+c+'">'+x.message+'</span></div>'}).join('');
 const a=new Set([...Object.keys(f.data.production),...Object.keys(f.data.consumption)]);
 document.getElementById('f').innerHTML=[...a].sort().map(r=>{
 const pr=(f.data.production[r]||0).toFixed(1),co=(f.data.consumption[r]||0).toFixed(1),n=(f.data.net_flow[r]||0).toFixed(1);
 return'<tr><td>'+r+'</td><td class="g">+'+pr+'</td><td class="r">-'+co+'</td><td class="'+(n>0?'g':n<-1?'r':'')+'">'+((n>0?'+':'')+n)+'</td></tr>'}).join('');
-const d=g.data;
-document.getElementById('g').innerHTML='<p>Tick: '+d.tick+' • Time: '+d.game_time+' • Speed: '+d.speed+'</p><p>Systems: '+d.systems+' • Players: '+d.players+'</p><p>Population: '+e.data.total_population.toLocaleString()+'</p><p>Credits: '+e.data.total_credits.toLocaleString()+'</p><p>Trade Volume: '+e.data.trade_volume.toFixed(0)+'</p>';
-document.getElementById('s').textContent='Live • '+new Date().toLocaleTimeString();
-}catch(e){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
+document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
+}catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
 </script></body></html>`
 
