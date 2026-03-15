@@ -55,16 +55,12 @@ func (ees *EconomicEventSystem) OnTick(tick int64) {
 		return
 	}
 
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
+	players := ctx.GetPlayers()
+	if players == nil {
 		return
 	}
 
-	logger, _ := ctx.GetGame().(EventLogger)
+	game := ctx.GetGame()
 
 	// Pick a random player with at least one planet
 	var candidates []*entities.Player
@@ -91,8 +87,8 @@ func (ees *EconomicEventSystem) OnTick(tick int64) {
 	ees.lastEventTick = tick
 
 	fmt.Printf("[Event] %s\n", event.Message)
-	if logger != nil {
-		logger.LogEvent("event", player.Name, event.Message)
+	if game != nil {
+		game.LogEvent("event", player.Name, event.Message)
 	}
 }
 

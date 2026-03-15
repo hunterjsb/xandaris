@@ -93,6 +93,75 @@ func (gs *GameServer) SaveGame(playerName string) error {
 	return nil
 }
 
+// AutoSave saves to a fixed path, overwriting the previous autosave.
+func (gs *GameServer) AutoSave(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create save directory: %w", err)
+	}
+
+	// Write to temp file first, then rename (atomic)
+	tmpPath := path + ".tmp"
+	file, err := os.Create(tmpPath)
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	var constructionQueues map[string][]*tickable.ConstructionItem
+	if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
+		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+			constructionQueues = cs.GetAllQueues()
+		}
+	}
+
+	playerName := "Server"
+	if gs.State.HumanPlayer != nil {
+		playerName = gs.State.HumanPlayer.Name
+	}
+
+	saveData := struct {
+		Version            string
+		SavedAt            time.Time
+		PlayerName         string
+		GameTime           string
+		Tick               int64
+		Seed               int64
+		TickSpeed          systems.TickSpeed
+		Systems            []*entities.System
+		Hyperlanes         []entities.Hyperlane
+		Players            []*entities.Player
+		ConstructionQueues map[string][]*tickable.ConstructionItem
+		MarketSnapshot     *economy.MarketSnapshot
+	}{
+		Version:            "2.0.0-gob",
+		SavedAt:            time.Now(),
+		PlayerName:         playerName,
+		GameTime:           gs.TickManager.GetGameTimeFormatted(),
+		Tick:               gs.TickManager.GetCurrentTick(),
+		Seed:               gs.State.Seed,
+		TickSpeed:          gs.TickManager.GetSpeed().(systems.TickSpeed),
+		Systems:            gs.State.Systems,
+		Hyperlanes:         gs.State.Hyperlanes,
+		Players:            gs.State.Players,
+		ConstructionQueues: constructionQueues,
+		MarketSnapshot:     gs.getMarketSnapshot(),
+	}
+
+	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
+		file.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to encode: %w", err)
+	}
+	file.Close()
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("failed to rename: %w", err)
+	}
+
+	fmt.Printf("[Autosave] Saved tick %d to %s\n", gs.TickManager.GetCurrentTick(), path)
+	return nil
+}
+
 func (gs *GameServer) getMarketSnapshot() *economy.MarketSnapshot {
 	if gs.State.Market == nil {
 		return nil

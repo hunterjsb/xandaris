@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/core"
@@ -93,6 +94,8 @@ func runGUI(autoStart bool, playerName string, startView string) {
 	}
 }
 
+const autosavePath = "saves/autosave.xsave"
+
 // runHeadless starts a headless server with no GUI.
 // The game runs as a simulation with the REST API exposed on :8080.
 func runHeadless(playerName string, loadPath string) {
@@ -101,17 +104,41 @@ func runHeadless(playerName string, loadPath string) {
 
 	gs := server.New(screenWidth, screenHeight)
 
+	// Priority: explicit --load path > autosave > new game
+	loaded := false
 	if loadPath != "" {
 		fmt.Printf("Loading save: %s\n", loadPath)
 		if err := gs.LoadGame(loadPath); err != nil {
 			log.Fatalf("Failed to load game: %v", err)
 		}
-	} else {
+		loaded = true
+	} else if _, err := os.Stat(autosavePath); err == nil {
+		fmt.Printf("Loading autosave: %s\n", autosavePath)
+		if err := gs.LoadGame(autosavePath); err != nil {
+			fmt.Printf("Autosave corrupted, starting new game: %v\n", err)
+		} else {
+			loaded = true
+			fmt.Printf("[Server] Resumed from autosave (tick %d)\n", gs.TickManager.GetCurrentTick())
+		}
+	}
+
+	if !loaded {
 		fmt.Printf("Starting new game for: %s\n", playerName)
 		if err := gs.NewGame(playerName); err != nil {
 			log.Fatalf("Failed to start new game: %v", err)
 		}
 	}
+
+	// Periodic autosave every 2 minutes
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := gs.AutoSave(autosavePath); err != nil {
+				fmt.Printf("[Autosave] Error: %v\n", err)
+			}
+		}
+	}()
 
 	// Handle graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -120,10 +147,8 @@ func runHeadless(playerName string, loadPath string) {
 	go func() {
 		<-sigCh
 		fmt.Println("\nShutting down...")
-		// Auto-save on shutdown
-		human := gs.GetHumanPlayer()
-		if human != nil {
-			gs.SaveGame(human.Name)
+		if err := gs.AutoSave(autosavePath); err != nil {
+			fmt.Printf("[Autosave] Shutdown save failed: %v\n", err)
 		}
 		gs.Stop()
 	}()

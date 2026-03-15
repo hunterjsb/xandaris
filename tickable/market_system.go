@@ -2,7 +2,6 @@ package tickable
 
 import (
 	"github.com/hunterjsb/xandaris/economy"
-	"github.com/hunterjsb/xandaris/entities"
 )
 
 func init() {
@@ -27,23 +26,12 @@ func (ms *MarketSystem) OnTick(tick int64) {
 		return
 	}
 
-	mp, ok := game.(MarketProvider)
-	if !ok {
-		return
-	}
-	market := mp.GetMarketEngine()
+	market := game.GetMarketEngine()
 	if market == nil {
 		return
 	}
 
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
+	players := ctx.GetPlayers()
 
 	// Every 10 ticks: consumption + price update (with per-system supply tracking)
 	if tick%10 == 0 {
@@ -51,41 +39,17 @@ func (ms *MarketSystem) OnTick(tick int64) {
 		for resType, d := range result.Demand {
 			market.SetDemand(resType, d)
 		}
-		// Use system-aware price update if systems provider is available
-		if sp, ok := game.(SystemsProvider); ok {
-			systems := sp.GetSystems()
-			market.UpdatePricesWithSystems(players, systems)
-		} else {
-			market.UpdatePrices(players)
-		}
+		systems := game.GetSystems()
+		market.UpdatePricesWithSystems(players, systems)
 	}
 
 	// Every 30 ticks: AI trader (more frequent than before)
 	if tick%30 == 0 {
-		ep, ok := game.(ExecutorProvider)
-		if !ok {
-			return
-		}
-		executor := ep.GetTradeExecutor()
+		executor := game.GetTradeExecutor()
 		if executor == nil {
 			return
 		}
 		executor.SetTick(tick)
 		economy.RunAITrader(executor, players)
 	}
-}
-
-// MarketProvider is implemented by the App to give tickable access to the market.
-type MarketProvider interface {
-	GetMarketEngine() *economy.Market
-}
-
-// ExecutorProvider is implemented by the App to give tickable access to the trade executor.
-type ExecutorProvider interface {
-	GetTradeExecutor() *economy.TradeExecutor
-}
-
-// SystemsProvider is implemented by the App to give access to star systems.
-type SystemsProvider interface {
-	GetSystems() []*entities.System
 }

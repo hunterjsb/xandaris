@@ -3,7 +3,6 @@ package tickable
 import (
 	"fmt"
 
-	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -29,16 +28,8 @@ func (ds *DeliverySystem) OnTick(tick int64) {
 		return
 	}
 
-	type deliveryProvider interface {
-		GetDeliveryManager() *economy.DeliveryManager
-		GetPlayers() []*entities.Player
-		GetSystemsMap() map[int]*entities.System
-		StartShipJourney(ship *entities.Ship, targetSystemID int) bool
-	}
-
-	gameInterface := context.GetGame()
-	game, ok := gameInterface.(deliveryProvider)
-	if !ok {
+	game := context.GetGame()
+	if game == nil {
 		return
 	}
 
