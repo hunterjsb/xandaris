@@ -19,13 +19,17 @@ type TradeRecord struct {
 	Total     int
 }
 
+// TradeCallback is called after every successful trade (for event logging).
+type TradeCallback func(record TradeRecord)
+
 // TradeExecutor provides the single code path for all trades.
 // Both the UI and API call into this to execute trades.
 type TradeExecutor struct {
-	market  *Market
-	history []TradeRecord
-	mu      sync.Mutex
-	tick    int64
+	market   *Market
+	history  []TradeRecord
+	mu       sync.Mutex
+	tick     int64
+	OnTrade  TradeCallback // optional callback for event logging
 
 	// Systems reference for system-scoped trading.
 	// When set, human trades are scoped to the trading planet's system.
@@ -159,6 +163,9 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		Total:     total,
 	}
 	te.appendRecord(record)
+	if te.OnTrade != nil {
+		te.OnTrade(record)
+	}
 
 	fmt.Printf("[Trade] %s bought %d %s @ %.0f = %d credits\n",
 		player.Name, quantity, resource, price, total)
@@ -268,6 +275,9 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 		Total:     total,
 	}
 	te.appendRecord(record)
+	if te.OnTrade != nil {
+		te.OnTrade(record)
+	}
 
 	fmt.Printf("[Trade] %s sold %d %s @ %.0f = %d credits\n",
 		player.Name, quantity, resource, price, total)

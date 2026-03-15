@@ -93,6 +93,19 @@ func (gs *GameServer) NewGame(playerName string) error {
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
 func (gs *GameServer) initSimulation() {
 	gs.Events = game.NewEventLog(100)
+
+	// Wire trade event logging
+	if gs.State.TradeExec != nil {
+		gs.State.TradeExec.OnTrade = func(r economy.TradeRecord) {
+			action := "bought"
+			if r.Action == "sell" {
+				action = "sold"
+			}
+			gs.Events.Addf(r.Tick, gs.TickManager.GetGameTimeFormatted(), game.EventTrade, r.Player,
+				"%s %s %d %s @ %.0fcr", r.Player, action, r.Quantity, r.Resource, r.UnitPrice)
+		}
+	}
+
 	gs.FleetCmdExecutor = game.NewFleetCommandExecutor(gs.State.Systems, gs.State.Hyperlanes)
 	gs.FleetMgmtSystem = game.NewFleetManagementSystem(gs.State)
 	gs.CargoCommander = game.NewCargoCommandExecutor(gs.State.Systems)
