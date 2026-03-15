@@ -3,10 +3,13 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/game"
+	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -241,6 +244,19 @@ func (cb *CommandBar) executeCommand(input string) {
 		cb.showPrice(resource)
 	case strings.Contains(lower, "happiness") || strings.Contains(lower, "morale"):
 		cb.showHappiness()
+	case strings.Contains(lower, "building") || strings.Contains(lower, "construction") || strings.Contains(lower, "queue"):
+		cb.showConstruction()
+	case strings.Contains(lower, "planets") || strings.Contains(lower, "colonies"):
+		cb.showPlanets()
+	case strings.Contains(lower, "ships") || strings.Contains(lower, "fleet"):
+		cb.showShips()
+
+	// Game action commands
+	case strings.HasPrefix(lower, "build "):
+		cb.handleBuild(strings.TrimPrefix(lower, "build "))
+	case strings.HasPrefix(lower, "sell ") || strings.HasPrefix(lower, "buy "):
+		cb.handleTrade(lower)
+
 	case strings.Contains(lower, "help"):
 		cb.showHelp()
 
@@ -452,22 +468,220 @@ func (cb *CommandBar) showHappiness() {
 	}
 }
 
+func (cb *CommandBar) showConstruction() {
+	constructionSystem := tickable.GetSystemByName("Construction")
+	if constructionSystem == nil {
+		cb.addFeedMessage("No construction system", utils.SystemRed)
+		return
+	}
+	cs, ok := constructionSystem.(*tickable.ConstructionSystem)
+	if !ok {
+		cb.addFeedMessage("Construction system unavailable", utils.SystemRed)
+		return
+	}
+
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil {
+		return
+	}
+
+	allQueues := cs.GetAllQueues()
+	count := 0
+	for _, items := range allQueues {
+		for _, item := range items {
+			if item.Owner == player.Name {
+				progress := 0
+				if item.TotalTicks > 0 {
+					progress = 100 - (item.RemainingTicks*100)/item.TotalTicks
+				}
+				cb.addFeedMessage(fmt.Sprintf("%s %s — %d%% complete (%d ticks left)",
+					item.Type, item.Name, progress, item.RemainingTicks), utils.SystemBlue)
+				count++
+			}
+		}
+	}
+	if count == 0 {
+		cb.addFeedMessage("No active construction", utils.TextSecondary)
+	}
+}
+
+func (cb *CommandBar) showPlanets() {
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil {
+		return
+	}
+	for _, planet := range player.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		totalRes := 0
+		for _, s := range planet.StoredResources {
+			if s != nil {
+				totalRes += s.Amount
+			}
+		}
+		buildings := len(planet.Buildings)
+		cb.addFeedMessage(fmt.Sprintf("%s: pop %d | %d buildings | %d resources | %.0f%% happy",
+			planet.Name, planet.Population, buildings, totalRes, planet.Happiness*100), utils.TextPrimary)
+	}
+	if len(player.OwnedPlanets) == 0 {
+		cb.addFeedMessage("No planets owned", utils.TextSecondary)
+	}
+}
+
+func (cb *CommandBar) showShips() {
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil {
+		return
+	}
+	for _, ship := range player.OwnedShips {
+		if ship == nil {
+			continue
+		}
+		status := string(ship.Status)
+		extra := ""
+		if ship.Status == entities.ShipStatusMoving {
+			extra = fmt.Sprintf(" → sys %d (%.0f%%)", ship.TargetSystem, ship.TravelProgress*100)
+		}
+		cb.addFeedMessage(fmt.Sprintf("%s (%s): %s%s | Fuel %d/%d | Cargo %d/%d",
+			ship.Name, ship.ShipType, status, extra,
+			ship.CurrentFuel, ship.MaxFuel,
+			ship.GetTotalCargo(), ship.MaxCargo), utils.TextPrimary)
+	}
+	if len(player.OwnedShips) == 0 {
+		cb.addFeedMessage("No ships", utils.TextSecondary)
+	}
+}
+
+func (cb *CommandBar) handleBuild(what string) {
+	what = strings.TrimSpace(what)
+
+	// Normalize building type
+	buildingType := ""
+	switch {
+	case strings.Contains(what, "mine"):
+		buildingType = "Mine"
+	case strings.Contains(what, "trading") || strings.Contains(what, "trade post"):
+		buildingType = "Trading Post"
+	case strings.Contains(what, "refinery"):
+		buildingType = "Refinery"
+	case strings.Contains(what, "factory"):
+		buildingType = "Factory"
+	case strings.Contains(what, "habitat"):
+		buildingType = "Habitat"
+	case strings.Contains(what, "shipyard"):
+		buildingType = "Shipyard"
+	default:
+		cb.addFeedMessage(fmt.Sprintf("Unknown building: %s", what), utils.SystemRed)
+		cb.addFeedMessage("Types: mine, trading post, refinery, factory, habitat, shipyard", utils.TextSecondary)
+		return
+	}
+
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil || len(player.OwnedPlanets) == 0 {
+		cb.addFeedMessage("No planets to build on", utils.SystemRed)
+		return
+	}
+
+	planet := player.OwnedPlanets[0] // Build on first planet
+	cmdCh := cb.ctx.GetCommandChannel()
+	if cmdCh == nil {
+		cb.addFeedMessage("Command channel unavailable", utils.SystemRed)
+		return
+	}
+
+	cmdCh <- game.GameCommand{
+		Type: "build",
+		Data: game.BuildCommandData{
+			PlanetID:     planet.GetID(),
+			BuildingType: buildingType,
+		},
+	}
+	cb.addFeedMessage(fmt.Sprintf("Queued %s on %s", buildingType, planet.Name), utils.SystemGreen)
+}
+
+func (cb *CommandBar) handleTrade(input string) {
+	// Parse: "buy 10 iron" or "sell 50 fuel"
+	parts := strings.Fields(input)
+	if len(parts) < 3 {
+		cb.addFeedMessage("Usage: buy/sell <qty> <resource>", utils.SystemRed)
+		return
+	}
+
+	action := parts[0]
+	qty, err := strconv.Atoi(parts[1])
+	if err != nil {
+		cb.addFeedMessage("Invalid quantity", utils.SystemRed)
+		return
+	}
+
+	resource := strings.Join(parts[2:], " ")
+	// Normalize resource name
+	words := strings.Fields(resource)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		}
+	}
+	resource = strings.Join(words, " ")
+	switch strings.ToLower(resource) {
+	case "rm", "rare metals", "rare metal":
+		resource = "Rare Metals"
+	case "he3", "helium", "helium-3":
+		resource = "Helium-3"
+	case "elec", "electronics":
+		resource = "Electronics"
+	}
+
+	isBuy := action == "buy"
+
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil || len(player.OwnedPlanets) == 0 {
+		cb.addFeedMessage("No planet to trade from", utils.SystemRed)
+		return
+	}
+
+	cmdCh := cb.ctx.GetCommandChannel()
+	if cmdCh == nil {
+		cb.addFeedMessage("Command channel unavailable", utils.SystemRed)
+		return
+	}
+
+	cmdCh <- game.GameCommand{
+		Type: "trade",
+		Data: game.TradeCommandData{
+			Resource: resource,
+			Quantity: qty,
+			Buy:      isBuy,
+			PlanetID: player.OwnedPlanets[0].GetID(),
+		},
+	}
+
+	verb := "Selling"
+	if isBuy {
+		verb = "Buying"
+	}
+	cb.addFeedMessage(fmt.Sprintf("%s %d %s...", verb, qty, resource), utils.SystemGreen)
+}
+
 func (cb *CommandBar) showHelp() {
 	commands := []struct {
 		cmd  string
 		desc string
 	}{
 		{"home", "Navigate to home planet"},
-		{"galaxy", "Switch to galaxy view"},
-		{"market", "Open market view"},
-		{"players", "Open player directory"},
+		{"galaxy/market/players", "Switch views"},
 		{"credits", "Show your balance"},
+		{"planets", "Show all your planets"},
+		{"ships", "Show your ships"},
 		{"trades", "Show recent trades"},
-		{"price <res>", "Show price + sparkline trend"},
-		{"happiness", "Show planet happiness & productivity"},
-		{"status", "Show game status"},
-		{"pause", "Toggle pause"},
-		{"1x/2x/4x/8x", "Set game speed"},
+		{"price <res>", "Price + sparkline trend"},
+		{"happiness", "Planet happiness summary"},
+		{"building", "Construction queue"},
+		{"build <type>", "Build (mine/factory/etc)"},
+		{"buy/sell <n> <res>", "Trade resources"},
+		{"status", "Game status"},
+		{"pause / 1x-8x", "Speed control"},
 	}
 	for i := len(commands) - 1; i >= 0; i-- {
 		c := commands[i]
