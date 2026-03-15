@@ -34,10 +34,17 @@ func main() {
 	startView := flag.String("view", "", "Start in specific view: market, players, galaxy (requires --auto)")
 	playerName := flag.String("player", "Player", "Player name")
 	loadPath := flag.String("load", "", "Path to save file to load")
+	connectURL := flag.String("connect", "", "Connect to remote server (e.g. https://api.xandaris.space)")
+	password := flag.String("password", "", "Password for remote server registration/login")
 	flag.Parse()
 
 	if *headless {
 		runHeadless(*playerName, *loadPath)
+		return
+	}
+
+	if *connectURL != "" {
+		runRemote(*connectURL, *playerName, *password)
 		return
 	}
 
@@ -71,6 +78,62 @@ func runGUI(autoStart bool, playerName string, startView string) {
 			app.GetViewManager().SwitchTo(views.ViewTypePlayers)
 		}
 	}
+
+	if err := ebiten.RunGame(app); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// runRemote connects to a remote server and runs the GUI client.
+func runRemote(serverURL, playerName, password string) {
+	if password == "" {
+		password = "default123" // simple default for testing
+	}
+
+	fmt.Printf("Connecting to %s as %s...\n", serverURL, playerName)
+
+	// Create a local server for the UI to read from
+	gs := server.New(screenWidth, screenHeight)
+	remote := server.NewRemoteSync(gs, serverURL, "")
+
+	// Try login first, then register if not found
+	apiKey, err := remote.Login(playerName, password)
+	if err != nil {
+		fmt.Printf("Login failed (%v), registering new account...\n", err)
+		apiKey, err = remote.Register(playerName, password)
+		if err != nil {
+			log.Fatalf("Failed to register: %v", err)
+		}
+		fmt.Printf("Registered! API key: %s\n", apiKey[:20]+"...")
+	} else {
+		fmt.Printf("Logged in! API key: %s\n", apiKey[:20]+"...")
+	}
+
+	// Initialize a local game for the UI
+	if err := gs.NewGame(playerName); err != nil {
+		log.Fatalf("Failed to initialize local game: %v", err)
+	}
+
+	// Start syncing from remote
+	remote.Start()
+	defer remote.Stop()
+
+	// Run Ebiten GUI
+	ebiten.SetWindowSize(screenWidth, screenHeight)
+	ebiten.SetWindowTitle(fmt.Sprintf("Xandaris II - %s @ %s", playerName, serverURL))
+	if runtime.GOARCH != "wasm" {
+		ebiten.SetFullscreen(true)
+	}
+
+	app := core.New(screenWidth, screenHeight)
+	if err := app.InitializeForMenu(); err != nil {
+		log.Fatalf("Failed to initialize: %v", err)
+	}
+	if err := app.InitializeNewGame(playerName); err != nil {
+		log.Fatalf("Failed to start game: %v", err)
+	}
+
+	fmt.Printf("Connected to %s! Playing as %s\n", serverURL, playerName)
 
 	if err := ebiten.RunGame(app); err != nil {
 		log.Fatal(err)
