@@ -325,6 +325,65 @@ func (cb *CommandBar) executeSlashCommand(input string) {
 	}
 }
 
+// handleNavigateAction processes a navigate:target:id action from the agent.
+func (cb *CommandBar) handleNavigateAction(action string) {
+	parts := strings.SplitN(action, ":", 3)
+	if len(parts) < 2 {
+		return
+	}
+	target := parts[1]
+	id := 0
+	if len(parts) >= 3 {
+		id, _ = strconv.Atoi(parts[2])
+	}
+
+	vm := cb.ctx.GetViewManager()
+
+	switch target {
+	case "galaxy":
+		vm.SwitchTo(views.ViewTypeGalaxy)
+		cb.addFeedMessage("  -> Navigated to galaxy map", utils.SystemGreen)
+	case "system":
+		// Switch to system view for the given system ID
+		if systemView, ok := vm.GetView(views.ViewTypeSystem).(interface {
+			SetSystem(*entities.System)
+		}); ok {
+			for _, sys := range cb.ctx.GetSystems() {
+				if sys.ID == id {
+					systemView.SetSystem(sys)
+					vm.SwitchTo(views.ViewTypeSystem)
+					cb.addFeedMessage(fmt.Sprintf("  -> Navigated to %s", sys.Name), utils.SystemGreen)
+					return
+				}
+			}
+		}
+		cb.addFeedMessage(fmt.Sprintf("  -> System %d not found", id), utils.SystemRed)
+	case "planet":
+		// Switch to planet view for the given planet ID
+		if planetView, ok := vm.GetView(views.ViewTypePlanet).(interface {
+			SetPlanet(*entities.Planet)
+		}); ok {
+			for _, sys := range cb.ctx.GetSystems() {
+				for _, e := range sys.Entities {
+					if p, ok := e.(*entities.Planet); ok && p.GetID() == id {
+						planetView.SetPlanet(p)
+						vm.SwitchTo(views.ViewTypePlanet)
+						cb.addFeedMessage(fmt.Sprintf("  -> Navigated to %s", p.Name), utils.SystemGreen)
+						return
+					}
+				}
+			}
+		}
+		cb.addFeedMessage(fmt.Sprintf("  -> Planet %d not found", id), utils.SystemRed)
+	case "market":
+		vm.SwitchTo(views.ViewTypeMarket)
+		cb.addFeedMessage("  -> Opened market", utils.SystemGreen)
+	case "players":
+		vm.SwitchTo(views.ViewTypePlayers)
+		cb.addFeedMessage("  -> Opened player directory", utils.SystemGreen)
+	}
+}
+
 // sendToChat sends a natural language message to the server's LLM chat endpoint.
 func (cb *CommandBar) sendToChat(message string) {
 	cb.addFeedMessage("Thinking...", utils.TextSecondary)
@@ -377,9 +436,13 @@ func (cb *CommandBar) callChatAPI(message string) (string, error) {
 		return "", fmt.Errorf("%s", result.Error)
 	}
 
-	// Show any actions taken
+	// Process actions — some are UI navigation commands
 	for _, action := range result.Data.Actions {
-		cb.addFeedMessage(fmt.Sprintf("  -> %s", action), utils.SystemBlue)
+		if strings.HasPrefix(action, "navigate:") {
+			cb.handleNavigateAction(action)
+		} else {
+			cb.addFeedMessage(fmt.Sprintf("  -> %s", action), utils.SystemBlue)
+		}
 	}
 
 	return result.Data.Response, nil

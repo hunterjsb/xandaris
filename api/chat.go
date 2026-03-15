@@ -22,7 +22,9 @@ RULES:
 - ALWAYS call get_status first to understand the player's current state
 - Execute the player's request using the available tools
 - If you can't do something, explain briefly why
-- Report what you did in plain language`
+- Report what you did in plain language
+- Use the navigate tool to show the player relevant locations (e.g. navigate to their planet, a system, the market, etc.)
+- When the player asks to "show me" or "go to" something, use navigate`
 
 var chatTools = []map[string]interface{}{
 	{"type": "function", "function": map[string]interface{}{
@@ -61,6 +63,13 @@ var chatTools = []map[string]interface{}{
 	{"type": "function", "function": map[string]interface{}{
 		"name": "get_economy", "description": "Get market prices and supply/demand",
 		"parameters": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
+	}},
+	{"type": "function", "function": map[string]interface{}{
+		"name": "navigate", "description": "Navigate the player's UI to a location: galaxy map, a system, a planet, the market, or player directory",
+		"parameters": map[string]interface{}{"type": "object", "properties": map[string]interface{}{
+			"target": map[string]interface{}{"type": "string", "enum": []string{"galaxy", "system", "planet", "market", "players"}},
+			"id":     map[string]interface{}{"type": "integer", "description": "System or planet ID (required for system/planet targets)"},
+		}, "required": []string{"target"}},
 	}},
 }
 
@@ -109,7 +118,18 @@ func handleChat(p GameStateProvider, playerName string, message string) (string,
 			tcID, _ := tcMap["id"].(string)
 
 			result := executeToolCall(p, playerName, fnName, fnArgs)
-			actions = append(actions, fmt.Sprintf("%s(%s)", fnName, truncate(fnArgs, 50)))
+
+			// Navigate actions get a special prefix for client-side handling
+			if fnName == "navigate" {
+				var navResult struct {
+					Navigate string `json:"navigate"`
+					ID       int    `json:"id"`
+				}
+				json.Unmarshal([]byte(result), &navResult)
+				actions = append(actions, fmt.Sprintf("navigate:%s:%d", navResult.Navigate, navResult.ID))
+			} else {
+				actions = append(actions, fmt.Sprintf("%s(%s)", fnName, truncate(fnArgs, 50)))
+			}
 
 			messages = append(messages, map[string]interface{}{
 				"role":         "tool",
@@ -228,6 +248,11 @@ func executeToolCall(p GameStateProvider, playerName, fnName, fnArgs string) str
 			Result: resultCh,
 		}
 		return waitForResult(resultCh)
+
+	case "navigate":
+		target, _ := args["target"].(string)
+		id := int(getFloat(args, "id"))
+		return fmt.Sprintf(`{"ok":true,"navigate":"%s","id":%d}`, target, id)
 
 	default:
 		return fmt.Sprintf(`{"error":"unknown tool: %s"}`, fnName)
