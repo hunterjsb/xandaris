@@ -74,7 +74,13 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 }
 
 // drawEmpirePanel renders a persistent top-right panel with empire vitals.
+// Hidden on planet view to avoid overlap with planet-specific UI.
 func (a *App) drawEmpirePanel(screen *ebiten.Image) {
+	// Don't show on planet view — the planet info panel has all the details
+	if a.viewManager.GetCurrentView().GetType() == views.ViewTypePlanet {
+		return
+	}
+
 	human := a.Server.State.HumanPlayer
 	if human == nil || len(human.OwnedPlanets) == 0 {
 		return

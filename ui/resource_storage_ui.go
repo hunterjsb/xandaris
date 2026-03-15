@@ -26,7 +26,7 @@ func NewResourceStorageUI(ctx UIContext) *ResourceStorageUI {
 	return &ResourceStorageUI{
 		ctx:   ctx,
 		x:      220,
-		y:      720 - 190,
+		y:      720 - 250,
 		width:  320,
 		height: 180,
 	}
