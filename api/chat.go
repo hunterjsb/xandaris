@@ -74,17 +74,24 @@ var chatTools = []map[string]interface{}{
 }
 
 // handleChat processes a natural language message from the player via LLM.
-func handleChat(p GameStateProvider, playerName string, message string) (string, []string, error) {
+// If conversationHistory is provided, it includes prior turns for context.
+func handleChat(p GameStateProvider, playerName string, message string, conversationHistory []map[string]interface{}) (string, []string, error) {
 	openrouterKey := os.Getenv("OPENROUTER_API_KEY")
 	if openrouterKey == "" {
 		return "", nil, fmt.Errorf("AI agent not configured on this server")
 	}
 
-	// Build conversation with system prompt + user message
+	// Build conversation with system prompt + history + new message
 	messages := []map[string]interface{}{
 		{"role": "system", "content": chatSystemPrompt},
-		{"role": "user", "content": message},
 	}
+	// Add conversation history (prior user/assistant turns)
+	for _, msg := range conversationHistory {
+		messages = append(messages, msg)
+	}
+	messages = append(messages, map[string]interface{}{
+		"role": "user", "content": message,
+	})
 
 	var actions []string
 
@@ -301,7 +308,8 @@ func registerChatEndpoint(mux *http.ServeMux, getProvider func() GameStateProvid
 		}
 
 		var req struct {
-			Message string `json:"message"`
+			Message string                   `json:"message"`
+			History []map[string]interface{} `json:"history"` // prior conversation turns
 		}
 		body, _ := io.ReadAll(r.Body)
 		if err := json.Unmarshal(body, &req); err != nil || strings.TrimSpace(req.Message) == "" {
@@ -314,7 +322,7 @@ func registerChatEndpoint(mux *http.ServeMux, getProvider func() GameStateProvid
 			player = "Player" // fallback for unauthenticated
 		}
 
-		response, actions, err := handleChat(getProvider(), player, req.Message)
+		response, actions, err := handleChat(getProvider(), player, req.Message, req.History)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return

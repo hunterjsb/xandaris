@@ -32,10 +32,12 @@ type CommandBar struct {
 	screenHeight     int
 	serverURL        string // base URL for API calls (e.g. "https://api.xandaris.space")
 	apiKey           string // player's API key for authenticated requests
-	showGlobalEvents bool // whether to show global events or just chat/own actions
-	copyFlashTimer   int  // frames remaining for "Copied!" flash
-	tabHeld          bool // debounce for tab key
-	copyHeld         bool // debounce for ctrl+c
+	chatHistory      []map[string]interface{} // conversation context for LLM
+	scrollOffset     int                      // scroll position in feed
+	showGlobalEvents bool                     // whether to show global events or just chat/own actions
+	copyFlashTimer   int                      // frames remaining for "Copied!" flash
+	tabHeld          bool                     // debounce for tab key
+	copyHeld         bool                     // debounce for ctrl+c
 }
 
 type feedMessage struct {
@@ -71,7 +73,7 @@ func (cb *CommandBar) Toggle() {
 	cb.isOpen = !cb.isOpen
 	if cb.isOpen {
 		cb.input = ""
-		cb.userMessages = nil // Clear old command output
+		cb.scrollOffset = 0
 		cb.refreshFeed()
 	}
 }
@@ -141,6 +143,22 @@ func (cb *CommandBar) Update() {
 		cb.copyFlashTimer--
 	}
 
+	// Scroll with mouse wheel
+	_, wheelY := ebiten.Wheel()
+	if wheelY != 0 {
+		cb.scrollOffset -= int(wheelY * 2)
+		if cb.scrollOffset < 0 {
+			cb.scrollOffset = 0
+		}
+		maxScroll := len(cb.feedMessages) - cb.maxFeed
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if cb.scrollOffset > maxScroll {
+			cb.scrollOffset = maxScroll
+		}
+	}
+
 	// Refresh feed periodically (every 60 frames = ~1 second)
 	tick := cb.ctx.GetTickManager().GetCurrentTick()
 	if tick%10 == 0 {
@@ -154,40 +172,19 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	barHeight := 220
+	barHeight := 180
 	barY := cb.screenHeight - barHeight
 	barX := 0
 	barWidth := cb.screenWidth
+	lineHeight := 13
 
 	// Semi-transparent background
 	bgPanel := &views.UIPanel{
 		X: barX, Y: barY, Width: barWidth, Height: barHeight,
-		BgColor:     color.RGBA{10, 10, 25, 220},
-		BorderColor: color.RGBA{80, 80, 140, 255},
+		BgColor:     color.RGBA{10, 12, 22, 230},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 	bgPanel.Draw(screen)
-
-	// Title with toggle state
-	eventsLabel := "All Events"
-	if !cb.showGlobalEvents {
-		eventsLabel = "Chat Only"
-	}
-	titleText := fmt.Sprintf("Chat  [` close | Tab: %s | Ctrl+C copy | /help]", eventsLabel)
-	views.DrawText(screen, titleText, barX+10, barY+12, utils.TextSecondary)
-
-	if cb.copyFlashTimer > 0 {
-		views.DrawText(screen, "Copied!", barX+barWidth-60, barY+12, utils.SystemGreen)
-	}
-
-	// Event feed (above the input)
-	feedY := barY + 28
-	for i, msg := range cb.feedMessages {
-		if i >= cb.maxFeed {
-			break
-		}
-		views.DrawText(screen, msg.Text, barX+10, feedY, msg.Color)
-		feedY += 13
-	}
 
 	// Input line at the bottom
 	inputY := barY + barHeight - 22
@@ -196,7 +193,7 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	inputBg := &views.UIPanel{
 		X: barX + 5, Y: inputY - 4, Width: barWidth - 10, Height: 20,
 		BgColor:     color.RGBA{20, 20, 40, 255},
-		BorderColor: color.RGBA{100, 100, 180, 255},
+		BorderColor: color.RGBA{40, 50, 80, 255},
 	}
 	inputBg.Draw(screen)
 
@@ -208,75 +205,103 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	}
 	inputText := fmt.Sprintf("> %s%s", cb.input, cursor)
 	views.DrawText(screen, inputText, barX+12, inputY, utils.Highlight)
+
+	// Title bar (top of panel)
+	eventsLabel := "All"
+	if !cb.showGlobalEvents {
+		eventsLabel = "Chat"
+	}
+	dimColor := color.RGBA{60, 70, 90, 255}
+	titleText := fmt.Sprintf("[`] close  [Tab] %s  [Ctrl+C] copy  [/help]", eventsLabel)
+	views.DrawText(screen, titleText, barX+10, barY+8, dimColor)
+
+	if cb.copyFlashTimer > 0 {
+		views.DrawText(screen, "Copied!", barX+barWidth-60, barY+8, utils.SystemGreen)
+	}
+
+	// Feed area: messages rendered bottom-up (newest at bottom, just above input)
+	feedBottom := inputY - 8
+	feedTop := barY + 22
+	maxVisible := (feedBottom - feedTop) / lineHeight
+
+	// Determine which messages to show (with scroll)
+	totalMsgs := len(cb.feedMessages)
+	endIdx := totalMsgs - cb.scrollOffset
+	if endIdx < 0 {
+		endIdx = 0
+	}
+	startIdx := endIdx - maxVisible
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
+	// Draw from bottom up
+	y := feedBottom
+	for i := endIdx - 1; i >= startIdx; i-- {
+		if y < feedTop {
+			break
+		}
+		views.DrawText(screen, cb.feedMessages[i].Text, barX+10, y, cb.feedMessages[i].Color)
+		y -= lineHeight
+	}
+
+	// Scroll indicator
+	if cb.scrollOffset > 0 {
+		views.DrawText(screen, fmt.Sprintf("^ %d more ^", cb.scrollOffset), barX+barWidth/2-30, feedTop, dimColor)
+	}
 }
 
 // refreshFeed rebuilds the display by merging user messages (top) with recent events.
 func (cb *CommandBar) refreshFeed() {
-	// Start with user messages (command output)
-	cb.feedMessages = make([]feedMessage, 0, cb.maxFeed)
-	for _, msg := range cb.userMessages {
-		if len(cb.feedMessages) >= cb.maxFeed {
-			break
+	// Build feed: events at top, then user messages at bottom
+	cb.feedMessages = make([]feedMessage, 0, 50)
+
+	// Add event log entries first (if enabled)
+	if cb.showGlobalEvents {
+		el := cb.ctx.GetEventLog()
+		if el != nil {
+			humanName := ""
+			if human := cb.ctx.GetHumanPlayer(); human != nil {
+				humanName = human.Name
+			}
+
+			events := el.Recent(20)
+			for _, ev := range events {
+				// In "chat only" mode, skip events not involving the player
+				if !cb.showGlobalEvents && humanName != "" && ev.Player != humanName {
+					continue
+				}
+
+				c := utils.TextSecondary
+				switch game.EventType(ev.Type) {
+				case game.EventTrade:
+					c = utils.SystemGreen
+				case game.EventBuild:
+					c = utils.SystemBlue
+				case game.EventColonize:
+					c = utils.SystemPurple
+				}
+				if string(ev.Type) == "event" {
+					c = utils.SystemOrange
+				}
+				if ev.Type == game.EventAlert {
+					c = utils.SystemRed
+				}
+				if ev.Type == game.EventJoin {
+					c = utils.SystemPurple
+				}
+
+				text := fmt.Sprintf("[%s] %s", ev.Time, ev.Message)
+				if len(text) > 100 {
+					text = text[:97] + "..."
+				}
+				cb.feedMessages = append(cb.feedMessages, feedMessage{Text: text, Color: c})
+			}
 		}
-		cb.feedMessages = append(cb.feedMessages, msg)
 	}
 
-	// Fill remaining space with event log entries (if enabled)
-	if !cb.showGlobalEvents {
-		return
-	}
-
-	el := cb.ctx.GetEventLog()
-	if el == nil {
-		return
-	}
-	remaining := cb.maxFeed - len(cb.feedMessages)
-	if remaining <= 0 {
-		return
-	}
-
-	// Get human player name for filtering
-	humanName := ""
-	if human := cb.ctx.GetHumanPlayer(); human != nil {
-		humanName = human.Name
-	}
-
-	events := el.Recent(remaining * 2) // fetch extra to account for filtering
-	for _, ev := range events {
-		if len(cb.feedMessages) >= cb.maxFeed {
-			break
-		}
-
-		// In "chat only" mode, skip events not involving the player
-		if !cb.showGlobalEvents && humanName != "" && ev.Player != humanName {
-			continue
-		}
-
-		c := utils.TextSecondary
-		switch game.EventType(ev.Type) {
-		case game.EventTrade:
-			c = utils.SystemGreen
-		case game.EventBuild:
-			c = utils.SystemBlue
-		case game.EventColonize:
-			c = utils.SystemPurple
-		}
-		if string(ev.Type) == "event" {
-			c = utils.SystemOrange
-		}
-		if ev.Type == game.EventAlert {
-			c = utils.SystemRed
-		}
-		if ev.Type == game.EventJoin {
-			c = utils.SystemPurple
-		}
-
-		text := fmt.Sprintf("[%s] %s", ev.Time, ev.Message)
-		if len(text) > 100 {
-			text = text[:97] + "..."
-		}
-		cb.feedMessages = append(cb.feedMessages, feedMessage{Text: text, Color: c})
-	}
+	// Append user messages (chat, command output) — these appear at the bottom
+	cb.feedMessages = append(cb.feedMessages, cb.userMessages...)
 }
 
 // executeCommand parses and executes a user command.
@@ -466,13 +491,27 @@ func (cb *CommandBar) sendToChat(message string) {
 			return
 		}
 		cb.addFeedMessage(resp, utils.SystemGreen)
+
+		// Maintain conversation context (keep last 10 turns)
+		cb.chatHistory = append(cb.chatHistory,
+			map[string]interface{}{"role": "user", "content": message},
+			map[string]interface{}{"role": "assistant", "content": resp},
+		)
+		if len(cb.chatHistory) > 20 { // 10 turns = 20 messages
+			cb.chatHistory = cb.chatHistory[len(cb.chatHistory)-20:]
+		}
 	}()
 }
 
 // callChatAPI sends a message to POST /api/chat and returns the response.
 func (cb *CommandBar) callChatAPI(message string) (string, error) {
-	// Build the request body
-	body := fmt.Sprintf(`{"message":%q}`, message)
+	// Build the request body with conversation history
+	reqBody := map[string]interface{}{
+		"message": message,
+		"history": cb.chatHistory,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+	body := string(bodyBytes)
 
 	req, err := http.NewRequest("POST", cb.serverURL+"/api/chat", strings.NewReader(body))
 	if err != nil {
@@ -519,11 +558,11 @@ func (cb *CommandBar) callChatAPI(message string) (string, error) {
 }
 
 func (cb *CommandBar) addFeedMessage(text string, c color.RGBA) {
-	cb.userMessages = append([]feedMessage{{Text: text, Color: c}}, cb.userMessages...)
-	if len(cb.userMessages) > cb.maxFeed {
-		cb.userMessages = cb.userMessages[:cb.maxFeed]
+	cb.userMessages = append(cb.userMessages, feedMessage{Text: text, Color: c})
+	if len(cb.userMessages) > 50 { // keep more history for scroll
+		cb.userMessages = cb.userMessages[len(cb.userMessages)-50:]
 	}
-	// Immediately rebuild display
+	cb.scrollOffset = 0 // snap to bottom on new message
 	cb.refreshFeed()
 }
 
