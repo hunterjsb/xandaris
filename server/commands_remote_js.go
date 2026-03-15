@@ -9,5 +9,9 @@ import (
 )
 
 func (gs *GameServer) forwardTradeToRemote(cmd game.GameCommand) {
-	sendResult(cmd, fmt.Errorf("remote trading not available in browser"))
+	sendResult(cmd, fmt.Errorf("remote not available in browser"))
+}
+
+func (gs *GameServer) forwardCommandToRemote(cmd game.GameCommand) {
+	sendResult(cmd, fmt.Errorf("remote not available in browser"))
 }

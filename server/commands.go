@@ -13,6 +13,20 @@ import (
 
 // executeCommand processes a single game command.
 func (gs *GameServer) executeCommand(cmd game.GameCommand) {
+	// In remote mode, forward gameplay commands to the remote server
+	if gs.remoteSync != nil {
+		switch cmd.Type {
+		case "trade", "build", "build_ship", "move_ship", "upgrade",
+			"refuel", "cargo_load", "cargo_unload", "colonize",
+			"fleet_move", "fleet_create", "fleet_disband",
+			"fleet_add_ship", "fleet_remove_ship",
+			"workforce_assign", "cancel_construction":
+			gs.forwardCommandToRemote(cmd)
+			return
+		}
+		// Local-only commands (save, speed, pause) fall through
+	}
+
 	switch cmd.Type {
 	case "save":
 		if playerName, ok := cmd.Data.(string); ok {
@@ -79,13 +93,7 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 	}
 }
 
-func (gs *GameServer) handleTradeCommand(cmd game.GameCommand) {
-	// Forward to remote server if connected
-	if gs.remoteSync != nil {
-		gs.forwardTradeToRemote(cmd)
-		return
-	}
-	td, ok := cmd.Data.(game.TradeCommandData)
+func (gs *GameServer) handleTradeCommand(cmd game.GameCommand) {	td, ok := cmd.Data.(game.TradeCommandData)
 	if !ok {
 		sendResult(cmd, fmt.Errorf("invalid trade data"))
 		return
