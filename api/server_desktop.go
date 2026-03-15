@@ -436,6 +436,14 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/expansion", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: handleGetExpansionTargets(getProvider(), getAuthPlayer(r))})
+	})
+
 	mux.HandleFunc("/api/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
@@ -1491,6 +1499,12 @@ a{color:#446}
 <div class="section">Economy</div>
 <div id="info"></div>
 <hr>
+<div class="section">Power Grid</div>
+<div id="power" style="font-size:10px"></div>
+<hr>
+<div class="section">Construction</div>
+<div id="construction" style="font-size:10px;max-height:80px;overflow-y:auto;color:#889"></div>
+<hr>
 <div class="section">Events</div>
 <div id="events" style="font-size:10px;max-height:120px;overflow-y:auto;color:#889"></div>
 <hr>
@@ -1504,8 +1518,8 @@ a{color:#446}
 <div id="status">Connecting...</div>
 <script>
 const B=location.origin,C=document.getElementById('c'),X=C.getContext('2d');
-let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null,selected=null,detail=null,tracked=null,hoverShip=null,t=0;
-const COLORS={Human:'#4caf50','Orion Exchange':'#ff9800','Lyra Cartel':'#e84040','Helios Commodities':'#8bc34a','Ceres Brokers':'#ffca28','Nova Frontier Co.':'#ab47bc',Server:'#4caf50'};
+let W,H,systems=[],ships=[],players=[],economy={},flows={},power=[],deliveries=[],construction=[],mx=0,my=0,hover=null,selected=null,detail=null,tracked=null,hoverShip=null,t=0;
+const COLORS={Human:'#4caf50',Server:'#4caf50','Llama Logistics':'#ff9800','DeepSeek Ventures':'#e84040','Gemini Exchange':'#8bc34a','Grok Industries':'#ffca28','Opus Cartel':'#ab47bc'};
 // Background stars
 let stars=[];
 function initStars(){stars=[];for(let i=0;i<200;i++)stars.push({x:Math.random(),y:Math.random(),s:Math.random()*1.5+0.5,b:Math.random()})}
@@ -1520,9 +1534,9 @@ else{selected=null;tracked=null;document.getElementById('detail').style.display=
 // Zoom
 let zoom=1,panX=0,panY=0,dragging=false,dragX=0,dragY=0;
 C.addEventListener('wheel',e=>{
-const oz=zoom;zoom=Math.max(0.5,Math.min(3,zoom*(e.deltaY>0?0.9:1.1)));
-// Zoom toward cursor
-panX+=(mx-W/2)*(1-zoom/oz);panY+=(my-H/2)*(1-zoom/oz);
+const oz=zoom;zoom=Math.max(0.3,Math.min(5,zoom*(e.deltaY>0?0.9:1.1)));
+// Zoom toward mouse cursor (world-space pivot)
+panX+=(mx-W/2-panX)*(1-zoom/oz);panY+=(my-H/2-panY)*(1-zoom/oz);
 e.preventDefault()},{passive:false});
 C.addEventListener('mousedown',e=>{if(e.button===0&&!hover){dragging=true;dragX=e.clientX-panX;dragY=e.clientY-panY}});
 C.addEventListener('mouseup',()=>{dragging=false});
@@ -1531,8 +1545,8 @@ function pc(name){return COLORS[name]||'#6688aa'}
 function hexA(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
 async function load(){
 try{
-const[g,s,p,e,f,ev]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows','/api/events?limit=15'].map(u=>fetch(B+u).then(r=>r.json())));
-systems=g.data;ships=s.data;players=p.data;economy=e.data;flows=f.data;
+const[g,s,p,e,f,ev,pw,dl,cx]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows','/api/events?limit=15','/api/power','/api/deliveries','/api/construction'].map(u=>fetch(B+u).then(r=>r.json())));
+systems=g.data;ships=s.data;players=p.data;economy=e.data;flows=f.data;power=pw.data||[];deliveries=dl.data||[];construction=cx.data||[];
 document.getElementById('status').textContent='Live · '+new Date().toLocaleTimeString();
 document.getElementById('players').innerHTML=players.sort((a,b)=>b.credits-a.credits).map(p=>{
 const c=pc(p.name);return'<div class="row"><span style="color:'+c+'">'+p.name+'</span><span>'+p.credits.toLocaleString()+'cr</span></div>'}).join('');
@@ -1589,11 +1603,11 @@ function draw(){
 t+=0.016;
 // Background
 X.fillStyle='#060810';X.fillRect(0,0,W,H);
-// Stars
+// Stars (parallax at 30% of camera for depth)
 stars.forEach(s=>{
 const flicker=0.6+0.4*Math.sin(t*2+s.b*20);
 X.fillStyle=hexA('#ffffff',flicker*0.5*s.s);
-X.fillRect(s.x*W,s.y*H,s.s,s.s)});
+X.fillRect(s.x*W+panX*0.3,s.y*H+panY*0.3,s.s,s.s)});
 if(!systems.length){requestAnimationFrame(draw);return}
 // Hyperlanes
 systems.forEach(s=>{(s.links||[]).forEach(lid=>{

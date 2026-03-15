@@ -443,6 +443,8 @@ func (cb *CommandBar) executeSlashCommand(input string) {
 		cb.showDeliveries()
 	case lower == "power":
 		cb.showPower()
+	case lower == "expand" || lower == "colonize" || lower == "targets":
+		cb.showExpansionTargets()
 
 	// Game actions
 	case strings.HasPrefix(lower, "build "):
@@ -908,6 +910,66 @@ func (cb *CommandBar) showDeliveries() {
 		cb.addFeedMessage(fmt.Sprintf("#%d %s→%s: %d %s (ship %d)",
 			d.ID, d.SellerName, d.BuyerName, d.Quantity, d.Resource, d.ShipID), utils.SystemBlue)
 	}
+}
+
+func (cb *CommandBar) showExpansionTargets() {
+	// Call expansion API
+	go func() {
+		serverURL := cb.serverURL
+		if serverURL == "" {
+			serverURL = "http://localhost:8080"
+		}
+		req, err := http.NewRequest("GET", serverURL+"/api/expansion", nil)
+		if err != nil {
+			cb.addFeedMessage("Failed to check targets", utils.SystemRed)
+			return
+		}
+		if cb.apiKey != "" {
+			req.Header.Set("X-API-Key", cb.apiKey)
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			cb.addFeedMessage("Server unreachable", utils.SystemRed)
+			return
+		}
+		defer resp.Body.Close()
+
+		var result struct {
+			OK   bool `json:"ok"`
+			Data []struct {
+				SystemName   string   `json:"system_name"`
+				PlanetName   string   `json:"planet_name"`
+				Habitability int      `json:"habitability"`
+				Resources    []string `json:"resources"`
+				Distance     int      `json:"distance"`
+				Score        int      `json:"score"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || !result.OK {
+			cb.addFeedMessage("Failed to parse expansion data", utils.SystemRed)
+			return
+		}
+
+		if len(result.Data) == 0 {
+			cb.addFeedMessage("No expansion targets found", utils.TextSecondary)
+			return
+		}
+
+		cb.addFeedMessage("Top colonization targets:", utils.Highlight)
+		for i, t := range result.Data {
+			if i >= 5 {
+				break
+			}
+			resStr := strings.Join(t.Resources, ",")
+			c := utils.SystemGreen
+			if t.Score < 30 {
+				c = utils.TextSecondary
+			}
+			cb.addFeedMessage(fmt.Sprintf("  %s in %s — hab:%d%% res:[%s] dist:%d score:%d",
+				t.PlanetName, t.SystemName, t.Habitability, resStr, t.Distance, t.Score), c)
+		}
+	}()
 }
 
 func (cb *CommandBar) showPower() {
