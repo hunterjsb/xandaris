@@ -22,7 +22,7 @@ func (g *FactoryGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *FactoryGenerator) GetSubType() string {
-	return "Factory"
+	return entities.BuildingFactory
 }
 
 func (g *FactoryGenerator) Generate(params entities.GenerationParams) entities.Entity {
@@ -38,7 +38,7 @@ func (g *FactoryGenerator) Generate(params entities.GenerationParams) entities.E
 	factory := entities.NewBuilding(
 		id,
 		"Electronics Factory",
-		"Factory",
+		entities.BuildingFactory,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		factoryColor,

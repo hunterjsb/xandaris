@@ -33,15 +33,15 @@ type Resource struct {
 // ResourceColor returns the default color for a resource type.
 func ResourceColor(resType string) color.RGBA {
 	switch resType {
-	case "Iron":
+	case ResIron:
 		return color.RGBA{180, 120, 80, 255}
-	case "Water":
+	case ResWater:
 		return color.RGBA{80, 140, 200, 255}
-	case "Oil":
+	case ResOil:
 		return color.RGBA{60, 60, 60, 255}
-	case "Rare Metals":
+	case ResRareMetals:
 		return color.RGBA{200, 180, 100, 255}
-	case "Helium-3":
+	case ResHelium3:
 		return color.RGBA{180, 220, 255, 255}
 	default:
 		return color.RGBA{150, 150, 150, 255}

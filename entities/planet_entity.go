@@ -209,7 +209,7 @@ func (p *Planet) GetBuildingPopulationCapacity() int64 {
 func (p *Planet) GetBaseBuilding() *Building {
 	for _, entity := range p.Buildings {
 		if building, ok := entity.(*Building); ok {
-			if building.BuildingType == "Base" {
+			if building.BuildingType == BuildingBase {
 				return building
 			}
 		}

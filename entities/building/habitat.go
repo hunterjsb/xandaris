@@ -23,7 +23,7 @@ func (g *HabitatGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *HabitatGenerator) GetSubType() string {
-	return "Habitat"
+	return entities.BuildingHabitat
 }
 
 func (g *HabitatGenerator) Generate(params entities.GenerationParams) entities.Entity {
@@ -45,7 +45,7 @@ func (g *HabitatGenerator) Generate(params entities.GenerationParams) entities.E
 	building := entities.NewBuilding(
 		id,
 		name,
-		"Habitat",
+		entities.BuildingHabitat,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		buildingColor,
@@ -62,14 +62,5 @@ func (g *HabitatGenerator) Generate(params entities.GenerationParams) entities.E
 	building.Description = "Provides housing for population. Increases planet capacity."
 	building.SetWorkersRequired(200)
 
-	return building
-}
-
-// CreateHabitat is a helper function to create a habitat on a specific planet
-func CreateHabitat(planetID string, owner string, params entities.GenerationParams) *entities.Building {
-	gen := &HabitatGenerator{}
-	building := gen.Generate(params).(*entities.Building)
-	building.AttachedTo = planetID
-	building.Owner = owner
 	return building
 }

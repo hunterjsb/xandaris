@@ -23,13 +23,11 @@ func (g *TradingPostGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *TradingPostGenerator) GetSubType() string {
-	return "Trading Post"
+	return entities.BuildingTradingPost
 }
 
 func (g *TradingPostGenerator) Generate(params entities.GenerationParams) entities.Entity {
 	id := params.SystemID*1000000 + rand.Intn(100000)
-
-	name := "Trading Post"
 
 	// Warm accent color to differentiate trade structures
 	buildingColor := color.RGBA{
@@ -41,8 +39,8 @@ func (g *TradingPostGenerator) Generate(params entities.GenerationParams) entiti
 
 	building := entities.NewBuilding(
 		id,
-		name,
-		"Trading Post",
+		entities.BuildingTradingPost,
+		entities.BuildingTradingPost,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		buildingColor,

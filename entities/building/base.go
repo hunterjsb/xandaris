@@ -25,7 +25,7 @@ func (g *BaseGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *BaseGenerator) GetSubType() string {
-	return "Base"
+	return entities.BuildingBase
 }
 
 func (g *BaseGenerator) Generate(params entities.GenerationParams) entities.Entity {
@@ -41,7 +41,7 @@ func (g *BaseGenerator) Generate(params entities.GenerationParams) entities.Enti
 	base := entities.NewBuilding(
 		id,
 		fmt.Sprintf("Planetary Base %d", rand.Intn(900)+100),
-		"Base",
+		entities.BuildingBase,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		buildingColor,

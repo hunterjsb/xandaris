@@ -23,7 +23,7 @@ func (g *ShipyardGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *ShipyardGenerator) GetSubType() string {
-	return "Shipyard"
+	return entities.BuildingShipyard
 }
 
 func (g *ShipyardGenerator) Generate(params entities.GenerationParams) entities.Entity {
@@ -46,7 +46,7 @@ func (g *ShipyardGenerator) Generate(params entities.GenerationParams) entities.
 	building := entities.NewBuilding(
 		id,
 		name,
-		"Shipyard",
+		entities.BuildingShipyard,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		buildingColor,
@@ -63,14 +63,5 @@ func (g *ShipyardGenerator) Generate(params entities.GenerationParams) entities.
 	building.Description = "Constructs and repairs ships. Enables fleet production."
 	building.SetWorkersRequired(400)
 
-	return building
-}
-
-// CreateShipyard is a helper function to create a shipyard on a specific planet
-func CreateShipyard(planetID string, owner string, params entities.GenerationParams) *entities.Building {
-	gen := &ShipyardGenerator{}
-	building := gen.Generate(params).(*entities.Building)
-	building.AttachedTo = planetID
-	building.Owner = owner
 	return building
 }
