@@ -25,6 +25,8 @@ type GameServer struct {
 	CargoCommander   *game.CargoCommandExecutor
 	Events           *game.EventLog
 	Registry         *game.PlayerRegistry
+	// Remote is set when connected to a remote server (desktop only, not WASM)
+	remoteSync interface{}
 
 	screenWidth  int
 	screenHeight int
@@ -248,6 +250,11 @@ func (gs *GameServer) GetConnectedSystems(fromSystemID int) []int {
 }
 func (gs *GameServer) GetSystemByID(systemID int) *entities.System {
 	return gs.FleetCmdExecutor.GetSystemByID(systemID)
+}
+
+// SetRemoteSync sets the remote sync client (for --connect mode).
+func (gs *GameServer) SetRemoteSync(rs interface{}) {
+	gs.remoteSync = rs
 }
 
 // LogEvent implements tickable.EventLogger for game event tracking.

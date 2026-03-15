@@ -80,6 +80,11 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 }
 
 func (gs *GameServer) handleTradeCommand(cmd game.GameCommand) {
+	// Forward to remote server if connected
+	if gs.remoteSync != nil {
+		gs.forwardTradeToRemote(cmd)
+		return
+	}
 	td, ok := cmd.Data.(game.TradeCommandData)
 	if !ok {
 		sendResult(cmd, fmt.Errorf("invalid trade data"))

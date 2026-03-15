@@ -9,17 +9,16 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/hunterjsb/xandaris/entities"
 )
 
 // RemoteSync periodically fetches state from a remote server
 // and updates the local GameServer to mirror it.
 type RemoteSync struct {
-	serverURL string
-	apiKey    string
-	gs        *GameServer
-	stopCh    chan struct{}
+	serverURL  string
+	apiKey     string
+	playerName string
+	gs         *GameServer
+	stopCh     chan struct{}
 }
 
 // NewRemoteSync creates a sync client for the remote server.
@@ -35,9 +34,7 @@ func NewRemoteSync(gs *GameServer, serverURL, apiKey string) *RemoteSync {
 // Start begins periodic syncing in a goroutine.
 func (rs *RemoteSync) Start() {
 	go func() {
-		// Initial sync
-		rs.syncOnce()
-
+		rs.syncAll()
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -45,7 +42,7 @@ func (rs *RemoteSync) Start() {
 			case <-rs.stopCh:
 				return
 			case <-ticker.C:
-				rs.syncOnce()
+				rs.syncPlayer()
 			}
 		}
 	}()
@@ -55,61 +52,63 @@ func (rs *RemoteSync) Stop() {
 	close(rs.stopCh)
 }
 
-func (rs *RemoteSync) syncOnce() {
-	// Sync player data
-	rs.syncPlayerMe()
+// syncAll fetches everything from the remote server.
+func (rs *RemoteSync) syncAll() {
+	rs.syncPlayer()
 }
 
-func (rs *RemoteSync) syncPlayerMe() {
+// syncPlayer updates the human player's credits and storage from remote.
+func (rs *RemoteSync) syncPlayer() {
 	data, err := rs.apiGet("/api/player/me")
 	if err != nil {
 		return
 	}
-
 	var resp struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			Name    string `json:"name"`
-			Credits int    `json:"credits"`
-			Ships   []struct {
-				ID           int            `json:"id"`
-				Name         string         `json:"name"`
-				Type         string         `json:"type"`
-				Status       string         `json:"status"`
-				SystemID     int            `json:"system_id"`
-				FuelCurrent  int            `json:"fuel_current"`
-				FuelMax      int            `json:"fuel_max"`
-				CargoUsed    int            `json:"cargo_used"`
-				CargoMax     int            `json:"cargo_max"`
-				CargoHold    map[string]int `json:"cargo_hold"`
-			} `json:"ships"`
+			Credits int `json:"credits"`
 			Planets []struct {
-				ID              int            `json:"id"`
-				Name            string         `json:"name"`
-				Population      int64          `json:"population"`
 				StoredResources map[string]int `json:"stored_resources"`
-				Buildings       []struct {
-					Type          string `json:"type"`
-					Level         int    `json:"level"`
-					IsOperational bool   `json:"is_operational"`
-				} `json:"buildings"`
+				Population      int64          `json:"population"`
 			} `json:"planets"`
 		} `json:"data"`
 	}
-
 	if err := json.Unmarshal(data, &resp); err != nil || !resp.OK {
 		return
 	}
 
-	// Update local player state
 	if rs.gs.State.HumanPlayer != nil {
 		rs.gs.State.HumanPlayer.Credits = resp.Data.Credits
+		// Sync planet storage
+		if len(resp.Data.Planets) > 0 && len(rs.gs.State.HumanPlayer.OwnedPlanets) > 0 {
+			rp := resp.Data.Planets[0]
+			lp := rs.gs.State.HumanPlayer.OwnedPlanets[0]
+			if lp != nil {
+				lp.Population = rp.Population
+				for resType, amount := range rp.StoredResources {
+					if s, ok := lp.StoredResources[resType]; ok && s != nil {
+						s.Amount = amount
+					}
+				}
+			}
+		}
 	}
 }
 
-// SendCommand sends a POST command to the remote server.
-func (rs *RemoteSync) SendCommand(endpoint string, body string) ([]byte, error) {
-	return rs.apiPost(endpoint, body)
+// ForwardTrade sends a trade to the remote server instead of local.
+func (rs *RemoteSync) ForwardTrade(resource string, quantity int, buy bool) ([]byte, error) {
+	action := "sell"
+	if buy {
+		action = "buy"
+	}
+	body := fmt.Sprintf(`{"resource":"%s","quantity":%d,"action":"%s"}`, resource, quantity, action)
+	return rs.apiPost("/api/market/trade", body)
+}
+
+// ForwardBuild sends a build command to the remote server.
+func (rs *RemoteSync) ForwardBuild(planetID int, buildingType string, resourceID int) ([]byte, error) {
+	body := fmt.Sprintf(`{"planet_id":%d,"building_type":"%s","resource_id":%d}`, planetID, buildingType, resourceID)
+	return rs.apiPost("/api/build", body)
 }
 
 // Register creates an account on the remote server.
@@ -120,20 +119,20 @@ func (rs *RemoteSync) Register(name, password string) (string, error) {
 		return "", err
 	}
 	var resp struct {
-		OK   bool   `json:"ok"`
+		OK    bool   `json:"ok"`
 		Error string `json:"error"`
-		Data struct {
+		Data  struct {
 			APIKey string `json:"api_key"`
-			Name   string `json:"name"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return "", err
 	}
 	if !resp.OK {
-		return "", fmt.Errorf(resp.Error)
+		return "", fmt.Errorf("%s", resp.Error)
 	}
 	rs.apiKey = resp.Data.APIKey
+	rs.playerName = name
 	return resp.Data.APIKey, nil
 }
 
@@ -145,9 +144,9 @@ func (rs *RemoteSync) Login(name, password string) (string, error) {
 		return "", err
 	}
 	var resp struct {
-		OK   bool   `json:"ok"`
+		OK    bool   `json:"ok"`
 		Error string `json:"error"`
-		Data struct {
+		Data  struct {
 			APIKey string `json:"api_key"`
 		} `json:"data"`
 	}
@@ -155,41 +154,22 @@ func (rs *RemoteSync) Login(name, password string) (string, error) {
 		return "", err
 	}
 	if !resp.OK {
-		return "", fmt.Errorf(resp.Error)
+		return "", fmt.Errorf("%s", resp.Error)
 	}
 	rs.apiKey = resp.Data.APIKey
+	rs.playerName = name
 	return resp.Data.APIKey, nil
 }
 
-// FetchGalaxy loads the full galaxy state from remote.
-func (rs *RemoteSync) FetchGalaxy() error {
-	// Fetch galaxy layout
-	data, err := rs.apiGet("/api/galaxy")
-	if err != nil {
-		return err
-	}
-	var resp struct {
-		OK   bool `json:"ok"`
-		Data []struct {
-			ID       int     `json:"id"`
-			Name     string  `json:"name"`
-			X        float64 `json:"x"`
-			Y        float64 `json:"y"`
-			Planets  int     `json:"planets"`
-			Owner    string  `json:"owner"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(data, &resp); err != nil || !resp.OK {
-		return fmt.Errorf("failed to fetch galaxy")
-	}
-
-	fmt.Printf("[Remote] Loaded galaxy: %d systems\n", len(resp.Data))
-	_ = entities.System{} // ensure import used
-	return nil
-}
-
 func (rs *RemoteSync) apiGet(endpoint string) ([]byte, error) {
-	resp, err := http.Get(rs.serverURL + endpoint)
+	req, err := http.NewRequest("GET", rs.serverURL+endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	if rs.apiKey != "" {
+		req.Header.Set("X-API-Key", rs.apiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
