@@ -115,11 +115,12 @@ func StartServer(provider GameStateProvider) {
 		// Execute trade on main goroutine via command channel
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "trade",
 			Data:   game.TradeCommandData{Resource: req.Resource, Quantity: req.Quantity, Buy: buy, PlanetID: req.PlanetID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 
 		// Wait for result with timeout
 		select {
@@ -160,7 +161,7 @@ func StartServer(provider GameStateProvider) {
 
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type: "cargo_load",
 			Data: game.CargoCommandData{
 				ShipID:   req.ShipID,
@@ -171,6 +172,7 @@ func StartServer(provider GameStateProvider) {
 			},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 
 		select {
 		case result := <-resultCh:
@@ -211,7 +213,7 @@ func StartServer(provider GameStateProvider) {
 
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type: "cargo_unload",
 			Data: game.CargoCommandData{
 				ShipID:   req.ShipID,
@@ -222,6 +224,7 @@ func StartServer(provider GameStateProvider) {
 			},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 
 		select {
 		case result := <-resultCh:
@@ -377,7 +380,7 @@ func StartServer(provider GameStateProvider) {
 				return
 			}
 			resultCh := make(chan interface{}, 1)
-			p.GetCommandChannel() <- game.GameCommand{
+			cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 				Type: "standing_order",
 				Data: game.StandingOrderCommandData{
 					PlanetID:  req.PlanetID,
@@ -390,6 +393,7 @@ func StartServer(provider GameStateProvider) {
 				},
 				Result: resultCh,
 			}
+		p.GetCommandChannel() <- cmd
 			select {
 			case result := <-resultCh:
 				switch v := result.(type) {
@@ -410,11 +414,12 @@ func StartServer(provider GameStateProvider) {
 				return
 			}
 			resultCh := make(chan interface{}, 1)
-			p.GetCommandChannel() <- game.GameCommand{
+			cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 				Type:   "cancel_order",
 				Data:   game.CancelOrderCommandData{OrderID: req.OrderID},
 				Result: resultCh,
 			}
+		p.GetCommandChannel() <- cmd
 			select {
 			case result := <-resultCh:
 				switch v := result.(type) {
@@ -612,11 +617,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "build_ship",
 			Data:   game.ShipBuildCommandData{PlanetID: req.PlanetID, ShipType: req.ShipType},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -646,11 +652,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "move_ship",
 			Data:   game.ShipMoveCommandData{ShipID: req.ShipID, TargetSystemID: req.TargetSystemID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -676,11 +683,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "refuel",
 			Data:   game.ShipRefuelCommandData{ShipID: req.ShipID, PlanetID: req.PlanetID, Amount: req.Amount},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -706,11 +714,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "colonize",
 			Data:   game.ColonizeCommandData{ShipID: req.ShipID, PlanetID: req.PlanetID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -736,11 +745,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "upgrade",
 			Data:   game.UpgradeCommandData{PlanetID: req.PlanetID, BuildingIndex: req.BuildingIndex},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -851,11 +861,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "workforce_assign",
 			Data:   game.WorkforceAssignCommandData{PlanetID: req.PlanetID, BuildingIndex: req.BuildingIndex, Workers: req.Workers},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -885,11 +896,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "cancel_construction",
 			Data:   game.CancelConstructionCommandData{ConstructionID: req.ConstructionID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -928,11 +940,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "fleet_move",
 			Data:   game.FleetMoveCommandData{FleetID: req.FleetID, TargetSystemID: req.TargetSystemID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -962,11 +975,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "fleet_create",
 			Data:   game.FleetCreateCommandData{ShipID: req.ShipID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -996,11 +1010,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "fleet_disband",
 			Data:   game.FleetDisbandCommandData{FleetID: req.FleetID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -1030,11 +1045,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "fleet_add_ship",
 			Data:   game.FleetAddShipCommandData{ShipID: req.ShipID, FleetID: req.FleetID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -1064,11 +1080,12 @@ func StartServer(provider GameStateProvider) {
 		}
 		p := getProvider()
 		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
+		cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 			Type:   "fleet_remove_ship",
 			Data:   game.FleetRemoveShipCommandData{ShipID: req.ShipID, FleetID: req.FleetID},
 			Result: resultCh,
 		}
+		p.GetCommandChannel() <- cmd
 		select {
 		case result := <-resultCh:
 			switch v := result.(type) {
@@ -1253,11 +1270,12 @@ func StartServer(provider GameStateProvider) {
 		// Create in-game faction for new players
 		if isNew {
 			resultCh := make(chan interface{}, 1)
-			p.GetCommandChannel() <- game.GameCommand{
+			cmd := game.GameCommand{PlayerName: getAuthPlayer(r),
 				Type:   "register_player",
 				Data:   game.RegisterPlayerCommandData{Name: account.Name, AccountKey: account.APIKey},
 				Result: resultCh,
 			}
+		p.GetCommandChannel() <- cmd
 			select {
 			case result := <-resultCh:
 				if pid, ok := result.(int); ok {
