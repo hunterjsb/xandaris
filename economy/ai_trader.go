@@ -20,6 +20,14 @@ func RunAITrader(executor *TradeExecutor, players []*entities.Player) {
 	}
 }
 
+// strategicReserve lists resources that should never be auto-sold below 100 units.
+// These are needed for ship construction and shouldn't be dumped on the market.
+var strategicReserve = map[string]int{
+	entities.ResIron: 100,
+	entities.ResFuel: 50,
+	entities.ResRareMetals: 50,
+}
+
 func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayers []*entities.Player) {
 	for _, planet := range player.OwnedPlanets {
 		if planet == nil {
@@ -27,6 +35,11 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 		}
 		for resType, storage := range planet.StoredResources {
 			if storage == nil || storage.Capacity <= 0 {
+				continue
+			}
+
+			// Never sell below strategic reserve (needed for ship construction)
+			if reserve, ok := strategicReserve[resType]; ok && storage.Amount <= reserve {
 				continue
 			}
 
