@@ -792,6 +792,24 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		lines = append(lines, fmt.Sprintf("Population: %s (no housing)", populationStr))
 	}
 
+	// Happiness indicator
+	if planet.Population > 0 {
+		happinessLabel := "Neutral"
+		if planet.Happiness >= 0.8 {
+			happinessLabel = "Thriving"
+		} else if planet.Happiness >= 0.6 {
+			happinessLabel = "Content"
+		} else if planet.Happiness >= 0.4 {
+			happinessLabel = "Uneasy"
+		} else if planet.Happiness >= 0.2 {
+			happinessLabel = "Unhappy"
+		} else {
+			happinessLabel = "Miserable"
+		}
+		lines = append(lines, fmt.Sprintf("Happiness: %s (%.0f%%) → %.1fx productivity",
+			happinessLabel, planet.Happiness*100, planet.ProductivityBonus))
+	}
+
 	if planet.WorkforceTotal > 0 {
 		lines = append(lines, fmt.Sprintf(
 			"Workforce: %s / %s",

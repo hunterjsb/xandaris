@@ -236,17 +236,19 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 	}
 
 	return PlanetDetail{
-		ID:              planet.GetID(),
-		Name:            planet.Name,
-		PlanetType:      planet.PlanetType,
-		Population:      planet.Population,
-		PopulationCap:   planet.GetTotalPopulationCapacity(),
-		Habitability:    planet.Habitability,
-		Owner:           planet.Owner,
-		StoredResources: stored,
-		ResourceDeposits: deposits,
-		Buildings:       buildings,
-		SystemID:        systemID,
+		ID:                planet.GetID(),
+		Name:              planet.Name,
+		PlanetType:        planet.PlanetType,
+		Population:        planet.Population,
+		PopulationCap:     planet.GetTotalPopulationCapacity(),
+		Habitability:      planet.Habitability,
+		Happiness:         math.Round(planet.Happiness*100) / 100,
+		ProductivityBonus: math.Round(planet.ProductivityBonus*100) / 100,
+		Owner:             planet.Owner,
+		StoredResources:   stored,
+		ResourceDeposits:  deposits,
+		Buildings:         buildings,
+		SystemID:          systemID,
 	}
 }
 
@@ -848,12 +850,14 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 			}
 
 			return PlanetRates{
-				PlanetID:    planet.GetID(),
-				PlanetName:  planet.Name,
-				Population:  planet.Population,
-				Production:  production,
-				Consumption: consumption,
-				NetFlow:     netFlow,
+				PlanetID:          planet.GetID(),
+				PlanetName:        planet.Name,
+				Population:        planet.Population,
+				Happiness:         math.Round(planet.Happiness*100) / 100,
+				ProductivityBonus: math.Round(planet.ProductivityBonus*100) / 100,
+				Production:        production,
+				Consumption:       consumption,
+				NetFlow:           netFlow,
 			}, true
 		}
 	}

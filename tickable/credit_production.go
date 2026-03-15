@@ -56,8 +56,12 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {
-			// Base production: 1 credit per 100 population per interval
-			production := int(planet.Population / 100)
+			// Base production: 1 credit per 100 population per interval, scaled by happiness
+			productivityMult := planet.ProductivityBonus
+			if productivityMult <= 0 {
+				productivityMult = 1.0
+			}
+			production := int(float64(planet.Population/100) * productivityMult)
 
 			// Trading Post revenue: earns from galaxy trade volume
 			// Each TP level captures a share of total trade activity

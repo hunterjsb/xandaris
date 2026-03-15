@@ -26,10 +26,12 @@ type Planet struct {
 	Atmosphere      string                      // Type of atmosphere
 	HasRings        bool                        // Whether the planet has rings
 	Habitability    int                         // Habitability score 0-100
-	Owner           string                      // Name of the player/faction who owns this planet
-	StoredResources map[string]*ResourceStorage // Resources stored on this planet (credits, materials, etc.)
-	WorkforceTotal  int64                       // Total workforce available (subset of population)
-	WorkforceUsed   int64                       // Workforce assigned to buildings/ships
+	Owner             string                      // Name of the player/faction who owns this planet
+	StoredResources   map[string]*ResourceStorage // Resources stored on this planet (credits, materials, etc.)
+	WorkforceTotal    int64                       // Total workforce available (subset of population)
+	WorkforceUsed     int64                       // Workforce assigned to buildings/ships
+	Happiness         float64                     // 0.0-1.0 based on resource fulfillment
+	ProductivityBonus float64                     // Multiplier from happiness (0.5-1.5)
 }
 
 // NewPlanet creates a new planet entity
@@ -55,8 +57,10 @@ func NewPlanet(id int, name, planetType string, orbitDistance, orbitAngle float6
 		Habitability:    50,
 		Owner:           "", // Unowned by default
 		StoredResources: make(map[string]*ResourceStorage),
-		WorkforceTotal:  0,
-		WorkforceUsed:   0,
+		WorkforceTotal:    0,
+		WorkforceUsed:     0,
+		Happiness:         0.5,
+		ProductivityBonus: 1.0,
 	}
 }
 

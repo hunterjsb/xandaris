@@ -226,6 +226,8 @@ func (cb *CommandBar) executeCommand(input string) {
 		resource := strings.TrimPrefix(input, "price ")
 		resource = strings.TrimPrefix(resource, "Price ")
 		cb.showPrice(resource)
+	case strings.Contains(lower, "happiness") || strings.Contains(lower, "morale"):
+		cb.showHappiness()
 	case strings.Contains(lower, "help"):
 		cb.showHelp()
 
@@ -402,6 +404,39 @@ func buildSparkline(history []float64, width int) string {
 	return string(result)
 }
 
+func (cb *CommandBar) showHappiness() {
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil {
+		cb.addFeedMessage("No player found", utils.SystemRed)
+		return
+	}
+	for _, planet := range player.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		label := "Neutral"
+		c := utils.TextSecondary
+		if planet.Happiness >= 0.8 {
+			label = "Thriving"
+			c = utils.SystemGreen
+		} else if planet.Happiness >= 0.6 {
+			label = "Content"
+			c = utils.SystemGreen
+		} else if planet.Happiness >= 0.4 {
+			label = "Uneasy"
+			c = utils.SystemOrange
+		} else if planet.Happiness >= 0.2 {
+			label = "Unhappy"
+			c = utils.SystemRed
+		} else {
+			label = "Miserable"
+			c = utils.SystemRed
+		}
+		cb.addFeedMessage(fmt.Sprintf("%s: %s (%.0f%%) → %.1fx productivity",
+			planet.Name, label, planet.Happiness*100, planet.ProductivityBonus), c)
+	}
+}
+
 func (cb *CommandBar) showHelp() {
 	commands := []struct {
 		cmd  string
@@ -414,6 +449,7 @@ func (cb *CommandBar) showHelp() {
 		{"credits", "Show your balance"},
 		{"trades", "Show recent trades"},
 		{"price <res>", "Show price + sparkline trend"},
+		{"happiness", "Show planet happiness & productivity"},
 		{"status", "Show game status"},
 		{"pause", "Toggle pause"},
 		{"1x/2x/4x/8x", "Set game speed"},

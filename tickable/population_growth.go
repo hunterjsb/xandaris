@@ -121,8 +121,14 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 		return
 	}
 
+	// Happiness boosts growth: happy planets grow up to 1.5x faster
+	happinessMultiplier := planet.ProductivityBonus
+	if happinessMultiplier <= 0 {
+		happinessMultiplier = 1.0
+	}
+
 	logFactor := math.Log10(float64(planet.Population)+1) / math.Log10(50000)
-	growthRate := 0.004 * habitability * foodSufficiency * (1.0 - logFactor)
+	growthRate := 0.004 * habitability * foodSufficiency * happinessMultiplier * (1.0 - logFactor)
 	if growthRate < 0.0005 {
 		growthRate = 0.0005
 	}

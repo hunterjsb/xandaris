@@ -67,17 +67,19 @@ type SystemSummary struct {
 
 // PlanetDetail is the detailed planet endpoint representation.
 type PlanetDetail struct {
-	ID              int                `json:"id"`
-	Name            string             `json:"name"`
-	PlanetType      string             `json:"planet_type"`
-	Population      int64              `json:"population"`
-	PopulationCap   int64              `json:"population_cap"`
-	Habitability    int                `json:"habitability"`
-	Owner           string             `json:"owner,omitempty"`
-	StoredResources map[string]int     `json:"stored_resources"`
-	ResourceDeposits []ResourceDeposit `json:"resource_deposits"`
-	Buildings       []BuildingInfo     `json:"buildings"`
-	SystemID        int                `json:"system_id"`
+	ID                int                `json:"id"`
+	Name              string             `json:"name"`
+	PlanetType        string             `json:"planet_type"`
+	Population        int64              `json:"population"`
+	PopulationCap     int64              `json:"population_cap"`
+	Habitability      int                `json:"habitability"`
+	Happiness         float64            `json:"happiness"`          // 0.0-1.0
+	ProductivityBonus float64            `json:"productivity_bonus"` // 0.5-1.5
+	Owner             string             `json:"owner,omitempty"`
+	StoredResources   map[string]int     `json:"stored_resources"`
+	ResourceDeposits  []ResourceDeposit  `json:"resource_deposits"`
+	Buildings         []BuildingInfo     `json:"buildings"`
+	SystemID          int                `json:"system_id"`
 }
 
 // ResourceDeposit is a minable resource node on a planet.
@@ -350,12 +352,14 @@ type SystemPrices struct {
 
 // PlanetRates shows production and consumption for a planet.
 type PlanetRates struct {
-	PlanetID    int                    `json:"planet_id"`
-	PlanetName  string                 `json:"planet_name"`
-	Population  int64                  `json:"population"`
-	Production  map[string]float64     `json:"production"`  // resource -> units/interval
-	Consumption map[string]float64     `json:"consumption"` // resource -> units/interval
-	NetFlow     map[string]float64     `json:"net_flow"`    // production - consumption
+	PlanetID          int                `json:"planet_id"`
+	PlanetName        string             `json:"planet_name"`
+	Population        int64              `json:"population"`
+	Happiness         float64            `json:"happiness"`
+	ProductivityBonus float64            `json:"productivity_bonus"`
+	Production        map[string]float64 `json:"production"`
+	Consumption       map[string]float64 `json:"consumption"`
+	NetFlow           map[string]float64 `json:"net_flow"`
 }
 
 // GameStatus is a comprehensive snapshot for agents — everything needed in one call.
