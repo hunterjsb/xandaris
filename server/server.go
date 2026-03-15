@@ -356,6 +356,11 @@ func (gs *GameServer) SetRemoteSync(rs interface{}) {
 	gs.remoteSync = rs
 }
 
+// IsRemote returns true if this server is connected to a remote server.
+func (gs *GameServer) IsRemote() bool {
+	return gs.remoteSync != nil
+}
+
 func (gs *GameServer) LogEvent(eventType string, player string, message string) {
 	if gs.Events != nil {
 		gs.Events.Add(gs.TickManager.GetCurrentTick(), gs.TickManager.GetGameTimeFormatted(),

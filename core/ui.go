@@ -70,7 +70,11 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 		}
 		credStr = fmt.Sprintf("Credits: %d (%s%d/s)  ", human.Credits, netColor, net)
 	}
-	views.DrawText(screen, credStr+"[`] Chat  [Space] Pause", textX, textY+15, utils.TextSecondary)
+	hints := "[`] Chat"
+	if !a.IsRemote() {
+		hints += "  [Space] Pause  [F5] Save"
+	}
+	views.DrawText(screen, credStr+hints, textX, textY+15, utils.TextSecondary)
 }
 
 // drawEmpirePanel renders a persistent top-right panel with empire vitals.

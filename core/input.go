@@ -14,33 +14,31 @@ func (a *App) handleGlobalInput() {
 		return
 	}
 
-	// Toggle pause
-	if a.keyBindings.IsActionJustPressed(views.ActionPauseToggle) {
-		a.Server.TickManager.TogglePause()
-	}
-
-	// Speed control
-	if a.keyBindings.IsActionJustPressed(views.ActionSpeedSlow) {
-		a.Server.TickManager.SetSpeed(systems.TickSpeed1x)
-	}
-	if a.keyBindings.IsActionJustPressed(views.ActionSpeedNormal) {
-		a.Server.TickManager.SetSpeed(systems.TickSpeed2x)
-	}
-	if a.keyBindings.IsActionJustPressed(views.ActionSpeedFast) {
-		a.Server.TickManager.SetSpeed(systems.TickSpeed4x)
-	}
-	if a.keyBindings.IsActionJustPressed(views.ActionSpeedVeryFast) {
-		a.Server.TickManager.SetSpeed(systems.TickSpeed8x)
-	}
-
-	// Quick save
-	if a.keyBindings.IsActionJustPressed(views.ActionQuickSave) {
-		if a.Server.State.HumanPlayer != nil {
-			err := a.SaveGameToFile(a.Server.State.HumanPlayer.Name)
-			if err != nil {
-				fmt.Printf("Failed to save game: %v\n", err)
-			} else {
-				fmt.Println("Game saved successfully!")
+	// Pause/speed/save only in singleplayer (not when connected to remote server)
+	if !a.IsRemote() {
+		if a.keyBindings.IsActionJustPressed(views.ActionPauseToggle) {
+			a.Server.TickManager.TogglePause()
+		}
+		if a.keyBindings.IsActionJustPressed(views.ActionSpeedSlow) {
+			a.Server.TickManager.SetSpeed(systems.TickSpeed1x)
+		}
+		if a.keyBindings.IsActionJustPressed(views.ActionSpeedNormal) {
+			a.Server.TickManager.SetSpeed(systems.TickSpeed2x)
+		}
+		if a.keyBindings.IsActionJustPressed(views.ActionSpeedFast) {
+			a.Server.TickManager.SetSpeed(systems.TickSpeed4x)
+		}
+		if a.keyBindings.IsActionJustPressed(views.ActionSpeedVeryFast) {
+			a.Server.TickManager.SetSpeed(systems.TickSpeed8x)
+		}
+		if a.keyBindings.IsActionJustPressed(views.ActionQuickSave) {
+			if a.Server.State.HumanPlayer != nil {
+				err := a.SaveGameToFile(a.Server.State.HumanPlayer.Name)
+				if err != nil {
+					fmt.Printf("Failed to save game: %v\n", err)
+				} else {
+					fmt.Println("Game saved successfully!")
+				}
 			}
 		}
 	}

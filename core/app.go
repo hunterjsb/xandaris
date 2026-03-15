@@ -54,6 +54,11 @@ func (a *App) GetKeyBindings() views.KeyBindingsInterface {
 	return a.keyBindings
 }
 
+// IsRemote returns true if connected to a remote server (multiplayer).
+func (a *App) IsRemote() bool {
+	return a.Server.IsRemote()
+}
+
 // GetFleetCommander returns the fleet command interface (delegates to server).
 func (a *App) GetFleetCommander() views.FleetCommandInterface {
 	return a.Server
