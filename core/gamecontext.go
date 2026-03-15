@@ -23,6 +23,9 @@ func (a *App) GetCargoCommander() *game.CargoCommandExecutor {
 func (a *App) GetEventLog() *game.EventLog {
 	return a.Server.GetEventLog()
 }
+func (a *App) GetRegistry() *game.PlayerRegistry {
+	return a.Server.GetRegistry()
+}
 
 func (a *App) GetSaveLoad() views.SaveLoadInterface { return a }
 

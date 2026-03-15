@@ -1005,6 +1005,88 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"action": "save_queued"}})
 	})
 
+	// Player registration
+	mux.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req struct {
+			Name     string `json:"name"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		p := getProvider()
+		registry := p.GetRegistry()
+		if registry == nil {
+			writeErr(w, http.StatusInternalServerError, "registration not available")
+			return
+		}
+		account, err := registry.Register(req.Name, req.Password)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		// Create the player faction in the game
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "register_player",
+			Data:   game.RegisterPlayerCommandData{Name: account.Name, AccountKey: account.APIKey},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			case int:
+				account.PlayerID = v
+				writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+					"name":      account.Name,
+					"api_key":   account.APIKey,
+					"player_id": account.PlayerID,
+				}})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
+	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req struct {
+			Name     string `json:"name"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		p := getProvider()
+		registry := p.GetRegistry()
+		if registry == nil {
+			writeErr(w, http.StatusInternalServerError, "login not available")
+			return
+		}
+		account, err := registry.Login(req.Name, req.Password)
+		if err != nil {
+			writeErr(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"name":      account.Name,
+			"api_key":   account.APIKey,
+			"player_id": account.PlayerID,
+		}})
+	})
+
 	// Serve pages
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -1028,12 +1110,23 @@ func StartServer(provider GameStateProvider) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		// Auth for POST
-		if apiKey != "" && r.Method == http.MethodPost {
+		// Auth for POST — check player registry first, then admin key
+		if r.Method == http.MethodPost {
 			key := r.Header.Get("X-API-Key")
-			if key != apiKey {
-				writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
-				return
+			// Registration and login don't need auth
+			if r.URL.Path != "/api/register" && r.URL.Path != "/api/login" {
+				p := getProvider()
+				registry := p.GetRegistry()
+				if registry != nil {
+					_, _, ok := registry.Authenticate(key)
+					if !ok {
+						writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
+						return
+					}
+				} else if apiKey != "" && key != apiKey {
+					writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
+					return
+				}
 			}
 		}
 		mux.ServeHTTP(w, r)

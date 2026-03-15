@@ -8,6 +8,7 @@ import (
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
+	"github.com/hunterjsb/xandaris/utils"
 )
 
 // executeCommand processes a single game command.
@@ -51,6 +52,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 
 	case "colonize":
 		gs.handleColonizeCommand(cmd)
+
+	case "register_player":
+		gs.handleRegisterPlayerCommand(cmd)
 
 	case "workforce_assign":
 		gs.handleWorkforceAssignCommand(cmd)
@@ -565,6 +569,60 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 			"system_id": systemID,
 			"colonists": planet.Population,
 		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleRegisterPlayerCommand(cmd game.GameCommand) {
+	rd, ok := cmd.Data.(game.RegisterPlayerCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid register data"))
+		return
+	}
+
+	// Check name isn't already a player
+	for _, p := range gs.State.Players {
+		if p != nil && p.Name == rd.Name {
+			sendResult(cmd, fmt.Errorf("player name already exists in game"))
+			return
+		}
+	}
+
+	// Create new player with unique ID and color
+	playerID := len(gs.State.Players)
+	colors := utils.GetAIPlayerColors()
+	playerColor := colors[playerID%len(colors)]
+	newPlayer := entities.NewPlayer(playerID, rd.Name, playerColor, entities.PlayerTypeHuman)
+
+	// Initialize with a homeworld
+	entities.InitializePlayer(newPlayer, gs.State.Systems)
+	game.PrepareHomeworld(newPlayer, false)
+
+	// Extra starting resources
+	if newPlayer.HomePlanet != nil {
+		newPlayer.HomePlanet.AddStoredResource("Fuel", 200)
+		newPlayer.HomePlanet.AddStoredResource("Oil", 150)
+	}
+
+	gs.State.Players = append(gs.State.Players, newPlayer)
+
+	// Update account with player ID
+	if gs.Registry != nil {
+		if acc := gs.Registry.GetAccount(rd.Name); acc != nil {
+			acc.PlayerID = playerID
+		}
+	}
+
+	// Log event
+	if gs.Events != nil {
+		gs.Events.Add(gs.TickManager.GetCurrentTick(), gs.TickManager.GetGameTimeFormatted(),
+			game.EventType("join"), rd.Name, fmt.Sprintf("%s joined the galaxy!", rd.Name))
+	}
+
+	fmt.Printf("[Server] New player registered: %s (id=%d)\n", rd.Name, playerID)
+
+	if cmd.Result != nil {
+		cmd.Result <- playerID
 		close(cmd.Result)
 	}
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/hunterjsb/xandaris/api"
@@ -23,6 +24,7 @@ type GameServer struct {
 	FleetMgmtSystem  *game.FleetManagementSystem
 	CargoCommander   *game.CargoCommandExecutor
 	Events           *game.EventLog
+	Registry         *game.PlayerRegistry
 
 	screenWidth  int
 	screenHeight int
@@ -93,6 +95,9 @@ func (gs *GameServer) NewGame(playerName string) error {
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
 func (gs *GameServer) initSimulation() {
 	gs.Events = game.NewEventLog(100)
+	if gs.Registry == nil {
+		gs.Registry = game.NewPlayerRegistry(os.Getenv("XANDARIS_API_KEY"))
+	}
 
 	// Wire trade event logging
 	if gs.State.TradeExec != nil {
@@ -189,6 +194,9 @@ func (gs *GameServer) GetFleetManagementSystem() *game.FleetManagementSystem {
 }
 func (gs *GameServer) GetEventLog() *game.EventLog {
 	return gs.Events
+}
+func (gs *GameServer) GetRegistry() *game.PlayerRegistry {
+	return gs.Registry
 }
 func (gs *GameServer) GetCommandChannel() chan game.GameCommand {
 	return gs.State.Commands

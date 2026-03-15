@@ -79,6 +79,12 @@ type ShipRefuelCommandData struct {
 	Amount   int // amount of Fuel to transfer (0 = fill up)
 }
 
+// RegisterPlayerCommandData is the payload for creating a new player faction.
+type RegisterPlayerCommandData struct {
+	Name       string
+	AccountKey string
+}
+
 // WorkforceAssignCommandData is the payload for assigning workforce.
 type WorkforceAssignCommandData struct {
 	PlanetID      int
