@@ -95,7 +95,7 @@ jobs:
                     </div>
                   </div>
                   <div class="actions">
-                    <a id="play-link" href="play.html">Play Online<span>Join live server</span></a>
+                    <a id="play-link" href="play.html">Play Game<span>Join live server</span></a>
                     <a href="https://api.xandaris.space/" target="_blank">Spectator<span>Live server</span></a>
                     <a href="live.html">Dashboard<span>Economy data</span></a>
                   </div>
@@ -106,15 +106,20 @@ jobs:
 
             <!-- Info cards for non-authenticated visitors -->
             <div id="guest-cards" class="cards">
+              <a class="card" href="play.html">
+                <h2>Play Game</h2>
+                <p>Run the game in your browser. Build mines, trade resources, grow your empire.</p>
+                <span class="badge demo">WASM</span>
+              </a>
               <a class="card" href="https://api.xandaris.space/" target="_blank">
-                <h2>Live Server</h2>
+                <h2>Spectator</h2>
                 <p>Watch the real-time economy — AI factions trading, prices moving, cargo ships in transit.</p>
                 <span class="badge live">LIVE</span>
               </a>
-              <a class="card" href="play.html">
-                <h2>Play Demo</h2>
-                <p>Run a standalone game in your browser. Build mines, trade resources, grow your empire.</p>
-                <span class="badge demo">WASM</span>
+              <a class="card" href="live.html">
+                <h2>Dashboard</h2>
+                <p>Market prices, player rankings, galaxy flows, and game stats updated in real time.</p>
+                <span class="badge live">DATA</span>
               </a>
             </div>
 
