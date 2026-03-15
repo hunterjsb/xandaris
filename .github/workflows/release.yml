@@ -124,6 +124,7 @@ jobs:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
         run: |
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/key.pem
@@ -159,10 +160,14 @@ jobs:
             sudo systemctl enable xandaris-agent
           fi"
 
-          # Update OpenRouter key in both service files (agent uses it directly, server uses it for /api/chat)
+          # Update environment variables in systemd service files
           $SSH "sudo sed -i 's|^Environment=OPENROUTER_API_KEY=.*|Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}|' /etc/systemd/system/xandaris-agent.service && \
                 grep -q OPENROUTER /etc/systemd/system/xandaris.service || sudo sed -i '/^Environment=XANDARIS_API_KEY=/a Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}' /etc/systemd/system/xandaris.service && \
                 sudo sed -i 's|^Environment=OPENROUTER_API_KEY=.*|Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}|' /etc/systemd/system/xandaris.service && \
+                grep -q DISCORD_CLIENT_SECRET /etc/systemd/system/xandaris.service || sudo sed -i '/^Environment=XANDARIS_API_KEY=/a Environment=DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}' /etc/systemd/system/xandaris.service && \
+                sudo sed -i 's|^Environment=DISCORD_CLIENT_SECRET=.*|Environment=DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}|' /etc/systemd/system/xandaris.service && \
+                grep -q BASE_URL /etc/systemd/system/xandaris.service || sudo sed -i '/^Environment=XANDARIS_API_KEY=/a Environment=BASE_URL=https://api.xandaris.space' /etc/systemd/system/xandaris.service && \
+                grep -q FRONTEND_URL /etc/systemd/system/xandaris.service || sudo sed -i '/^Environment=XANDARIS_API_KEY=/a Environment=FRONTEND_URL=https://hunterjsb.github.io/xandaris' /etc/systemd/system/xandaris.service && \
                 sudo systemctl daemon-reload"
 
           # Swap server binary and restart
