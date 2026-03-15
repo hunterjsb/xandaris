@@ -115,28 +115,68 @@ jobs:
           go-version: '1.25.x'
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev libasound2-dev
-      - name: Build server binary
-        run: go build -v -o xandaris-server
+      - name: Build server and agent binaries
+        run: |
+          go build -v -o xandaris-server
+          go build -v -o xandaris-agent ./cmd/agent/
       - name: Deploy to EC2
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/key.pem
           chmod 600 ~/.ssh/key.pem
+          SCP="scp -o StrictHostKeyChecking=no -i ~/.ssh/key.pem"
           SSH="ssh -o StrictHostKeyChecking=no -i ~/.ssh/key.pem ec2-user@$EC2_HOST"
 
-          # Upload new binary
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/key.pem xandaris-server ec2-user@$EC2_HOST:/home/ec2-user/xandaris-server-new
+          # Upload binaries
+          $SCP xandaris-server ec2-user@$EC2_HOST:/home/ec2-user/xandaris-server-new
+          $SCP xandaris-agent ec2-user@$EC2_HOST:/home/ec2-user/xandaris-agent-new
 
-          # Swap binary and restart service
+          # Create agent systemd service if it doesn't exist
+          $SSH "if [ ! -f /etc/systemd/system/xandaris-agent.service ]; then
+            sudo tee /etc/systemd/system/xandaris-agent.service > /dev/null <<'SVCEOF'
+          [Unit]
+          Description=Xandaris LLM Agent
+          After=network.target xandaris.service
+          Wants=xandaris.service
+
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/home/ec2-user
+          ExecStart=/home/ec2-user/xandaris-agent --server http://localhost:8080 --game-key e4287f2503866497ce414a00c55f4581 --turns 999999 --interval 30s --model z-ai/glm-4.7-flash
+          Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+          Restart=always
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
+            sudo systemctl daemon-reload
+            sudo systemctl enable xandaris-agent
+          fi"
+
+          # Update OpenRouter key in service file
+          $SSH "sudo sed -i 's|^Environment=OPENROUTER_API_KEY=.*|Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}|' /etc/systemd/system/xandaris-agent.service && sudo systemctl daemon-reload"
+
+          # Swap server binary and restart
           $SSH "chmod +x /home/ec2-user/xandaris-server-new && \
                 sudo systemctl stop xandaris && \
                 mv /home/ec2-user/xandaris-server-new /home/ec2-user/xandaris-server && \
                 sudo systemctl start xandaris && \
                 sleep 2 && \
                 sudo systemctl is-active xandaris"
+
+          # Swap agent binary and restart
+          $SSH "chmod +x /home/ec2-user/xandaris-agent-new && \
+                sudo systemctl stop xandaris-agent 2>/dev/null || true && \
+                mv /home/ec2-user/xandaris-agent-new /home/ec2-user/xandaris-agent && \
+                sudo systemctl start xandaris-agent && \
+                sleep 2 && \
+                sudo systemctl is-active xandaris-agent"
 
   publish_release:
     runs-on: ubuntu-latest

@@ -22,16 +22,21 @@ IMPORTANT RULES:
 - ALWAYS call get_planet before trading to check your actual stock levels
 - Only sell resources you HAVE (check stored_resources in get_planet response)
 - Only build_ship if your Shipyard construction is COMPLETE (check get_construction)
-- Mine costs 500cr, Refinery 1500cr, Shipyard 2000cr, Cargo ship 1000cr + 60 Iron + 15 Fuel
+- Mine 500cr, Refinery 1500cr, Factory 2000cr, Shipyard 2000cr, Habitat 800cr
+
+RESOURCES: Iron(75), Water(100), Oil(150), Fuel(200), Rare Metals(500), Helium-3(600), Electronics(800)
+PRODUCTION CHAINS: Refinery: 2 Oil → 3 Fuel | Factory: 2 Rare Metals + 1 Iron → 2 Electronics
 
 STRATEGY:
 1. Build mines on ALL unmined resource deposits (check resource_deposits, build on ones where has_mine=false)
-2. Build Refinery when mines are done (converts Oil→Fuel)
-3. Build Shipyard when you have 2000cr
-4. Build Cargo ship for trade routes (needs operational Shipyard + Iron + Fuel on planet)
-5. Sell surplus resources (storage > 200) at market for credits
-6. Upgrade mines (750cr) when affordable to boost production
-7. Move Cargo ships to adjacent systems using get_routes then move_ship
+2. Build Refinery when you have Oil mines (converts Oil→Fuel, essential for ships)
+3. Build Factory when you have Rare Metals + Iron mines (makes Electronics — high value!)
+4. Build Shipyard when you have 2000cr, then build Cargo ships for trade
+5. Sell surplus resources (storage > 300) at market — especially Electronics (800cr base!)
+6. Buy resources that are cheap (below base price) — arbitrage opportunities
+7. Upgrade mines and factories when affordable to boost throughput (+30%/level)
+8. Keep resources stocked to maintain planet happiness (affects productivity 0.5x-1.5x)
+9. Build Habitats when population nears capacity for more workers
 
 Think step by step. Be precise — check your actual resources before trading.`
 
