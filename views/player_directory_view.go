@@ -18,6 +18,8 @@ type playerDirectoryEntry struct {
 	tradingPosts int
 	totalStock   int
 	mines        int
+	buildings    int
+	population   int64
 	bounds       struct {
 		X, Y, W, H int
 	}
@@ -30,6 +32,7 @@ type PlayerDirectoryView struct {
 	entries           []*playerDirectoryEntry
 	scrollOffset      int
 	maxVisibleRows    int
+	hoveredRow        int
 	backgroundPanel   *UIPanel
 	headerPanel       *UIPanel
 	tablePanel        *UIPanel
@@ -44,35 +47,35 @@ func NewPlayerDirectoryView(ctx GameContext) *PlayerDirectoryView {
 		Y:           panelMargin,
 		Width:       ScreenWidth - panelMargin*2,
 		Height:      ScreenHeight - panelMargin*2,
-		BgColor:     color.RGBA{18, 24, 36, 240},
-		BorderColor: utils.PanelBorder,
+		BgColor:     color.RGBA{12, 16, 28, 245},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	header := &UIPanel{
 		X:           background.X + 20,
-		Y:           background.Y + 20,
+		Y:           background.Y + 15,
 		Width:       background.Width - 40,
-		Height:      80,
-		BgColor:     color.RGBA{25, 32, 48, 245},
-		BorderColor: utils.PanelBorder,
+		Height:      60,
+		BgColor:     color.RGBA{18, 22, 42, 250},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	table := &UIPanel{
 		X:           header.X,
-		Y:           header.Y + header.Height + 10,
+		Y:           header.Y + header.Height + 8,
 		Width:       header.Width,
-		Height:      background.Height - header.Height - 100,
-		BgColor:     color.RGBA{20, 28, 45, 235},
-		BorderColor: utils.PanelBorder,
+		Height:      background.Height - header.Height - 85,
+		BgColor:     color.RGBA{14, 18, 34, 240},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	instructions := &UIPanel{
 		X:           background.X + 20,
-		Y:           background.Y + background.Height - 70,
+		Y:           background.Y + background.Height - 50,
 		Width:       background.Width - 40,
-		Height:      50,
-		BgColor:     color.RGBA{22, 30, 50, 235},
-		BorderColor: utils.PanelBorder,
+		Height:      35,
+		BgColor:     color.RGBA{18, 22, 42, 240},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	return &PlayerDirectoryView{
@@ -81,6 +84,7 @@ func NewPlayerDirectoryView(ctx GameContext) *PlayerDirectoryView {
 		entries:           make([]*playerDirectoryEntry, 0),
 		scrollOffset:      0,
 		maxVisibleRows:    14,
+		hoveredRow:        -1,
 		backgroundPanel:   background,
 		headerPanel:       header,
 		tablePanel:        table,
@@ -110,6 +114,17 @@ func (pd *PlayerDirectoryView) Update() error {
 		return nil
 	}
 
+	// Track hovered row
+	mx, my := ebiten.CursorPosition()
+	pd.hoveredRow = -1
+	for i, entry := range pd.entries {
+		if mx >= entry.bounds.X && mx <= entry.bounds.X+entry.bounds.W &&
+			my >= entry.bounds.Y && my <= entry.bounds.Y+entry.bounds.H {
+			pd.hoveredRow = i
+			break
+		}
+	}
+
 	if len(pd.entries) > 0 {
 		_, wheelY := ebiten.Wheel()
 		if wheelY != 0 {
@@ -124,7 +139,6 @@ func (pd *PlayerDirectoryView) Update() error {
 	}
 
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		mx, my := ebiten.CursorPosition()
 		if mx >= pd.tablePanel.X && mx <= pd.tablePanel.X+pd.tablePanel.Width &&
 			my >= pd.tablePanel.Y && my <= pd.tablePanel.Y+pd.tablePanel.Height {
 			for _, entry := range pd.entries {
@@ -147,101 +161,172 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 	pd.tablePanel.Draw(screen)
 	pd.instructionsPanel.Draw(screen)
 
-	titleY := pd.headerPanel.Y + 20
-	DrawTextCentered(screen, "Player Directory", pd.headerPanel.X+pd.headerPanel.Width/2, titleY, color.RGBA{235, 240, 255, 255}, 1.8)
-
-	summary := fmt.Sprintf("Factions tracked: %d", len(pd.entries))
-	DrawTextCentered(screen, summary, pd.headerPanel.X+pd.headerPanel.Width/2, titleY+40, utils.TextSecondary, 1.2)
-
-	headerY := pd.tablePanel.Y + 18
-	// Refresh data every draw (lightweight)
+	// Refresh data every draw
 	pd.refreshEntries()
 
-	DrawText(screen, "Name", pd.tablePanel.X+20, headerY, utils.TextPrimary)
-	DrawText(screen, "Type", pd.tablePanel.X+170, headerY, utils.TextPrimary)
-	DrawText(screen, "Credits", pd.tablePanel.X+220, headerY, utils.TextPrimary)
-	DrawText(screen, "Pop", pd.tablePanel.X+290, headerY, utils.TextPrimary)
-	DrawText(screen, "Mines", pd.tablePanel.X+350, headerY, utils.TextPrimary)
-	DrawText(screen, "Ships", pd.tablePanel.X+400, headerY, utils.TextPrimary)
-	DrawText(screen, "Bldgs", pd.tablePanel.X+450, headerY, utils.TextPrimary)
-	DrawText(screen, "Stock", pd.tablePanel.X+510, headerY, utils.TextPrimary)
-	DrawText(screen, "Home", pd.tablePanel.X+580, headerY, utils.TextPrimary)
+	accentColor := color.RGBA{127, 219, 202, 255}
+	dimColor := color.RGBA{80, 95, 115, 255}
 
-	DrawLine(screen, pd.tablePanel.X+15, headerY+12, pd.tablePanel.X+pd.tablePanel.Width-15, headerY+12, utils.PanelBorder)
+	// Header
+	titleY := pd.headerPanel.Y + 15
+	DrawTextCentered(screen, "PLAYER DIRECTORY", pd.headerPanel.X+pd.headerPanel.Width/2, titleY, accentColor, 1.6)
+	summary := fmt.Sprintf("%d factions", len(pd.entries))
+	DrawTextCentered(screen, summary, pd.headerPanel.X+pd.headerPanel.Width/2, titleY+25, dimColor, 1.0)
+
+	// Column headers
+	headerY := pd.tablePanel.Y + 16
+	cols := pd.columnOffsets()
+
+	DrawText(screen, "Faction", cols[0], headerY, dimColor)
+	DrawText(screen, "Credits", cols[1], headerY, dimColor)
+	DrawText(screen, "Pop", cols[2], headerY, dimColor)
+	DrawText(screen, "Planets", cols[3], headerY, dimColor)
+	DrawText(screen, "Mines", cols[4], headerY, dimColor)
+	DrawText(screen, "Ships", cols[5], headerY, dimColor)
+	DrawText(screen, "Stock", cols[6], headerY, dimColor)
+
+	DrawLine(screen, pd.tablePanel.X+12, headerY+14, pd.tablePanel.X+pd.tablePanel.Width-12, headerY+14, color.RGBA{30, 40, 68, 255})
 
 	if len(pd.entries) == 0 {
-		DrawText(screen, "No known factions yet. Establish contact to populate this list.", pd.tablePanel.X+20, headerY+40, utils.TextSecondary)
+		DrawTextCentered(screen, "No factions discovered.", pd.tablePanel.X+pd.tablePanel.Width/2, headerY+60, dimColor, 1.0)
 	} else {
-		contentTop := headerY + 20
-		rowHeight := 26
+		// Find max credits for wealth bar scaling
+		maxCredits := 1
+		for _, e := range pd.entries {
+			if e.player.Credits > maxCredits {
+				maxCredits = e.player.Credits
+			}
+		}
+
+		contentTop := headerY + 22
+		rowHeight := 30
 		startIndex := pd.visibleStartIndex()
 		endIndex := pd.visibleEndIndex()
 		y := contentTop
 
-		for _, entry := range pd.entries[startIndex:endIndex] {
-			entry.bounds.X = pd.tablePanel.X + 15
-			entry.bounds.Y = y - 8
-			entry.bounds.W = pd.tablePanel.Width - 30
+		for idx, entry := range pd.entries[startIndex:endIndex] {
+			globalIdx := startIndex + idx
+
+			// Row background on hover
+			if globalIdx == pd.hoveredRow {
+				rowBg := ebiten.NewImage(pd.tablePanel.Width-24, rowHeight)
+				rowBg.Fill(color.RGBA{25, 32, 55, 200})
+				opts := &ebiten.DrawImageOptions{}
+				opts.GeoM.Translate(float64(pd.tablePanel.X+12), float64(y-6))
+				screen.DrawImage(rowBg, opts)
+			}
+
+			entry.bounds.X = pd.tablePanel.X + 12
+			entry.bounds.Y = y - 6
+			entry.bounds.W = pd.tablePanel.Width - 24
 			entry.bounds.H = rowHeight
 
+			// Player color dot + name
+			dotImg := utils.NewCircleImageCache().GetOrCreate(4, entry.player.Color)
+			dotOpts := &ebiten.DrawImageOptions{}
+			dotOpts.GeoM.Translate(float64(cols[0]-2), float64(y+2))
+			screen.DrawImage(dotImg, dotOpts)
+
 			nameColor := entry.player.Color
-			DrawText(screen, entry.player.Name, pd.tablePanel.X+20, y, nameColor)
-			playerType := "AI"
+			label := entry.player.Name
 			if entry.isHuman {
-				playerType = "Human"
+				label += " *"
 			}
-			DrawText(screen, playerType, pd.tablePanel.X+170, y, utils.TextSecondary)
-			credColor := utils.TextPrimary
-			if entry.player.Credits < 1000 {
-				credColor = utils.SystemRed
+			DrawText(screen, truncate(label, 18), cols[0]+12, y, nameColor)
+
+			// Credits with wealth bar
+			credStr := formatNumber(entry.player.Credits)
+			credColor := color.RGBA{192, 200, 216, 255}
+			if entry.player.Credits < 500 {
+				credColor = color.RGBA{255, 100, 100, 255}
+			} else if entry.player.Credits > 100000 {
+				credColor = color.RGBA{127, 219, 202, 255}
 			}
-			DrawText(screen, fmt.Sprintf("%d", entry.player.Credits), pd.tablePanel.X+220, y, credColor)
+			DrawText(screen, credStr, cols[1], y, credColor)
+
+			// Small wealth bar under credits
+			barWidth := 70
+			barHeight := 3
+			barY := y + 12
+			ratio := float64(entry.player.Credits) / float64(maxCredits)
+			if ratio > 1 {
+				ratio = 1
+			}
+			fillWidth := int(float64(barWidth) * ratio)
+			if fillWidth < 1 {
+				fillWidth = 1
+			}
+			barBg := ebiten.NewImage(barWidth, barHeight)
+			barBg.Fill(color.RGBA{20, 25, 40, 255})
+			barBgOpts := &ebiten.DrawImageOptions{}
+			barBgOpts.GeoM.Translate(float64(cols[1]), float64(barY))
+			screen.DrawImage(barBg, barBgOpts)
+			barFill := ebiten.NewImage(fillWidth, barHeight)
+			barFill.Fill(entry.player.Color)
+			barFillOpts := &ebiten.DrawImageOptions{}
+			barFillOpts.GeoM.Translate(float64(cols[1]), float64(barY))
+			screen.DrawImage(barFill, barFillOpts)
 
 			// Population
-			pop := entry.player.GetTotalPopulation()
-			popStr := fmt.Sprintf("%d", pop)
-			if pop >= 1000 {
-				popStr = fmt.Sprintf("%.1fk", float64(pop)/1000.0)
+			popStr := formatPopulation(entry.population)
+			DrawText(screen, popStr, cols[2], y, color.RGBA{192, 200, 216, 255})
+
+			// Planets
+			planetColor := dimColor
+			if entry.planets > 0 {
+				planetColor = color.RGBA{192, 200, 216, 255}
 			}
-			DrawText(screen, popStr, pd.tablePanel.X+290, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", entry.planets), cols[3], y, planetColor)
 
 			// Mines
-			mineColor := utils.TextSecondary
+			mineColor := dimColor
 			if entry.mines > 0 {
-				mineColor = utils.TextPrimary
+				mineColor = color.RGBA{192, 200, 216, 255}
 			}
-			DrawText(screen, fmt.Sprintf("%d", entry.mines), pd.tablePanel.X+350, y, mineColor)
+			DrawText(screen, fmt.Sprintf("%d", entry.mines), cols[4], y, mineColor)
 
-			DrawText(screen, fmt.Sprintf("%d", len(entry.player.OwnedShips)), pd.tablePanel.X+400, y, utils.TextPrimary)
-
-			// Building count
-			bldgCount := 0
-			for _, planet := range entry.player.OwnedPlanets {
-				if planet != nil {
-					bldgCount += len(planet.Buildings)
-				}
+			// Ships
+			shipCount := len(entry.player.OwnedShips)
+			if shipCount == 0 && entry.player.SyncedStock > 0 {
+				// Remote player — we don't have local ship data
+				shipCount = 0 // Can't determine from synced data yet
 			}
-			DrawText(screen, fmt.Sprintf("%d", bldgCount), pd.tablePanel.X+450, y, utils.TextPrimary)
+			DrawText(screen, fmt.Sprintf("%d", shipCount), cols[5], y, color.RGBA{192, 200, 216, 255})
 
-			DrawText(screen, fmt.Sprintf("%d", entry.totalStock), pd.tablePanel.X+510, y, utils.TextPrimary)
-
-			homeName := "Unknown"
-			if entry.player.HomeSystem != nil {
-				homeName = entry.player.HomeSystem.Name
+			// Stock
+			stockColor := dimColor
+			if entry.totalStock > 0 {
+				stockColor = color.RGBA{192, 200, 216, 255}
 			}
-			DrawText(screen, homeName, pd.tablePanel.X+580, y, utils.TextSecondary)
+			DrawText(screen, formatNumber(entry.totalStock), cols[6], y, stockColor)
 
 			y += rowHeight
 		}
 
+		// Scroll indicator
 		if len(pd.entries) > pd.maxVisibleRows {
-			info := fmt.Sprintf("Showing %d-%d of %d", startIndex+1, endIndex, len(pd.entries))
-			DrawText(screen, info, pd.tablePanel.X+20, pd.tablePanel.Y+pd.tablePanel.Height-25, utils.TextSecondary)
+			info := fmt.Sprintf("%d-%d of %d", startIndex+1, endIndex, len(pd.entries))
+			DrawText(screen, info, pd.tablePanel.X+pd.tablePanel.Width-120, pd.tablePanel.Y+pd.tablePanel.Height-20, dimColor)
 		}
 	}
 
-	instrY := pd.instructionsPanel.Y + 20
-	DrawCenteredText(screen, "Click a faction to center its home system. Press [Esc] to return.", pd.instructionsPanel.X+pd.instructionsPanel.Width/2, instrY)
+	// Instructions
+	instrY := pd.instructionsPanel.Y + 12
+	DrawTextCentered(screen, "Click faction to focus home system  |  Scroll to browse  |  Esc to close",
+		pd.instructionsPanel.X+pd.instructionsPanel.Width/2, instrY, dimColor, 0.9)
+}
+
+func (pd *PlayerDirectoryView) columnOffsets() []int {
+	x := pd.tablePanel.X
+	return []int{
+		x + 20,  // Faction name
+		x + 160, // Credits
+		x + 250, // Population
+		x + 320, // Planets
+		x + 380, // Mines
+		x + 430, // Ships
+		x + 480, // Stock
+	}
 }
 
 func (pd *PlayerDirectoryView) refreshEntries() {
@@ -253,41 +338,58 @@ func (pd *PlayerDirectoryView) refreshEntries() {
 		}
 
 		mineCount := 0
+		bldgCount := 0
 		for _, planet := range player.OwnedPlanets {
 			if planet == nil {
 				continue
 			}
+			bldgCount += len(planet.Buildings)
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" {
 					mineCount++
 				}
 			}
 		}
+
+		pop := player.GetTotalPopulation()
+		planets := len(player.OwnedPlanets)
+		stock := totalStoredResources(player.OwnedPlanets)
+
+		// Use synced data for remote factions
+		if planets == 0 && player.SyncedPlanets > 0 {
+			planets = player.SyncedPlanets
+		}
+		if mineCount == 0 && player.SyncedMines > 0 {
+			mineCount = player.SyncedMines
+		}
+		if bldgCount == 0 && player.SyncedBuildings > 0 {
+			bldgCount = player.SyncedBuildings
+		}
+		if stock == 0 && player.SyncedStock > 0 {
+			stock = player.SyncedStock
+		}
+
 		entry := &playerDirectoryEntry{
 			player:       player,
 			isHuman:      player.IsHuman(),
-			planets:      len(player.OwnedPlanets),
+			planets:      planets,
 			tradingPosts: countTradingPosts(player.OwnedPlanets),
-			totalStock:   totalStoredResources(player.OwnedPlanets),
+			totalStock:   stock,
 			mines:        mineCount,
+			buildings:    bldgCount,
+			population:   pop,
 		}
 		pd.entries = append(pd.entries, entry)
 	}
 
+	// Sort by credits descending (richest first)
 	sort.Slice(pd.entries, func(i, j int) bool {
-		if pd.entries[i].isHuman == pd.entries[j].isHuman {
-			return pd.entries[i].player.Name < pd.entries[j].player.Name
-		}
-		return pd.entries[i].isHuman
+		return pd.entries[i].player.Credits > pd.entries[j].player.Credits
 	})
 }
 
 func (pd *PlayerDirectoryView) focusPlayer(player *entities.Player) {
-	if player == nil {
-		return
-	}
-
-	if player.HomeSystem == nil {
+	if player == nil || player.HomeSystem == nil {
 		return
 	}
 
@@ -299,7 +401,7 @@ func (pd *PlayerDirectoryView) focusPlayer(player *entities.Player) {
 }
 
 func (pd *PlayerDirectoryView) maxScroll() int {
-	total := len(pd.entries) * 26
+	total := len(pd.entries) * 30
 	visible := pd.tablePanel.Height - 60
 	maxScroll := total - visible
 	if maxScroll < 0 {
@@ -309,8 +411,7 @@ func (pd *PlayerDirectoryView) maxScroll() int {
 }
 
 func (pd *PlayerDirectoryView) visibleStartIndex() int {
-	rowHeight := 26
-	return pd.scrollOffset / rowHeight
+	return pd.scrollOffset / 30
 }
 
 func (pd *PlayerDirectoryView) visibleEndIndex() int {
@@ -331,3 +432,39 @@ func (pd *PlayerDirectoryView) SetReturnView(view ViewType) {
 func (pd *PlayerDirectoryView) GetReturnView() ViewType {
 	return pd.returnTo
 }
+
+// --- Formatting helpers ---
+
+func formatNumber(n int) string {
+	if n >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(n)/1000000.0)
+	}
+	if n >= 10000 {
+		return fmt.Sprintf("%.0fk", float64(n)/1000.0)
+	}
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000.0)
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+func formatPopulation(pop int64) string {
+	if pop >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(pop)/1000000.0)
+	}
+	if pop >= 10000 {
+		return fmt.Sprintf("%.0fk", float64(pop)/1000.0)
+	}
+	if pop >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(pop)/1000.0)
+	}
+	return fmt.Sprintf("%d", pop)
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-2] + ".."
+}
+

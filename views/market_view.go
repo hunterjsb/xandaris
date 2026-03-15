@@ -57,41 +57,41 @@ const tradeLot = 10
 
 // NewMarketView creates a new market view instance
 func NewMarketView(ctx GameContext) *MarketView {
-	panelMargin := 60
+	panelMargin := 40
 	background := &UIPanel{
 		X:           panelMargin,
 		Y:           panelMargin,
 		Width:       ScreenWidth - panelMargin*2,
 		Height:      ScreenHeight - panelMargin*2,
-		BgColor:     color.RGBA{18, 20, 32, 235},
-		BorderColor: utils.PanelBorder,
+		BgColor:     color.RGBA{12, 16, 28, 245},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	header := &UIPanel{
-		X:           background.X + 20,
-		Y:           background.Y + 20,
-		Width:       background.Width - 40,
-		Height:      70,
-		BgColor:     color.RGBA{28, 38, 58, 245},
-		BorderColor: utils.PanelBorder,
+		X:           background.X + 15,
+		Y:           background.Y + 12,
+		Width:       background.Width - 30,
+		Height:      55,
+		BgColor:     color.RGBA{18, 22, 42, 250},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	table := &UIPanel{
 		X:           header.X,
-		Y:           header.Y + header.Height + 10,
+		Y:           header.Y + header.Height + 6,
 		Width:       header.Width,
-		Height:      background.Height - header.Height - 120,
-		BgColor:     color.RGBA{22, 30, 48, 235},
-		BorderColor: utils.PanelBorder,
+		Height:      background.Height - header.Height - 80,
+		BgColor:     color.RGBA{14, 18, 34, 240},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	instructions := &UIPanel{
-		X:           background.X + 20,
-		Y:           table.Y + table.Height + 10,
-		Width:       background.Width - 40,
-		Height:      50,
-		BgColor:     color.RGBA{22, 32, 48, 235},
-		BorderColor: utils.PanelBorder,
+		X:           background.X + 15,
+		Y:           table.Y + table.Height + 6,
+		Width:       background.Width - 30,
+		Height:      35,
+		BgColor:     color.RGBA{18, 22, 42, 240},
+		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 
 	return &MarketView{
@@ -205,15 +205,18 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	mv.tablePanel.Draw(screen)
 	mv.instructionsPanel.Draw(screen)
 
-	title := "Market Directory"
-	if mv.tradingPlanet != nil {
-		title = fmt.Sprintf("Market at %s", mv.tradingPlanet.Name)
-	}
-	subtitle := fmt.Sprintf("Credits: %d", mv.humanCredits)
-	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+22, utils.TextPrimary)
-	DrawText(screen, subtitle, mv.headerPanel.X+20, mv.headerPanel.Y+40, utils.TextSecondary)
+	accentColor := color.RGBA{127, 219, 202, 255}
+	dimColor := color.RGBA{80, 95, 115, 255}
 
-	// Stock on this planet (right-aligned)
+	title := "MARKET"
+	if mv.tradingPlanet != nil {
+		title = fmt.Sprintf("MARKET — %s", mv.tradingPlanet.Name)
+	}
+	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+15, accentColor)
+	credStr := fmt.Sprintf("Credits: %s", formatNumber(mv.humanCredits))
+	DrawText(screen, credStr, mv.headerPanel.X+20, mv.headerPanel.Y+35, color.RGBA{192, 200, 216, 255})
+
+	// Stock + trade mode (right side)
 	if mv.tradingPlanet != nil {
 		totalStock := 0
 		for _, s := range mv.tradingPlanet.StoredResources {
@@ -221,23 +224,19 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 				totalStock += s.Amount
 			}
 		}
-		stockInfo := fmt.Sprintf("Stock: %d  Pop: %d", totalStock, mv.tradingPlanet.Population)
+		stockInfo := fmt.Sprintf("Stock: %s  Pop: %s", formatNumber(totalStock), formatPopulation(mv.tradingPlanet.Population))
 		stockWidth := len(stockInfo) * 6
-		DrawText(screen, stockInfo, mv.headerPanel.X+mv.headerPanel.Width-stockWidth-20, mv.headerPanel.Y+22, utils.TextSecondary)
-	}
+		DrawText(screen, stockInfo, mv.headerPanel.X+mv.headerPanel.Width-stockWidth-20, mv.headerPanel.Y+15, dimColor)
 
-	// Show trade mode (local vs galaxy-wide) with fee info
-	tradeMode := "Galaxy-wide trading (import/export fees apply)"
-	tradeModeColor := utils.SystemOrange
-	// Check if there's an NPC in the same system for local trading
-	if mv.tradingPlanet != nil {
+		// Trade mode indicator
+		tradeMode := "Galaxy (fees apply)"
+		tradeModeColor := utils.SystemOrange
 		for _, sys := range mv.ctx.GetSystems() {
 			for _, e := range sys.Entities {
 				if p, ok := e.(*entities.Planet); ok && p.GetID() == mv.tradingPlanet.GetID() {
-					// Check for NPC planets in this system
 					for _, e2 := range sys.Entities {
 						if p2, ok := e2.(*entities.Planet); ok && p2.Owner != "" && p2.Owner != mv.tradingPlanet.Owner {
-							tradeMode = "Local market (no fees)"
+							tradeMode = "Local (no fees)"
 							tradeModeColor = utils.SystemGreen
 							break
 						}
@@ -246,14 +245,13 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 				}
 			}
 		}
+		tmWidth := len(tradeMode) * 6
+		DrawText(screen, tradeMode, mv.headerPanel.X+mv.headerPanel.Width-tmWidth-20, mv.headerPanel.Y+35, tradeModeColor)
 	}
-	DrawText(screen, tradeMode, mv.headerPanel.X+300, mv.headerPanel.Y+40, tradeModeColor)
 
-	// Show status message or commodity count
+	// Status message
 	if mv.statusMsg != "" {
-		DrawText(screen, mv.statusMsg, mv.headerPanel.X+20, mv.headerPanel.Y+58, mv.statusColor)
-	} else {
-		DrawText(screen, fmt.Sprintf("Commodities: %d", len(mv.rows)), mv.headerPanel.X+20, mv.headerPanel.Y+58, utils.TextSecondary)
+		DrawText(screen, mv.statusMsg, mv.headerPanel.X+250, mv.headerPanel.Y+35, mv.statusColor)
 	}
 
 	headerY := mv.tablePanel.Y + 18
@@ -268,18 +266,18 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	colFee := mv.tablePanel.X + 645
 	colAction := mv.tablePanel.X + mv.tablePanel.Width - 120
 
-	DrawText(screen, "Commodity", colResource, headerY, utils.TextPrimary)
-	DrawText(screen, "Stock", colStock, headerY, utils.TextPrimary)
-	DrawText(screen, "Galaxy", colGalSupply, headerY, utils.TextSecondary)
-	DrawText(screen, "Buy @", colBuy, headerY, utils.SystemGreen)
-	DrawText(screen, "Sell @", colSell, headerY, utils.SystemOrange)
-	DrawText(screen, "Best@", colBase, headerY, utils.SystemGreen)
-	DrawText(screen, "Flow", colDemand, headerY, utils.TextSecondary)
-	DrawText(screen, "Status", colTrend, headerY, utils.TextPrimary)
-	DrawText(screen, "Fee", colFee, headerY, utils.TextSecondary)
-	DrawText(screen, "Trade", colAction, headerY, utils.TextPrimary)
+	DrawText(screen, "Commodity", colResource, headerY, dimColor)
+	DrawText(screen, "Stock", colStock, headerY, dimColor)
+	DrawText(screen, "Galaxy", colGalSupply, headerY, dimColor)
+	DrawText(screen, "Buy @", colBuy, headerY, dimColor)
+	DrawText(screen, "Sell @", colSell, headerY, dimColor)
+	DrawText(screen, "Best@", colBase, headerY, dimColor)
+	DrawText(screen, "Flow", colDemand, headerY, dimColor)
+	DrawText(screen, "Status", colTrend, headerY, dimColor)
+	DrawText(screen, "Fee", colFee, headerY, dimColor)
+	DrawText(screen, "Trade", colAction, headerY, dimColor)
 
-	DrawLine(screen, mv.tablePanel.X+15, headerY+12, mv.tablePanel.X+mv.tablePanel.Width-15, headerY+12, utils.PanelBorder)
+	DrawLine(screen, mv.tablePanel.X+12, headerY+14, mv.tablePanel.X+mv.tablePanel.Width-12, headerY+14, color.RGBA{30, 40, 68, 255})
 
 	if len(mv.rows) == 0 {
 		DrawText(screen, "No tradable inventory available yet. Build Trading Posts and accumulate goods.",
@@ -297,15 +295,19 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		endIndex = len(mv.rows)
 	}
 
+	mx, my := ebiten.CursorPosition()
 	for _, row := range mv.rows[mv.scrollOffset:endIndex] {
-		rowRect := image.Rect(mv.tablePanel.X+12, y-4, mv.tablePanel.X+mv.tablePanel.Width-12, y+rowHeight-4)
+		// Hover highlight
+		if mx >= mv.tablePanel.X+12 && mx <= mv.tablePanel.X+mv.tablePanel.Width-12 &&
+			my >= y-4 && my < y+rowHeight-4 {
+			hoverBg := ebiten.NewImage(mv.tablePanel.Width-24, rowHeight)
+			hoverBg.Fill(color.RGBA{25, 32, 55, 200})
+			opts := &ebiten.DrawImageOptions{}
+			opts.GeoM.Translate(float64(mv.tablePanel.X+12), float64(y-4))
+			screen.DrawImage(hoverBg, opts)
+		}
 
-		rowPanel := NewUIPanel(rowRect.Min.X, rowRect.Min.Y, rowRect.Dx(), rowRect.Dy())
-		rowPanel.BgColor = color.RGBA{34, 46, 70, 220}
-		rowPanel.BorderColor = utils.PanelBorder
-		rowPanel.Draw(screen)
-
-		DrawText(screen, row.resource, colResource, y, utils.TextPrimary)
+		DrawText(screen, row.resource, colResource, y, color.RGBA{192, 200, 216, 255})
 
 		// Stock: player's stock on trading planet (white = plenty, red = low)
 		stockColor := utils.TextPrimary
@@ -527,8 +529,9 @@ func (mv *MarketView) setStatus(msg string, c color.RGBA) {
 }
 
 func (mv *MarketView) drawInstructions(screen *ebiten.Image) {
-	instr := fmt.Sprintf("[Buy]/[Sell] trades %d units. Scroll with mouse wheel. [Esc] to return.", tradeLot)
-	DrawText(screen, instr, mv.instructionsPanel.X+20, mv.instructionsPanel.Y+20, utils.TextSecondary)
+	dimColor := color.RGBA{80, 95, 115, 255}
+	instr := fmt.Sprintf("Click Buy/Sell to trade %d units  |  Scroll to browse  |  Esc to close", tradeLot)
+	DrawTextCentered(screen, instr, mv.instructionsPanel.X+mv.instructionsPanel.Width/2, mv.instructionsPanel.Y+12, dimColor, 0.9)
 }
 
 func (mv *MarketView) getRow(resource string) *marketResourceRow {
