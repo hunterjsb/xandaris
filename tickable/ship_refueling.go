@@ -90,7 +90,7 @@ func findPlanetAtOrbit(ship *entities.Ship, systems []*entities.System) *entitie
 		}
 		for _, e := range sys.Entities {
 			if planet, ok := e.(*entities.Planet); ok {
-				if math.Abs(ship.GetOrbitDistance()-planet.GetOrbitDistance()) < 1.0 {
+				if math.Abs(ship.GetOrbitDistance()-planet.GetOrbitDistance()) < 5.0 {
 					return planet
 				}
 			}
