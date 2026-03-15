@@ -141,15 +141,22 @@ func (tm *TickManager) TogglePause() {
 	}
 }
 
-// SetSpeed sets the game speed
+// SetSpeed sets the game speed. Accepts TickSpeed or float64.
 func (tm *TickManager) SetSpeed(speed interface{}) {
-	if ts, ok := speed.(TickSpeed); ok {
-		tm.speed = ts
-		if ts == TickSpeedPaused {
-			tm.isPaused = true
-		} else if tm.isPaused {
-			tm.Resume()
-		}
+	var ts TickSpeed
+	switch v := speed.(type) {
+	case TickSpeed:
+		ts = v
+	case float64:
+		ts = TickSpeed(v)
+	default:
+		return
+	}
+	tm.speed = ts
+	if ts == TickSpeedPaused {
+		tm.isPaused = true
+	} else if tm.isPaused {
+		tm.Resume()
 	}
 }
 

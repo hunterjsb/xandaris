@@ -7,6 +7,7 @@ import (
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/server"
 	"github.com/hunterjsb/xandaris/systems"
+	"github.com/hunterjsb/xandaris/ui"
 	"github.com/hunterjsb/xandaris/views"
 )
 
@@ -17,6 +18,7 @@ type App struct {
 
 	viewManager *views.ViewManager
 	keyBindings *systems.KeyBindings
+	commandBar  *ui.CommandBar
 
 	// Screen dimensions
 	screenWidth  int
@@ -72,8 +74,18 @@ func (a *App) SaveKeyBindings() error {
 
 // Update updates the app state (implements ebiten.Game).
 func (a *App) Update() error {
-	// Handle global keyboard shortcuts (client-side input)
-	a.handleGlobalInput()
+	// Command bar toggle (before other input so it can capture keys)
+	if a.commandBar != nil && a.commandBar.IsOpen() {
+		a.commandBar.Update()
+	} else {
+		// Handle global keyboard shortcuts (client-side input)
+		a.handleGlobalInput()
+	}
+
+	// Toggle command bar with backtick
+	if a.commandBar != nil && a.keyBindings.IsActionJustPressed(views.ActionOpenCommandBar) {
+		a.commandBar.Toggle()
+	}
 
 	// Drain commands and advance simulation (in-process server)
 	a.Server.DrainCommands()
@@ -89,6 +101,11 @@ func (a *App) Update() error {
 func (a *App) Draw(screen *ebiten.Image) {
 	a.viewManager.Draw(screen)
 	a.drawTickInfo(screen)
+
+	// Command bar draws on top of everything
+	if a.commandBar != nil {
+		a.commandBar.Draw(screen)
+	}
 }
 
 // Layout returns the game's screen size (implements ebiten.Game).

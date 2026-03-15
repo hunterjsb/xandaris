@@ -56,6 +56,9 @@ func (a *App) InitializeClientViews() {
 	fleetInfoUI := ui.NewFleetInfoUI(a)
 
 	a.initializeGameViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
+
+	// Command bar (overlay on all views)
+	a.commandBar = ui.NewCommandBar(a, a.screenWidth, a.screenHeight)
 }
 
 // SwitchToGalaxyView switches the view to the galaxy view. Used for remote play startup.

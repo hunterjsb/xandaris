@@ -12,13 +12,20 @@ type UIContext interface {
 	// State access
 	GetState() *game.State
 	GetSystemsMap() map[int]*entities.System
+	GetSystems() []*entities.System
 	GetHyperlanes() []entities.Hyperlane
+	GetHumanPlayer() *entities.Player
 
 	// System managers (reuse interfaces from views package to avoid duplication)
 	GetTickManager() views.TickManagerInterface
 	GetFleetCommander() views.FleetCommandInterface
 	GetFleetManagementSystem() *game.FleetManagementSystem
 	GetKeyBindings() views.KeyBindingsInterface
+	GetViewManager() views.ViewManagerInterface
+
+	// Event log and command channel
+	GetEventLog() *game.EventLog
+	GetCommandChannel() chan game.GameCommand
 
 	// Cargo command executor for loading/unloading cargo
 	GetCargoCommander() *game.CargoCommandExecutor

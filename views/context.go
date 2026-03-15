@@ -41,6 +41,12 @@ type GameContext interface {
 	GetMarket() *economy.Market
 	GetTradeExecutor() *economy.TradeExecutor
 
+	// Event log for command bar / event feed
+	GetEventLog() *game.EventLog
+
+	// Command channel for issuing game commands
+	GetCommandChannel() chan game.GameCommand
+
 	// Game lifecycle methods (primarily for main menu)
 	// These update the current game state in-place rather than replacing it
 	InitializeNewGame(playerName string) error
@@ -99,6 +105,9 @@ const (
 	ActionOpenPlayerDir       KeyAction = "open_player_directory"
 	ActionFocusHome           KeyAction = "focus_home_system"
 	ActionToggleWorkforceView KeyAction = "toggle_workforce_view"
+
+	// Command bar
+	ActionOpenCommandBar KeyAction = "open_command_bar"
 
 	// Menu navigation
 	ActionMenuUp      KeyAction = "menu_up"

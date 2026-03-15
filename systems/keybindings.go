@@ -42,6 +42,7 @@ func (kb *KeyBindings) LoadDefaults() {
 	kb.bindings[views.ActionOpenPlayerDir] = ebiten.KeyP
 	kb.bindings[views.ActionFocusHome] = ebiten.KeyTab
 	kb.bindings[views.ActionToggleWorkforceView] = ebiten.KeyW
+	kb.bindings[views.ActionOpenCommandBar] = ebiten.KeyBackquote
 
 	// Menu navigation
 	kb.bindings[views.ActionMenuUp] = ebiten.KeyUp
@@ -86,6 +87,7 @@ func (kb *KeyBindings) GetActionName(action views.KeyAction) string {
 		views.ActionToggleWorkforceView: "Toggle Workforce View",
 		views.ActionOpenPlayerDir:       "Open Player Directory",
 		views.ActionFocusHome:           "Focus Home System",
+		views.ActionOpenCommandBar:      "Open Command Bar",
 		views.ActionMenuUp:              "Menu: Up",
 		views.ActionMenuDown:            "Menu: Down",
 		views.ActionMenuConfirm:         "Menu: Confirm",
@@ -165,6 +167,7 @@ func (kb *KeyBindings) GetAllActions() []views.KeyAction {
 		views.ActionOpenPlayerDir,
 		views.ActionFocusHome,
 		views.ActionToggleWorkforceView,
+		views.ActionOpenCommandBar,
 		views.ActionMenuUp,
 		views.ActionMenuDown,
 		views.ActionMenuConfirm,
