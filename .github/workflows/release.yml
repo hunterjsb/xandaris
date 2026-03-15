@@ -159,8 +159,11 @@ jobs:
             sudo systemctl enable xandaris-agent
           fi"
 
-          # Update OpenRouter key in service file
-          $SSH "sudo sed -i 's|^Environment=OPENROUTER_API_KEY=.*|Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}|' /etc/systemd/system/xandaris-agent.service && sudo systemctl daemon-reload"
+          # Update OpenRouter key in both service files (agent uses it directly, server uses it for /api/chat)
+          $SSH "sudo sed -i 's|^Environment=OPENROUTER_API_KEY=.*|Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}|' /etc/systemd/system/xandaris-agent.service && \
+                grep -q OPENROUTER /etc/systemd/system/xandaris.service || sudo sed -i '/^Environment=XANDARIS_API_KEY=/a Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}' /etc/systemd/system/xandaris.service && \
+                sudo sed -i 's|^Environment=OPENROUTER_API_KEY=.*|Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}|' /etc/systemd/system/xandaris.service && \
+                sudo systemctl daemon-reload"
 
           # Swap server binary and restart
           $SSH "chmod +x /home/ec2-user/xandaris-server-new && \
