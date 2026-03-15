@@ -383,9 +383,13 @@ func main() {
 	}
 	json.Unmarshal([]byte(result), &playersResp)
 
-	// Build faction list from server players
+	// Build faction list — only AI factions, never control human players
 	var factions []*Faction
 	for _, p := range playersResp.Data {
+		if p.Type == "human" {
+			fmt.Printf("   Skipping human player: %s\n", p.Name)
+			continue
+		}
 		personality, exists := factionPersonalities[p.Name]
 		if !exists {
 			personality = "You are a balanced strategist. Grow your economy steadily through smart investment and trade."
