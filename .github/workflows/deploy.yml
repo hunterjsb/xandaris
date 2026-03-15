@@ -96,8 +96,8 @@ jobs:
                   </div>
                   <div class="actions">
                     <a id="play-link" href="play.html">Play Game<span>Join live server</span></a>
-                    <a href="https://api.xandaris.space/" target="_blank">Spectator<span>Live server</span></a>
-                    <a href="live.html">Dashboard<span>Economy data</span></a>
+                    <a href="https://api.xandaris.space/" target="_blank">Spectator<span>Galaxy map</span></a>
+                    <a href="https://api.xandaris.space/data" target="_blank">Dashboard<span>Economy data</span></a>
                   </div>
                   <center><button class="signout" onclick="signOut()">Sign out</button></center>
                 </div>
@@ -116,9 +116,9 @@ jobs:
                 <p>Watch the real-time economy — AI factions trading, prices moving, cargo ships in transit.</p>
                 <span class="badge live">LIVE</span>
               </a>
-              <a class="card" href="live.html">
+              <a class="card" href="https://api.xandaris.space/data" target="_blank">
                 <h2>Dashboard</h2>
-                <p>Market prices, player rankings, galaxy flows, and game stats updated in real time.</p>
+                <p>Leaderboard, power grid, market sparklines, events — the full economy at a glance.</p>
                 <span class="badge live">DATA</span>
               </a>
             </div>
@@ -270,120 +270,13 @@ jobs:
           </html>
           EOF
 
-      - name: Create live dashboard
+      - name: Create live dashboard redirect
         run: |
           cat > dist/live.html <<'DASHBOARD'
-          <!DOCTYPE html>
-          <html>
-          <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Xandaris II — Live Economy</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { background: #0a0c14; color: #c0c8d8; font-family: 'Courier New', monospace; padding: 20px; }
-            h1 { color: #7fdbca; margin-bottom: 4px; }
-            .subtitle { color: #556; margin-bottom: 20px; font-size: 14px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 1000px; }
-            .panel { background: #12162a; border: 1px solid #1e2844; border-radius: 6px; padding: 16px; }
-            .panel h2 { color: #7fdbca; font-size: 14px; margin-bottom: 12px; border-bottom: 1px solid #1e2844; padding-bottom: 6px; }
-            table { width: 100%; border-collapse: collapse; font-size: 13px; }
-            th { text-align: left; color: #889; padding: 4px 8px; }
-            td { padding: 4px 8px; }
-            .green { color: #6dcc6d; }
-            .red { color: #cc5555; }
-            .orange { color: #ccaa44; }
-            .dim { color: #556; }
-            .status { position: fixed; bottom: 8px; right: 12px; font-size: 11px; color: #444; }
-            .status.live { color: #4a4; }
-            .status.dead { color: #a44; }
-            #error { color: #c44; padding: 20px; display: none; }
-            @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
-          </style>
-          </head>
-          <body>
-          <h1>Xandaris II — Live Economy</h1>
-          <p class="subtitle">Real-time data from production server • <a href="./" style="color:#557">Play Game</a></p>
-          <div id="error">Cannot reach server. Is it running?</div>
-          <div class="grid">
-            <div class="panel">
-              <h2>Market Prices</h2>
-              <table><thead><tr><th>Resource</th><th>Buy</th><th>Base</th><th>Ratio</th><th>Scarcity</th></tr></thead>
-              <tbody id="market"></tbody></table>
-            </div>
-            <div class="panel">
-              <h2>Players</h2>
-              <table><thead><tr><th>Name</th><th>Credits</th><th>Pop</th><th>Mines</th><th>Stock</th></tr></thead>
-              <tbody id="players"></tbody></table>
-            </div>
-            <div class="panel">
-              <h2>Galaxy Flows</h2>
-              <table><thead><tr><th>Resource</th><th>Production</th><th>Consumption</th><th>Net</th></tr></thead>
-              <tbody id="flows"></tbody></table>
-            </div>
-            <div class="panel">
-              <h2>Game Info</h2>
-              <div id="gameinfo"></div>
-            </div>
-          </div>
-          <div id="statusbar" class="status">Connecting...</div>
-          <script>
-          const API = 'https://api.xandaris.space';
-          async function refresh() {
-            try {
-              const [econ, players, flows, game] = await Promise.all([
-                fetch(API+'/api/economy').then(r=>r.json()),
-                fetch(API+'/api/players').then(r=>r.json()),
-                fetch(API+'/api/flows').then(r=>r.json()),
-                fetch(API+'/api/game').then(r=>r.json()),
-              ]);
-              // Market
-              const m = document.getElementById('market');
-              m.innerHTML = Object.entries(econ.data.resources).sort().map(([n,r]) => {
-                const rc = r.price_ratio > 1.5 ? 'red' : r.price_ratio > 0.8 ? '' : 'green';
-                const sc = r.scarcity === 'Scarce' || r.scarcity === 'Critical' ? 'orange' : r.scarcity === 'Depleted' ? 'red' : 'dim';
-                return `<tr><td>${n}</td><td class="${rc}">${r.buy_price.toFixed(0)}</td><td class="dim">${r.base_price}</td><td class="${rc}">${r.price_ratio.toFixed(1)}x</td><td class="${sc}">${r.scarcity}</td></tr>`;
-              }).join('');
-              // Players
-              const p = document.getElementById('players');
-              p.innerHTML = players.data.sort((a,b)=>b.credits-a.credits).map(pl => {
-                const cc = pl.credits < 100 ? 'red' : pl.credits < 500 ? 'orange' : '';
-                return `<tr><td>${pl.name}</td><td class="${cc}">${pl.credits}</td><td>${pl.population}</td><td>${pl.mines}</td><td>${pl.stock}</td></tr>`;
-              }).join('');
-              // Flows
-              const f = document.getElementById('flows');
-              const allRes = new Set([...Object.keys(flows.data.production), ...Object.keys(flows.data.consumption)]);
-              f.innerHTML = [...allRes].sort().map(r => {
-                const prod = (flows.data.production[r]||0).toFixed(1);
-                const cons = (flows.data.consumption[r]||0).toFixed(1);
-                const net = (flows.data.net_flow[r]||0).toFixed(1);
-                const nc = net > 0 ? 'green' : net < -1 ? 'red' : '';
-                return `<tr><td>${r}</td><td class="green">+${prod}</td><td class="red">-${cons}</td><td class="${nc}">${net > 0 ? '+' : ''}${net}</td></tr>`;
-              }).join('');
-              // Game info
-              const g = game.data;
-              document.getElementById('gameinfo').innerHTML = `
-                <p>Tick: ${g.tick} • Time: ${g.game_time} • Speed: ${g.speed}</p>
-                <p>Systems: ${g.systems} • Players: ${g.players}</p>
-                <p>Population: ${econ.data.total_population.toLocaleString()}</p>
-                <p>Total Credits: ${econ.data.total_credits.toLocaleString()}</p>
-                <p>Trade Volume: ${econ.data.trade_volume.toFixed(0)}</p>
-              `;
-              document.getElementById('statusbar').textContent = `Live • Updated ${new Date().toLocaleTimeString()}`;
-              document.getElementById('statusbar').className = 'status live';
-              document.getElementById('error').style.display = 'none';
-            } catch(e) {
-              document.getElementById('error').style.display = 'block';
-              document.getElementById('statusbar').textContent = 'Disconnected';
-              document.getElementById('statusbar').className = 'status dead';
-            }
-          }
-          refresh();
-          setInterval(refresh, 3000);
-          </script>
-          </body>
-          </html>
+          <!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=https://api.xandaris.space/data"></head><body>Redirecting to <a href="https://api.xandaris.space/data">dashboard</a>...</body></html>
           DASHBOARD
+          echo "live.html now redirects to api.xandaris.space/data"
+
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
