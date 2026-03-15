@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	aiSurplusThreshold  = 0.30 // Sell when above 30% capacity (300 units at cap 1000)
-	aiShortageThreshold = 0.10 // Buy when below 10% capacity (100 units at cap 1000)
-	aiMaxTradeQty       = 50   // Max units per AI trade
+	aiSurplusThreshold  = 0.60 // Sell when above 60% capacity (600 units at cap 1000)
+	aiShortageThreshold = 0.15 // Buy when below 15% capacity (150 units at cap 1000)
+	aiMaxTradeQty       = 30   // Max units per AI trade (lower = more gradual)
 )
 
 // RunAITrader executes trading logic for all AI players using the trade executor.
