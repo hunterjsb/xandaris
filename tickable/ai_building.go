@@ -205,9 +205,12 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			return
 		}
 
-		// PRIORITY 4: Build Habitat when population at 70%+ capacity
+		// PRIORITY 4: Build Habitat when population at 85%+ capacity
+		// Only build if power is stable (>60%) and max 5 habitats per planet
 		capacity := planet.GetTotalPopulationCapacity()
-		if capacity > 0 && planet.Population > int64(float64(capacity)*0.7) && player.Credits >= 800 {
+		habitatCount := countBuildings(planet, "Habitat")
+		if capacity > 0 && planet.Population > int64(float64(capacity)*0.85) &&
+			habitatCount < 5 && powerRatio > 0.6 && player.Credits >= 800 {
 			player.Credits -= 800
 			builder.AIBuildOnPlanet(planet, "Habitat", player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built habitat at %s (pop %d/%d)\n",
@@ -296,8 +299,9 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			}
 		}
 
-		// PRIORITY 9: Build second refinery if we have Oil surplus
-		if hasOilMine && refineryCount == 1 && planet.GetStoredAmount("Oil") > 200 && player.Credits >= 1500 {
+		// PRIORITY 9: Build second refinery when generators need more Fuel
+		fuelStored := planet.GetStoredAmount("Fuel")
+		if hasOilMine && refineryCount < 3 && (fuelStored < 50 || refineryCount < genCount) && player.Credits >= 1500 {
 			player.Credits -= 1500
 			builder.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
 			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Refinery #2 at %s", player.Name, planet.Name))
