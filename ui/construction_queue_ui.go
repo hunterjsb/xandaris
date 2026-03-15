@@ -7,14 +7,15 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
-	"github.com/hunterjsb/xandaris/tickable"
-	"github.com/hunterjsb/xandaris/views"
+	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/utils"
+	"github.com/hunterjsb/xandaris/views"
 )
 
 // ConstructionQueueUI displays all active construction items
 type ConstructionQueueUI struct {
-	ctx         UIContext
+	ctx          UIContext
+	provider     *PlanetDataProvider
 	x            int
 	y            int
 	width        int
@@ -24,11 +25,12 @@ type ConstructionQueueUI struct {
 }
 
 // NewConstructionQueueUI creates a new construction queue UI
-func NewConstructionQueueUI(ctx UIContext) *ConstructionQueueUI {
+func NewConstructionQueueUI(ctx UIContext, provider *PlanetDataProvider) *ConstructionQueueUI {
 	return &ConstructionQueueUI{
-		ctx:         ctx,
-		x:            1280 - 310,
-		y:            120,
+		ctx:          ctx,
+		provider:     provider,
+		x:            970,
+		y:            50,
 		width:        300,
 		itemHeight:   70,
 		maxVisible:   5,
@@ -60,103 +62,107 @@ func (cq *ConstructionQueueUI) Update() {
 
 // Draw renders the construction queue panel
 func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
-	// Get all constructions
-	constructions := cq.getAllConstructions()
-	if len(constructions) == 0 {
-		return // Don't show panel if nothing is building
+	items := cq.provider.GetConstructionItems()
+	if len(items) == 0 {
+		return
 	}
 
+	// Dark theme colors
+	bgColor := color.RGBA{12, 16, 28, 220}
+	borderColor := color.RGBA{30, 40, 68, 255}
+	accentColor := color.RGBA{127, 219, 202, 255}
+
 	// Calculate panel height based on number of items
-	visibleCount := len(constructions)
+	visibleCount := len(items)
 	if visibleCount > cq.maxVisible {
 		visibleCount = cq.maxVisible
 	}
 	panelHeight := 50 + (visibleCount * (cq.itemHeight + 5))
 
 	// Draw background panel
-	panel := views.NewUIPanel(cq.x, cq.y, cq.width, panelHeight)
+	panel := &views.UIPanel{
+		X: cq.x, Y: cq.y, Width: cq.width, Height: panelHeight,
+		BgColor: bgColor, BorderColor: borderColor,
+	}
 	panel.Draw(screen)
 
 	// Draw title
 	titleY := cq.y + 15
-	views.DrawCenteredText(screen, "Construction Queue", cq.x+cq.width/2, titleY)
+	views.DrawText(screen, "Construction Queue", cq.x+10, titleY, accentColor)
 
 	// Draw total count
 	countY := titleY + 15
-	countText := fmt.Sprintf("%d building", len(constructions))
-	if len(constructions) > 1 {
-		countText = fmt.Sprintf("%d buildings", len(constructions))
+	countText := fmt.Sprintf("%d building", len(items))
+	if len(items) > 1 {
+		countText = fmt.Sprintf("%d buildings", len(items))
 	}
-	views.DrawCenteredText(screen, countText, cq.x+cq.width/2, countY)
+	views.DrawText(screen, countText, cq.x+10, countY, utils.TextSecondary)
 
 	// Draw separator
 	separatorY := countY + 10
-	views.DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, utils.PanelBorder)
+	views.DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, borderColor)
 
 	// Draw construction items
 	itemY := separatorY + 10
 	displayed := 0
 
-	for i := cq.scrollOffset; i < len(constructions) && displayed < cq.maxVisible; i++ {
-		construction := constructions[i]
-		cq.drawConstructionItem(screen, construction, itemY, i)
+	for i := cq.scrollOffset; i < len(items) && displayed < cq.maxVisible; i++ {
+		item := items[i]
+		cq.drawConstructionItem(screen, item, itemY)
 		itemY += cq.itemHeight + 5
 		displayed++
 	}
 
 	// Draw scroll indicator if needed
-	if len(constructions) > cq.maxVisible {
-		scrollText := fmt.Sprintf("(%d more...)", len(constructions)-cq.scrollOffset-cq.maxVisible)
-		if len(constructions)-cq.scrollOffset-cq.maxVisible > 0 {
+	if len(items) > cq.maxVisible {
+		remaining := len(items) - cq.scrollOffset - cq.maxVisible
+		if remaining > 0 {
+			scrollText := fmt.Sprintf("(%d more...)", remaining)
 			scrollY := cq.y + panelHeight - 15
-			views.DrawCenteredText(screen, scrollText, cq.x+cq.width/2, scrollY)
+			views.DrawText(screen, scrollText, cq.x+10, scrollY, utils.TextSecondary)
 		}
 	}
 }
 
 // drawConstructionItem draws a single construction item
-func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *tickable.ConstructionItem, y int, index int) {
+func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item ConstructionItemData, y int) {
 	itemX := cq.x + 10
 	itemW := cq.width - 20
 
-	// Draw item background
-	itemPanel := views.NewUIPanel(itemX, y, itemW, cq.itemHeight)
-	itemPanel.BgColor = color.RGBA{25, 25, 50, 230}
+	// Item background
+	itemPanel := &views.UIPanel{
+		X: itemX, Y: y, Width: itemW, Height: cq.itemHeight,
+		BgColor: color.RGBA{18, 22, 38, 230}, BorderColor: color.RGBA{30, 40, 68, 255},
+	}
 	itemPanel.Draw(screen)
 
-	// Draw construction name
+	// Construction name
 	nameY := y + 10
 	views.DrawText(screen, item.Name, itemX+5, nameY, utils.TextPrimary)
 
-	// Draw location
+	// Location
 	locationY := nameY + 15
 	locationText := fmt.Sprintf("Location: %s", cq.getLocationName(item.Location))
 	views.DrawText(screen, locationText, itemX+5, locationY, utils.TextSecondary)
 
-	// Calculate progress
-	item.Mutex.RLock()
-	progress := item.Progress
-	remainingTicks := item.RemainingTicks
-	item.Mutex.RUnlock()
-
-	// Draw progress bar
+	// Progress bar with accent color
 	progressY := locationY + 15
 	progressBarWidth := itemW - 10
 	progressBarHeight := 10
 
 	bar := views.NewUIProgressBar(itemX+5, progressY, progressBarWidth, progressBarHeight)
-	bar.SetValue(float64(progress), 100.0)
-	bar.FillColor = color.RGBA{100, 200, 100, 255}
-	bar.BgColor = color.RGBA{22, 22, 38, 255}
+	bar.SetValue(float64(item.Progress), 100.0)
+	bar.FillColor = color.RGBA{100, 200, 140, 255}
+	bar.BgColor = color.RGBA{18, 22, 38, 255}
 	bar.Draw(screen)
 
-	// Draw progress percentage and time remaining
+	// Progress text
 	progressTextY := progressY + progressBarHeight + 12
-	timeRemaining := cq.formatTimeRemaining(remainingTicks)
-	progressText := fmt.Sprintf("%d%% - %s remaining", progress, timeRemaining)
+	timeRemaining := cq.formatTimeRemaining(item.RemainingTicks)
+	progressText := fmt.Sprintf("%d%% - %s remaining", item.Progress, timeRemaining)
 	views.DrawText(screen, progressText, itemX+5, progressTextY, utils.TextSecondary)
 
-	// Draw cancel hint on hover
+	// Cancel hint on hover
 	mx, my := ebiten.CursorPosition()
 	if mx >= itemX && mx < itemX+itemW && my >= y && my < y+cq.itemHeight {
 		cancelY := y + cq.itemHeight - 12
@@ -164,39 +170,14 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item *
 	}
 }
 
-// getAllConstructions gets all active construction items sorted by start time
-func (cq *ConstructionQueueUI) getAllConstructions() []*tickable.ConstructionItem {
-	constructionSystem := tickable.GetSystemByName("Construction")
-	if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-		if cq.ctx.GetState().HumanPlayer != nil {
-			items := cs.GetConstructionsByOwner(cq.ctx.GetState().HumanPlayer.Name)
-
-			// Sort by start time to ensure consistent order
-			// This prevents flickering from map iteration randomness
-			for i := 0; i < len(items)-1; i++ {
-				for j := i + 1; j < len(items); j++ {
-					if items[i].Started > items[j].Started {
-						items[i], items[j] = items[j], items[i]
-					}
-				}
-			}
-
-			return items
-		}
-	}
-	return []*tickable.ConstructionItem{}
-}
-
 // getLocationName gets a friendly name for a location ID
 func (cq *ConstructionQueueUI) getLocationName(locationID string) string {
-	// Search for the location in all systems
 	for _, system := range cq.ctx.GetState().Systems {
 		for _, entity := range system.Entities {
 			if fmt.Sprintf("%d", entity.GetID()) == locationID {
 				return entity.GetName()
 			}
 
-			// Check resources on planets
 			if planet, ok := entity.(*entities.Planet); ok {
 				for _, resource := range planet.Resources {
 					if fmt.Sprintf("%d", resource.GetID()) == locationID {
@@ -217,7 +198,6 @@ func (cq *ConstructionQueueUI) formatTimeRemaining(remainingTicks int) string {
 		return "Paused"
 	}
 
-	// Calculate real seconds remaining
 	secondsRemaining := float64(remainingTicks) / effectiveSpeed
 
 	if secondsRemaining < 60 {
@@ -235,12 +215,12 @@ func (cq *ConstructionQueueUI) formatTimeRemaining(remainingTicks int) string {
 
 // isMouseOver checks if mouse is over the panel area
 func (cq *ConstructionQueueUI) isMouseOver(mx, my int) bool {
-	constructions := cq.getAllConstructions()
-	if len(constructions) == 0 {
+	items := cq.provider.GetConstructionItems()
+	if len(items) == 0 {
 		return false
 	}
 
-	visibleCount := len(constructions)
+	visibleCount := len(items)
 	if visibleCount > cq.maxVisible {
 		visibleCount = cq.maxVisible
 	}
@@ -256,25 +236,23 @@ func (cq *ConstructionQueueUI) handleRightClick(mx, my int) {
 		return
 	}
 
-	constructions := cq.getAllConstructions()
+	items := cq.provider.GetConstructionItems()
 	itemY := cq.y + 50 + 10
 
-	for i := cq.scrollOffset; i < len(constructions) && i < cq.scrollOffset+cq.maxVisible; i++ {
+	for i := cq.scrollOffset; i < len(items) && i < cq.scrollOffset+cq.maxVisible; i++ {
 		itemX := cq.x + 10
 		itemW := cq.width - 20
 
 		if mx >= itemX && mx < itemX+itemW && my >= itemY && my < itemY+cq.itemHeight {
-			// Cancel this construction
-			construction := constructions[i]
-			constructionSystem := tickable.GetSystemByName("Construction")
-			if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-				// Refund partial cost based on progress
-				refundAmount := int(float64(construction.Cost) * (1.0 - float64(construction.Progress)/100.0))
-				cq.ctx.GetState().HumanPlayer.Credits += refundAmount
-
-				// Remove from queue
-				cs.RemoveFromQueue(construction.Location, construction.ID)
+			item := items[i]
+			// Send cancel command through the command channel (works in both local and remote mode)
+			cq.ctx.GetCommandChannel() <- game.GameCommand{
+				Type: game.CmdCancelConstruction,
+				Data: game.CancelConstructionCommandData{
+					ConstructionID: item.ID,
+				},
 			}
+			cq.provider.ForceRefresh()
 			return
 		}
 

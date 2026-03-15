@@ -32,11 +32,12 @@ func (a *App) InitializeForMenu() error {
 // initializeGameViews creates and registers all game views with UI components.
 // Called after server has initialized game state.
 func (a *App) initializeGameViews(buildMenu *ui.BuildMenu, constructionQueue *ui.ConstructionQueueUI,
-	resourceStorage *ui.ResourceStorageUI, shipyardUI *ui.ShipyardUI, fleetInfoUI *ui.FleetInfoUI) {
+	resourceStorage *ui.ResourceStorageUI, shipyardUI *ui.ShipyardUI, fleetInfoUI *ui.FleetInfoUI,
+	provider *ui.PlanetDataProvider) {
 
 	galaxyView := views.NewGalaxyView(a)
 	systemView := views.NewSystemView(a, fleetInfoUI)
-	planetView := views.NewPlanetView(a, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
+	planetView := views.NewPlanetView(a, buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI, provider)
 	marketView := views.NewMarketView(a)
 	playerDirectory := views.NewPlayerDirectoryView(a)
 
@@ -50,13 +51,16 @@ func (a *App) initializeGameViews(buildMenu *ui.BuildMenu, constructionQueue *ui
 // InitializeClientViews sets up UI components and registers game views.
 // Called after the server has a game loaded/created. Exported for remote play.
 func (a *App) InitializeClientViews() {
-	buildMenu := ui.NewBuildMenu(a)
-	constructionQueue := ui.NewConstructionQueueUI(a)
-	resourceStorage := ui.NewResourceStorageUI(a)
+	// Create the planet data provider (abstracts local vs remote data access)
+	provider := ui.NewPlanetDataProvider(a, a.IsRemote(), a.remoteServerURL, a.remoteAPIKey)
+
+	buildMenu := ui.NewBuildMenu(a, provider)
+	constructionQueue := ui.NewConstructionQueueUI(a, provider)
+	resourceStorage := ui.NewResourceStorageUI(a, provider)
 	shipyardUI := ui.NewShipyardUI(a)
 	fleetInfoUI := ui.NewFleetInfoUI(a)
 
-	a.initializeGameViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
+	a.initializeGameViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI, provider)
 
 	// Command bar (overlay on all views)
 	a.commandBar = ui.NewCommandBar(a, a.screenWidth, a.screenHeight)
@@ -120,6 +124,10 @@ func (a *App) ConnectToRemote(serverURL, playerName, apiKey string) error {
 
 	a.Server.SetRemoteSync(remote)
 	remote.Start()
+
+	// Store remote config for UI components
+	a.remoteServerURL = serverURL
+	a.remoteAPIKey = apiKey
 
 	// Set up client-side views
 	a.InitializeClientViews()

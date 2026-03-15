@@ -7,6 +7,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
@@ -38,6 +39,7 @@ type BuildMenuItem struct {
 // BuildMenu displays available buildings and handles construction
 type BuildMenu struct {
 	ctx               UIContext
+	provider          *PlanetDataProvider
 	isOpen            bool
 	x                 int
 	y                 int
@@ -54,9 +56,10 @@ type BuildMenu struct {
 }
 
 // NewBuildMenu creates a new build menu
-func NewBuildMenu(ctx UIContext) *BuildMenu {
+func NewBuildMenu(ctx UIContext, provider *PlanetDataProvider) *BuildMenu {
 	return &BuildMenu{
 		ctx:           ctx,
+		provider:      provider,
 		isOpen:        false,
 		width:         400,
 		height:        500,
@@ -200,11 +203,8 @@ func (bm *BuildMenu) loadResourceBuildings() {
 		resourceIDStr := fmt.Sprintf("%d", resource.GetID())
 
 		// Check construction queue first
-		constructionSystem := tickable.GetSystemByName("Construction")
-		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-			if cs.HasMineInQueue(resourceIDStr) {
-				description = "Mine already being built (1 per node max)"
-			}
+		if bm.provider.HasMineQueued(resourceIDStr) {
+			description = "Mine already being built (1 per node max)"
 		}
 
 		// Check completed buildings
@@ -353,13 +353,10 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 			resourceIDStr := fmt.Sprintf("%d", resource.GetID())
 
 			// Check if there's already a mine in the construction queue for this resource
-			constructionSystem := tickable.GetSystemByName("Construction")
-			if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-				if cs.HasMineInQueue(resourceIDStr) {
-					bm.notification = "Mine already being built on this node"
-					bm.notificationTimer = 120 // 2 seconds at 60fps
-					return
-				}
+			if bm.provider.HasMineQueued(resourceIDStr) {
+				bm.notification = "Mine already being built on this node"
+				bm.notificationTimer = 120 // 2 seconds at 60fps
+				return
 			}
 
 			// Find the parent planet to check existing completed mines
@@ -376,6 +373,32 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 	if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
 		bm.notification = "Insufficient funds"
 		bm.notificationTimer = 120 // 2 seconds at 60fps
+		return
+	}
+
+	// In remote mode, send a build command instead of manipulating construction directly
+	if bm.provider.IsRemote() {
+		planetID := 0
+		resourceID := 0
+		if planet, ok := bm.attachedTo.(*entities.Planet); ok {
+			planetID = planet.GetID()
+		} else if resource, ok := bm.attachedTo.(*entities.Resource); ok {
+			resourceID = resource.GetID()
+			planet := bm.findParentPlanet(resource)
+			if planet != nil {
+				planetID = planet.GetID()
+			}
+		}
+		bm.ctx.GetCommandChannel() <- game.GameCommand{
+			Type: game.CmdBuild,
+			Data: game.BuildCommandData{
+				PlanetID:     planetID,
+				BuildingType: item.BuildingType,
+				ResourceID:   resourceID,
+			},
+		}
+		bm.provider.ForceRefresh()
+		bm.Close()
 		return
 	}
 
@@ -472,11 +495,8 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 				resourceIDStr := fmt.Sprintf("%d", resource.GetID())
 
 				// Check construction queue
-				constructionSystem := tickable.GetSystemByName("Construction")
-				if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-					if cs.HasMineInQueue(resourceIDStr) {
-						canBuild = false
-					}
+				if bm.provider.HasMineQueued(resourceIDStr) {
+					canBuild = false
 				}
 
 				// Check completed buildings

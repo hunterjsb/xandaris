@@ -18,6 +18,30 @@ const (
 	BuildingShipyard      = "Shipyard"
 )
 
+// BuildingColor returns the default color for a building type.
+func BuildingColor(buildingType string) color.RGBA {
+	switch buildingType {
+	case BuildingMine:
+		return color.RGBA{120, 110, 90, 255}
+	case BuildingHabitat:
+		return color.RGBA{100, 180, 220, 255}
+	case BuildingShipyard:
+		return color.RGBA{150, 160, 180, 255}
+	case BuildingRefinery:
+		return color.RGBA{200, 130, 50, 255}
+	case BuildingFactory:
+		return color.RGBA{180, 130, 255, 255}
+	case BuildingTradingPost:
+		return color.RGBA{210, 175, 95, 255}
+	case BuildingGenerator:
+		return color.RGBA{255, 180, 50, 255}
+	case BuildingFusionReactor:
+		return color.RGBA{100, 220, 255, 255}
+	default:
+		return color.RGBA{150, 150, 150, 255}
+	}
+}
+
 // Building represents a building entity on a planet or resource
 type Building struct {
 	BaseEntity

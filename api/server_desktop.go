@@ -1559,10 +1559,18 @@ document.getElementById('info').innerHTML=
 '<div class="row"><span>Population</span><span>'+(economy.total_population||0).toLocaleString()+'</span></div>'+
 '<div class="row"><span>Trade Volume</span><span>'+(economy.trade_volume||0).toFixed(0)+'</span></div>'+
 Object.entries(nf).sort().map(([n,v])=>'<div class="row"><span>'+n+'</span><span class="'+(v>0?'g':v<-1?'r':'d')+'">'+((v>0?'+':'')+v.toFixed(0))+'/int</span></div>').join('');
+// Power grid
+document.getElementById('power').innerHTML=power.map(x=>{
+const pct=x.consumed_mw>0?Math.min(1,x.generated_mw/x.consumed_mw):1;
+const c=pct<0.5?'#c55':pct<0.8?'#ca4':'#5c5';
+return'<div class="row"><span style="color:'+pc(x.owner)+'">'+x.owner+'</span><span style="color:'+c+'">'+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+'MW</span></div>'}).join('')||'<span class="d">No data</span>';
+// Construction queue
+document.getElementById('construction').innerHTML=construction.map(x=>{
+return'<div style="padding:1px 0;color:#889">'+x.name+' <span style="color:'+pc(x.owner)+'">'+x.owner+'</span> <span style="color:#5cf">'+x.progress+'%</span></div>'}).join('')||'<span class="d">Idle</span>';
 // Events
 const evts=ev.data||[];
 document.getElementById('events').innerHTML=evts.map(x=>{
-const c=x.type==='trade'?'#889':x.type==='colonize'?'#7fdbca':x.type==='build'?'#6c6':'#889';
+const c=x.type==='trade'?'#889':x.type==='colonize'?'#7fdbca':x.type==='build'?'#6c6':x.type==='alert'?'#c55':'#889';
 return'<div style="color:'+c+';padding:1px 0">'+x.time+' '+x.message+'</div>'}).join('');
 }catch(e){document.getElementById('status').textContent='Disconnected';document.getElementById('status').style.color='#a44'}}
 async function loadDetail(sysId){
@@ -1579,6 +1587,8 @@ h+='<div style="margin-top:8px;border-top:1px solid #1a2040;padding-top:6px">';
 h+='<b style="color:#7fdbca">'+p.name+'</b> <span style="color:#556">('+p.planet_type+')</span>';
 h+='<div style="color:#889">Pop: '+p.population.toLocaleString()+' / '+p.population_cap.toLocaleString()+'</div>';
 if(p.owner)h+='<div>Owner: <span style="color:'+pc(p.owner)+'">'+p.owner+'</span></div>';
+if(p.happiness!==undefined){const hc=p.happiness>0.7?'#5c5':p.happiness>0.4?'#ca4':'#c55';h+='<div style="color:'+hc+'">Happy: '+(p.happiness*100).toFixed(0)+'% · Prod: '+p.productivity_bonus.toFixed(1)+'x</div>'}
+if(p.power_consumed>0){const pr=p.power_ratio||0;const pc2=pr>0.8?'#5c5':pr>0.5?'#ca4':'#c55';h+='<div style="color:'+pc2+'">Power: '+(pr*100).toFixed(0)+'% ('+p.power_generated.toFixed(0)+'/'+p.power_consumed.toFixed(0)+' MW)</div>'}
 if(p.buildings?.length){h+='<div style="margin-top:4px">';
 p.buildings.forEach(b=>{
 const col=b.is_operational?'#6c6':'#c55';
@@ -1615,6 +1625,13 @@ const tgt=systems.find(x=>x.id===lid);if(!tgt)return;
 const[x1,y1]=sp(s),[x2,y2]=sp(tgt);
 X.strokeStyle='rgba(50,60,90,0.25)';X.lineWidth=1;
 X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke()})});
+// Active delivery routes
+deliveries.forEach(d=>{
+const src=systems.find(x=>x.id===d.source_system),dst=systems.find(x=>x.id===d.dest_system);
+if(!src||!dst)return;
+const[x1,y1]=sp(src),[x2,y2]=sp(dst);
+X.strokeStyle='rgba(127,219,202,0.08)';X.lineWidth=3;
+X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke()});
 // Trade routes + moving ships
 hoverShip=null;
 const shipPositions=[];
@@ -1670,9 +1687,9 @@ X.fillStyle='#667';X.font='10px monospace';X.textAlign='center';
 X.fillText(s.name,sx,sy+nP*5+16);
 // Owner label
 if(owner){
-const pl=players.find(p=>p.name===owner);
+const pop=s.population?s.population.toLocaleString():'';
 X.fillStyle=hexA(c,0.8);X.font='9px monospace';
-X.fillText((owner.length>10?owner.slice(0,8)+'..':owner)+' '+(pl?pl.stock:''),sx,sy+nP*5+26)}
+X.fillText((owner.length>10?owner.slice(0,8)+'..':owner)+(pop?' '+pop:''),sx,sy+nP*5+26)}
 // Selection ring
 if(selected&&selected.id===s.id){
 X.strokeStyle='#7fdbca';X.lineWidth=2;X.setLineDash([4,4]);
@@ -1728,6 +1745,7 @@ tt.innerHTML=h;C.style.cursor='pointer';
 tt.style.display='block';tt.style.left=(mx+15)+'px';tt.style.top=Math.min(my-10,H-120)+'px';
 let h='<b style="color:#7fdbca">'+hover.name+'</b><br>Planets: '+hover.planets;
 if(hover.owner)h+='<br>Owner: <span style="color:'+pc(hover.owner)+'">'+hover.owner+'</span>';
+if(hover.population)h+='<br>Pop: '+hover.population.toLocaleString();
 if(hover.resources?.length)h+='<br>Resources: '+hover.resources.join(', ');
 const ls=ships.filter(x=>x.system_id===hover.id);
 if(ls.length)h+='<br>Ships: '+ls.length;

@@ -73,6 +73,15 @@ type FleetInfoUIInterface interface {
 	Draw(screen *ebiten.Image)
 }
 
+// PlanetDataProviderInterface abstracts local vs remote planet data access.
+type PlanetDataProviderInterface interface {
+	SetPlanetID(id int)
+	Update()
+	PopulatePlanetEntities(planet *entities.Planet) bool
+	ForceRefresh()
+	IsRemote() bool
+}
+
 // PlanetView represents the detailed view of a single planet
 type PlanetView struct {
 	ctx               GameContext
@@ -92,10 +101,11 @@ type PlanetView struct {
 	buildingRenderer  *rendering.BuildingRenderer
 	fleetUIManager    *fleetUIManager
 	shipFleetRenderer *ShipFleetRenderer
+	provider          PlanetDataProviderInterface
 }
 
 // NewPlanetView creates a new planet view
-func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQueue ConstructionQueueUIInterface, resourceStorage ResourceStorageUIInterface, shipyardUI ShipyardUIInterface, fleetInfoUI FleetInfoUIInterface) *PlanetView {
+func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQueue ConstructionQueueUIInterface, resourceStorage ResourceStorageUIInterface, shipyardUI ShipyardUIInterface, fleetInfoUI FleetInfoUIInterface, provider PlanetDataProviderInterface) *PlanetView {
 	spriteRenderer := rendering.NewSpriteRenderer()
 	pv := &PlanetView{
 		ctx:               ctx,
@@ -111,6 +121,7 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 		spriteRenderer:    spriteRenderer,
 		buildingRenderer:  rendering.NewBuildingRenderer(spriteRenderer),
 		shipFleetRenderer: NewShipFleetRenderer(ctx, spriteRenderer),
+		provider:          provider,
 	}
 	pv.fleetUIManager = newFleetUIManager(pv)
 	return pv
@@ -119,6 +130,9 @@ func NewPlanetView(ctx GameContext, buildMenu BuildMenuInterface, constructionQu
 // SetPlanet sets the planet to display
 func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 	pv.planet = planet
+	if pv.provider != nil && planet != nil {
+		pv.provider.SetPlanetID(planet.GetID())
+	}
 	if pv.workforceOverlay != nil {
 		pv.workforceOverlay.Hide()
 		pv.workforceOverlay.SetPlanet(planet)
@@ -157,6 +171,18 @@ func (pv *PlanetView) SetPlanet(planet *entities.Planet) {
 func (pv *PlanetView) Update() error {
 	if pv.planet == nil {
 		return nil
+	}
+
+	// Update planet data provider (once per frame)
+	if pv.provider != nil {
+		pv.provider.Update()
+
+		// In remote mode, populate planet entities from server state
+		if pv.provider.IsRemote() {
+			if pv.provider.PopulatePlanetEntities(pv.planet) {
+				pv.registerClickables()
+			}
+		}
 	}
 
 	// Update sprite animations based on game tick rate
@@ -710,7 +736,7 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	DrawCenteredText(screen, resource.ResourceType, centerX, labelY)
 
 	// Show abundance and extraction rate below label
-	detailStr := fmt.Sprintf("a:%d  x%.1f", resource.Abundance, resource.ExtractionRate)
+	detailStr := fmt.Sprintf("%d abundance  %.1fx", resource.Abundance, resource.ExtractionRate)
 	detailColor := utils.TextSecondary
 	if resource.Abundance < 20 {
 		detailColor = utils.SystemOrange
