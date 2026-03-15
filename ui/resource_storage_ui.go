@@ -84,6 +84,31 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	titleY := rsu.y + 15
 	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, utils.TextPrimary)
 
+	// Power status bar (compact, right of title)
+	if planet.PowerConsumed > 0 {
+		powerRatio := planet.GetPowerRatio()
+		pwrColor := utils.SystemGreen
+		if powerRatio < 0.5 {
+			pwrColor = utils.SystemRed
+		} else if powerRatio < 0.8 {
+			pwrColor = utils.SystemOrange
+		}
+		pwrStr := fmt.Sprintf("Power: %.0f%%", powerRatio*100)
+		views.DrawText(screen, pwrStr, rsu.x+rsu.width-len(pwrStr)*6-10, titleY, pwrColor)
+	}
+
+	// Happiness indicator
+	if planet.Population > 0 {
+		happyColor := utils.SystemGreen
+		if planet.Happiness < 0.4 {
+			happyColor = utils.SystemRed
+		} else if planet.Happiness < 0.7 {
+			happyColor = utils.SystemOrange
+		}
+		happyStr := fmt.Sprintf("%.0f%% happy", planet.Happiness*100)
+		views.DrawText(screen, happyStr, rsu.x+rsu.width-len(happyStr)*6-10, titleY-12, happyColor)
+	}
+
 	// Draw stored resources or empty message
 	resourceY := titleY + 20
 
