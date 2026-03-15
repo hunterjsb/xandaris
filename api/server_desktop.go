@@ -998,115 +998,150 @@ const spectatorHTML = `<!DOCTYPE html>
 <title>Xandaris II — Live Galaxy</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#080a12;overflow:hidden;font-family:'Courier New',monospace}
+body{background:#060810;overflow:hidden;font-family:'Courier New',monospace}
 canvas{display:block}
-#hud{position:fixed;top:10px;right:10px;background:rgba(12,16,32,0.9);border:1px solid #1e2844;border-radius:6px;padding:12px;color:#c0c8d8;font-size:12px;max-width:280px;max-height:90vh;overflow-y:auto}
-#hud h2{color:#7fdbca;font-size:13px;margin-bottom:8px}
-#hud .row{display:flex;justify-content:space-between;padding:2px 0}
-#hud .g{color:#6c6}#hud .r{color:#c55}#hud .o{color:#ca4}#hud .d{color:#556}
-#hud hr{border:none;border-top:1px solid #1e2844;margin:8px 0}
-#status{position:fixed;bottom:8px;left:10px;color:#4a4;font-size:11px}
-#tooltip{position:fixed;display:none;background:rgba(12,16,32,0.95);border:1px solid #1e2844;border-radius:4px;padding:8px;color:#c0c8d8;font-size:11px;pointer-events:none;z-index:100}
-a{color:#557}
+#hud{position:fixed;top:10px;right:10px;background:rgba(8,12,24,0.92);border:1px solid #1a2040;border-radius:8px;padding:14px;color:#b0b8c8;font-size:12px;width:260px;max-height:90vh;overflow-y:auto;backdrop-filter:blur(8px)}
+#hud h2{color:#7fdbca;font-size:14px;margin-bottom:10px;letter-spacing:1px}
+#hud .row{display:flex;justify-content:space-between;padding:3px 0}
+#hud .g{color:#5cdb5c}#hud .r{color:#db5555}#hud .o{color:#dba855}#hud .d{color:#556}
+#hud hr{border:none;border-top:1px solid #1a2040;margin:10px 0}
+#hud .section{font-size:11px;color:#7fdbca;margin:6px 0 4px;text-transform:uppercase;letter-spacing:1px}
+#status{position:fixed;bottom:10px;left:12px;color:#4a4;font-size:11px}
+#title{position:fixed;top:14px;left:16px;color:#7fdbca;font-size:20px;letter-spacing:2px;text-shadow:0 0 20px rgba(127,219,202,0.3)}
+#subtitle{position:fixed;top:38px;left:16px;color:#445;font-size:11px}
+#tooltip{position:fixed;display:none;background:rgba(8,12,24,0.95);border:1px solid #2a3060;border-radius:6px;padding:10px 12px;color:#c0c8d8;font-size:11px;pointer-events:none;z-index:100;backdrop-filter:blur(4px);max-width:220px}
+a{color:#446}
 </style></head><body>
 <canvas id="c"></canvas>
+<div id="title">XANDARIS II</div>
+<div id="subtitle">Live Galaxy — Spectator Mode</div>
 <div id="hud">
-<h2>Xandaris II — Live</h2>
+<div class="section">Factions</div>
 <div id="players"></div>
 <hr>
+<div class="section">Market</div>
 <div id="market"></div>
 <hr>
+<div class="section">Economy</div>
 <div id="info"></div>
-<p style="margin-top:8px;font-size:10px"><a href="/api/game" target="_blank">API</a> • <a href="https://github.com/hunterjsb/xandaris" target="_blank">GitHub</a></p>
+<hr>
+<p style="font-size:10px;color:#334;margin-top:4px"><a href="/data">Data View</a> · <a href="/api/game" target="_blank">API</a> · <a href="https://github.com/hunterjsb/xandaris" target="_blank">GitHub</a></p>
 </div>
 <div id="tooltip"></div>
 <div id="status">Connecting...</div>
 <script>
 const B=location.origin,C=document.getElementById('c'),X=C.getContext('2d');
-let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null;
-const COLORS={Human:'#4caf50','Orion Exchange':'#ff9800','Lyra Cartel':'#f44336','Helios Commodities':'#8bc34a','Ceres Brokers':'#ffc107','Nova Frontier Co.':'#9c27b0'};
+let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null,t=0;
+const COLORS={Human:'#4caf50','Orion Exchange':'#ff9800','Lyra Cartel':'#e84040','Helios Commodities':'#8bc34a','Ceres Brokers':'#ffca28','Nova Frontier Co.':'#ab47bc',Server:'#4caf50'};
+// Background stars
+let stars=[];
+function initStars(){stars=[];for(let i=0;i<200;i++)stars.push({x:Math.random(),y:Math.random(),s:Math.random()*1.5+0.5,b:Math.random()})}
+initStars();
 function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
-addEventListener('resize',resize);resize();
+addEventListener('resize',()=>{resize();initStars()});resize();
 C.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
-function playerColor(name){return COLORS[name]||'#888'}
+function pc(name){return COLORS[name]||'#6688aa'}
+function hexA(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
 async function load(){
 try{
 const[g,s,p,e,f]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows'].map(u=>fetch(B+u).then(r=>r.json())));
 systems=g.data;ships=s.data;players=p.data;economy=e.data;flows=f.data;
-document.getElementById('status').textContent='Live • '+new Date().toLocaleTimeString();
-// HUD
+document.getElementById('status').textContent='Live · '+new Date().toLocaleTimeString();
 document.getElementById('players').innerHTML=players.sort((a,b)=>b.credits-a.credits).map(p=>{
-const c=playerColor(p.name);
-return'<div class="row"><span style="color:'+c+'">'+p.name+'</span><span>'+p.credits+'cr</span></div>'}).join('');
+const c=pc(p.name);return'<div class="row"><span style="color:'+c+'">'+p.name+'</span><span>'+p.credits.toLocaleString()+'cr</span></div>'}).join('');
 const res=economy.resources||{};
 document.getElementById('market').innerHTML=Object.entries(res).sort().map(([n,r])=>{
 const c=r.price_ratio>1.5?'r':r.price_ratio<0.5?'g':'d';
 return'<div class="row"><span>'+n+'</span><span class="'+c+'">'+r.buy_price.toFixed(0)+' ('+r.price_ratio.toFixed(1)+'x)</span></div>'}).join('');
-document.getElementById('info').innerHTML='<div class="row"><span>Population</span><span>'+economy.total_population?.toLocaleString()+'</span></div><div class="row"><span>Trade Volume</span><span>'+economy.trade_volume?.toFixed(0)+'</span></div>';
+const nf=flows.net_flow||{};
+document.getElementById('info').innerHTML=
+'<div class="row"><span>Population</span><span>'+(economy.total_population||0).toLocaleString()+'</span></div>'+
+'<div class="row"><span>Trade Volume</span><span>'+(economy.trade_volume||0).toFixed(0)+'</span></div>'+
+Object.entries(nf).sort().map(([n,v])=>'<div class="row"><span>'+n+'</span><span class="'+(v>0?'g':v<-1?'r':'d')+'">'+((v>0?'+':'')+v.toFixed(0))+'/int</span></div>').join('');
 }catch(e){document.getElementById('status').textContent='Disconnected';document.getElementById('status').style.color='#a44'}}
-function sysPos(s){
-const pad=80,sx=(s.x/1280)*(W-pad*2)+pad,sy=(s.y/720)*(H-pad*2)+pad;
-return[sx,sy]}
+function sp(s){const pad=80;return[(s.x/1280)*(W-pad*2)+pad,(s.y/720)*(H-pad*2)+pad]}
 function draw(){
-X.fillStyle='#080a12';X.fillRect(0,0,W,H);
+t+=0.016;
+// Background
+X.fillStyle='#060810';X.fillRect(0,0,W,H);
+// Stars
+stars.forEach(s=>{
+const flicker=0.6+0.4*Math.sin(t*2+s.b*20);
+X.fillStyle=hexA('#ffffff',flicker*0.5*s.s);
+X.fillRect(s.x*W,s.y*H,s.s,s.s)});
 if(!systems.length){requestAnimationFrame(draw);return}
 // Hyperlanes
-X.strokeStyle='rgba(60,70,100,0.3)';X.lineWidth=1;
 systems.forEach(s=>{(s.links||[]).forEach(lid=>{
-const t=systems.find(x=>x.id===lid);if(!t)return;
-const[x1,y1]=sysPos(s),[x2,y2]=sysPos(t);
+const tgt=systems.find(x=>x.id===lid);if(!tgt)return;
+const[x1,y1]=sp(s),[x2,y2]=sp(tgt);
+X.strokeStyle='rgba(50,60,90,0.25)';X.lineWidth=1;
 X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke()})});
-// Trade routes (moving ships with cargo)
+// Trade routes
 ships.filter(s=>s.status==='Moving'&&s.cargo_used>0).forEach(s=>{
 const src=systems.find(x=>x.id===s.system_id),tgt=systems.find(x=>x.id===s.target_system);
 if(!src||!tgt)return;
-const[x1,y1]=sysPos(src),[x2,y2]=sysPos(tgt);
-const c=playerColor(s.owner);
-X.strokeStyle=c+'44';X.lineWidth=2;X.setLineDash([6,6]);
-X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
-X.setLineDash([]);
-// Ship dot along route
-const p=0.5+0.3*Math.sin(Date.now()/1000);
+const[x1,y1]=sp(src),[x2,y2]=sp(tgt),c=pc(s.owner);
+// Glowing route line
+X.strokeStyle=hexA(c,0.15);X.lineWidth=4;X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
+X.strokeStyle=hexA(c,0.4);X.lineWidth=1;X.setLineDash([8,8]);
+X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();X.setLineDash([]);
+// Animated ship
+const p=((t*0.3+s.system_id)%1);
 const sx=x1+(x2-x1)*p,sy=y1+(y2-y1)*p;
-X.fillStyle=c;X.beginPath();X.arc(sx,sy,3,0,Math.PI*2);X.fill()});
+X.fillStyle=c;X.shadowColor=c;X.shadowBlur=8;
+X.beginPath();X.arc(sx,sy,3,0,Math.PI*2);X.fill();
+X.shadowBlur=0;
+// Cargo label
+X.fillStyle=hexA(c,0.7);X.font='8px monospace';X.textAlign='center';
+X.fillText(s.cargo_used+'u',sx,sy-8)});
 // Systems
 hover=null;
 systems.forEach(s=>{
-const[sx,sy]=sysPos(s);
-const owner=s.owner||'';const c=owner?playerColor(owner):'#667';
-// Orbit rings
-const nPlanets=s.planets||1;
-for(let i=0;i<nPlanets;i++){
-X.strokeStyle=owner?c+'44':'rgba(80,80,100,0.2)';X.lineWidth=1;
-X.beginPath();X.arc(sx,sy,8+i*4,0,Math.PI*2);X.stroke()}
-// Star
-X.fillStyle=c;X.beginPath();X.arc(sx,sy,3,0,Math.PI*2);X.fill();
-// Label
-X.fillStyle='#889';X.font='10px monospace';X.textAlign='center';
-X.fillText(s.name,sx,sy+nPlanets*4+14);
-// Owner + stock
+const[sx,sy]=sp(s);
+const owner=s.owner||'';const c=owner?pc(owner):'#556';
+const nP=s.planets||1;
+// Glow for owned systems
+if(owner){X.fillStyle=hexA(c,0.06);X.beginPath();X.arc(sx,sy,20+nP*3,0,Math.PI*2);X.fill()}
+// Orbit rings with animated planets
+for(let i=0;i<nP;i++){
+const r=8+i*5;
+X.strokeStyle=hexA(c,owner?0.2:0.1);X.lineWidth=0.5;
+X.beginPath();X.arc(sx,sy,r,0,Math.PI*2);X.stroke();
+// Planet dot orbiting
+const pa=t*0.5/(i+1)+i*2.1;
+const px=sx+r*Math.cos(pa),py=sy+r*Math.sin(pa);
+X.fillStyle=hexA(c,0.6);X.beginPath();X.arc(px,py,1.5,0,Math.PI*2);X.fill()}
+// Star with glow
+X.fillStyle=c;X.shadowColor=c;X.shadowBlur=owner?12:4;
+X.beginPath();X.arc(sx,sy,owner?3.5:2.5,0,Math.PI*2);X.fill();
+X.shadowBlur=0;
+// System name
+X.fillStyle='#667';X.font='10px monospace';X.textAlign='center';
+X.fillText(s.name,sx,sy+nP*5+16);
+// Owner label
 if(owner){
 const pl=players.find(p=>p.name===owner);
-const stock=pl?pl.stock:0;
-X.fillStyle=c+'cc';X.font='9px monospace';
-X.fillText(owner.split(' ')[0]+' '+stock,sx,sy+nPlanets*4+24)}
-// Hover detection
-const dx=mx-sx,dy=my-sy;
-if(dx*dx+dy*dy<400)hover=s});
-// Ships at systems (not moving)
+X.fillStyle=hexA(c,0.8);X.font='9px monospace';
+X.fillText((owner.length>10?owner.slice(0,8)+'..':owner)+' '+(pl?pl.stock:''),sx,sy+nP*5+26)}
+// Hover
+if((mx-sx)**2+(my-sy)**2<500)hover=s});
+// Docked ships
 ships.filter(s=>s.status!=='Moving').forEach(s=>{
 const sys=systems.find(x=>x.id===s.system_id);if(!sys)return;
-const[sx,sy]=sysPos(sys);
-X.fillStyle=playerColor(s.owner)+'88';
-X.fillRect(sx+12,sy-2,4,4)});
+const[sx,sy]=sp(sys);
+X.fillStyle=hexA(pc(s.owner),0.5);
+const a=t+s.fuel_current;
+X.beginPath();X.arc(sx+15*Math.cos(a),sy+15*Math.sin(a),2,0,Math.PI*2);X.fill()});
 // Tooltip
 const tt=document.getElementById('tooltip');
 if(hover){
-tt.style.display='block';tt.style.left=(mx+15)+'px';tt.style.top=(my-10)+'px';
-let html='<b style="color:#7fdbca">'+hover.name+'</b><br>Planets: '+hover.planets;
-if(hover.owner)html+='<br>Owner: <span style="color:'+playerColor(hover.owner)+'">'+hover.owner+'</span>';
-if(hover.resources?.length)html+='<br>Resources: '+hover.resources.join(', ');
-tt.innerHTML=html}else{tt.style.display='none'}
+tt.style.display='block';tt.style.left=(mx+15)+'px';tt.style.top=Math.min(my-10,H-120)+'px';
+let h='<b style="color:#7fdbca">'+hover.name+'</b><br>Planets: '+hover.planets;
+if(hover.owner)h+='<br>Owner: <span style="color:'+pc(hover.owner)+'">'+hover.owner+'</span>';
+if(hover.resources?.length)h+='<br>Resources: '+hover.resources.join(', ');
+const ls=ships.filter(x=>x.system_id===hover.id);
+if(ls.length)h+='<br>Ships: '+ls.length;
+tt.innerHTML=h}else{tt.style.display='none'}
 requestAnimationFrame(draw)}
 load();setInterval(load,3000);draw();
 </script></body></html>`
