@@ -77,8 +77,9 @@ func PrepareHomeworld(player *entities.Player, buildMines bool) {
 		AddTradingPostToPlanet(planet, player.Name, systemID)
 	}
 
-	// Ensure home planet has Rare Metals for Factory production chain
-	EnsureResourceDeposit(planet, "Rare Metals", player.Name)
+	// Ensure home planet has key resources for production chains
+	EnsureResourceDeposit(planet, "Rare Metals", player.Name) // Factory: RM+Iron → Electronics
+	EnsureResourceDeposit(planet, "Helium-3", player.Name)    // Fusion Reactor: He-3 → 200MW
 
 	SeedInitialCommodities(planet, player.Name)
 
