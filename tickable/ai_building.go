@@ -124,11 +124,15 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			}
 		}
 
-		// PRIORITY 2: Build Generator for power (critical for productivity)
-		if !hasBuilding(planet, "Generator") && planet.Population > 1000 && player.Credits >= 1000 {
+		// PRIORITY 2: Build Generators for power (critical for productivity)
+		// Need enough generators to cover demand — build more if power ratio < 80%
+		powerRatio := planet.GetPowerRatio()
+		genCount := countBuildings(planet, "Generator")
+		if (genCount == 0 || (powerRatio < 0.8 && genCount < 4)) && planet.Population > 500 && player.Credits >= 1000 {
 			player.Credits -= 1000
 			builder.AIBuildOnPlanet(planet, "Generator", player.Name, systemID)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Generator at %s", player.Name, planet.Name))
+			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Generator #%d at %s (power %.0f%%)",
+				player.Name, genCount+1, planet.Name, powerRatio*100))
 			return
 		}
 
