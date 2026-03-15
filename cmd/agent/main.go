@@ -15,128 +15,104 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-const systemPrompt = `You are an AI agent playing Xandaris, a space trading game. You control a faction and must build infrastructure, trade resources, and grow your economy.
+const baseSystemPrompt = `You are %s, an AI faction in Xandaris — a space trading game with a real economy.
 
-IMPORTANT RULES:
-- ALWAYS call get_status first each turn to see your credits and planet IDs
-- ALWAYS call get_planet before trading to check your actual stock levels
-- Only sell resources you HAVE (check stored_resources in get_planet response)
-- Only build_ship if your Shipyard construction is COMPLETE (check get_construction)
-- Mine 500cr, Refinery 1500cr, Factory 2000cr, Generator 1000cr, Fusion Reactor 3000cr, Shipyard 2000cr, Habitat 800cr
-- Buildings and population NEED POWER. Build a Generator (burns Fuel→50MW) early!
-- Fusion Reactor burns Helium-3→200MW (4x more efficient, build when you have He-3 mines)
+YOUR FACTION: %s
+PERSONALITY: %s
 
-RESOURCES: Iron(75), Water(100), Oil(150), Fuel(200), Rare Metals(500), Helium-3(600), Electronics(800)
-PRODUCTION CHAINS: Refinery: 2 Oil → 3 Fuel | Factory: 2 Rare Metals + 1 Iron → 2 Electronics
+RULES:
+- Call get_status first to see your credits, planets, and hints
+- Call get_planet to check resource deposits and buildings before acting
+- Only sell resources you actually HAVE
+- Buildings need POWER — build Generators (Fuel→50MW) or Fusion Reactors (He-3→200MW)
 
-STRATEGY:
-1. Build mines on ALL unmined resource deposits (check resource_deposits, build on ones where has_mine=false)
-2. Build Refinery when you have Oil mines (converts Oil→Fuel, essential for ships)
-3. Build Factory when you have Rare Metals + Iron mines (makes Electronics — high value!)
-4. Build Shipyard when you have 2000cr, then build Cargo ships for trade
-5. Sell surplus resources (storage > 300) at market — especially Electronics (800cr base!)
-6. Buy resources that are cheap (below base price) — arbitrage opportunities
-7. Upgrade mines and factories when affordable to boost throughput (+30%/level)
-8. Keep resources stocked to maintain planet happiness (affects productivity 0.5x-1.5x)
-9. Build Habitats when population nears capacity for more workers
+RESOURCES (base price): Iron(75), Water(100), Oil(150), Fuel(200), Rare Metals(500), Helium-3(600), Electronics(800)
+PRODUCTION: Refinery: 2 Oil→3 Fuel | Factory: 2 RM + 1 Iron→2 Electronics
+BUILDINGS: Mine(500), Generator(1000), Trading Post(1200), Refinery(1500), Factory(2000), Shipyard(2000), Habitat(800), Fusion Reactor(3000)
 
-Think step by step. Be precise — check your actual resources before trading.`
+STRATEGY PRIORITIES:
+1. Mine ALL unmined deposits (resource_deposits where has_mine=false)
+2. Build Generator for power (critical!)
+3. Build Refinery (Oil→Fuel for generators)
+4. Build Factory (RM+Iron→Electronics, highest value resource)
+5. Sell surplus, buy cheap — watch price ratios for arbitrage
+6. Upgrade buildings when affordable (+30%% per level)
+7. Build Habitat when population near capacity
+8. Keep resources stocked for happiness (affects productivity 0.5x-1.5x)
 
-var tools = []openai.Tool{
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "get_status",
-			Description: "Get your current game status including credits, planets, ships, and hints",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "get_economy",
-			Description: "Get galaxy-wide economy data: resource prices, supply, demand, scarcity",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "get_planet",
-			Description: "Get detailed info about your planet including resource deposits and buildings",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer","description":"Planet ID"}},"required":["planet_id"]}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "get_flows",
-			Description: "Get galaxy-wide production vs consumption rates for all resources",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "build",
-			Description: "Build a structure on your planet. Types: Mine, Trading Post, Refinery, Factory, Generator, Fusion Reactor, Habitat, Shipyard. Generator burns Fuel for power. Fusion Reactor burns He-3 for more power. Mines require resource_id.",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_type":{"type":"string","enum":["Mine","Trading Post","Refinery","Factory","Generator","Fusion Reactor","Habitat","Shipyard"]},"resource_id":{"type":"integer","description":"Required for mines: the resource deposit ID to attach to"}},"required":["planet_id","building_type"]}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "trade",
-			Description: "Buy or sell resources at the market",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"resource":{"type":"string"},"quantity":{"type":"integer"},"action":{"type":"string","enum":["buy","sell"]}},"required":["resource","quantity","action"]}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "build_ship",
-			Description: "Build a ship at your shipyard. Types: Scout, Cargo, Colony, Frigate",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"ship_type":{"type":"string","enum":["Scout","Cargo","Colony","Frigate"]}},"required":["planet_id","ship_type"]}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "upgrade",
-			Description: "Upgrade a building on your planet by its index",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_index":{"type":"integer"}},"required":["planet_id","building_index"]}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "get_construction",
-			Description: "Check construction queue — see what's being built and progress",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{}}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "move_ship",
-			Description: "Move a ship to an adjacent system via hyperlane",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"target_system_id":{"type":"integer"}},"required":["ship_id","target_system_id"]}`),
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "get_routes",
-			Description: "Get connected systems (hyperlanes) from a system — for planning ship routes",
-			Parameters:  json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"}},"required":["system_id"]}`),
-		},
-	},
+CONTEXT: You are playing continuously. Remember what you did last turn and build on it. Don't repeat failed actions.`
+
+// Faction defines an AI-controlled faction with personality.
+type Faction struct {
+	Name        string
+	Personality string
+	APIKey      string // per-faction API key on the game server
+	History     []openai.ChatCompletionMessage
+	MaxHistory  int
 }
 
-var serverURL string
-var gameAPIKey string
+var factionPersonalities = map[string]string{
+	"Llama Logistics":    "You are methodical and logistics-focused. Prioritize cargo ships, trade routes, and efficient supply chains. You prefer steady income over risky plays.",
+	"DeepSeek Ventures":  "You are analytical and data-driven. Focus on arbitrage opportunities — buy low, sell high. Upgrade buildings for maximum efficiency. You crunch numbers before every decision.",
+	"Gemini Exchange":    "You are a bold trader. Dominate the market by cornering scarce resources. Build Trading Posts and Factories for maximum credit generation. You're not afraid to speculate.",
+	"Grok Industries":    "You are an industrialist. Maximize production capacity — mines, refineries, factories. You build infrastructure first and trade second. Power and production are everything.",
+	"Opus Cartel":        "You are a strategic expansionist. Focus on colonization, building Shipyards and Colony ships. You want to own the most planets and control the most territory.",
+	"Mistral Trading Co.": "You are a balanced diplomat. Diversify across all resource types. Build a little of everything. Avoid over-specialization and maintain healthy reserves.",
+}
 
-func callAPI(method, endpoint string, body string) (string, error) {
+var (
+	serverURL  string
+	gameAPIKey string // admin key for shared endpoints
+)
+
+var tools = []openai.Tool{
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_status", Description: "Get your current game status including credits, planets, ships, and hints",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_economy", Description: "Get galaxy-wide economy data: resource prices, supply, demand, scarcity",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_planet", Description: "Get detailed info about a planet including resource deposits and buildings",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"}},"required":["planet_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_flows", Description: "Get galaxy-wide production vs consumption rates for all resources",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "build", Description: "Build a structure. Types: Mine, Trading Post, Refinery, Factory, Generator, Fusion Reactor, Habitat, Shipyard. Mines need resource_id.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_type":{"type":"string","enum":["Mine","Trading Post","Refinery","Factory","Generator","Fusion Reactor","Habitat","Shipyard"]},"resource_id":{"type":"integer","description":"For mines: resource deposit ID"}},"required":["planet_id","building_type"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "trade", Description: "Buy or sell resources at the market",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"resource":{"type":"string"},"quantity":{"type":"integer"},"action":{"type":"string","enum":["buy","sell"]}},"required":["resource","quantity","action"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "build_ship", Description: "Build a ship at your shipyard. Types: Scout, Cargo, Colony, Frigate",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"ship_type":{"type":"string","enum":["Scout","Cargo","Colony","Frigate"]}},"required":["planet_id","ship_type"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "upgrade", Description: "Upgrade a building on your planet by its index",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_index":{"type":"integer"}},"required":["planet_id","building_index"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_construction", Description: "Check construction queue — see what's being built and progress",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "move_ship", Description: "Move a ship to an adjacent system via hyperlane",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"target_system_id":{"type":"integer"}},"required":["ship_id","target_system_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_routes", Description: "Get connected systems (hyperlanes) from a system — for planning ship routes",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"}},"required":["system_id"]}`),
+	}},
+}
+
+func callAPI(method, endpoint string, body string, factionKey string) (string, error) {
 	var req *http.Request
 	var err error
 
@@ -146,12 +122,18 @@ func callAPI(method, endpoint string, body string) (string, error) {
 	} else {
 		req, err = http.NewRequest("POST", url, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		if gameAPIKey != "" {
-			req.Header.Set("X-API-Key", gameAPIKey)
-		}
 	}
 	if err != nil {
 		return "", err
+	}
+
+	// Use faction-specific key if available, otherwise admin key
+	key := factionKey
+	if key == "" {
+		key = gameAPIKey
+	}
+	if key != "" {
+		req.Header.Set("X-API-Key", key)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -161,7 +143,6 @@ func callAPI(method, endpoint string, body string) (string, error) {
 	defer resp.Body.Close()
 
 	data, _ := io.ReadAll(resp.Body)
-	// Truncate very long responses
 	result := string(data)
 	if len(result) > 3000 {
 		result = result[:3000] + "...(truncated)"
@@ -169,107 +150,187 @@ func callAPI(method, endpoint string, body string) (string, error) {
 	return result, nil
 }
 
-func executeTool(name string, args string) string {
-	var params map[string]interface{}
-	json.Unmarshal([]byte(args), &params)
-
+func executeTool(name string, args string, factionKey string) string {
 	switch name {
 	case "get_status":
-		result, err := callAPI("GET", "/api/status", "")
+		result, err := callAPI("GET", "/api/status", "", factionKey)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-
 	case "get_economy":
-		result, err := callAPI("GET", "/api/economy", "")
+		result, err := callAPI("GET", "/api/economy", "", factionKey)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-
-	case "get_flows":
-		result, err := callAPI("GET", "/api/flows", "")
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return result
-
 	case "get_planet":
-		pid := int(params["planet_id"].(float64))
-		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", pid), "")
+		var p struct{ PlanetID int `json:"planet_id"` }
+		json.Unmarshal([]byte(args), &p)
+		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionKey)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-
-	case "build":
-		body, _ := json.Marshal(params)
-		result, err := callAPI("POST", "/api/build", string(body))
+	case "get_flows":
+		result, err := callAPI("GET", "/api/flows", "", factionKey)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-
-	case "trade":
-		body, _ := json.Marshal(params)
-		result, err := callAPI("POST", "/api/market/trade", string(body))
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return result
-
-	case "build_ship":
-		body, _ := json.Marshal(params)
-		result, err := callAPI("POST", "/api/ships/build", string(body))
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return result
-
-	case "upgrade":
-		body, _ := json.Marshal(params)
-		result, err := callAPI("POST", "/api/upgrade", string(body))
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return result
-
 	case "get_construction":
-		result, err := callAPI("GET", "/api/construction", "")
+		result, err := callAPI("GET", "/api/construction", "", factionKey)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-
-	case "move_ship":
-		body, _ := json.Marshal(params)
-		result, err := callAPI("POST", "/api/ships/move", string(body))
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return result
-
 	case "get_routes":
-		sysID := int(params["system_id"].(float64))
-		result, err := callAPI("GET", fmt.Sprintf("/api/routes/%d", sysID), "")
+		var p struct{ SystemID int `json:"system_id"` }
+		json.Unmarshal([]byte(args), &p)
+		result, err := callAPI("GET", fmt.Sprintf("/api/systems/%d", p.SystemID), "", factionKey)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-
+	case "build", "trade", "build_ship", "upgrade", "move_ship":
+		endpoint := map[string]string{
+			"build": "/api/build", "trade": "/api/market/trade",
+			"build_ship": "/api/ships/build", "upgrade": "/api/upgrade",
+			"move_ship": "/api/ships/move",
+		}[name]
+		result, err := callAPI("POST", endpoint, args, factionKey)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
 	default:
 		return fmt.Sprintf("Unknown tool: %s", name)
 	}
+}
+
+func runFactionTurn(client *openai.Client, model string, faction *Faction, turn int) {
+	// Build system prompt with faction identity
+	sysPrompt := fmt.Sprintf(baseSystemPrompt, faction.Name, faction.Name, faction.Personality)
+
+	// Start with system prompt + rolling history + new turn prompt
+	messages := []openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: sysPrompt},
+	}
+
+	// Append rolling history (previous turns' context)
+	messages = append(messages, faction.History...)
+
+	// Add turn prompt with a summary request to maintain context
+	turnPrompt := fmt.Sprintf("Turn %d. Check your status and take 1-3 strategic actions as %s. Build on what you did last turn.", turn, faction.Name)
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role: openai.ChatMessageRoleUser, Content: turnPrompt,
+	})
+
+	var turnMessages []openai.ChatCompletionMessage
+	turnMessages = append(turnMessages, openai.ChatCompletionMessage{
+		Role: openai.ChatMessageRoleUser, Content: turnPrompt,
+	})
+
+	// Agent loop
+	for step := 0; step < 8; step++ {
+		resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			Model:    model,
+			Messages: messages,
+			Tools:    tools,
+		})
+		if err != nil {
+			fmt.Printf("  [%s] ❌ LLM error: %v\n", faction.Name, err)
+			break
+		}
+
+		choice := resp.Choices[0]
+
+		if len(choice.Message.ToolCalls) > 0 {
+			messages = append(messages, choice.Message)
+			turnMessages = append(turnMessages, choice.Message)
+
+			for _, tc := range choice.Message.ToolCalls {
+				fmt.Printf("  [%s] 🔧 %s(%s)\n", faction.Name, tc.Function.Name, truncate(tc.Function.Arguments, 80))
+				result := executeTool(tc.Function.Name, tc.Function.Arguments, faction.APIKey)
+
+				if len(result) > 200 {
+					fmt.Printf("  [%s]    → %s...\n", faction.Name, result[:200])
+				} else {
+					fmt.Printf("  [%s]    → %s\n", faction.Name, result)
+				}
+
+				toolMsg := openai.ChatCompletionMessage{
+					Role: openai.ChatMessageRoleTool, Content: result, ToolCallID: tc.ID,
+				}
+				messages = append(messages, toolMsg)
+				turnMessages = append(turnMessages, toolMsg)
+			}
+			continue
+		}
+
+		// Model done — capture reasoning
+		if choice.Message.Content != "" {
+			fmt.Printf("  [%s] 💭 %s\n", faction.Name, truncate(choice.Message.Content, 200))
+			turnMessages = append(turnMessages, openai.ChatCompletionMessage{
+				Role: openai.ChatMessageRoleAssistant, Content: choice.Message.Content,
+			})
+		}
+		break
+	}
+
+	// Add this turn's messages to rolling history, keep last 20 messages
+	faction.History = append(faction.History, turnMessages...)
+	if len(faction.History) > faction.MaxHistory {
+		faction.History = faction.History[len(faction.History)-faction.MaxHistory:]
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) > n {
+		return s[:n-3] + "..."
+	}
+	return s
+}
+
+// registerFaction creates or finds a faction account on the game server.
+func registerFaction(name string) string {
+	body := fmt.Sprintf(`{"name":"%s","password":"agent_%s"}`, name, name)
+	// Try login first
+	result, err := callAPI("POST", "/api/login", body, gameAPIKey)
+	if err == nil {
+		var resp struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				APIKey string `json:"api_key"`
+			} `json:"data"`
+		}
+		if json.Unmarshal([]byte(result), &resp) == nil && resp.OK && resp.Data.APIKey != "" {
+			return resp.Data.APIKey
+		}
+	}
+	// Try register
+	result, err = callAPI("POST", "/api/register", body, gameAPIKey)
+	if err == nil {
+		var resp struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				APIKey string `json:"api_key"`
+			} `json:"data"`
+		}
+		if json.Unmarshal([]byte(result), &resp) == nil && resp.OK && resp.Data.APIKey != "" {
+			return resp.Data.APIKey
+		}
+	}
+	return "" // Will fall back to admin key
 }
 
 func main() {
 	apiKey := flag.String("key", os.Getenv("OPENROUTER_API_KEY"), "OpenRouter API key")
 	model := flag.String("model", "z-ai/glm-4.7-flash", "Model to use")
 	server := flag.String("server", "http://localhost:8080", "Game server URL")
-	gameKey := flag.String("game-key", os.Getenv("XANDARIS_API_KEY"), "Game server API key for POST endpoints")
-	turns := flag.Int("turns", 10, "Number of decision turns")
-	interval := flag.Duration("interval", 30*time.Second, "Time between turns")
+	gameKey := flag.String("game-key", os.Getenv("XANDARIS_API_KEY"), "Game server admin API key")
+	turns := flag.Int("turns", 999999, "Number of decision cycles")
+	interval := flag.Duration("interval", 30*time.Second, "Time between full cycles (all factions)")
 	flag.Parse()
 
 	serverURL = *server
@@ -279,76 +340,75 @@ func main() {
 		log.Fatal("Set OPENROUTER_API_KEY or use -key flag")
 	}
 
-	// Configure OpenAI client for OpenRouter
 	config := openai.DefaultConfig(*apiKey)
 	config.BaseURL = "https://openrouter.ai/api/v1"
 	client := openai.NewClientWithConfig(config)
 
-	fmt.Printf("🤖 Xandaris AI Agent\n")
+	// Wait for server to be ready
+	fmt.Printf("🤖 Xandaris Multi-Faction Agent\n")
 	fmt.Printf("   Model: %s\n", *model)
-	fmt.Printf("   Turns: %d (every %s)\n", *turns, *interval)
-	fmt.Printf("   Server: %s\n\n", serverURL)
+	fmt.Printf("   Server: %s\n", serverURL)
+	fmt.Printf("   Cycle interval: %s\n\n", *interval)
 
-	// Verify server is running
-	if _, err := callAPI("GET", "/api/game", ""); err != nil {
-		log.Fatalf("Cannot reach game server at %s: %v", serverURL, err)
-	}
-
-	for turn := 1; turn <= *turns; turn++ {
-		fmt.Printf("━━━ Turn %d/%d ━━━\n", turn, *turns)
-
-		messages := []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{Role: openai.ChatMessageRoleUser, Content: fmt.Sprintf("Turn %d. Check your status and decide what to do next. Take 1-3 actions.", turn)},
-		}
-
-		// Agent loop: keep calling until no more tool calls
-		for step := 0; step < 8; step++ {
-			resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-				Model:    *model,
-				Messages: messages,
-				Tools:    tools,
-			})
-			if err != nil {
-				fmt.Printf("  ❌ LLM error: %v\n", err)
-				break
-			}
-
-			choice := resp.Choices[0]
-
-			// If the model wants to call tools
-			if len(choice.Message.ToolCalls) > 0 {
-				messages = append(messages, choice.Message)
-
-				for _, tc := range choice.Message.ToolCalls {
-					fmt.Printf("  🔧 %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
-					result := executeTool(tc.Function.Name, tc.Function.Arguments)
-
-					// Print a summary of the result
-					if len(result) > 200 {
-						fmt.Printf("     → %s...\n", result[:200])
-					} else {
-						fmt.Printf("     → %s\n", result)
-					}
-
-					messages = append(messages, openai.ChatCompletionMessage{
-						Role:       openai.ChatMessageRoleTool,
-						Content:    result,
-						ToolCallID: tc.ID,
-					})
-				}
-				continue
-			}
-
-			// Model is done — print its reasoning
-			if choice.Message.Content != "" {
-				fmt.Printf("  💭 %s\n", choice.Message.Content)
-			}
+	for i := 0; i < 30; i++ {
+		if _, err := callAPI("GET", "/api/game", "", gameAPIKey); err == nil {
 			break
 		}
+		fmt.Println("Waiting for server...")
+		time.Sleep(2 * time.Second)
+	}
 
-		if turn < *turns {
-			fmt.Printf("  ⏳ Waiting %s...\n\n", *interval)
+	// Get faction list from the server
+	result, err := callAPI("GET", "/api/players", "", gameAPIKey)
+	if err != nil {
+		log.Fatalf("Cannot reach server: %v", err)
+	}
+
+	var playersResp struct {
+		OK   bool `json:"ok"`
+		Data []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"data"`
+	}
+	json.Unmarshal([]byte(result), &playersResp)
+
+	// Build faction list from server players
+	var factions []*Faction
+	for _, p := range playersResp.Data {
+		personality, exists := factionPersonalities[p.Name]
+		if !exists {
+			// Use a generic personality for unknown factions (e.g. human players controlled by agent)
+			personality = "You are a balanced strategist. Grow your economy steadily through smart investment and trade."
+		}
+
+		// Register or login to get a per-faction API key
+		factionKey := registerFaction(p.Name)
+
+		factions = append(factions, &Faction{
+			Name:        p.Name,
+			Personality: personality,
+			APIKey:      factionKey,
+			MaxHistory:  20,
+		})
+		fmt.Printf("   Faction: %s (key: %s)\n", p.Name, truncate(factionKey, 20))
+	}
+
+	if len(factions) == 0 {
+		log.Fatal("No factions found on server")
+	}
+
+	fmt.Printf("\n   Controlling %d factions\n\n", len(factions))
+
+	for cycle := 1; cycle <= *turns; cycle++ {
+		fmt.Printf("━━━ Cycle %d ━━━\n", cycle)
+
+		for _, faction := range factions {
+			runFactionTurn(client, *model, faction, cycle)
+		}
+
+		if cycle < *turns {
+			fmt.Printf("  ⏳ Next cycle in %s...\n\n", *interval)
 			time.Sleep(*interval)
 		}
 	}
