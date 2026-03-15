@@ -137,6 +137,11 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			continue
 		}
 
+		// Skip stranded ships (no fuel) — they need manual refueling
+		if ship.CurrentFuel < ship.FuelPerJump+10 {
+			continue
+		}
+
 		// Find the planet this ship is orbiting
 		planet := findPlanetAtShipOrbit(ship, systems)
 		isHome := planet != nil && planet.Owner == ship.Owner
@@ -147,6 +152,10 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 				als.unloadAllCargo(ship, planet, cargoOp)
 			} else {
 				// Empty at home — load surplus and send to another system
+				// Only dispatch if enough fuel for round trip
+				if ship.CurrentFuel < ship.FuelPerJump*2+50 {
+					continue // wait for refueling
+				}
 				als.loadSurplus(ship, planet, cargoOp)
 				if ship.GetTotalCargo() > 0 && hasMover && hasJourney {
 					// Pick a connected system and go there
