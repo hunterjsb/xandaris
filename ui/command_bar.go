@@ -117,9 +117,7 @@ func (cb *CommandBar) Init() {
 	// Subscribe to multiplayer chat
 	if cl := cb.ctx.GetChatLog(); cl != nil {
 		cl.Subscribe(func(msg game.ChatMsg) {
-			if cb.mode == ModeAgent {
-				return // multiplayer chat not shown in agent mode
-			}
+			// Always show chat messages — they're from other players
 			cb.mu.Lock()
 			cb.feed = append(cb.feed, ChatMessage{
 				Tick: msg.Tick, Type: MsgUser, Sender: msg.Player,
@@ -362,7 +360,6 @@ func (cb *CommandBar) executeCommand(input string) {
 		cb.addFeedMessage(fmt.Sprintf("> %s", input), utils.Highlight)
 		cb.sendToChat(input)
 	case ModeEventsAll, ModeChatOnly:
-		// Send as multiplayer chat
 		cb.sendMultiplayerChat(input)
 	}
 }
