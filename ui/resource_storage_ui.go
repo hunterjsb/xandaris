@@ -290,7 +290,7 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 		// Bar fill
 		if storage.Capacity > 0 {
 			fillW := int(float64(barW) * float64(storage.Amount) / float64(storage.Capacity))
-			if fillW > 0 {
+			if fillW > 2 {
 				fillColor := utils.SystemGreen
 				pct := float64(storage.Amount) / float64(storage.Capacity)
 				if pct > 0.8 {

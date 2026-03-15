@@ -43,6 +43,8 @@ func (m *mockGameProvider) UnloadCargo(ship *entities.Ship, planet *entities.Pla
 }
 func (m *mockGameProvider) AIBuildOnPlanet(planet *entities.Planet, buildingType string, owner string, systemID int) {
 }
+func (m *mockGameProvider) ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entities.Player, systemID int) {
+}
 func (m *mockGameProvider) LogEvent(eventType string, player string, message string) {
 	m.events = append(m.events, mockEvent{eventType, player, message})
 }
