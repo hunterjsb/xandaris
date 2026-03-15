@@ -17,6 +17,9 @@ import (
 const (
 	saveDirectory = "saves"
 	saveExtension = ".xsave"
+	// SaveVersion — bump this when save format is incompatible.
+	// The autosave loader will discard saves with a different version.
+	SaveVersion = "2.1.0"
 )
 
 func init() {
@@ -71,7 +74,7 @@ func (gs *GameServer) SaveGame(playerName string) error {
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
 	}{
-		Version:            "2.0.0-gob",
+		Version:            SaveVersion,
 		SavedAt:            time.Now(),
 		PlayerName:         playerName,
 		GameTime:           gs.TickManager.GetGameTimeFormatted(),
@@ -132,7 +135,7 @@ func (gs *GameServer) AutoSave(path string) error {
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
 	}{
-		Version:            "2.0.0-gob",
+		Version:            SaveVersion,
 		SavedAt:            time.Now(),
 		PlayerName:         playerName,
 		GameTime:           gs.TickManager.GetGameTimeFormatted(),
@@ -197,6 +200,11 @@ func (gs *GameServer) LoadGame(path string) error {
 
 	if err := gob.NewDecoder(file).Decode(&saveData); err != nil {
 		return fmt.Errorf("failed to decode save data: %w", err)
+	}
+
+	// Version check — reject incompatible saves
+	if saveData.Version != SaveVersion {
+		return fmt.Errorf("save version mismatch: got %q, need %q", saveData.Version, SaveVersion)
 	}
 
 	// Restore state
