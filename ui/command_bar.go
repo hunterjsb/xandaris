@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
+	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/entities"
@@ -129,7 +132,7 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	bgPanel.Draw(screen)
 
 	// Title
-	views.DrawText(screen, "Command Bar  [` to close]", barX+10, barY+12, utils.TextSecondary)
+	views.DrawText(screen, "Chat  [` close | /help commands]", barX+10, barY+12, utils.TextSecondary)
 
 	// Event feed (above the input)
 	feedY := barY + 28
@@ -213,67 +216,77 @@ func (cb *CommandBar) refreshFeed() {
 }
 
 // executeCommand parses and executes a user command.
+// Commands prefixed with / are local slash commands (instant).
+// Everything else is sent to the LLM agent for interpretation.
 func (cb *CommandBar) executeCommand(input string) {
 	input = strings.TrimSpace(input)
-	lower := strings.ToLower(input)
 
-	// Add the command itself to feed
+	// Add the input to feed
 	cb.addFeedMessage(fmt.Sprintf("> %s", input), utils.Highlight)
 
-	// Navigation commands
+	// Slash commands: /help, /credits, /build factory, etc.
+	if strings.HasPrefix(input, "/") {
+		cb.executeSlashCommand(strings.TrimPrefix(input, "/"))
+		return
+	}
+
+	// Natural language → send to LLM chat endpoint
+	cb.sendToChat(input)
+}
+
+// executeSlashCommand handles /prefixed local commands.
+func (cb *CommandBar) executeSlashCommand(input string) {
+	lower := strings.ToLower(strings.TrimSpace(input))
+
 	switch {
-	case strings.Contains(lower, "home") || strings.Contains(lower, "take me home"):
+	// Navigation
+	case lower == "home":
 		cb.navigateHome()
-	case strings.Contains(lower, "galaxy") || strings.Contains(lower, "galaxy view"):
+	case lower == "galaxy":
 		cb.ctx.GetViewManager().SwitchTo(views.ViewTypeGalaxy)
 		cb.addFeedMessage("Switched to galaxy view", utils.SystemGreen)
-	case strings.Contains(lower, "market") || strings.Contains(lower, "show market"):
+	case lower == "market":
 		cb.ctx.GetViewManager().SwitchTo(views.ViewTypeMarket)
 		cb.addFeedMessage("Opened market view", utils.SystemGreen)
-	case strings.Contains(lower, "players") || strings.Contains(lower, "directory"):
+	case lower == "players":
 		cb.ctx.GetViewManager().SwitchTo(views.ViewTypePlayers)
 		cb.addFeedMessage("Opened player directory", utils.SystemGreen)
 
-	// Query commands
-	case strings.Contains(lower, "credits") || strings.Contains(lower, "balance"):
+	// Queries
+	case lower == "credits" || lower == "balance":
 		cb.showCredits()
-	case strings.Contains(lower, "recent trades") || strings.Contains(lower, "show trades"):
+	case lower == "trades":
 		cb.showRecentTrades()
-	case strings.Contains(lower, "events"):
+	case lower == "events":
+		cb.userMessages = nil
 		cb.refreshFeed()
-		cb.addFeedMessage("Refreshed event feed", utils.SystemGreen)
-	case strings.Contains(lower, "status") || lower == "info":
+	case lower == "status" || lower == "info":
 		cb.showStatus()
 	case strings.HasPrefix(lower, "price "):
-		resource := strings.TrimPrefix(input, "price ")
-		resource = strings.TrimPrefix(resource, "Price ")
-		cb.showPrice(resource)
-	case strings.Contains(lower, "happiness") || strings.Contains(lower, "morale"):
+		cb.showPrice(strings.TrimPrefix(lower, "price "))
+	case lower == "happiness" || lower == "morale":
 		cb.showHappiness()
-	case strings.Contains(lower, "building") || strings.Contains(lower, "construction") || strings.Contains(lower, "queue"):
+	case lower == "building" || lower == "construction" || lower == "queue":
 		cb.showConstruction()
-	case strings.Contains(lower, "planets") || strings.Contains(lower, "colonies"):
+	case lower == "planets" || lower == "colonies":
 		cb.showPlanets()
-	case strings.Contains(lower, "ships") || strings.Contains(lower, "fleet"):
+	case lower == "ships" || lower == "fleet":
 		cb.showShips()
-	case strings.Contains(lower, "leaderboard") || strings.Contains(lower, "ranking") || strings.Contains(lower, "score"):
+	case lower == "leaderboard" || lower == "score":
 		cb.showLeaderboard()
+	case lower == "orders":
+		cb.showOrders()
 
-	// Game action commands
+	// Game actions
 	case strings.HasPrefix(lower, "build "):
 		cb.handleBuild(strings.TrimPrefix(lower, "build "))
 	case strings.HasPrefix(lower, "sell ") || strings.HasPrefix(lower, "buy "):
 		cb.handleTrade(lower)
 	case strings.HasPrefix(lower, "order "):
 		cb.handleOrder(strings.TrimPrefix(lower, "order "))
-	case lower == "orders":
-		cb.showOrders()
 
-	case strings.Contains(lower, "help"):
-		cb.showHelp()
-
-	// Speed commands — TickSpeed is float64 under the hood
-	case strings.Contains(lower, "pause"):
+	// Speed control
+	case lower == "pause":
 		cb.ctx.GetTickManager().TogglePause()
 		cb.addFeedMessage("Toggled pause", utils.SystemGreen)
 	case lower == "1x" || lower == "slow":
@@ -285,13 +298,89 @@ func (cb *CommandBar) executeCommand(input string) {
 	case lower == "4x" || lower == "fast":
 		cb.ctx.GetTickManager().SetSpeed(float64(4.0))
 		cb.addFeedMessage("Speed: 4x", utils.SystemGreen)
-	case lower == "8x" || strings.Contains(lower, "very fast"):
+	case lower == "8x":
 		cb.ctx.GetTickManager().SetSpeed(float64(8.0))
 		cb.addFeedMessage("Speed: 8x", utils.SystemGreen)
 
+	case lower == "help":
+		cb.showHelp()
+
 	default:
-		cb.addFeedMessage(fmt.Sprintf("Unknown command: %s (type 'help' for commands)", input), utils.SystemRed)
+		cb.addFeedMessage(fmt.Sprintf("Unknown command: /%s (try /help)", input), utils.SystemRed)
 	}
+}
+
+// sendToChat sends a natural language message to the server's LLM chat endpoint.
+func (cb *CommandBar) sendToChat(message string) {
+	cb.addFeedMessage("Thinking...", utils.TextSecondary)
+
+	// Run in goroutine to avoid blocking the game loop
+	go func() {
+		resp, err := cb.callChatAPI(message)
+		if err != nil {
+			cb.addFeedMessage(fmt.Sprintf("Agent error: %v", err), utils.SystemRed)
+			return
+		}
+		cb.addFeedMessage(resp, utils.SystemGreen)
+	}()
+}
+
+// callChatAPI sends a message to POST /api/chat and returns the response.
+func (cb *CommandBar) callChatAPI(message string) (string, error) {
+	state := cb.ctx.GetState()
+	if state == nil {
+		return "", fmt.Errorf("no game state")
+	}
+
+	// Build the request body
+	body := fmt.Sprintf(`{"message":%q}`, message)
+
+	// Determine server URL — if remote sync is active, use that; otherwise localhost
+	serverURL := "http://localhost:8080"
+	// For remote play, the server URL is embedded in the sync config
+	// For now, try localhost (works for both local and remote since remote server has the endpoint)
+
+	req, err := http.NewRequest("POST", serverURL+"/api/chat", strings.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add API key if we have one stored in state
+	if state.HumanPlayer != nil {
+		// The player's API key is stored in the registry, but we don't have easy access from here
+		// For now, no auth header — the chat endpoint will use the player context
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach server: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+		Data  struct {
+			Response string   `json:"response"`
+			Actions  []string `json:"actions"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("invalid response")
+	}
+	if !result.OK {
+		return "", fmt.Errorf("%s", result.Error)
+	}
+
+	// Show any actions taken
+	for _, action := range result.Data.Actions {
+		cb.addFeedMessage(fmt.Sprintf("  -> %s", action), utils.SystemBlue)
+	}
+
+	return result.Data.Response, nil
 }
 
 func (cb *CommandBar) addFeedMessage(text string, c color.RGBA) {
@@ -840,26 +929,26 @@ func (cb *CommandBar) showOrders() {
 }
 
 func (cb *CommandBar) showHelp() {
+	cb.addFeedMessage("Type normally to chat with the AI agent.", utils.TextSecondary)
+	cb.addFeedMessage("Prefix with / for instant commands:", utils.TextSecondary)
 	commands := []struct {
 		cmd  string
 		desc string
 	}{
-		{"home", "Navigate to home planet"},
-		{"galaxy/market/players", "Switch views"},
-		{"credits", "Show your balance"},
-		{"planets", "Show all your planets"},
-		{"ships", "Show your ships"},
-		{"trades", "Show recent trades"},
-		{"price <res>", "Price + sparkline trend"},
-		{"happiness", "Planet happiness summary"},
-		{"leaderboard", "Player rankings"},
-		{"building", "Construction queue"},
-		{"build <type>", "Build (mine/factory/etc)"},
-		{"buy/sell <n> <res>", "Trade resources"},
-		{"order sell iron above 300", "Auto-trade rule"},
-		{"orders", "List standing orders"},
-		{"status", "Game status"},
-		{"pause / 1x-8x", "Speed control"},
+		{"/home", "Navigate to home planet"},
+		{"/galaxy /market /players", "Switch views"},
+		{"/credits", "Show your balance"},
+		{"/planets /ships", "Your empire"},
+		{"/trades /events", "Recent activity"},
+		{"/price <res>", "Price + sparkline"},
+		{"/happiness", "Planet morale"},
+		{"/leaderboard", "Rankings"},
+		{"/building", "Construction queue"},
+		{"/build <type>", "Build (mine/factory/etc)"},
+		{"/buy /sell <n> <res>", "Trade resources"},
+		{"/order sell iron above 300", "Auto-trade"},
+		{"/orders", "List standing orders"},
+		{"/pause /1x /2x /4x /8x", "Speed control"},
 	}
 	for i := len(commands) - 1; i >= 0; i-- {
 		c := commands[i]

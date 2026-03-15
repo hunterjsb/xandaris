@@ -1275,6 +1275,9 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// LLM chat endpoint
+	registerChatEndpoint(mux, getProvider)
+
 	// Rate limiter: 30 reads/sec, 10 writes/sec per key, burst of 60/20
 	rateLimiter := NewRateLimiter(30, 10, 60, 20)
 
