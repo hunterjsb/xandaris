@@ -62,32 +62,8 @@ func (als *AILogisticsSystem) processColonyShips(player *entities.Player, game G
 		// Check if there's an unclaimed habitable planet in this system
 		planet := findUnclaimedHabitable(ship.CurrentSystem, systems)
 		if planet != nil {
-			planet.Owner = ship.Owner
-			planet.Population = int64(ship.Colonists)
-			planet.SetBaseOwner(ship.Owner)
-			player.AddOwnedPlanet(planet)
-			for _, resEntity := range planet.Resources {
-				if res, ok := resEntity.(*entities.Resource); ok {
-					res.Owner = ship.Owner
-				}
-			}
-
-			// Set up colony infrastructure via the game server
-			systemID := ship.CurrentSystem
-			game.AIBuildOnPlanet(planet, entities.BuildingTradingPost, ship.Owner, systemID)
-			game.AIBuildOnPlanet(planet, entities.BuildingRefinery, ship.Owner, systemID)
-			game.AIBuildOnPlanet(planet, entities.BuildingGenerator, ship.Owner, systemID)
-
-			// Seed starting resources
-			planet.AddStoredResource(entities.ResFuel, 100)
-			planet.AddStoredResource(entities.ResWater, 100)
-
-			ship.Colonists = 0
-			ship.Status = entities.ShipStatusOrbiting
-			planet.RebalanceWorkforce()
-			msg := fmt.Sprintf("%s colonized %s with infrastructure!", player.Name, planet.Name)
-			fmt.Printf("[AIColonize] %s (%d colonists)\n", msg, planet.Population)
-			game.LogEvent("colonize", player.Name, msg)
+			game.ColonizePlanet(planet, ship, player, ship.CurrentSystem)
+			game.LogEvent("colonize", player.Name, fmt.Sprintf("%s colonized %s!", player.Name, planet.Name))
 			continue
 		}
 		// Find nearest unclaimed habitable planet and fly there (if enough fuel)

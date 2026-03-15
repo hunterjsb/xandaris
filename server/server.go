@@ -236,6 +236,11 @@ func (gs *GameServer) AIBuildOnPlanet(planet *entities.Planet, buildingType stri
 	game.AddBuildingToPlanet(planet, buildingType, owner, systemID)
 }
 
+// ColonizePlanet sets up a new colony (part of tickable.GameProvider).
+func (gs *GameServer) ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entities.Player, systemID int) {
+	game.ColonizePlanet(planet, ship, player, systemID)
+}
+
 // --- api.GameStateProvider implementation ---
 
 func (gs *GameServer) GetSystems() []*entities.System     { return gs.State.Systems }

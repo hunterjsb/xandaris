@@ -74,12 +74,12 @@ func PrepareHomeworld(player *entities.Player, buildMines bool) {
 	}
 
 	if !planet.HasBuilding(entities.BuildingTradingPost) {
-		AddTradingPostToPlanet(planet, player.Name, systemID)
+		AddBuildingToPlanet(planet, entities.BuildingTradingPost, player.Name, systemID)
 	}
 
 	// Ensure home planet has key resources for production chains
-	EnsureResourceDeposit(planet, "Rare Metals", player.Name) // Factory: RM+Iron → Electronics
-	EnsureResourceDeposit(planet, "Helium-3", player.Name)    // Fusion Reactor: He-3 → 200MW
+	EnsureResourceDeposit(planet, entities.ResRareMetals, player.Name) // Factory: RM+Iron → Electronics
+	EnsureResourceDeposit(planet, entities.ResHelium3, player.Name)   // Fusion Reactor: He-3 → 200MW
 
 	SeedInitialCommodities(planet, player.Name)
 
@@ -174,11 +174,6 @@ func GetBuildingCost(buildingType string) int {
 	return 500 // default fallback
 }
 
-// AddTradingPostToPlanet creates and attaches a Trading Post to a planet.
-func AddTradingPostToPlanet(planet *entities.Planet, owner string, systemID int) {
-	AddBuildingToPlanet(planet, entities.BuildingTradingPost, owner, systemID)
-}
-
 // EnsureResourceDeposit adds a resource deposit to a planet if it doesn't have one of that type.
 func EnsureResourceDeposit(planet *entities.Planet, resType string, owner string) {
 	for _, res := range planet.Resources {
@@ -263,12 +258,12 @@ func SeedInitialCommodities(planet *entities.Planet, owner string) {
 	// Seed all resource types so consumption creates demand for everything.
 	// Rare resources get more seeding since they can't be produced on most planets.
 	essentials := map[string]int{
-		"Water":       150,
-		"Iron":        80,
-		"Oil":         60,
-		"Fuel":        30,
-		"Rare Metals": 100,
-		"Helium-3":    80,
+		entities.ResWater:      150,
+		entities.ResIron:       80,
+		entities.ResOil:        60,
+		entities.ResFuel:       30,
+		entities.ResRareMetals: 100,
+		entities.ResHelium3:    80,
 	}
 	for res, base := range essentials {
 		if planet.GetStoredAmount(res) < base/2 {

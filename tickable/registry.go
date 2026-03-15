@@ -43,8 +43,9 @@ type GameProvider interface {
 	// Fleet/ship movement
 	GetConnectedSystems(fromSystemID int) []int
 	StartShipJourney(ship *entities.Ship, targetSystemID int) bool
-	// Building
+	// Building / colonization
 	AIBuildOnPlanet(planet *entities.Planet, buildingType string, owner string, systemID int)
+	ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entities.Player, systemID int)
 	// Events
 	LogEvent(eventType string, player string, message string)
 	// Standing orders
