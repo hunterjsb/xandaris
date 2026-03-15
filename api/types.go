@@ -260,11 +260,14 @@ type FleetRemoveShipRequest struct {
 // CatalogBuilding describes an available building type.
 type CatalogBuilding struct {
 	Type           string         `json:"type"`
+	Description    string         `json:"description"`
 	Cost           int            `json:"cost"`
 	MaxLevel       int            `json:"max_level"`
 	Workers        int            `json:"workers"`
-	CreditUpkeep   int            `json:"credit_upkeep"`           // credits per interval (base)
-	ResourceUpkeep map[string]int `json:"resource_upkeep"`         // resources consumed per interval
+	CreditUpkeep   int            `json:"credit_upkeep"`
+	ResourceUpkeep map[string]int `json:"resource_upkeep"`
+	Produces       map[string]int `json:"produces,omitempty"`  // resources produced per interval
+	Consumes       map[string]int `json:"consumes,omitempty"`  // resources consumed for production (not upkeep)
 }
 
 // CatalogShip describes an available ship type.
@@ -285,10 +288,18 @@ type PopConsumptionRate struct {
 	PopDivisor    float64 `json:"pop_divisor"`     // per this many population
 }
 
-// Catalog lists all available buildings and ships with costs.
+// CatalogResource describes a tradeable resource.
+type CatalogResource struct {
+	Name      string  `json:"name"`
+	BasePrice float64 `json:"base_price"`
+	Source    string  `json:"source"` // "mining", "refining", "manufacturing"
+}
+
+// Catalog lists all available buildings, ships, and resources with costs.
 type Catalog struct {
 	Buildings             []CatalogBuilding    `json:"buildings"`
 	Ships                 []CatalogShip        `json:"ships"`
+	Resources             []CatalogResource    `json:"resources"`
 	PopulationConsumption []PopConsumptionRate  `json:"population_consumption"`
 }
 
@@ -387,13 +398,14 @@ type EconomyOverview struct {
 
 // ResourceSummary aggregates supply/demand data for one resource.
 type ResourceSummary struct {
-	TotalSupply  int     `json:"total_supply"`
-	BuyPrice     float64 `json:"buy_price"`
-	SellPrice    float64 `json:"sell_price"`
-	BasePrice    float64 `json:"base_price"`
-	Demand       float64 `json:"demand"`
-	Trend        float64 `json:"trend"`
-	ImportFee    float64 `json:"import_fee"`    // dynamic fee rate (0.05-0.20)
-	Scarcity     string  `json:"scarcity"`      // "Abundant", "Moderate", "Scarce", "Critical", "Depleted"
-	PriceRatio   float64 `json:"price_ratio"`   // current/base price (1.0 = at equilibrium)
+	TotalSupply  int       `json:"total_supply"`
+	BuyPrice     float64   `json:"buy_price"`
+	SellPrice    float64   `json:"sell_price"`
+	BasePrice    float64   `json:"base_price"`
+	Demand       float64   `json:"demand"`
+	Trend        float64   `json:"trend"`
+	ImportFee    float64   `json:"import_fee"`
+	Scarcity     string    `json:"scarcity"`
+	PriceRatio   float64   `json:"price_ratio"`
+	PriceHistory []float64 `json:"price_history,omitempty"` // last 100 mid prices
 }

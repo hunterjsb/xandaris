@@ -222,6 +222,10 @@ func (cb *CommandBar) executeCommand(input string) {
 		cb.addFeedMessage("Refreshed event feed", utils.SystemGreen)
 	case strings.Contains(lower, "status") || lower == "info":
 		cb.showStatus()
+	case strings.HasPrefix(lower, "price "):
+		resource := strings.TrimPrefix(input, "price ")
+		resource = strings.TrimPrefix(resource, "Price ")
+		cb.showPrice(resource)
 	case strings.Contains(lower, "help"):
 		cb.showHelp()
 
@@ -314,6 +318,90 @@ func (cb *CommandBar) showStatus() {
 		player.Name, player.Credits, len(player.OwnedPlanets), len(player.OwnedShips)), utils.TextPrimary)
 }
 
+func (cb *CommandBar) showPrice(resource string) {
+	// Normalize resource name (capitalize first letter of each word)
+	words := strings.Fields(resource)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		}
+	}
+	resName := strings.Join(words, " ")
+
+	// Special case for common abbreviations
+	switch strings.ToLower(resource) {
+	case "rm", "rare metals", "rare metal":
+		resName = "Rare Metals"
+	case "he3", "helium", "helium-3":
+		resName = "Helium-3"
+	case "elec", "electronics":
+		resName = "Electronics"
+	}
+
+	state := cb.ctx.GetState()
+	if state == nil || state.Market == nil {
+		cb.addFeedMessage("Market not available", utils.SystemRed)
+		return
+	}
+
+	snap := state.Market.GetSnapshot()
+	rm, ok := snap.Resources[resName]
+	if !ok {
+		cb.addFeedMessage(fmt.Sprintf("Unknown resource: %s", resName), utils.SystemRed)
+		return
+	}
+
+	// Show current prices
+	cb.addFeedMessage(fmt.Sprintf("%s: Buy %.0f | Sell %.0f | Base %.0f | Supply %d",
+		resName, rm.BuyPrice, rm.SellPrice, rm.BasePrice, int(rm.TotalSupply)), utils.TextPrimary)
+
+	// Show mini sparkline from price history
+	if len(rm.PriceHistory) >= 5 {
+		sparkline := buildSparkline(rm.PriceHistory, 20)
+		cb.addFeedMessage(fmt.Sprintf("Trend: %s", sparkline), utils.SystemGreen)
+	}
+}
+
+func buildSparkline(history []float64, width int) string {
+	// Take last N entries
+	data := history
+	if len(data) > width {
+		data = data[len(data)-width:]
+	}
+
+	// Find min/max
+	min, max := data[0], data[0]
+	for _, v := range data {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+
+	// Build sparkline using unicode block chars
+	blocks := []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+	rng := max - min
+	if rng < 0.01 {
+		rng = 1
+	}
+
+	result := make([]rune, len(data))
+	for i, v := range data {
+		normalized := (v - min) / rng
+		idx := int(normalized * float64(len(blocks)-1))
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(blocks) {
+			idx = len(blocks) - 1
+		}
+		result[i] = blocks[idx]
+	}
+	return string(result)
+}
+
 func (cb *CommandBar) showHelp() {
 	commands := []struct {
 		cmd  string
@@ -325,6 +413,7 @@ func (cb *CommandBar) showHelp() {
 		{"players", "Open player directory"},
 		{"credits", "Show your balance"},
 		{"trades", "Show recent trades"},
+		{"price <res>", "Show price + sparkline trend"},
 		{"status", "Show game status"},
 		{"pause", "Toggle pause"},
 		{"1x/2x/4x/8x", "Set game speed"},

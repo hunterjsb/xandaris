@@ -683,6 +683,9 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 			}
 
 			rs.Scarcity = economy.ComputeScarcity(rm.TotalSupply, rm.TotalDemand)
+			if len(rm.PriceHistory) > 0 {
+				rs.PriceHistory = rm.PriceHistory
+			}
 			overview.Resources[name] = rs
 		}
 	}
@@ -859,15 +862,21 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 
 func handleGetCatalog() interface{} {
 	buildingTypes := []struct {
-		name     string
-		maxLevel int
-		workers  int
+		name        string
+		description string
+		maxLevel    int
+		workers     int
+		produces    map[string]int
+		consumes    map[string]int
 	}{
-		{"Mine", 5, 80},
-		{"Trading Post", 5, 150},
-		{"Refinery", 5, 250},
-		{"Habitat", 10, 200},
-		{"Shipyard", 5, 400},
+		{"Mine", "Extracts resources from planetary deposits", 5, 80, nil, nil},
+		{"Trading Post", "Enables market access and generates trade revenue", 5, 150, nil, nil},
+		{"Refinery", "Converts Oil into Fuel (2 Oil -> 3 Fuel per interval)", 5, 250,
+			map[string]int{"Fuel": 3}, map[string]int{"Oil": 2}},
+		{"Factory", "Converts Rare Metals + Iron into Electronics (2 RM + 1 Iron -> 2 Elec)", 5, 300,
+			map[string]int{"Electronics": 2}, map[string]int{"Rare Metals": 2, "Iron": 1}},
+		{"Habitat", "Provides housing for population (+700 capacity per level)", 10, 200, nil, nil},
+		{"Shipyard", "Enables ship construction", 5, 400, nil, nil},
 	}
 
 	buildings := make([]CatalogBuilding, 0, len(buildingTypes))
@@ -884,11 +893,14 @@ func handleGetCatalog() interface{} {
 		}
 		buildings = append(buildings, CatalogBuilding{
 			Type:           bt.name,
+			Description:    bt.description,
 			Cost:           game.GetBuildingCost(bt.name),
 			MaxLevel:       bt.maxLevel,
 			Workers:        bt.workers,
 			CreditUpkeep:   creditUpkeep,
 			ResourceUpkeep: resUpkeep,
+			Produces:       bt.produces,
+			Consumes:       bt.consumes,
 		})
 	}
 
@@ -924,7 +936,23 @@ func handleGetCatalog() interface{} {
 		})
 	}
 
-	return Catalog{Buildings: buildings, Ships: ships, PopulationConsumption: popConsumption}
+	// Resource catalog
+	resources := []CatalogResource{
+		{"Iron", economy.GetBasePrice("Iron"), "mining"},
+		{"Water", economy.GetBasePrice("Water"), "mining"},
+		{"Oil", economy.GetBasePrice("Oil"), "mining"},
+		{"Rare Metals", economy.GetBasePrice("Rare Metals"), "mining"},
+		{"Helium-3", economy.GetBasePrice("Helium-3"), "mining"},
+		{"Fuel", economy.GetBasePrice("Fuel"), "refining"},
+		{"Electronics", economy.GetBasePrice("Electronics"), "manufacturing"},
+	}
+
+	return Catalog{
+		Buildings:             buildings,
+		Ships:                 ships,
+		Resources:             resources,
+		PopulationConsumption: popConsumption,
+	}
 }
 
 func handleGetWorkforce(p GameStateProvider, planetID int) (interface{}, bool) {
