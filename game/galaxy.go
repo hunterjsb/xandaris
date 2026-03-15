@@ -33,6 +33,7 @@ func NewGalaxyGenerator(screenWidth, screenHeight int) *GalaxyGenerator {
 
 // GenerateSystems creates systems at random coordinates
 func (gg *GalaxyGenerator) GenerateSystems(seed int64) []*entities.System {
+	rng := rand.New(rand.NewSource(seed))
 	systems := make([]*entities.System, 0, systemCount)
 	colors := getSystemColors()
 
@@ -44,8 +45,8 @@ func (gg *GalaxyGenerator) GenerateSystems(seed int64) []*entities.System {
 
 		// Keep trying until we find a position that's not too close to existing systems
 		for !validPosition && attempts < 200 {
-			x = 80 + rand.Float64()*(float64(gg.screenWidth)-160)
-			y = 80 + rand.Float64()*(float64(gg.screenHeight)-160)
+			x = 80 + rng.Float64()*(float64(gg.screenWidth)-160)
+			y = 80 + rng.Float64()*(float64(gg.screenHeight)-160)
 			validPosition = true
 
 			// Check distance to all existing systems
@@ -64,7 +65,7 @@ func (gg *GalaxyGenerator) GenerateSystems(seed int64) []*entities.System {
 			X:           x,
 			Y:           y,
 			Name:        fmt.Sprintf("SYS-%d", i+1),
-			Color:       colors[rand.Intn(len(colors))],
+			Color:       colors[rng.Intn(len(colors))],
 			Connections: make([]int, 0),
 		}
 
