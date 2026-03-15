@@ -93,7 +93,7 @@ func (cce *CargoCommandExecutor) UnloadCargo(ship *entities.Ship, planet *entiti
 	if planet.Owner != ship.Owner {
 		hasTradingPost := false
 		for _, be := range planet.Buildings {
-			if b, ok := be.(*entities.Building); ok && b.BuildingType == "Trading Post" && b.IsOperational {
+			if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
 				hasTradingPost = true
 				break
 			}
