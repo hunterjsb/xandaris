@@ -266,7 +266,7 @@ func (als *AILogisticsSystem) pickBestTradeTarget(connected []int, ship *entitie
 				}
 				// Prefer systems with Trading Posts (can trade there)
 				for _, be := range p.Buildings {
-					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Trading Post" && b.IsOperational {
+					if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
 						score += 50
 						break
 					}

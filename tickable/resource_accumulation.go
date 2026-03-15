@@ -65,7 +65,7 @@ func computeResourceExtraction(resource *entities.Resource, planet *entities.Pla
 
 	for _, buildingEntity := range planet.Buildings {
 		building, ok := buildingEntity.(*entities.Building)
-		if !ok || building.BuildingType != "Mine" || !building.IsOperational {
+		if !ok || building.BuildingType != entities.BuildingMine || !building.IsOperational {
 			continue
 		}
 		if building.AttachmentType != "Resource" || building.AttachedTo != resourceID {

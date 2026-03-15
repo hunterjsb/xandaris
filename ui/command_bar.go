@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -263,7 +264,7 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	scrollOff := cb.scrollOffset
 	cb.mu.Unlock()
 
-	feedBottom := inputY - 10
+	feedBottom := inputY - 22 // enough gap so text doesn't overlap input bar
 	feedTop := barY + 6
 	maxVisible := (feedBottom - feedTop) / lineHeight
 
@@ -527,8 +528,14 @@ func (cb *CommandBar) callChatAPI(message string) (string, error) {
 		} `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("invalid response")
+	respBody, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		// Show what we actually got for debugging
+		snippet := string(respBody)
+		if len(snippet) > 80 {
+			snippet = snippet[:80]
+		}
+		return "", fmt.Errorf("bad response: %s", snippet)
 	}
 	if !result.OK {
 		return "", fmt.Errorf("%s", result.Error)

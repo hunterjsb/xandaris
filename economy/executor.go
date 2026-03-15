@@ -571,7 +571,7 @@ func firstPlanetWithTradingPost(player *entities.Player) *entities.Planet {
 		}
 		for _, be := range planet.Buildings {
 			if b, ok := be.(*entities.Building); ok {
-				if b.BuildingType == "Trading Post" && b.IsOperational {
+				if b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
 					return planet
 				}
 			}
