@@ -936,6 +936,16 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"action": "save_queued"}})
 	})
 
+	// Serve live dashboard at root
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, dashboardHTML)
+	})
+
 	// Wrap mux with auth + CORS middleware
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CORS
@@ -978,6 +988,59 @@ func parseSpeed(s string) (systems.TickSpeed, bool) {
 	}
 	return 0, false
 }
+
+const dashboardHTML = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xandaris II — Live Economy</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0c14;color:#c0c8d8;font-family:'Courier New',monospace;padding:20px}
+h1{color:#7fdbca;margin-bottom:4px}
+.sub{color:#556;margin-bottom:20px;font-size:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1000px}
+.panel{background:#12162a;border:1px solid #1e2844;border-radius:6px;padding:16px}
+.panel h2{color:#7fdbca;font-size:14px;margin-bottom:12px;border-bottom:1px solid #1e2844;padding-bottom:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:#889;padding:4px 8px}
+td{padding:4px 8px}
+.g{color:#6dcc6d}.r{color:#c55}.o{color:#cca444}.d{color:#556}
+.st{position:fixed;bottom:8px;right:12px;font-size:11px;color:#4a4}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<h1>Xandaris II — Live Economy</h1>
+<p class="sub">Real-time data from game server • Auto-refreshes every 3s</p>
+<div class="grid">
+<div class="panel"><h2>Market Prices</h2>
+<table><thead><tr><th>Resource</th><th>Buy</th><th>Base</th><th>Ratio</th><th>Scarcity</th></tr></thead><tbody id="m"></tbody></table></div>
+<div class="panel"><h2>Players</h2>
+<table><thead><tr><th>Name</th><th>Credits</th><th>Pop</th><th>Mines</th><th>Stock</th></tr></thead><tbody id="p"></tbody></table></div>
+<div class="panel"><h2>Galaxy Flows</h2>
+<table><thead><tr><th>Resource</th><th>Prod</th><th>Cons</th><th>Net</th></tr></thead><tbody id="f"></tbody></table></div>
+<div class="panel"><h2>Game Info</h2><div id="g"></div></div>
+</div>
+<div id="s" class="st">Loading...</div>
+<script>
+const B=location.origin;
+async function R(){try{
+const[e,p,f,g]=await Promise.all([B+'/api/economy',B+'/api/players',B+'/api/flows',B+'/api/game'].map(u=>fetch(u).then(r=>r.json())));
+document.getElementById('m').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
+const c=r.price_ratio>1.5?'r':r.price_ratio>0.8?'':'g';
+const s=r.scarcity=='Scarce'||r.scarcity=='Critical'?'o':r.scarcity=='Depleted'?'r':'d';
+return'<tr><td>'+n+'</td><td class="'+c+'">'+r.buy_price.toFixed(0)+'</td><td class="d">'+r.base_price+'</td><td class="'+c+'">'+r.price_ratio.toFixed(1)+'x</td><td class="'+s+'">'+r.scarcity+'</td></tr>'}).join('');
+document.getElementById('p').innerHTML=p.data.sort((a,b)=>b.credits-a.credits).map(x=>{
+const c=x.credits<100?'r':x.credits<500?'o':'';
+return'<tr><td>'+x.name+'</td><td class="'+c+'">'+x.credits+'</td><td>'+x.population+'</td><td>'+x.mines+'</td><td>'+x.stock+'</td></tr>'}).join('');
+const a=new Set([...Object.keys(f.data.production),...Object.keys(f.data.consumption)]);
+document.getElementById('f').innerHTML=[...a].sort().map(r=>{
+const pr=(f.data.production[r]||0).toFixed(1),co=(f.data.consumption[r]||0).toFixed(1),n=(f.data.net_flow[r]||0).toFixed(1);
+return'<tr><td>'+r+'</td><td class="g">+'+pr+'</td><td class="r">-'+co+'</td><td class="'+(n>0?'g':n<-1?'r':'')+'">'+((n>0?'+':'')+n)+'</td></tr>'}).join('');
+const d=g.data;
+document.getElementById('g').innerHTML='<p>Tick: '+d.tick+' • Time: '+d.game_time+' • Speed: '+d.speed+'</p><p>Systems: '+d.systems+' • Players: '+d.players+'</p><p>Population: '+e.data.total_population.toLocaleString()+'</p><p>Credits: '+e.data.total_credits.toLocaleString()+'</p><p>Trade Volume: '+e.data.trade_volume.toFixed(0)+'</p>';
+document.getElementById('s').textContent='Live • '+new Date().toLocaleTimeString();
+}catch(e){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
+R();setInterval(R,3000);
+</script></body></html>`
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
