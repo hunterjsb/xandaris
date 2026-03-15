@@ -287,6 +287,8 @@ func (cb *CommandBar) executeSlashCommand(input string) {
 		cb.showOrders()
 	case lower == "scarcity" || lower == "economy" || lower == "shortages":
 		cb.showScarcity()
+	case lower == "power":
+		cb.showPower()
 
 	// Game actions
 	case strings.HasPrefix(lower, "build "):
@@ -564,6 +566,48 @@ func (cb *CommandBar) showHappiness() {
 		}
 		cb.addFeedMessage(fmt.Sprintf("%s: %s (%.0f%%) → %.1fx productivity",
 			planet.Name, label, planet.Happiness*100, planet.ProductivityBonus), c)
+	}
+}
+
+func (cb *CommandBar) showPower() {
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil {
+		cb.addFeedMessage("No player", utils.SystemRed)
+		return
+	}
+	for _, planet := range player.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		ratio := planet.GetPowerRatio()
+		c := utils.SystemGreen
+		status := "OK"
+		if ratio < 0.5 {
+			c = utils.SystemRed
+			status = "CRITICAL"
+		} else if ratio < 0.8 {
+			c = utils.SystemOrange
+			status = "Low"
+		}
+
+		// Count power buildings
+		gens := 0
+		reactors := 0
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok {
+				if b.BuildingType == "Generator" {
+					gens++
+				} else if b.BuildingType == "Fusion Reactor" {
+					reactors++
+				}
+			}
+		}
+
+		fuelStored := planet.GetStoredAmount("Fuel")
+		he3Stored := planet.GetStoredAmount("Helium-3")
+		cb.addFeedMessage(fmt.Sprintf("%s: %.0f/%.0f MW (%s) | %d gen %d fusion | Fuel:%d He3:%d",
+			planet.Name, planet.PowerGenerated, planet.PowerConsumed, status,
+			gens, reactors, fuelStored, he3Stored), c)
 	}
 }
 
@@ -1002,6 +1046,7 @@ func (cb *CommandBar) showHelp() {
 		{"/price <res>", "Price + sparkline"},
 		{"/happiness", "Planet morale"},
 		{"/leaderboard", "Rankings"},
+		{"/power", "Power grid status per planet"},
 		{"/scarcity", "Resource shortages + advice"},
 		{"/building", "Construction queue"},
 		{"/build <type>", "Build (mine/factory/etc)"},

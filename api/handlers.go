@@ -257,6 +257,55 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 	}
 }
 
+func handleGetPowerGrid(p GameStateProvider) interface{} {
+	type planetPower struct {
+		PlanetID       int     `json:"planet_id"`
+		PlanetName     string  `json:"planet_name"`
+		Owner          string  `json:"owner"`
+		Generated      float64 `json:"generated_mw"`
+		Consumed       float64 `json:"consumed_mw"`
+		Ratio          float64 `json:"ratio"`
+		Generators     int     `json:"generators"`
+		FusionReactors int     `json:"fusion_reactors"`
+		FuelStored     int     `json:"fuel_stored"`
+		He3Stored      int     `json:"he3_stored"`
+	}
+	var result []planetPower
+	for _, player := range p.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			gens, reactors := 0, 0
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok {
+					if b.BuildingType == "Generator" {
+						gens++
+					} else if b.BuildingType == "Fusion Reactor" {
+						reactors++
+					}
+				}
+			}
+			result = append(result, planetPower{
+				PlanetID:       planet.GetID(),
+				PlanetName:     planet.Name,
+				Owner:          player.Name,
+				Generated:      math.Round(planet.PowerGenerated*10) / 10,
+				Consumed:       math.Round(planet.PowerConsumed*10) / 10,
+				Ratio:          math.Round(planet.GetPowerRatio()*100) / 100,
+				Generators:     gens,
+				FusionReactors: reactors,
+				FuelStored:     planet.GetStoredAmount("Fuel"),
+				He3Stored:      planet.GetStoredAmount("Helium-3"),
+			})
+		}
+	}
+	return result
+}
+
 func handleGetLeaderboard(p GameStateProvider) interface{} {
 	players := p.GetPlayers()
 
