@@ -14,9 +14,9 @@ type ConsumptionRate struct {
 // PopulationConsumption defines resource drain from population.
 // These rates apply per 10-tick interval (~1 second at 1x speed).
 var PopulationConsumption = []ConsumptionRate{
-	{entities.ResWater, 1, 500},         // 1 per 500 pop — life support
-	{entities.ResIron, 1, 1000},        // 1 per 1000 pop — infrastructure
-	{entities.ResOil, 1, 1500},         // 1 per 1500 pop — industry
+	{entities.ResWater, 1, 1000},        // 1 per 1000 pop — life support
+	{entities.ResIron, 1, 2000},        // 1 per 2000 pop — infrastructure
+	{entities.ResOil, 1, 3000},         // 1 per 3000 pop — industry
 	{entities.ResRareMetals, 1, 5000},  // 1 per 5000 pop — raw materials (luxury)
 	{entities.ResHelium3, 1, 10000},    // 1 per 10000 pop — fusion (luxury)
 	{entities.ResElectronics, 1, 3000}, // 1 per 3000 pop — technology goods

@@ -19,7 +19,7 @@ const (
 	saveExtension = ".xsave"
 	// SaveVersion — bump this when save format is incompatible.
 	// The autosave loader will discard saves with a different version.
-	SaveVersion = "2.2.0"
+	SaveVersion = "2.3.0"
 )
 
 func init() {
