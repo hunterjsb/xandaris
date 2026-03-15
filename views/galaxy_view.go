@@ -293,18 +293,24 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
 	planets := system.GetEntitiesByType(entities.EntityTypePlanet)
 
-	// Territory glow for owned systems
+	// Territory ring for owned systems (subtle dotted outline)
 	for _, entity := range system.Entities {
 		if p, ok := entity.(*entities.Planet); ok && p.Owner != "" {
 			if ownerColor, ok := gv.getOwnerColor(p.Owner); ok {
-				glowRadius := 12 + len(planets)*4
-				glowColor := color.RGBA{ownerColor.R, ownerColor.G, ownerColor.B, 25}
-				glowImg := galaxyCircleCache.GetOrCreate(glowRadius, glowColor)
-				glowOpts := &ebiten.DrawImageOptions{}
-				glowOpts.GeoM.Translate(float64(centerX-glowRadius), float64(centerY-glowRadius))
-				screen.DrawImage(glowImg, glowOpts)
+				ringRadius := float64(10 + len(planets)*3)
+				ringColor := color.RGBA{ownerColor.R, ownerColor.G, ownerColor.B, 55}
+				segments := 24
+				for i := 0; i < segments; i += 2 { // skip every other segment for dotted effect
+					angle1 := float64(i) * 2 * math.Pi / float64(segments)
+					angle2 := float64(i+1) * 2 * math.Pi / float64(segments)
+					x1 := centerX + int(ringRadius*math.Cos(angle1))
+					y1 := centerY + int(ringRadius*math.Sin(angle1))
+					x2 := centerX + int(ringRadius*math.Cos(angle2))
+					y2 := centerY + int(ringRadius*math.Sin(angle2))
+					DrawLine(screen, x1, y1, x2, y2, ringColor)
+				}
 			}
-			break // one glow per system
+			break // one ring per system
 		}
 	}
 

@@ -79,15 +79,14 @@ func (p *PlanetDataProvider) Update() {
 		p.updateRemote()
 		return
 	}
-	p.cachedPlanet = p.findPlanet()
-	if p.cachedPlanet == nil {
-		p.cachedPD = nil
-		p.cachedRates = nil
-		p.cachedItems = nil
+	planet := p.findPlanet()
+	if planet == nil {
+		// Keep stale cache rather than flickering to nil
 		return
 	}
-	p.cachedPD = p.buildPlanetData(p.cachedPlanet)
-	p.cachedRates = p.buildRatesData(p.cachedPlanet)
+	p.cachedPlanet = planet
+	p.cachedPD = p.buildPlanetData(planet)
+	p.cachedRates = p.buildRatesData(planet)
 	p.cachedItems = p.buildConstructionItems()
 	p.refreshRequired = false
 }
