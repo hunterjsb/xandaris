@@ -1307,7 +1307,7 @@ func StartServer(provider GameStateProvider) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CORS
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Player")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -1333,6 +1333,12 @@ func StartServer(provider GameStateProvider) {
 			if registry != nil {
 				playerName, admin, ok := registry.Authenticate(key)
 				if ok {
+					// Admin impersonation: X-Player header lets admin act as any faction
+					if admin {
+						if impersonate := r.Header.Get("X-Player"); impersonate != "" {
+							playerName = impersonate
+						}
+					}
 					ctx := context.WithValue(r.Context(), ctxPlayerName, playerName)
 					ctx = context.WithValue(ctx, ctxIsAdmin, admin)
 					r = r.WithContext(ctx)

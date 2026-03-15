@@ -46,7 +46,6 @@ CONTEXT: You are playing continuously. Remember what you did last turn and build
 type Faction struct {
 	Name        string
 	Personality string
-	APIKey      string // per-faction API key on the game server
 	History     []openai.ChatCompletionMessage
 	MaxHistory  int
 }
@@ -112,7 +111,7 @@ var tools = []openai.Tool{
 	}},
 }
 
-func callAPI(method, endpoint string, body string, factionKey string) (string, error) {
+func callAPI(method, endpoint string, body string, factionName string) (string, error) {
 	var req *http.Request
 	var err error
 
@@ -127,13 +126,12 @@ func callAPI(method, endpoint string, body string, factionKey string) (string, e
 		return "", err
 	}
 
-	// Use faction-specific key if available, otherwise admin key
-	key := factionKey
-	if key == "" {
-		key = gameAPIKey
+	// Use admin key + X-Player header for faction impersonation
+	if gameAPIKey != "" {
+		req.Header.Set("X-API-Key", gameAPIKey)
 	}
-	if key != "" {
-		req.Header.Set("X-API-Key", key)
+	if factionName != "" {
+		req.Header.Set("X-Player", factionName)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -150,16 +148,16 @@ func callAPI(method, endpoint string, body string, factionKey string) (string, e
 	return result, nil
 }
 
-func executeTool(name string, args string, factionKey string) string {
+func executeTool(name string, args string, factionName string) string {
 	switch name {
 	case "get_status":
-		result, err := callAPI("GET", "/api/status", "", factionKey)
+		result, err := callAPI("GET", "/api/status", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
 	case "get_economy":
-		result, err := callAPI("GET", "/api/economy", "", factionKey)
+		result, err := callAPI("GET", "/api/economy", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
@@ -167,19 +165,19 @@ func executeTool(name string, args string, factionKey string) string {
 	case "get_planet":
 		var p struct{ PlanetID int `json:"planet_id"` }
 		json.Unmarshal([]byte(args), &p)
-		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionKey)
+		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
 	case "get_flows":
-		result, err := callAPI("GET", "/api/flows", "", factionKey)
+		result, err := callAPI("GET", "/api/flows", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
 	case "get_construction":
-		result, err := callAPI("GET", "/api/construction", "", factionKey)
+		result, err := callAPI("GET", "/api/construction", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
@@ -187,7 +185,7 @@ func executeTool(name string, args string, factionKey string) string {
 	case "get_routes":
 		var p struct{ SystemID int `json:"system_id"` }
 		json.Unmarshal([]byte(args), &p)
-		result, err := callAPI("GET", fmt.Sprintf("/api/systems/%d", p.SystemID), "", factionKey)
+		result, err := callAPI("GET", fmt.Sprintf("/api/systems/%d", p.SystemID), "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
@@ -198,7 +196,7 @@ func executeTool(name string, args string, factionKey string) string {
 			"build_ship": "/api/ships/build", "upgrade": "/api/upgrade",
 			"move_ship": "/api/ships/move",
 		}[name]
-		result, err := callAPI("POST", endpoint, args, factionKey)
+		result, err := callAPI("POST", endpoint, args, factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
@@ -251,7 +249,7 @@ func runFactionTurn(client *openai.Client, model string, faction *Faction, turn 
 
 			for _, tc := range choice.Message.ToolCalls {
 				fmt.Printf("  [%s] 🔧 %s(%s)\n", faction.Name, tc.Function.Name, truncate(tc.Function.Arguments, 80))
-				result := executeTool(tc.Function.Name, tc.Function.Arguments, faction.APIKey)
+				result := executeTool(tc.Function.Name, tc.Function.Arguments, faction.Name)
 
 				if len(result) > 200 {
 					fmt.Printf("  [%s]    → %s...\n", faction.Name, result[:200])
@@ -290,38 +288,6 @@ func truncate(s string, n int) string {
 		return s[:n-3] + "..."
 	}
 	return s
-}
-
-// registerFaction creates or finds a faction account on the game server.
-func registerFaction(name string) string {
-	body := fmt.Sprintf(`{"name":"%s","password":"agent_%s"}`, name, name)
-	// Try login first
-	result, err := callAPI("POST", "/api/login", body, gameAPIKey)
-	if err == nil {
-		var resp struct {
-			OK   bool `json:"ok"`
-			Data struct {
-				APIKey string `json:"api_key"`
-			} `json:"data"`
-		}
-		if json.Unmarshal([]byte(result), &resp) == nil && resp.OK && resp.Data.APIKey != "" {
-			return resp.Data.APIKey
-		}
-	}
-	// Try register
-	result, err = callAPI("POST", "/api/register", body, gameAPIKey)
-	if err == nil {
-		var resp struct {
-			OK   bool `json:"ok"`
-			Data struct {
-				APIKey string `json:"api_key"`
-			} `json:"data"`
-		}
-		if json.Unmarshal([]byte(result), &resp) == nil && resp.OK && resp.Data.APIKey != "" {
-			return resp.Data.APIKey
-		}
-	}
-	return "" // Will fall back to admin key
 }
 
 func main() {
@@ -378,20 +344,15 @@ func main() {
 	for _, p := range playersResp.Data {
 		personality, exists := factionPersonalities[p.Name]
 		if !exists {
-			// Use a generic personality for unknown factions (e.g. human players controlled by agent)
 			personality = "You are a balanced strategist. Grow your economy steadily through smart investment and trade."
 		}
-
-		// Register or login to get a per-faction API key
-		factionKey := registerFaction(p.Name)
 
 		factions = append(factions, &Faction{
 			Name:        p.Name,
 			Personality: personality,
-			APIKey:      factionKey,
 			MaxHistory:  20,
 		})
-		fmt.Printf("   Faction: %s (key: %s)\n", p.Name, truncate(factionKey, 20))
+		fmt.Printf("   Faction: %s (%s)\n", p.Name, p.Type)
 	}
 
 	if len(factions) == 0 {
