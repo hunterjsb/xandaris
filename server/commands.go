@@ -216,7 +216,7 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 
 	// For mines, determine attachment
 	attachmentID := fmt.Sprintf("%d", planet.GetID())
-	if bd.BuildingType == "Mine" {
+	if bd.BuildingType == entities.BuildingMine {
 		if bd.ResourceID > 0 {
 			attachmentID = fmt.Sprintf("%d", bd.ResourceID)
 		} else {
@@ -284,7 +284,7 @@ func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {
 		return
 	}
 
-	if !planet.HasOperationalBuilding("Shipyard") {
+	if !planet.HasOperationalBuilding(entities.BuildingShipyard) {
 		sendResult(cmd, fmt.Errorf("no operational shipyard on this planet"))
 		return
 	}
