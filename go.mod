@@ -6,7 +6,6 @@ require (
 	github.com/hajimehoshi/bitmapfont/v4 v4.1.0
 	github.com/hajimehoshi/ebiten/v2 v2.9.1
 	github.com/sashabaranov/go-openai v1.41.2
-	golang.org/x/crypto v0.49.0
 )
 
 require (

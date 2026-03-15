@@ -9,33 +9,32 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // PlayerAccount stores credentials for a registered player.
 type PlayerAccount struct {
-	Name         string `json:"name"`
-	PasswordHash string `json:"-"`
-	APIKey       string `json:"api_key"`
-	PlayerID     int    `json:"player_id"`
+	Name      string `json:"name"`
+	DiscordID string `json:"discord_id"`
+	APIKey    string `json:"api_key"`
+	PlayerID  int    `json:"player_id"`
 }
 
-// savedAccount is the on-disk representation (includes password hash).
+// savedAccount is the on-disk representation.
 type savedAccount struct {
-	Name         string `json:"name"`
-	PasswordHash string `json:"password_hash"`
-	APIKey       string `json:"api_key"`
-	PlayerID     int    `json:"player_id"`
+	Name      string `json:"name"`
+	DiscordID string `json:"discord_id"`
+	APIKey    string `json:"api_key"`
+	PlayerID  int    `json:"player_id"`
 }
 
 // PlayerRegistry manages player accounts and API key authentication.
 type PlayerRegistry struct {
-	mu       sync.RWMutex
-	accounts map[string]*PlayerAccount // name → account
-	keys     map[string]*PlayerAccount // api_key → account
-	adminKey string                    // global admin key (XANDARIS_API_KEY)
-	filePath string                    // path to accounts.json
+	mu         sync.RWMutex
+	accounts   map[string]*PlayerAccount // lowercase name → account
+	keys       map[string]*PlayerAccount // api_key → account
+	discordIDs map[string]*PlayerAccount // discord_id → account
+	adminKey   string                    // global admin key (XANDARIS_API_KEY)
+	filePath   string                    // path to accounts.json
 }
 
 // NewPlayerRegistry creates a new registry with an optional admin key.
@@ -45,68 +44,60 @@ func NewPlayerRegistry(adminKey string) *PlayerRegistry {
 	fp := filepath.Join(home, ".xandaris", "accounts.json")
 
 	pr := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		adminKey: adminKey,
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		adminKey:   adminKey,
+		filePath:   fp,
 	}
 	pr.load()
 	return pr
 }
 
-// Register creates a new player account. Returns the account or error.
-func (pr *PlayerRegistry) Register(name, password string) (*PlayerAccount, error) {
-	name = strings.TrimSpace(name)
-	if len(name) < 2 || len(name) > 24 {
-		return nil, fmt.Errorf("name must be 2-24 characters")
-	}
-	if len(password) < 4 {
-		return nil, fmt.Errorf("password must be at least 4 characters")
+// FindOrCreateByDiscord looks up an account by Discord ID, or creates one.
+// Returns the account and whether it was newly created.
+func (pr *PlayerRegistry) FindOrCreateByDiscord(discordID, discordUsername string) (*PlayerAccount, bool, error) {
+	if discordID == "" {
+		return nil, false, fmt.Errorf("discord ID required")
 	}
 
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 
-	if _, exists := pr.accounts[strings.ToLower(name)]; exists {
-		return nil, fmt.Errorf("name already taken")
+	// Existing account — update username if it changed
+	if acc, exists := pr.discordIDs[discordID]; exists {
+		if acc.Name != discordUsername {
+			delete(pr.accounts, strings.ToLower(acc.Name))
+			acc.Name = discordUsername
+			pr.accounts[strings.ToLower(discordUsername)] = acc
+			pr.saveLocked()
+		}
+		return acc, false, nil
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password")
+	// New account
+	name := strings.TrimSpace(discordUsername)
+	if len(name) > 24 {
+		name = name[:24]
+	}
+	if len(name) < 1 {
+		name = "Player"
 	}
 
 	apiKey := generateAPIKey()
-
 	account := &PlayerAccount{
-		Name:         name,
-		PasswordHash: string(hash),
-		APIKey:       apiKey,
+		Name:      name,
+		DiscordID: discordID,
+		APIKey:    apiKey,
 	}
 
 	pr.accounts[strings.ToLower(name)] = account
 	pr.keys[apiKey] = account
+	pr.discordIDs[discordID] = account
 
 	pr.saveLocked()
 
-	return account, nil
-}
-
-// Login verifies credentials and returns the account.
-func (pr *PlayerRegistry) Login(name, password string) (*PlayerAccount, error) {
-	pr.mu.RLock()
-	defer pr.mu.RUnlock()
-
-	account, exists := pr.accounts[strings.ToLower(name)]
-	if !exists {
-		return nil, fmt.Errorf("unknown player")
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
-		return nil, fmt.Errorf("wrong password")
-	}
-
-	return account, nil
+	return account, true, nil
 }
 
 // Authenticate checks an API key and returns the player name.
@@ -138,18 +129,32 @@ func (pr *PlayerRegistry) GetAccount(name string) *PlayerAccount {
 	return pr.accounts[strings.ToLower(name)]
 }
 
-// Save persists all accounts to disk. Caller must hold at least a read lock.
+// GetAccountByDiscordID returns an account by Discord ID.
+func (pr *PlayerRegistry) GetAccountByDiscordID(discordID string) *PlayerAccount {
+	pr.mu.RLock()
+	defer pr.mu.RUnlock()
+	return pr.discordIDs[discordID]
+}
+
+// Save persists all accounts to disk (thread-safe).
+func (pr *PlayerRegistry) Save() {
+	pr.mu.RLock()
+	defer pr.mu.RUnlock()
+	pr.saveLocked()
+}
+
+// saveLocked persists all accounts to disk. Caller must hold the lock.
 func (pr *PlayerRegistry) saveLocked() {
 	if pr.filePath == "" {
 		return
 	}
 	var saved []savedAccount
-	for _, acc := range pr.accounts {
+	for _, acc := range pr.discordIDs {
 		saved = append(saved, savedAccount{
-			Name:         acc.Name,
-			PasswordHash: acc.PasswordHash,
-			APIKey:       acc.APIKey,
-			PlayerID:     acc.PlayerID,
+			Name:      acc.Name,
+			DiscordID: acc.DiscordID,
+			APIKey:    acc.APIKey,
+			PlayerID:  acc.PlayerID,
 		})
 	}
 	data, err := json.MarshalIndent(saved, "", "  ")
@@ -170,7 +175,7 @@ func (pr *PlayerRegistry) load() {
 	}
 	data, err := os.ReadFile(pr.filePath)
 	if err != nil {
-		return // file doesn't exist yet — that's fine
+		return // file doesn't exist yet
 	}
 	var saved []savedAccount
 	if err := json.Unmarshal(data, &saved); err != nil {
@@ -178,16 +183,20 @@ func (pr *PlayerRegistry) load() {
 		return
 	}
 	for _, s := range saved {
+		if s.DiscordID == "" {
+			continue // skip legacy password-based accounts
+		}
 		acc := &PlayerAccount{
-			Name:         s.Name,
-			PasswordHash: s.PasswordHash,
-			APIKey:       s.APIKey,
-			PlayerID:     s.PlayerID,
+			Name:      s.Name,
+			DiscordID: s.DiscordID,
+			APIKey:    s.APIKey,
+			PlayerID:  s.PlayerID,
 		}
 		pr.accounts[strings.ToLower(s.Name)] = acc
 		pr.keys[s.APIKey] = acc
+		pr.discordIDs[s.DiscordID] = acc
 	}
-	fmt.Printf("[Auth] Loaded %d accounts from %s\n", len(saved), pr.filePath)
+	fmt.Printf("[Auth] Loaded %d accounts from %s\n", len(pr.discordIDs), pr.filePath)
 }
 
 func generateAPIKey() string {

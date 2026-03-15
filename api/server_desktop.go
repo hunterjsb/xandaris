@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +20,8 @@ import (
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 )
+
+const discordClientID = "584064302051229707"
 
 type ctxKey string
 
@@ -1028,86 +1032,126 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"action": "save_queued"}})
 	})
 
-	// Player registration
-	mux.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+	// Discord OAuth2
+	discordSecret := os.Getenv("DISCORD_CLIENT_SECRET")
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "https://hunterjsb.github.io/xandaris"
+	}
+	redirectURI := baseURL + "/api/auth/discord/callback"
+
+	mux.HandleFunc("/api/auth/discord", func(w http.ResponseWriter, r *http.Request) {
+		authURL := fmt.Sprintf(
+			"https://discord.com/api/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=identify",
+			discordClientID, url.QueryEscape(redirectURI),
+		)
+		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+	})
+
+	mux.HandleFunc("/api/auth/discord/callback", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			writeErr(w, http.StatusBadRequest, "missing code parameter")
 			return
 		}
-		var req struct {
-			Name     string `json:"name"`
-			Password string `json:"password"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeErr(w, http.StatusBadRequest, "invalid JSON")
+
+		// Exchange code for access token
+		tokenResp, err := http.PostForm("https://discord.com/api/oauth2/token", url.Values{
+			"client_id":     {discordClientID},
+			"client_secret": {discordSecret},
+			"grant_type":    {"authorization_code"},
+			"code":          {code},
+			"redirect_uri":  {redirectURI},
+		})
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "failed to contact Discord")
 			return
 		}
+		defer tokenResp.Body.Close()
+
+		tokenBody, _ := io.ReadAll(tokenResp.Body)
+		fmt.Printf("[Auth] Discord token response (%d): %s\n", tokenResp.StatusCode, string(tokenBody))
+
+		var tokenData struct {
+			AccessToken string `json:"access_token"`
+			TokenType   string `json:"token_type"`
+			Error       string `json:"error"`
+			ErrorDesc   string `json:"error_description"`
+		}
+		if err := json.Unmarshal(tokenBody, &tokenData); err != nil || tokenData.AccessToken == "" {
+			errMsg := "failed to get Discord token"
+			if tokenData.Error != "" {
+				errMsg = tokenData.Error + ": " + tokenData.ErrorDesc
+			}
+			writeErr(w, http.StatusBadGateway, errMsg)
+			return
+		}
+
+		// Fetch Discord user info
+		userReq, _ := http.NewRequest("GET", "https://discord.com/api/users/@me", nil)
+		userReq.Header.Set("Authorization", "Bearer "+tokenData.AccessToken)
+		userResp, err := http.DefaultClient.Do(userReq)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "failed to fetch Discord user")
+			return
+		}
+		defer userResp.Body.Close()
+
+		body, _ := io.ReadAll(userResp.Body)
+		var discordUser struct {
+			ID       string `json:"id"`
+			Username string `json:"username"`
+		}
+		if err := json.Unmarshal(body, &discordUser); err != nil || discordUser.ID == "" {
+			writeErr(w, http.StatusBadGateway, "failed to parse Discord user")
+			return
+		}
+
+		// Find or create account
 		p := getProvider()
 		registry := p.GetRegistry()
 		if registry == nil {
-			writeErr(w, http.StatusInternalServerError, "registration not available")
+			writeErr(w, http.StatusInternalServerError, "auth not available")
 			return
 		}
-		account, err := registry.Register(req.Name, req.Password)
+
+		account, isNew, err := registry.FindOrCreateByDiscord(discordUser.ID, discordUser.Username)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		// Create the player faction in the game
-		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
-			Type:   "register_player",
-			Data:   game.RegisterPlayerCommandData{Name: account.Name, AccountKey: account.APIKey},
-			Result: resultCh,
-		}
-		select {
-		case result := <-resultCh:
-			switch v := result.(type) {
-			case error:
-				writeErr(w, http.StatusBadRequest, v.Error())
-			case int:
-				account.PlayerID = v
-				writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
-					"name":      account.Name,
-					"api_key":   account.APIKey,
-					"player_id": account.PlayerID,
-				}})
+		// Create in-game faction for new players
+		if isNew {
+			resultCh := make(chan interface{}, 1)
+			p.GetCommandChannel() <- game.GameCommand{
+				Type:   "register_player",
+				Data:   game.RegisterPlayerCommandData{Name: account.Name, AccountKey: account.APIKey},
+				Result: resultCh,
 			}
-		case <-time.After(5 * time.Second):
-			writeErr(w, http.StatusGatewayTimeout, "timed out")
+			select {
+			case result := <-resultCh:
+				if pid, ok := result.(int); ok {
+					account.PlayerID = pid
+					registry.Save() // persist player ID
+				}
+			case <-time.After(5 * time.Second):
+				// faction creation timed out, but account exists
+			}
 		}
-	})
 
-	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeErr(w, http.StatusMethodNotAllowed, "POST only")
-			return
+		// Redirect to frontend with credentials in fragment
+		fragment := url.Values{
+			"key":       {account.APIKey},
+			"name":      {account.Name},
+			"player_id": {strconv.Itoa(account.PlayerID)},
+			"new":       {strconv.FormatBool(isNew)},
 		}
-		var req struct {
-			Name     string `json:"name"`
-			Password string `json:"password"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeErr(w, http.StatusBadRequest, "invalid JSON")
-			return
-		}
-		p := getProvider()
-		registry := p.GetRegistry()
-		if registry == nil {
-			writeErr(w, http.StatusInternalServerError, "login not available")
-			return
-		}
-		account, err := registry.Login(req.Name, req.Password)
-		if err != nil {
-			writeErr(w, http.StatusUnauthorized, err.Error())
-			return
-		}
-		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
-			"name":      account.Name,
-			"api_key":   account.APIKey,
-			"player_id": account.PlayerID,
-		}})
+		http.Redirect(w, r, frontendURL+"/#"+fragment.Encode(), http.StatusTemporaryRedirect)
 	})
 
 	// Serve pages
@@ -1147,17 +1191,15 @@ func StartServer(provider GameStateProvider) {
 				}
 			}
 		}
-		// Require auth for POST (except register/login)
+		// Require auth for POST (OAuth endpoints are GET, so no exemptions needed)
 		if r.Method == http.MethodPost {
-			if r.URL.Path != "/api/register" && r.URL.Path != "/api/login" {
-				player := getAuthPlayer(r)
-				admin := isAdmin(r)
-				if !admin && player == "" {
-					// Fall back to legacy admin key check
-					if apiKey != "" && key != apiKey {
-						writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
-						return
-					}
+			player := getAuthPlayer(r)
+			admin := isAdmin(r)
+			if !admin && player == "" {
+				// Fall back to legacy admin key check
+				if apiKey != "" && key != apiKey {
+					writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
+					return
 				}
 			}
 		}

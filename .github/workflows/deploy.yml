@@ -36,9 +36,27 @@ jobs:
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { background: #0a0c14; color: #c0c8d8; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-            .container { max-width: 600px; text-align: center; padding: 40px 20px; }
-            h1 { color: #7fdbca; font-size: 2.5em; margin-bottom: 8px; }
-            .tagline { color: #667; margin-bottom: 40px; font-size: 1.1em; }
+            .container { max-width: 640px; text-align: center; padding: 40px 20px; }
+            h1 { color: #7fdbca; font-size: 2.5em; margin-bottom: 8px; letter-spacing: 2px; }
+            .tagline { color: #667; margin-bottom: 32px; font-size: 1.1em; }
+            .auth-section { margin-bottom: 32px; }
+            .discord-btn { display: inline-flex; align-items: center; gap: 10px; background: #5865F2; color: #fff; font-family: inherit; font-size: 1em; padding: 12px 28px; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; transition: background 0.2s; }
+            .discord-btn:hover { background: #4752c4; }
+            .discord-btn svg { width: 20px; height: 20px; fill: #fff; }
+            .user-panel { background: #12162a; border: 1px solid #1e2844; border-radius: 8px; padding: 20px; text-align: left; }
+            .user-panel h2 { color: #7fdbca; font-size: 1.1em; margin-bottom: 12px; }
+            .user-panel .field { margin-bottom: 10px; }
+            .user-panel label { color: #889; font-size: 0.8em; display: block; margin-bottom: 4px; }
+            .api-key-box { display: flex; gap: 8px; align-items: center; }
+            .api-key-box code { flex: 1; background: #0a0c14; border: 1px solid #1e2844; padding: 8px; border-radius: 4px; font-size: 0.85em; color: #7fdbca; word-break: break-all; }
+            .copy-btn { background: #1e2844; color: #c0c8d8; border: 1px solid #2a3660; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.8em; }
+            .copy-btn:hover { background: #2a3660; }
+            .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+            .actions a { flex: 1; text-align: center; background: #12162a; border: 1px solid #1e2844; border-radius: 6px; padding: 12px; text-decoration: none; color: #c0c8d8; font-size: 0.9em; transition: border-color 0.2s; }
+            .actions a:hover { border-color: #7fdbca; }
+            .actions a span { display: block; color: #7fdbca; font-size: 0.75em; margin-top: 4px; }
+            .signout { background: none; border: none; color: #556; font-family: inherit; font-size: 0.75em; cursor: pointer; margin-top: 12px; }
+            .signout:hover { color: #889; }
             .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
             .card { background: #12162a; border: 1px solid #1e2844; border-radius: 8px; padding: 24px; width: 260px; text-align: left; text-decoration: none; color: #c0c8d8; transition: border-color 0.2s; }
             .card:hover { border-color: #7fdbca; }
@@ -47,18 +65,47 @@ jobs:
             .card .badge { display: inline-block; font-size: 0.7em; padding: 2px 8px; border-radius: 4px; margin-top: 12px; }
             .live { background: #1a3a1a; color: #6c6; }
             .demo { background: #1a2a3a; color: #6ac; }
-            .api { background: #2a1a2a; color: #c6a; }
+            .stats { margin-top: 24px; color: #556; font-size: 0.8em; }
             .footer { margin-top: 40px; font-size: 0.75em; color: #445; }
             .footer a { color: #557; }
-            .stats { margin-top: 24px; color: #556; font-size: 0.8em; }
             #pop { color: #7fdbca; }
           </style>
           </head>
           <body>
           <div class="container">
-            <h1>Xandaris II</h1>
+            <h1>XANDARIS II</h1>
             <p class="tagline">A fully-simulated space economy driven by supply and demand</p>
-            <div class="cards">
+
+            <!-- Auth section: sign-in or user panel -->
+            <div class="auth-section">
+              <div id="signed-out">
+                <a class="discord-btn" href="https://api.xandaris.space/api/auth/discord">
+                  <svg viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+                  Sign in with Discord
+                </a>
+              </div>
+              <div id="signed-in" style="display:none">
+                <div class="user-panel">
+                  <h2 id="welcome">Welcome back</h2>
+                  <div class="field">
+                    <label>Your API Key</label>
+                    <div class="api-key-box">
+                      <code id="api-key"></code>
+                      <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('api-key').textContent)">Copy</button>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <a href="play.html">Play WASM<span>Singleplayer</span></a>
+                    <a href="https://api.xandaris.space/" target="_blank">Spectator<span>Live server</span></a>
+                    <a href="live.html">Dashboard<span>Economy data</span></a>
+                  </div>
+                  <center><button class="signout" onclick="signOut()">Sign out</button></center>
+                </div>
+              </div>
+            </div>
+
+            <!-- Info cards for non-authenticated visitors -->
+            <div id="guest-cards" class="cards">
               <a class="card" href="https://api.xandaris.space/" target="_blank">
                 <h2>Live Server</h2>
                 <p>Watch the real-time economy — AI factions trading, prices moving, cargo ships in transit.</p>
@@ -69,24 +116,54 @@ jobs:
                 <p>Run a standalone game in your browser. Build mines, trade resources, grow your empire.</p>
                 <span class="badge demo">WASM</span>
               </a>
-              <a class="card" href="https://api.xandaris.space/api/status" target="_blank">
-                <h2>API</h2>
-                <p>39 REST endpoints. Connect your own AI agent or build a custom client.</p>
-                <span class="badge api">REST</span>
-              </a>
             </div>
+
             <p class="stats" id="stats">Connecting to server...</p>
             <p class="footer">
               <a href="https://github.com/hunterjsb/xandaris">GitHub</a> •
-              Go + Ebitengine • LLM agents via OpenRouter
+              Go + Ebitengine
             </p>
           </div>
           <script>
+          // Handle OAuth callback — credentials come in URL fragment
+          (function() {
+            const hash = location.hash.substring(1);
+            if (hash) {
+              const params = new URLSearchParams(hash);
+              const key = params.get('key');
+              if (key) {
+                localStorage.setItem('xn_api_key', key);
+                localStorage.setItem('xn_name', params.get('name') || '');
+                localStorage.setItem('xn_player_id', params.get('player_id') || '');
+                history.replaceState(null, '', location.pathname);
+              }
+            }
+          })();
+
+          function signOut() {
+            localStorage.removeItem('xn_api_key');
+            localStorage.removeItem('xn_name');
+            localStorage.removeItem('xn_player_id');
+            location.reload();
+          }
+
+          // Render auth state
+          const apiKey = localStorage.getItem('xn_api_key');
+          const name = localStorage.getItem('xn_name');
+          if (apiKey) {
+            document.getElementById('signed-out').style.display = 'none';
+            document.getElementById('signed-in').style.display = 'block';
+            document.getElementById('guest-cards').style.display = 'none';
+            document.getElementById('welcome').textContent = 'Welcome, ' + name;
+            document.getElementById('api-key').textContent = apiKey;
+          }
+
+          // Live stats
           fetch('https://api.xandaris.space/api/economy').then(r=>r.json()).then(d=>{
             const e=d.data;
             document.getElementById('stats').innerHTML=
-              'Server population: <span id="pop">'+e.total_population.toLocaleString()+'</span> • '+
-              Object.keys(e.resources).length+' resources • '+
+              'Server population: <span id="pop">'+e.total_population.toLocaleString()+'</span> · '+
+              Object.keys(e.resources).length+' resources · '+
               'Trade volume: '+e.trade_volume.toFixed(0);
           }).catch(()=>{document.getElementById('stats').textContent='Server offline'});
           </script>

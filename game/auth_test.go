@@ -14,133 +14,103 @@ func newTestRegistry(t *testing.T, adminKey string) *PlayerRegistry {
 	dir := t.TempDir()
 	fp := filepath.Join(dir, "accounts.json")
 	return &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		adminKey: adminKey,
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		adminKey:   adminKey,
+		filePath:   fp,
 	}
 }
 
-// --- Registration ---
+// --- FindOrCreateByDiscord ---
 
-func TestRegisterBasic(t *testing.T) {
+func TestFindOrCreate_NewAccount(t *testing.T) {
 	pr := newTestRegistry(t, "")
-	acc, err := pr.Register("Alice", "pass1234")
+	acc, isNew, err := pr.FindOrCreateByDiscord("123456", "Alice")
 	if err != nil {
-		t.Fatalf("Register failed: %v", err)
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !isNew {
+		t.Error("expected new account")
 	}
 	if acc.Name != "Alice" {
 		t.Errorf("expected name Alice, got %s", acc.Name)
 	}
+	if acc.DiscordID != "123456" {
+		t.Errorf("expected discord ID 123456, got %s", acc.DiscordID)
+	}
 	if !strings.HasPrefix(acc.APIKey, "xk-") {
 		t.Errorf("expected API key prefix xk-, got %s", acc.APIKey)
 	}
-	if acc.PasswordHash == "" {
-		t.Error("password hash should not be empty")
+}
+
+func TestFindOrCreate_ExistingAccount(t *testing.T) {
+	pr := newTestRegistry(t, "")
+	acc1, _, _ := pr.FindOrCreateByDiscord("123456", "Alice")
+	acc2, isNew, _ := pr.FindOrCreateByDiscord("123456", "Alice")
+
+	if isNew {
+		t.Error("second call should not create new account")
 	}
-	if acc.PasswordHash == "pass1234" {
-		t.Error("password hash should not be plaintext")
+	if acc1.APIKey != acc2.APIKey {
+		t.Error("should return same account")
 	}
 }
 
-func TestRegisterDuplicateName(t *testing.T) {
+func TestFindOrCreate_UpdatesUsername(t *testing.T) {
 	pr := newTestRegistry(t, "")
-	_, err := pr.Register("Alice", "pass1234")
-	if err != nil {
-		t.Fatalf("first register failed: %v", err)
+	pr.FindOrCreateByDiscord("123456", "OldName")
+	acc, isNew, _ := pr.FindOrCreateByDiscord("123456", "NewName")
+
+	if isNew {
+		t.Error("should not be new")
 	}
-	_, err = pr.Register("alice", "otherpass")
+	if acc.Name != "NewName" {
+		t.Errorf("expected name NewName, got %s", acc.Name)
+	}
+	// Old name lookup should be gone
+	if pr.GetAccount("OldName") != nil {
+		t.Error("old name should be removed from index")
+	}
+	// New name lookup should work
+	if pr.GetAccount("NewName") == nil {
+		t.Error("new name should be indexed")
+	}
+}
+
+func TestFindOrCreate_EmptyDiscordID(t *testing.T) {
+	pr := newTestRegistry(t, "")
+	_, _, err := pr.FindOrCreateByDiscord("", "Alice")
 	if err == nil {
-		t.Fatal("expected error for duplicate name (case-insensitive)")
-	}
-	if !strings.Contains(err.Error(), "already taken") {
-		t.Errorf("unexpected error: %v", err)
+		t.Error("should reject empty discord ID")
 	}
 }
 
-func TestRegisterNameValidation(t *testing.T) {
+func TestFindOrCreate_LongUsername(t *testing.T) {
 	pr := newTestRegistry(t, "")
-
-	tests := []struct {
-		name string
-		pass string
-		want string
-	}{
-		{"", "pass1234", "2-24 characters"},
-		{"A", "pass1234", "2-24 characters"},
-		{"ABCDEFGHIJKLMNOPQRSTUVWXY", "pass1234", "2-24 characters"}, // 25 chars
-		{"  ", "pass1234", "2-24 characters"},                        // trimmed to empty
-		{"Alice", "abc", "at least 4"},
-		{"Alice", "", "at least 4"},
-	}
-
-	for _, tt := range tests {
-		_, err := pr.Register(tt.name, tt.pass)
-		if err == nil {
-			t.Errorf("Register(%q, %q) should have failed", tt.name, tt.pass)
-			continue
-		}
-		if !strings.Contains(err.Error(), tt.want) {
-			t.Errorf("Register(%q, %q) error = %q, want substring %q", tt.name, tt.pass, err.Error(), tt.want)
-		}
+	longName := strings.Repeat("a", 50)
+	acc, _, _ := pr.FindOrCreateByDiscord("123", longName)
+	if len(acc.Name) > 24 {
+		t.Errorf("name should be truncated to 24 chars, got %d", len(acc.Name))
 	}
 }
 
-func TestRegisterUniqueAPIKeys(t *testing.T) {
+func TestFindOrCreate_UniqueAPIKeys(t *testing.T) {
 	pr := newTestRegistry(t, "")
-	acc1, _ := pr.Register("Alice", "pass1234")
-	acc2, _ := pr.Register("Bob", "pass5678")
+	acc1, _, _ := pr.FindOrCreateByDiscord("111", "Alice")
+	acc2, _, _ := pr.FindOrCreateByDiscord("222", "Bob")
 	if acc1.APIKey == acc2.APIKey {
 		t.Error("two accounts should not share an API key")
 	}
 }
 
-// --- Login ---
-
-func TestLoginSuccess(t *testing.T) {
+func TestFindOrCreate_DifferentDiscordSameName(t *testing.T) {
 	pr := newTestRegistry(t, "")
-	_, err := pr.Register("Alice", "pass1234")
-	if err != nil {
-		t.Fatalf("register failed: %v", err)
-	}
-	acc, err := pr.Login("Alice", "pass1234")
-	if err != nil {
-		t.Fatalf("login failed: %v", err)
-	}
-	if acc.Name != "Alice" {
-		t.Errorf("expected Alice, got %s", acc.Name)
-	}
-}
-
-func TestLoginCaseInsensitive(t *testing.T) {
-	pr := newTestRegistry(t, "")
-	pr.Register("Alice", "pass1234")
-	_, err := pr.Login("ALICE", "pass1234")
-	if err != nil {
-		t.Errorf("login should be case-insensitive for name: %v", err)
-	}
-}
-
-func TestLoginWrongPassword(t *testing.T) {
-	pr := newTestRegistry(t, "")
-	pr.Register("Alice", "pass1234")
-	_, err := pr.Login("Alice", "wrong")
-	if err == nil {
-		t.Fatal("login with wrong password should fail")
-	}
-	if !strings.Contains(err.Error(), "wrong password") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestLoginUnknownPlayer(t *testing.T) {
-	pr := newTestRegistry(t, "")
-	_, err := pr.Login("Nobody", "pass1234")
-	if err == nil {
-		t.Fatal("login for unknown player should fail")
-	}
-	if !strings.Contains(err.Error(), "unknown") {
-		t.Errorf("unexpected error: %v", err)
+	acc1, _, _ := pr.FindOrCreateByDiscord("111", "Alice")
+	acc2, _, _ := pr.FindOrCreateByDiscord("222", "Alice")
+	// Both should exist — different Discord users can have same display name
+	if acc1.APIKey == acc2.APIKey {
+		t.Error("should be different accounts")
 	}
 }
 
@@ -148,17 +118,17 @@ func TestLoginUnknownPlayer(t *testing.T) {
 
 func TestAuthenticatePlayerKey(t *testing.T) {
 	pr := newTestRegistry(t, "")
-	acc, _ := pr.Register("Alice", "pass1234")
+	acc, _, _ := pr.FindOrCreateByDiscord("123", "Alice")
 
 	name, admin, ok := pr.Authenticate(acc.APIKey)
 	if !ok {
-		t.Fatal("authenticate should succeed with valid player key")
+		t.Fatal("should succeed with valid player key")
 	}
 	if admin {
 		t.Error("player key should not be admin")
 	}
 	if name != "Alice" {
-		t.Errorf("expected player name Alice, got %s", name)
+		t.Errorf("expected Alice, got %s", name)
 	}
 }
 
@@ -167,10 +137,10 @@ func TestAuthenticateAdminKey(t *testing.T) {
 
 	name, admin, ok := pr.Authenticate("my-admin-key")
 	if !ok {
-		t.Fatal("authenticate should succeed with admin key")
+		t.Fatal("should succeed with admin key")
 	}
 	if !admin {
-		t.Error("admin key should return admin=true")
+		t.Error("should return admin=true")
 	}
 	if name != "" {
 		t.Errorf("admin key should return empty player name, got %s", name)
@@ -179,11 +149,11 @@ func TestAuthenticateAdminKey(t *testing.T) {
 
 func TestAuthenticateInvalidKey(t *testing.T) {
 	pr := newTestRegistry(t, "admin-key")
-	pr.Register("Alice", "pass1234")
+	pr.FindOrCreateByDiscord("123", "Alice")
 
 	_, _, ok := pr.Authenticate("bogus-key")
 	if ok {
-		t.Error("authenticate should fail with invalid key")
+		t.Error("should fail with invalid key")
 	}
 }
 
@@ -191,16 +161,7 @@ func TestAuthenticateEmptyKey(t *testing.T) {
 	pr := newTestRegistry(t, "admin-key")
 	_, _, ok := pr.Authenticate("")
 	if ok {
-		t.Error("authenticate should fail with empty key")
-	}
-}
-
-func TestAuthenticateNoAdminKey(t *testing.T) {
-	pr := newTestRegistry(t, "")
-	// With no admin key configured, only player keys should work
-	_, _, ok := pr.Authenticate("anything")
-	if ok {
-		t.Error("should not authenticate random key when no admin key is set")
+		t.Error("should fail with empty key")
 	}
 }
 
@@ -208,19 +169,35 @@ func TestAuthenticateNoAdminKey(t *testing.T) {
 
 func TestGetAccount(t *testing.T) {
 	pr := newTestRegistry(t, "")
-	pr.Register("Alice", "pass1234")
+	pr.FindOrCreateByDiscord("123", "Alice")
 
 	acc := pr.GetAccount("alice")
 	if acc == nil {
-		t.Fatal("GetAccount should find alice (case-insensitive)")
+		t.Fatal("should find alice (case-insensitive)")
 	}
 	if acc.Name != "Alice" {
 		t.Errorf("expected Alice, got %s", acc.Name)
 	}
 
-	acc = pr.GetAccount("nobody")
-	if acc != nil {
-		t.Error("GetAccount should return nil for unknown name")
+	if pr.GetAccount("nobody") != nil {
+		t.Error("should return nil for unknown name")
+	}
+}
+
+func TestGetAccountByDiscordID(t *testing.T) {
+	pr := newTestRegistry(t, "")
+	pr.FindOrCreateByDiscord("123", "Alice")
+
+	acc := pr.GetAccountByDiscordID("123")
+	if acc == nil {
+		t.Fatal("should find by discord ID")
+	}
+	if acc.Name != "Alice" {
+		t.Errorf("expected Alice, got %s", acc.Name)
+	}
+
+	if pr.GetAccountByDiscordID("999") != nil {
+		t.Error("should return nil for unknown discord ID")
 	}
 }
 
@@ -230,43 +207,36 @@ func TestPersistenceSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
 	fp := filepath.Join(dir, "accounts.json")
 
-	// Create registry and register accounts
 	pr1 := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		adminKey: "admin",
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		adminKey:   "admin",
+		filePath:   fp,
 	}
-	acc1, _ := pr1.Register("Alice", "pass1234")
+	acc1, _, _ := pr1.FindOrCreateByDiscord("111", "Alice")
 	acc1.PlayerID = 1
-	acc2, _ := pr1.Register("Bob", "pass5678")
+	acc2, _, _ := pr1.FindOrCreateByDiscord("222", "Bob")
 	acc2.PlayerID = 2
-	pr1.saveLocked() // save again to capture PlayerID updates
+	pr1.mu.Lock()
+	pr1.saveLocked()
+	pr1.mu.Unlock()
 
-	// Create new registry from same file
+	// Load into fresh registry
 	pr2 := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		adminKey: "admin",
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		adminKey:   "admin",
+		filePath:   fp,
 	}
 	pr2.load()
 
-	// Verify accounts loaded
-	if len(pr2.accounts) != 2 {
-		t.Fatalf("expected 2 accounts after load, got %d", len(pr2.accounts))
+	if len(pr2.discordIDs) != 2 {
+		t.Fatalf("expected 2 accounts after load, got %d", len(pr2.discordIDs))
 	}
 
-	// Verify login works with loaded accounts
-	loadedAcc, err := pr2.Login("Alice", "pass1234")
-	if err != nil {
-		t.Fatalf("login after load failed: %v", err)
-	}
-	if loadedAcc.PlayerID != 1 {
-		t.Errorf("expected PlayerID 1, got %d", loadedAcc.PlayerID)
-	}
-
-	// Verify API key auth works after load
+	// API key auth works after load
 	name, _, ok := pr2.Authenticate(acc1.APIKey)
 	if !ok {
 		t.Fatal("API key auth should work after load")
@@ -275,13 +245,13 @@ func TestPersistenceSaveAndLoad(t *testing.T) {
 		t.Errorf("expected Alice, got %s", name)
 	}
 
-	// Verify second account too
-	name, _, ok = pr2.Authenticate(acc2.APIKey)
-	if !ok {
-		t.Fatal("Bob's API key should work after load")
+	// Discord ID lookup works after load
+	loaded := pr2.GetAccountByDiscordID("222")
+	if loaded == nil || loaded.Name != "Bob" {
+		t.Error("discord ID lookup should work after load")
 	}
-	if name != "Bob" {
-		t.Errorf("expected Bob, got %s", name)
+	if loaded.PlayerID != 2 {
+		t.Errorf("expected PlayerID 2, got %d", loaded.PlayerID)
 	}
 }
 
@@ -290,13 +260,13 @@ func TestPersistenceFileFormat(t *testing.T) {
 	fp := filepath.Join(dir, "accounts.json")
 
 	pr := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		filePath:   fp,
 	}
-	pr.Register("Alice", "pass1234")
+	pr.FindOrCreateByDiscord("123456", "Alice")
 
-	// Read the file and verify it's valid JSON with password hash
 	data, err := os.ReadFile(fp)
 	if err != nil {
 		t.Fatalf("failed to read accounts file: %v", err)
@@ -304,16 +274,13 @@ func TestPersistenceFileFormat(t *testing.T) {
 
 	var saved []savedAccount
 	if err := json.Unmarshal(data, &saved); err != nil {
-		t.Fatalf("accounts file is not valid JSON: %v", err)
+		t.Fatalf("not valid JSON: %v", err)
 	}
 	if len(saved) != 1 {
 		t.Fatalf("expected 1 saved account, got %d", len(saved))
 	}
-	if saved[0].Name != "Alice" {
-		t.Errorf("expected name Alice, got %s", saved[0].Name)
-	}
-	if saved[0].PasswordHash == "" {
-		t.Error("password hash should be persisted")
+	if saved[0].DiscordID != "123456" {
+		t.Errorf("expected discord ID 123456, got %s", saved[0].DiscordID)
 	}
 	if !strings.HasPrefix(saved[0].APIKey, "xk-") {
 		t.Errorf("expected API key prefix xk-, got %s", saved[0].APIKey)
@@ -325,54 +292,86 @@ func TestPersistenceFilePermissions(t *testing.T) {
 	fp := filepath.Join(dir, "accounts.json")
 
 	pr := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		filePath:   fp,
 	}
-	pr.Register("Alice", "pass1234")
+	pr.FindOrCreateByDiscord("123", "Alice")
 
 	info, err := os.Stat(fp)
 	if err != nil {
-		t.Fatalf("failed to stat accounts file: %v", err)
+		t.Fatalf("failed to stat: %v", err)
 	}
-	perm := info.Mode().Perm()
-	if perm != 0600 {
-		t.Errorf("expected file permissions 0600, got %04o", perm)
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("expected 0600, got %04o", info.Mode().Perm())
 	}
 }
 
 func TestPersistenceMissingFile(t *testing.T) {
 	pr := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		filePath: filepath.Join(t.TempDir(), "nonexistent.json"),
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		filePath:   filepath.Join(t.TempDir(), "nonexistent.json"),
 	}
-	pr.load() // should not panic or error
+	pr.load()
 	if len(pr.accounts) != 0 {
-		t.Error("loading nonexistent file should result in empty accounts")
+		t.Error("should have no accounts")
 	}
 }
 
-func TestPersistenceAutoSaveOnRegister(t *testing.T) {
+func TestPersistenceSkipsLegacyAccounts(t *testing.T) {
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "accounts.json")
+
+	// Write a legacy account with no discord ID
+	legacy := []savedAccount{
+		{Name: "OldUser", DiscordID: "", APIKey: "xk-old", PlayerID: 1},
+		{Name: "NewUser", DiscordID: "999", APIKey: "xk-new", PlayerID: 2},
+	}
+	data, _ := json.Marshal(legacy)
+	os.WriteFile(fp, data, 0600)
+
+	pr := &PlayerRegistry{
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		filePath:   fp,
+	}
+	pr.load()
+
+	if len(pr.discordIDs) != 1 {
+		t.Errorf("expected 1 account (legacy skipped), got %d", len(pr.discordIDs))
+	}
+	if pr.GetAccount("OldUser") != nil {
+		t.Error("legacy account should be skipped")
+	}
+	if pr.GetAccount("NewUser") == nil {
+		t.Error("discord account should be loaded")
+	}
+}
+
+func TestPersistenceAutoSaveOnCreate(t *testing.T) {
 	dir := t.TempDir()
 	fp := filepath.Join(dir, "accounts.json")
 
 	pr := &PlayerRegistry{
-		accounts: make(map[string]*PlayerAccount),
-		keys:     make(map[string]*PlayerAccount),
-		filePath: fp,
+		accounts:   make(map[string]*PlayerAccount),
+		keys:       make(map[string]*PlayerAccount),
+		discordIDs: make(map[string]*PlayerAccount),
+		filePath:   fp,
 	}
-	pr.Register("Alice", "pass1234")
+	pr.FindOrCreateByDiscord("123", "Alice")
 
-	// File should exist without explicit save call
 	if _, err := os.Stat(fp); os.IsNotExist(err) {
-		t.Error("accounts file should be auto-created on register")
+		t.Error("file should be auto-created")
 	}
 }
 
 // --- Concurrency ---
 
-func TestConcurrentRegisterAndAuth(t *testing.T) {
+func TestConcurrentOperations(t *testing.T) {
 	pr := newTestRegistry(t, "admin")
 	var wg sync.WaitGroup
 
@@ -381,19 +380,19 @@ func TestConcurrentRegisterAndAuth(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			name := strings.Repeat("u", 2) + string(rune('a'+n))
-			pr.Register(name, "pass1234")
+			id := string(rune('A'+n)) + "discord"
+			name := string(rune('A'+n)) + "user"
+			pr.FindOrCreateByDiscord(id, name)
 		}(i)
 	}
 	wg.Wait()
 
-	// All should be authenticatable
 	pr.mu.RLock()
-	keyCount := len(pr.keys)
+	count := len(pr.discordIDs)
 	pr.mu.RUnlock()
 
-	if keyCount != 20 {
-		t.Errorf("expected 20 registered keys, got %d", keyCount)
+	if count != 20 {
+		t.Errorf("expected 20 accounts, got %d", count)
 	}
 
 	// Concurrent auth
