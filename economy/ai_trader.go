@@ -38,18 +38,20 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 				continue
 			}
 
-			// Never auto-sell Iron, Fuel, or Rare Metals — needed for ship construction
+			// Strategic reserve — never sell below this floor
+			floor := 0
 			if resType == "Iron" || resType == "Fuel" || resType == "Rare Metals" {
-				if storage.Amount <= 200 {
-					continue
-				}
+				floor = 200
+			}
+			if storage.Amount <= floor {
+				continue
 			}
 
 			ratio := float64(storage.Amount) / float64(storage.Capacity)
 
 			if ratio > aiSurplusThreshold {
-				// Sell surplus from THIS planet
-				excess := storage.Amount - int(float64(storage.Capacity)*aiSurplusThreshold)
+				// Sell surplus but keep the strategic reserve floor
+				excess := storage.Amount - max(int(float64(storage.Capacity)*aiSurplusThreshold), floor)
 				qty := excess
 				if qty > aiMaxTradeQty {
 					qty = aiMaxTradeQty
