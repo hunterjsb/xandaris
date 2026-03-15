@@ -29,12 +29,6 @@ type StandingOrderInfo struct {
 	Active    bool
 }
 
-// StandingOrderProvider gives access to standing orders and trade execution.
-type StandingOrderProvider interface {
-	GetStandingOrderInfos() []StandingOrderInfo
-	ExecuteStandingOrderTrade(order StandingOrderInfo, player *entities.Player) error
-}
-
 func (sos *StandingOrderSystem) OnTick(tick int64) {
 	if tick%30 != 0 {
 		return
@@ -45,26 +39,12 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 		return
 	}
 
-	gameObj := ctx.GetGame()
-	if gameObj == nil {
+	game := ctx.GetGame()
+	if game == nil {
 		return
 	}
 
-	sop, ok := gameObj.(StandingOrderProvider)
-	if !ok {
-		return
-	}
-
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
-
-	logger, _ := gameObj.(EventLogger)
+	players := ctx.GetPlayers()
 
 	playerByName := make(map[string]*entities.Player)
 	for _, p := range players {
@@ -73,7 +53,7 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 		}
 	}
 
-	orders := sop.GetStandingOrderInfos()
+	orders := game.GetStandingOrderInfos()
 	for _, order := range orders {
 		if !order.Active {
 			continue
@@ -97,12 +77,10 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 			continue
 		}
 
-		if err := sop.ExecuteStandingOrderTrade(order, player); err == nil {
-			if logger != nil {
-				logger.LogEvent("trade", order.Player,
-					fmt.Sprintf("[Auto] %s %s %d %s (order #%d)",
-						order.Player, order.Action, order.Quantity, order.Resource, order.ID))
-			}
+		if err := game.ExecuteStandingOrderTrade(order, player); err == nil {
+			game.LogEvent("trade", order.Player,
+				fmt.Sprintf("[Auto] %s %s %d %s (order #%d)",
+					order.Player, order.Action, order.Quantity, order.Resource, order.ID))
 		}
 	}
 }

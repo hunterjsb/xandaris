@@ -82,8 +82,8 @@ func (tm *TickManager) Update() {
 
 // processTick notifies all listeners about a new tick
 func (tm *TickManager) processTick() {
-	// Update all tickable systems concurrently
-	tickable.UpdateAllSystems(tm.currentTick)
+	// Update all tickable systems sequentially (priority order ensures correct data dependencies)
+	tickable.UpdateAllSystemsSequential(tm.currentTick)
 
 	// Notify all listeners
 	for _, listener := range tm.listeners {

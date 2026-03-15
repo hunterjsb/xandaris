@@ -18,12 +18,6 @@ type AILogisticsSystem struct {
 	*BaseSystem
 }
 
-// CargoOperator defines cargo load/unload operations (avoids importing game package).
-type CargoOperator interface {
-	LoadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error)
-	UnloadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error)
-}
-
 func (als *AILogisticsSystem) OnTick(tick int64) {
 	// Run every 50 ticks
 	if tick%50 != 0 {
@@ -35,55 +29,23 @@ func (als *AILogisticsSystem) OnTick(tick int64) {
 		return
 	}
 
-	gameObj := ctx.GetGame()
-	if gameObj == nil {
+	game := ctx.GetGame()
+	if game == nil {
 		return
 	}
 
-	// Get cargo operator via the CargoOperator interface directly on the game object
-	cargoOp, ok := gameObj.(CargoOperator)
-	if !ok {
-		return
-	}
-
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
-
-	// Get systems for planet lookup
-	sp, ok := gameObj.(SystemsProvider)
-	if !ok {
-		return
-	}
-	systems := sp.GetSystems()
+	players := ctx.GetPlayers()
+	systems := game.GetSystems()
 
 	for _, player := range players {
 		if player == nil || player.IsHuman() {
 			continue
 		}
-		als.processAILogistics(player, cargoOp, systems)
+		als.processAILogistics(player, game, systems)
 	}
 }
 
-// FleetMover lets AI move ships without importing game package.
-type FleetMover interface {
-	GetConnectedSystems(fromSystemID int) []int
-}
-
-// ShipJourney starts a ship moving via ShipMovementHelper.
-type ShipJourney interface {
-	StartShipJourney(ship *entities.Ship, targetSystemID int) bool
-}
-
-func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoOp CargoOperator, systems []*entities.System) {
-	gameObj := als.GetContext().GetGame()
-	mover, hasMover := gameObj.(FleetMover)
-	journeyer, hasJourney := gameObj.(ShipJourney)
+func (als *AILogisticsSystem) processAILogistics(player *entities.Player, game GameProvider, systems []*entities.System) {
 
 	// Handle colony ships — find unclaimed habitable planet and colonize
 	for _, ship := range player.OwnedShips {
@@ -111,17 +73,15 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			planet.RebalanceWorkforce()
 			msg := fmt.Sprintf("%s colonized %s!", player.Name, planet.Name)
 			fmt.Printf("[AIColonize] %s (%d colonists)\n", msg, planet.Population)
-			if logger, ok := als.GetContext().GetGame().(EventLogger); ok {
-				logger.LogEvent("colonize", player.Name, msg)
-			}
+			game.LogEvent("colonize", player.Name, msg)
 			continue
 		}
 		// Find nearest unclaimed habitable planet and fly there (if enough fuel)
 		fuelNeeded := ship.FuelPerJump + int(ship.FuelPerTick*120)
-		if hasJourney && hasMover && ship.CurrentFuel >= fuelNeeded {
-			targetSys := als.findColonyTarget(ship, player, systems, mover)
+		if ship.CurrentFuel >= fuelNeeded {
+			targetSys := als.findColonyTarget(ship, player, systems, game)
 			if targetSys >= 0 && targetSys != ship.CurrentSystem {
-				if journeyer.StartShipJourney(ship, targetSys) {
+				if game.StartShipJourney(ship, targetSys) {
 					fmt.Printf("[AIColonize] %s sending colony ship to SYS-%d\n", player.Name, targetSys)
 				}
 			}
@@ -155,7 +115,7 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 		if isHome {
 			if ship.GetTotalCargo() > 0 {
 				// Returned home with cargo — unload
-				als.unloadAllCargo(ship, planet, cargoOp)
+				als.unloadAllCargo(ship, planet, game)
 			} else {
 				// Empty at home — load surplus and send to another system
 				// Only dispatch if enough fuel for round trip
@@ -163,13 +123,13 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 				if ship.CurrentFuel < fuelNeeded {
 					continue // wait for refueling
 				}
-				als.loadSurplus(ship, planet, cargoOp)
-				if ship.GetTotalCargo() > 0 && hasMover && hasJourney {
+				als.loadSurplus(ship, planet, game)
+				if ship.GetTotalCargo() > 0 {
 					// Pick the best connected system based on demand
-					connected := mover.GetConnectedSystems(ship.CurrentSystem)
+					connected := game.GetConnectedSystems(ship.CurrentSystem)
 					target := als.pickBestTradeTarget(connected, ship, systems)
 					if target >= 0 {
-						if journeyer.StartShipJourney(ship, target) {
+						if game.StartShipJourney(ship, target) {
 							fmt.Printf("[AILogistics] %s dispatched %s to SYS-%d with cargo\n",
 								player.Name, ship.Name, target)
 						}
@@ -187,7 +147,7 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 					for _, e := range sys.Entities {
 						if p, ok := e.(*entities.Planet); ok && p.Owner != "" {
 							// Try unloading at any planet (Trading Post check is in UnloadCargo)
-							als.unloadAllCargo(ship, p, cargoOp)
+							als.unloadAllCargo(ship, p, game)
 							if ship.GetTotalCargo() == 0 {
 								break
 							}
@@ -198,10 +158,10 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			}
 			// Head home if enough fuel
 			fuelForReturn := ship.FuelPerJump + int(ship.FuelPerTick*120)
-			if hasJourney && ship.CurrentFuel >= fuelForReturn {
+			if ship.CurrentFuel >= fuelForReturn {
 				homeSys := als.findHomeSystem(player, systems)
 				if homeSys >= 0 && homeSys != ship.CurrentSystem {
-					if journeyer.StartShipJourney(ship, homeSys) {
+					if game.StartShipJourney(ship, homeSys) {
 						fmt.Printf("[AILogistics] %s returning %s home to SYS-%d\n",
 							player.Name, ship.Name, homeSys)
 					}
@@ -230,19 +190,19 @@ func (als *AILogisticsSystem) findHomeSystem(player *entities.Player, systems []
 	return -1
 }
 
-func (als *AILogisticsSystem) unloadAllCargo(ship *entities.Ship, planet *entities.Planet, cargoOp CargoOperator) {
+func (als *AILogisticsSystem) unloadAllCargo(ship *entities.Ship, planet *entities.Planet, game GameProvider) {
 	for resType, amount := range ship.CargoHold {
 		if amount <= 0 {
 			continue
 		}
-		unloaded, err := cargoOp.UnloadCargo(ship, planet, resType, amount)
+		unloaded, err := game.UnloadCargo(ship, planet, resType, amount)
 		if err == nil && unloaded > 0 {
 			fmt.Printf("[AILogistics] %s unloaded %d %s at %s\n", ship.Name, unloaded, resType, planet.Name)
 		}
 	}
 }
 
-func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.Planet, cargoOp CargoOperator) {
+func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.Planet, game GameProvider) {
 	// Find the resource with highest stock ratio and load some of it
 	var bestRes string
 	bestRatio := 0.0
@@ -268,7 +228,7 @@ func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.
 	if qty <= 0 {
 		return
 	}
-	loaded, err := cargoOp.LoadCargo(ship, planet, bestRes, qty)
+	loaded, err := game.LoadCargo(ship, planet, bestRes, qty)
 	if err == nil && loaded > 0 {
 		fmt.Printf("[AILogistics] %s loaded %d %s from %s\n", ship.Name, loaded, bestRes, planet.Name)
 	}
@@ -346,10 +306,10 @@ func findUnclaimedHabitable(systemID int, systems []*entities.System) *entities.
 }
 
 // findColonyTarget finds the nearest system with an unclaimed habitable planet.
-func (als *AILogisticsSystem) findColonyTarget(ship *entities.Ship, player *entities.Player, systems []*entities.System, mover FleetMover) int {
+func (als *AILogisticsSystem) findColonyTarget(ship *entities.Ship, player *entities.Player, systems []*entities.System, game GameProvider) int {
 	// BFS from current system to find nearest unclaimed habitable planet
 	visited := map[int]bool{ship.CurrentSystem: true}
-	queue := mover.GetConnectedSystems(ship.CurrentSystem)
+	queue := game.GetConnectedSystems(ship.CurrentSystem)
 	for _, id := range queue {
 		visited[id] = true
 	}
@@ -368,7 +328,7 @@ func (als *AILogisticsSystem) findColonyTarget(ship *entities.Ship, player *enti
 			}
 		}
 		// Expand search
-		for _, next := range mover.GetConnectedSystems(sysID) {
+		for _, next := range game.GetConnectedSystems(sysID) {
 			if !visited[next] {
 				visited[next] = true
 				queue = append(queue, next)

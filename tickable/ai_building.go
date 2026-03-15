@@ -17,11 +17,6 @@ type AIBuildingSystem struct {
 	*BaseSystem
 }
 
-// BuildingAdder is implemented by the game server to let AI build things.
-type BuildingAdder interface {
-	AIBuildOnPlanet(planet *entities.Planet, buildingType string, owner string, systemID int)
-}
-
 func (abs *AIBuildingSystem) OnTick(tick int64) {
 	if tick%100 != 0 {
 		return
@@ -32,51 +27,29 @@ func (abs *AIBuildingSystem) OnTick(tick int64) {
 		return
 	}
 
-	gameObj := ctx.GetGame()
-	if gameObj == nil {
+	game := ctx.GetGame()
+	if game == nil {
 		return
 	}
 
-	builder, ok := gameObj.(BuildingAdder)
-	if !ok {
-		return
-	}
+	players := ctx.GetPlayers()
 
-	logger, _ := gameObj.(EventLogger)
-
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
-
-	mp, ok := gameObj.(MarketProvider)
-	if !ok {
-		return
-	}
-	market := mp.GetMarketEngine()
+	market := game.GetMarketEngine()
 	if market == nil {
 		return
 	}
 
-	sp, ok := gameObj.(SystemsProvider)
-	if !ok {
-		return
-	}
-	systems := sp.GetSystems()
+	systems := game.GetSystems()
 
 	for _, player := range players {
 		if player == nil || player.IsHuman() {
 			continue
 		}
-		abs.evaluateInvestment(player, market, builder, systems, logger)
+		abs.evaluateInvestment(player, market, game, systems)
 	}
 }
 
-func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market interface{ GetBuyPrice(string) float64 }, builder BuildingAdder, systems []*entities.System, logger EventLogger) {
+func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market interface{ GetBuyPrice(string) float64 }, game GameProvider, systems []*entities.System) {
 	if player.Credits < 300 {
 		return
 	}
@@ -107,7 +80,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 
 			if mineCount == 0 && player.Credits >= 500 {
 				player.Credits -= 500
-				builder.AIBuildOnPlanet(planet, "Mine", player.Name, systemID)
+				game.AIBuildOnPlanet(planet, "Mine", player.Name, systemID)
 				for i := len(planet.Buildings) - 1; i >= 0; i-- {
 					if b, ok := planet.Buildings[i].(*entities.Building); ok {
 						if b.BuildingType == "Mine" && b.AttachedTo == fmt.Sprintf("%d", planet.GetID()) {
@@ -119,7 +92,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 				}
 				msg := fmt.Sprintf("%s built mine on %s at %s", player.Name, res.ResourceType, planet.Name)
 				fmt.Printf("[AIBuild] %s\n", msg)
-				logBuildEvent(logger, player.Name, msg)
+				logBuildEvent(game, player.Name, msg)
 				return
 			}
 		}
@@ -130,8 +103,8 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		genCount := countBuildings(planet, "Generator")
 		if (genCount == 0 || (powerRatio < 0.8 && genCount < 4)) && planet.Population > 500 && player.Credits >= 1000 {
 			player.Credits -= 1000
-			builder.AIBuildOnPlanet(planet, "Generator", player.Name, systemID)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Generator #%d at %s (power %.0f%%)",
+			game.AIBuildOnPlanet(planet, "Generator", player.Name, systemID)
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Generator #%d at %s (power %.0f%%)",
 				player.Name, genCount+1, planet.Name, powerRatio*100))
 			return
 		}
@@ -151,8 +124,8 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		}
 		if hasHe3Mine && !hasBuilding(planet, "Fusion Reactor") && powerRatio < 0.9 && player.Credits >= 3000 {
 			player.Credits -= 3000
-			builder.AIBuildOnPlanet(planet, "Fusion Reactor", player.Name, systemID)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Fusion Reactor at %s", player.Name, planet.Name))
+			game.AIBuildOnPlanet(planet, "Fusion Reactor", player.Name, systemID)
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Fusion Reactor at %s", player.Name, planet.Name))
 			return
 		}
 
@@ -172,9 +145,9 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		refineryCount := countBuildings(planet, "Refinery")
 		if hasOilMine && refineryCount == 0 && player.Credits >= 1500 {
 			player.Credits -= 1500
-			builder.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built refinery at %s\n", player.Name, planet.Name)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Refinery at %s", player.Name, planet.Name))
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Refinery at %s", player.Name, planet.Name))
 			return
 		}
 
@@ -199,9 +172,9 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		factoryCount := countBuildings(planet, "Factory")
 		if hasRMmine && hasIronMine && factoryCount == 0 && player.Credits >= 2000 {
 			player.Credits -= 2000
-			builder.AIBuildOnPlanet(planet, "Factory", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, "Factory", player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built factory at %s\n", player.Name, planet.Name)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Factory at %s", player.Name, planet.Name))
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Factory at %s", player.Name, planet.Name))
 			return
 		}
 
@@ -212,7 +185,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		if capacity > 0 && planet.Population > int64(float64(capacity)*0.85) &&
 			habitatCount < 5 && powerRatio > 0.6 && player.Credits >= 800 {
 			player.Credits -= 800
-			builder.AIBuildOnPlanet(planet, "Habitat", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, "Habitat", player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built habitat at %s (pop %d/%d)\n",
 				player.Name, planet.Name, planet.Population, capacity)
 			return
@@ -221,8 +194,8 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		// PRIORITY 5: Build Trading Post if missing
 		if !hasBuilding(planet, "Trading Post") && player.Credits >= 1200 {
 			player.Credits -= 1200
-			builder.AIBuildOnPlanet(planet, "Trading Post", player.Name, systemID)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Trading Post at %s", player.Name, planet.Name))
+			game.AIBuildOnPlanet(planet, "Trading Post", player.Name, systemID)
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Trading Post at %s", player.Name, planet.Name))
 			return
 		}
 
@@ -244,7 +217,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 							b.Upgrade()
 							msg := fmt.Sprintf("%s upgraded %s mine to L%d at %s", player.Name, res.ResourceType, b.Level, planet.Name)
 							fmt.Printf("[AIBuild] %s\n", msg)
-							logBuildEvent(logger, player.Name, msg)
+							logBuildEvent(game, player.Name, msg)
 							return
 						}
 					}
@@ -255,8 +228,8 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		// PRIORITY 7: Build Shipyard when affordable
 		if !hasBuilding(planet, "Shipyard") && player.Credits >= 2500 {
 			player.Credits -= 2000
-			builder.AIBuildOnPlanet(planet, "Shipyard", player.Name, systemID)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Shipyard at %s", player.Name, planet.Name))
+			game.AIBuildOnPlanet(planet, "Shipyard", player.Name, systemID)
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Shipyard at %s", player.Name, planet.Name))
 			return
 		}
 
@@ -292,7 +265,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 							Started:        abs.GetContext().GetTick(),
 						}
 						cs.AddToQueue(location, item)
-						logBuildEvent(logger, player.Name, fmt.Sprintf("%s building Colony ship at %s", player.Name, planet.Name))
+						logBuildEvent(game, player.Name, fmt.Sprintf("%s building Colony ship at %s", player.Name, planet.Name))
 					}
 				}
 				return
@@ -303,14 +276,14 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 		fuelStored := planet.GetStoredAmount("Fuel")
 		if hasOilMine && refineryCount < 3 && (fuelStored < 50 || refineryCount < genCount) && player.Credits >= 1500 {
 			player.Credits -= 1500
-			builder.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
-			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Refinery #2 at %s", player.Name, planet.Name))
+			game.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Refinery #2 at %s", player.Name, planet.Name))
 			return
 		}
 	}
 }
 
-func logBuildEvent(logger EventLogger, player, msg string) {
+func logBuildEvent(logger GameProvider, player, msg string) {
 	if logger != nil {
 		logger.LogEvent("build", player, msg)
 	}

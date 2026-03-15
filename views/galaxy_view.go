@@ -204,8 +204,7 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	// Draw hints below header
 	gv.drawHints(screen)
 
-	// Draw player info
-	gv.drawPlayerInfo(screen)
+	// Player info panel is drawn by core.App.drawEmpirePanel (top-right, all views)
 
 	// Draw quit confirmation dialog
 	if gv.confirmQuit {

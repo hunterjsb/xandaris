@@ -2,6 +2,9 @@ package tickable
 
 import (
 	"sync"
+
+	"github.com/hunterjsb/xandaris/economy"
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 // TickableSystem is the interface that all tickable game systems must implement
@@ -26,16 +29,39 @@ type TickableSystem interface {
 	Initialize(context SystemContext)
 }
 
-// SystemContext provides access to game state for tickable systems
-type SystemContext interface {
-	GetGame() interface{}
-	GetPlayers() interface{}
-	GetTick() int64
+// GameProvider is the typed interface that tickable systems use to access game functionality.
+// It replaces the previous interface{}-based GetGame() pattern, giving compile-time safety.
+type GameProvider interface {
+	// Systems/map access
+	GetSystems() []*entities.System
+	GetSystemsMap() map[int]*entities.System
+	GetHyperlanes() []entities.Hyperlane
+	// Market/trade
+	GetMarketEngine() *economy.Market
+	GetTradeExecutor() *economy.TradeExecutor
+	// Cargo operations
+	LoadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error)
+	UnloadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error)
+	// Fleet/ship movement
+	GetConnectedSystems(fromSystemID int) []int
+	StartShipJourney(ship *entities.Ship, targetSystemID int) bool
+	// Building
+	AIBuildOnPlanet(planet *entities.Planet, buildingType string, owner string, systemID int)
+	// Events
+	LogEvent(eventType string, player string, message string)
+	// Standing orders
+	GetStandingOrderInfos() []StandingOrderInfo
+	ExecuteStandingOrderTrade(order StandingOrderInfo, player *entities.Player) error
+	// Deliveries
+	GetDeliveryManager() *economy.DeliveryManager
+	GetPlayers() []*entities.Player
 }
 
-// EventLogger allows tickable systems to log game events.
-type EventLogger interface {
-	LogEvent(eventType string, player string, message string)
+// SystemContext provides access to game state for tickable systems
+type SystemContext interface {
+	GetGame() GameProvider
+	GetPlayers() []*entities.Player
+	GetTick() int64
 }
 
 // Registry holds all registered tickable systems

@@ -11,92 +11,69 @@ import (
 	"github.com/hunterjsb/xandaris/utils"
 )
 
-// executeCommand processes a single game command.
+// remoteForwardedCommands lists command types that should be forwarded in remote mode.
+var remoteForwardedCommands = map[game.CommandType]bool{
+	game.CmdTrade: true, game.CmdBuild: true, game.CmdBuildShip: true,
+	game.CmdMoveShip: true, game.CmdUpgrade: true, game.CmdRefuel: true,
+	game.CmdCargoLoad: true, game.CmdCargoUnload: true, game.CmdColonize: true,
+	game.CmdFleetMove: true, game.CmdFleetCreate: true, game.CmdFleetDisband: true,
+	game.CmdFleetAddShip: true, game.CmdFleetRemoveShip: true,
+	game.CmdWorkforceAssign: true, game.CmdCancelConstruction: true,
+}
+
+// executeCommand processes a single game command via the registry.
 func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 	// In remote mode, forward gameplay commands to the remote server
-	if gs.remoteSync != nil {
-		switch cmd.Type {
-		case "trade", "build", "build_ship", "move_ship", "upgrade",
-			"refuel", "cargo_load", "cargo_unload", "colonize",
-			"fleet_move", "fleet_create", "fleet_disband",
-			"fleet_add_ship", "fleet_remove_ship",
-			"workforce_assign", "cancel_construction":
-			gs.forwardCommandToRemote(cmd)
-			return
-		}
-		// Local-only commands (save, speed, pause) fall through
+	if gs.remoteSync != nil && remoteForwardedCommands[cmd.Type] {
+		gs.forwardCommandToRemote(cmd)
+		return
 	}
 
-	switch cmd.Type {
-	case "save":
+	if err := gs.cmdRegistry.Execute(cmd); err != nil {
+		fmt.Printf("[Server] %v\n", err)
+	}
+}
+
+// initCommandRegistry registers all command handlers.
+func (gs *GameServer) initCommandRegistry() {
+	cr := NewCommandRegistry()
+
+	cr.Register(game.CmdSave, func(cmd game.GameCommand) {
 		if playerName, ok := cmd.Data.(string); ok {
 			if err := gs.SaveGame(playerName); err != nil {
 				fmt.Printf("[Server] Save failed: %v\n", err)
 			}
 		}
-
-	case "set_speed":
+	})
+	cr.Register(game.CmdSetSpeed, func(cmd game.GameCommand) {
 		if speed, ok := cmd.Data.(systems.TickSpeed); ok {
 			gs.TickManager.SetSpeed(speed)
 		}
-
-	case "toggle_pause":
+	})
+	cr.Register(game.CmdTogglePause, func(cmd game.GameCommand) {
 		gs.TickManager.TogglePause()
+	})
+	cr.Register(game.CmdTrade, gs.handleTradeCommand)
+	cr.Register(game.CmdCargoLoad, gs.handleCargoCommand)
+	cr.Register(game.CmdCargoUnload, gs.handleCargoCommand)
+	cr.Register(game.CmdBuild, gs.handleBuildCommand)
+	cr.Register(game.CmdBuildShip, gs.handleBuildShipCommand)
+	cr.Register(game.CmdMoveShip, gs.handleMoveShipCommand)
+	cr.Register(game.CmdUpgrade, gs.handleUpgradeCommand)
+	cr.Register(game.CmdRefuel, gs.handleRefuelCommand)
+	cr.Register(game.CmdColonize, gs.handleColonizeCommand)
+	cr.Register(game.CmdRegisterPlayer, gs.handleRegisterPlayerCommand)
+	cr.Register(game.CmdWorkforceAssign, gs.handleWorkforceAssignCommand)
+	cr.Register(game.CmdCancelConstruction, gs.handleCancelConstructionCommand)
+	cr.Register(game.CmdStandingOrder, gs.handleStandingOrderCommand)
+	cr.Register(game.CmdCancelOrder, gs.handleCancelOrderCommand)
+	cr.Register(game.CmdFleetMove, gs.handleFleetMoveCommand)
+	cr.Register(game.CmdFleetCreate, gs.handleFleetCreateCommand)
+	cr.Register(game.CmdFleetDisband, gs.handleFleetDisbandCommand)
+	cr.Register(game.CmdFleetAddShip, gs.handleFleetAddShipCommand)
+	cr.Register(game.CmdFleetRemoveShip, gs.handleFleetRemoveShipCommand)
 
-	case "trade":
-		gs.handleTradeCommand(cmd)
-
-	case "cargo_load", "cargo_unload":
-		gs.handleCargoCommand(cmd)
-
-	case "build":
-		gs.handleBuildCommand(cmd)
-
-	case "build_ship":
-		gs.handleBuildShipCommand(cmd)
-
-	case "move_ship":
-		gs.handleMoveShipCommand(cmd)
-
-	case "upgrade":
-		gs.handleUpgradeCommand(cmd)
-
-	case "refuel":
-		gs.handleRefuelCommand(cmd)
-
-	case "colonize":
-		gs.handleColonizeCommand(cmd)
-
-	case "register_player":
-		gs.handleRegisterPlayerCommand(cmd)
-
-	case "workforce_assign":
-		gs.handleWorkforceAssignCommand(cmd)
-
-	case "cancel_construction":
-		gs.handleCancelConstructionCommand(cmd)
-
-	case "standing_order":
-		gs.handleStandingOrderCommand(cmd)
-
-	case "cancel_order":
-		gs.handleCancelOrderCommand(cmd)
-
-	case "fleet_move":
-		gs.handleFleetMoveCommand(cmd)
-
-	case "fleet_create":
-		gs.handleFleetCreateCommand(cmd)
-
-	case "fleet_disband":
-		gs.handleFleetDisbandCommand(cmd)
-
-	case "fleet_add_ship":
-		gs.handleFleetAddShipCommand(cmd)
-
-	case "fleet_remove_ship":
-		gs.handleFleetRemoveShipCommand(cmd)
-	}
+	gs.cmdRegistry = cr
 }
 
 func (gs *GameServer) handleTradeCommand(cmd game.GameCommand) {	td, ok := cmd.Data.(game.TradeCommandData)
@@ -916,7 +893,7 @@ func (gs *GameServer) handleStandingOrderCommand(cmd game.GameCommand) {
 	}
 
 	order := &game.StandingOrder{
-		Player:    getCommandPlayer(cmd),
+		Player:    "", // resolved below from planet ownership
 		PlanetID:  data.PlanetID,
 		Resource:  data.Resource,
 		Action:    data.Action,
@@ -969,16 +946,16 @@ func (gs *GameServer) handleCancelOrderCommand(cmd game.GameCommand) {
 	}
 }
 
-// getCommandPlayer extracts the player name from a command (if set by auth middleware).
-func getCommandPlayer(cmd game.GameCommand) string {
-	// The Result channel approach doesn't carry auth context — for now return empty
-	// and let the handler resolve from planet ownership.
-	return ""
-}
-
 func sendResult(cmd game.GameCommand, err error) {
 	if cmd.Result != nil {
 		cmd.Result <- err
+		close(cmd.Result)
+	}
+}
+
+func sendSuccess(cmd game.GameCommand, data interface{}) {
+	if cmd.Result != nil {
+		cmd.Result <- data
 		close(cmd.Result)
 	}
 }

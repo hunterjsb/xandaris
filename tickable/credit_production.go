@@ -34,24 +34,12 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 		return
 	}
 
-	// Get players from context
-	playersInterface := context.GetPlayers()
-	if playersInterface == nil {
-		return
-	}
-
-	players, ok := playersInterface.([]*entities.Player)
-	if !ok {
-		return
-	}
+	players := context.GetPlayers()
 
 	// Get trade volume from market for Trading Post revenue
 	var totalTradeVolume float64
-	if mp, ok := context.GetGame().(interface{ GetMarketEngine() interface{ GetTradeVolume() float64 } }); ok {
-		me := mp.GetMarketEngine()
-		if me != nil {
-			totalTradeVolume = me.GetTradeVolume()
-		}
+	if me := context.GetGame().GetMarketEngine(); me != nil {
+		totalTradeVolume = me.GetTradeVolume()
 	}
 
 	for _, player := range players {

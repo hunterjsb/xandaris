@@ -26,15 +26,7 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 		return
 	}
 
-	playersInterface := context.GetPlayers()
-	if playersInterface == nil {
-		return
-	}
-
-	players, ok := playersInterface.([]*entities.Player)
-	if !ok {
-		return
-	}
+	players := context.GetPlayers()
 
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {

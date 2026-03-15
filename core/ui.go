@@ -77,25 +77,41 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		return
 	}
 
-	panelW := 220
-	panelH := 14 + len(human.OwnedPlanets)*42 + 4
-	if panelH > 200 {
-		panelH = 200
+	// Calculate panel height based on content
+	panelW := 230
+	perPlanet := 50
+	for _, planet := range human.OwnedPlanets {
+		if planet != nil && planet.PowerConsumed > 0 {
+			perPlanet = 68 // extra room for power bar
+			break
+		}
+	}
+	panelH := 24 + len(human.OwnedPlanets)*perPlanet + 4
+	if panelH > 280 {
+		panelH = 280
 	}
 	x := a.screenWidth - panelW - 10
 	y := 10
 
+	accentColor := color.RGBA{127, 219, 202, 255}
+	dimColor := color.RGBA{80, 95, 115, 255}
+	textLight := color.RGBA{192, 200, 216, 255}
+
 	panel := &views.UIPanel{
 		X: x, Y: y, Width: panelW, Height: panelH,
-		BgColor:     color.RGBA{12, 16, 28, 200},
+		BgColor:     color.RGBA{12, 16, 28, 220},
 		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 	panel.Draw(screen)
 
 	textY := y + 10
-	views.DrawText(screen, fmt.Sprintf("%s  %d planets  %d ships",
-		human.Name, len(human.OwnedPlanets), len(human.OwnedShips)), x+8, textY, utils.TextSecondary)
-	textY += 14
+	views.DrawText(screen, human.Name, x+10, textY, accentColor)
+
+	// Credits right-aligned
+	credStr := formatCredits(human.Credits)
+	credW := len(credStr) * 6
+	views.DrawText(screen, credStr, x+panelW-credW-10, textY, textLight)
+	textY += 18
 
 	for _, planet := range human.OwnedPlanets {
 		if planet == nil || textY > y+panelH-10 {
@@ -103,18 +119,17 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		}
 
 		// Planet name
-		views.DrawText(screen, planet.Name, x+8, textY, color.RGBA{127, 219, 202, 255})
-		textY += 12
+		views.DrawText(screen, planet.Name, x+10, textY, accentColor)
+		textY += 15
 
-		// Population
+		// Population + happiness on same line
 		popCap := planet.GetTotalPopulationCapacity()
 		popStr := fmt.Sprintf("Pop: %d", planet.Population)
 		if popCap > 0 {
 			popStr = fmt.Sprintf("Pop: %d/%d", planet.Population, popCap)
 		}
-		views.DrawText(screen, popStr, x+12, textY, utils.TextSecondary)
+		views.DrawText(screen, popStr, x+14, textY, dimColor)
 
-		// Happiness indicator (right side)
 		happyStr := fmt.Sprintf("%.0f%%", planet.Happiness*100)
 		happyColor := utils.SystemGreen
 		if planet.Happiness < 0.4 {
@@ -122,22 +137,20 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		} else if planet.Happiness < 0.7 {
 			happyColor = utils.SystemOrange
 		}
-		views.DrawText(screen, happyStr, x+panelW-40, textY, happyColor)
-		textY += 12
+		views.DrawText(screen, happyStr, x+panelW-36, textY, happyColor)
+		textY += 15
 
-		// Power bar
+		// Power bar + label
 		if planet.PowerConsumed > 0 {
 			powerRatio := planet.GetPowerRatio()
-			barX := x + 12
-			barW := panelW - 24
-			barH := 6
+			barX := x + 14
+			barW := panelW - 28
+			barH := 5
 
-			// Background
 			bg := &views.UIPanel{X: barX, Y: textY, Width: barW, Height: barH,
-				BgColor: color.RGBA{20, 20, 30, 255}, BorderColor: color.RGBA{40, 40, 60, 255}}
+				BgColor: color.RGBA{20, 25, 40, 255}, BorderColor: color.RGBA{30, 35, 55, 255}}
 			bg.Draw(screen)
 
-			// Fill
 			fillW := int(float64(barW) * powerRatio)
 			if fillW > 0 {
 				fillColor := utils.SystemGreen
@@ -151,12 +164,24 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 				fill.Draw(screen)
 			}
 
-			// Label
 			pwrLabel := fmt.Sprintf("%.0f/%.0fMW", planet.PowerGenerated, planet.PowerConsumed)
-			views.DrawText(screen, pwrLabel, barX, textY+barH+1, utils.TextSecondary)
-			textY += barH + 12
+			views.DrawText(screen, pwrLabel, barX, textY+barH+3, dimColor)
+			textY += barH + 16
 		} else {
-			textY += 6
+			textY += 8
 		}
 	}
+}
+
+func formatCredits(n int) string {
+	if n >= 1000000 {
+		return fmt.Sprintf("%.1fM cr", float64(n)/1000000.0)
+	}
+	if n >= 10000 {
+		return fmt.Sprintf("%.0fk cr", float64(n)/1000.0)
+	}
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk cr", float64(n)/1000.0)
+	}
+	return fmt.Sprintf("%d cr", n)
 }

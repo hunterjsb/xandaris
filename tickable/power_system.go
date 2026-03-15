@@ -42,14 +42,7 @@ func (ps *PowerSystem) OnTick(tick int64) {
 	if ctx == nil {
 		return
 	}
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
+	players := ctx.GetPlayers()
 
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {

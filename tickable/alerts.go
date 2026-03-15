@@ -32,16 +32,12 @@ func (as *AlertSystem) OnTick(tick int64) {
 		return
 	}
 
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
+	players := ctx.GetPlayers()
+	if players == nil {
 		return
 	}
 
-	logger, _ := ctx.GetGame().(EventLogger)
+	logger := ctx.GetGame()
 	if logger == nil {
 		return
 	}
@@ -54,7 +50,7 @@ func (as *AlertSystem) OnTick(tick int64) {
 	}
 }
 
-func (as *AlertSystem) checkAlerts(player *entities.Player, tick int64, logger EventLogger) {
+func (as *AlertSystem) checkAlerts(player *entities.Player, tick int64, logger GameProvider) {
 	for _, planet := range player.OwnedPlanets {
 		if planet == nil {
 			continue
@@ -112,7 +108,7 @@ func (as *AlertSystem) checkAlerts(player *entities.Player, tick int64, logger E
 	}
 }
 
-func (as *AlertSystem) alert(player, alertType string, tick int64, logger EventLogger, message string) {
+func (as *AlertSystem) alert(player, alertType string, tick int64, logger GameProvider, message string) {
 	key := player + ":" + alertType
 	if last, ok := as.lastAlerted[key]; ok && tick-last < alertCooldown {
 		return // Still in cooldown

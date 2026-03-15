@@ -26,20 +26,8 @@ func (srs *ShipRefuelingSystem) OnTick(tick int64) {
 		return
 	}
 
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
-
-	sp, ok := ctx.GetGame().(SystemsProvider)
-	if !ok {
-		return
-	}
-	systems := sp.GetSystems()
+	players := ctx.GetPlayers()
+	systems := ctx.GetGame().GetSystems()
 
 	for _, player := range players {
 		if player == nil {

@@ -26,6 +26,7 @@ type GameServer struct {
 	Events           *game.EventLog
 	Registry         *game.PlayerRegistry
 	DeliveryMgr      *economy.DeliveryManager
+	cmdRegistry      *CommandRegistry
 	// Remote is set when connected to a remote server (desktop only, not WASM)
 	remoteSync interface{}
 
@@ -97,6 +98,7 @@ func (gs *GameServer) NewGame(playerName string) error {
 
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
 func (gs *GameServer) initSimulation() {
+	gs.initCommandRegistry()
 	gs.Events = game.NewEventLog(100)
 	if gs.Registry == nil {
 		gs.Registry = game.NewPlayerRegistry(os.Getenv("XANDARIS_API_KEY"))
@@ -439,10 +441,13 @@ func (gs *GameServer) GetDeliveryManager() *economy.DeliveryManager {
 
 // --- serverSystemContext implements tickable.SystemContext ---
 
+// Compile-time check: GameServer must implement GameProvider.
+var _ tickable.GameProvider = (*GameServer)(nil)
+
 type serverSystemContext struct {
 	server *GameServer
 }
 
-func (ssc *serverSystemContext) GetGame() interface{}    { return ssc.server }
-func (ssc *serverSystemContext) GetPlayers() interface{} { return ssc.server.State.Players }
-func (ssc *serverSystemContext) GetTick() int64          { return ssc.server.TickManager.GetCurrentTick() }
+func (ssc *serverSystemContext) GetGame() tickable.GameProvider    { return ssc.server }
+func (ssc *serverSystemContext) GetPlayers() []*entities.Player    { return ssc.server.State.Players }
+func (ssc *serverSystemContext) GetTick() int64                    { return ssc.server.TickManager.GetCurrentTick() }

@@ -32,21 +32,13 @@ func (sss *ScoutSurveySystem) OnTick(tick int64) {
 		return
 	}
 
-	playersIface := ctx.GetPlayers()
-	if playersIface == nil {
-		return
-	}
-	players, ok := playersIface.([]*entities.Player)
-	if !ok {
-		return
-	}
+	players := ctx.GetPlayers()
 
-	logger, _ := ctx.GetGame().(EventLogger)
-	sp, ok := ctx.GetGame().(SystemsProvider)
-	if !ok {
+	game := ctx.GetGame()
+	if game == nil {
 		return
 	}
-	systems := sp.GetSystems()
+	systems := game.GetSystems()
 
 	// Build system lookup
 	systemByID := make(map[int]*entities.System)
@@ -74,7 +66,7 @@ func (sss *ScoutSurveySystem) OnTick(tick int64) {
 				continue
 			}
 
-			sss.surveySystem(sys, player, ship, logger)
+			sss.surveySystem(sys, player, ship, game)
 		}
 	}
 }
@@ -90,7 +82,7 @@ var surveyableResources = []struct {
 	{"Helium-3", 5},
 }
 
-func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entities.Player, ship *entities.Ship, logger EventLogger) {
+func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entities.Player, ship *entities.Ship, logger GameProvider) {
 	// Find planets in this system
 	for _, e := range sys.Entities {
 		planet, ok := e.(*entities.Planet)

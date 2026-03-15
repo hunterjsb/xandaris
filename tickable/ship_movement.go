@@ -24,20 +24,8 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		return
 	}
 
-	// Get game from context
-	gameInterface := context.GetGame()
-	if gameInterface == nil {
-		return
-	}
-
-	// Cast to Game type (we'll need to handle this carefully)
-	type GameWithSystemsMap interface {
-		GetSystemsMap() map[int]*entities.System
-		GetHyperlanes() []entities.Hyperlane
-	}
-
-	game, ok := gameInterface.(GameWithSystemsMap)
-	if !ok {
+	game := context.GetGame()
+	if game == nil {
 		return
 	}
 
@@ -52,10 +40,7 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 }
 
 // processShipMovement handles movement for a single ship
-func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, game interface {
-	GetSystemsMap() map[int]*entities.System
-	GetHyperlanes() []entities.Hyperlane
-}) {
+func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, game GameProvider) {
 	// Only process ships that are moving
 	if ship.Status != entities.ShipStatusMoving {
 		return

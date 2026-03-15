@@ -67,9 +67,37 @@ func (gs *State) GetStandingOrders(player string) []*StandingOrder {
 	return result
 }
 
+// CommandType identifies a game command.
+type CommandType string
+
+const (
+	CmdSave               CommandType = "save"
+	CmdSetSpeed           CommandType = "set_speed"
+	CmdTogglePause        CommandType = "toggle_pause"
+	CmdTrade              CommandType = "trade"
+	CmdCargoLoad          CommandType = "cargo_load"
+	CmdCargoUnload        CommandType = "cargo_unload"
+	CmdBuild              CommandType = "build"
+	CmdBuildShip          CommandType = "build_ship"
+	CmdMoveShip           CommandType = "move_ship"
+	CmdUpgrade            CommandType = "upgrade"
+	CmdRefuel             CommandType = "refuel"
+	CmdColonize           CommandType = "colonize"
+	CmdRegisterPlayer     CommandType = "register_player"
+	CmdWorkforceAssign    CommandType = "workforce_assign"
+	CmdCancelConstruction CommandType = "cancel_construction"
+	CmdStandingOrder      CommandType = "standing_order"
+	CmdCancelOrder        CommandType = "cancel_order"
+	CmdFleetMove          CommandType = "fleet_move"
+	CmdFleetCreate        CommandType = "fleet_create"
+	CmdFleetDisband       CommandType = "fleet_disband"
+	CmdFleetAddShip       CommandType = "fleet_add_ship"
+	CmdFleetRemoveShip    CommandType = "fleet_remove_ship"
+)
+
 // GameCommand represents a command to be executed on the main goroutine.
 type GameCommand struct {
-	Type   string
+	Type   CommandType
 	Data   interface{}
 	Result chan interface{} // optional: for synchronous API responses
 }
