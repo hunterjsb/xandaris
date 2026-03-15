@@ -23,6 +23,15 @@ type App struct {
 	// Screen dimensions
 	screenWidth  int
 	screenHeight int
+
+	// Empire panel click regions (planet ID → y range)
+	empirePlanetHits []empirePlanetHit
+}
+
+type empirePlanetHit struct {
+	PlanetID int
+	Y1, Y2   int
+	X1, X2   int
 }
 
 // New creates a new App instance with an in-process server.
@@ -85,6 +94,8 @@ func (a *App) Update() error {
 	} else {
 		// Handle global keyboard shortcuts (client-side input)
 		a.handleGlobalInput()
+		// Empire panel planet clicks
+		a.handleEmpirePanelClick()
 	}
 
 	// Toggle command bar with backtick

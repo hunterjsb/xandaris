@@ -5,6 +5,7 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/utils"
@@ -126,12 +127,16 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	views.DrawText(screen, credStr, x+panelW-credW-10, textY, textLight)
 	textY += 18
 
+	a.empirePlanetHits = a.empirePlanetHits[:0] // reset hit regions
+
 	for _, planet := range human.OwnedPlanets {
 		if planet == nil || textY > y+panelH-10 {
 			continue
 		}
 
-		// Planet name
+		hitStart := textY
+
+		// Planet name (clickable)
 		views.DrawText(screen, planet.Name, x+10, textY, accentColor)
 		textY += 15
 
@@ -182,6 +187,46 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 			textY += barH + 16
 		} else {
 			textY += 8
+		}
+
+		// Record clickable hit region for this planet
+		a.empirePlanetHits = append(a.empirePlanetHits, empirePlanetHit{
+			PlanetID: planet.GetID(),
+			Y1: hitStart, Y2: textY,
+			X1: x, X2: x + panelW,
+		})
+	}
+}
+
+// handleEmpirePanelClick checks if the user clicked on a planet in the empire panel.
+func (a *App) handleEmpirePanelClick() {
+	if !inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		return
+	}
+	mx, my := ebiten.CursorPosition()
+	for _, hit := range a.empirePlanetHits {
+		if mx >= hit.X1 && mx <= hit.X2 && my >= hit.Y1 && my <= hit.Y2 {
+			// Navigate to this planet
+			a.navigateToPlanet(hit.PlanetID)
+			return
+		}
+	}
+}
+
+// navigateToPlanet switches to the planet view for the given planet ID.
+func (a *App) navigateToPlanet(planetID int) {
+	for _, sys := range a.Server.State.Systems {
+		for _, e := range sys.Entities {
+			if planet, ok := e.(*entities.Planet); ok && planet.GetID() == planetID {
+				// Switch to planet view
+				if pv, ok := a.viewManager.GetView(views.ViewTypePlanet).(interface {
+					SetPlanet(*entities.Planet)
+				}); ok {
+					pv.SetPlanet(planet)
+					a.viewManager.SwitchTo(views.ViewTypePlanet)
+				}
+				return
+			}
 		}
 	}
 }
