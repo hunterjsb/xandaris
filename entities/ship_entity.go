@@ -385,9 +385,9 @@ func GetShipResourceRequirements(shipType ShipType) map[string]int {
 		requirements[ResFuel] = 20
 
 	case ShipTypeColony:
-		requirements[ResIron] = 100
-		requirements[ResFuel] = 80
-		requirements[ResRareMetals] = 20
+		requirements[ResIron] = 60
+		requirements[ResFuel] = 30
+		requirements[ResRareMetals] = 10
 
 	case ShipTypeCargo:
 		requirements[ResIron] = 60
