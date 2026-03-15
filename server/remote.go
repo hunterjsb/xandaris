@@ -137,9 +137,14 @@ func (rs *RemoteSync) syncPlayer() {
 		Data struct {
 			Credits int `json:"credits"`
 			Planets []struct {
-				ID              int            `json:"id"`
-				StoredResources map[string]int `json:"stored_resources"`
-				Population      int64          `json:"population"`
+				ID                int            `json:"id"`
+				StoredResources   map[string]int `json:"stored_resources"`
+				Population        int64          `json:"population"`
+				PopulationCap     int64          `json:"population_cap"`
+				Happiness         float64        `json:"happiness"`
+				ProductivityBonus float64        `json:"productivity_bonus"`
+				PowerGenerated    float64        `json:"power_generated"`
+				PowerConsumed     float64        `json:"power_consumed"`
 			} `json:"planets"`
 		} `json:"data"`
 	}
@@ -154,13 +159,17 @@ func (rs *RemoteSync) syncPlayer() {
 
 	hp.Credits = resp.Data.Credits
 
-	// Sync each planet's storage by matching IDs
+	// Sync each planet's state by matching IDs
 	for _, rp := range resp.Data.Planets {
 		for _, lp := range hp.OwnedPlanets {
 			if lp == nil || lp.GetID() != rp.ID {
 				continue
 			}
 			lp.Population = rp.Population
+			lp.Happiness = rp.Happiness
+			lp.ProductivityBonus = rp.ProductivityBonus
+			lp.PowerGenerated = rp.PowerGenerated
+			lp.PowerConsumed = rp.PowerConsumed
 			for resType, amount := range rp.StoredResources {
 				if s, ok := lp.StoredResources[resType]; ok && s != nil {
 					s.Amount = amount
