@@ -334,6 +334,14 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetPlayers(getProvider())})
 	})
 
+	mux.HandleFunc("/api/leaderboard", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: handleGetLeaderboard(getProvider())})
+	})
+
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
@@ -1045,9 +1053,11 @@ func StartServer(provider GameStateProvider) {
 	redirectURI := baseURL + "/api/auth/discord/callback"
 
 	mux.HandleFunc("/api/auth/discord", func(w http.ResponseWriter, r *http.Request) {
+		// Support local_callback for desktop OAuth flow
+		state := r.URL.Query().Get("local_callback")
 		authURL := fmt.Sprintf(
-			"https://discord.com/api/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=identify",
-			discordClientID, url.QueryEscape(redirectURI),
+			"https://discord.com/api/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=identify&state=%s",
+			discordClientID, url.QueryEscape(redirectURI), url.QueryEscape(state),
 		)
 		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 	})
@@ -1144,14 +1154,25 @@ func StartServer(provider GameStateProvider) {
 			}
 		}
 
-		// Redirect to frontend with credentials in fragment
-		fragment := url.Values{
+		// Redirect with credentials
+		params := url.Values{
 			"key":       {account.APIKey},
 			"name":      {account.Name},
 			"player_id": {strconv.Itoa(account.PlayerID)},
 			"new":       {strconv.FormatBool(isNew)},
 		}
-		http.Redirect(w, r, frontendURL+"/#"+fragment.Encode(), http.StatusTemporaryRedirect)
+
+		// Desktop OAuth: redirect to local callback with query params
+		localCallback := r.URL.Query().Get("state")
+		fmt.Printf("[Auth] Callback state=%q, account=%s, isNew=%v\n", localCallback, account.Name, isNew)
+		if localCallback != "" {
+			redirectTo := localCallback + "?" + params.Encode()
+			fmt.Printf("[Auth] Redirecting to local callback: %s\n", redirectTo)
+			http.Redirect(w, r, redirectTo, http.StatusTemporaryRedirect)
+		} else {
+			// Web OAuth: redirect to frontend with fragment (never sent to server)
+			http.Redirect(w, r, frontendURL+"/#"+params.Encode(), http.StatusTemporaryRedirect)
+		}
 	})
 
 	// Serve pages

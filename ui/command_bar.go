@@ -250,6 +250,8 @@ func (cb *CommandBar) executeCommand(input string) {
 		cb.showPlanets()
 	case strings.Contains(lower, "ships") || strings.Contains(lower, "fleet"):
 		cb.showShips()
+	case strings.Contains(lower, "leaderboard") || strings.Contains(lower, "ranking") || strings.Contains(lower, "score"):
+		cb.showLeaderboard()
 
 	// Game action commands
 	case strings.HasPrefix(lower, "build "):
@@ -468,6 +470,59 @@ func (cb *CommandBar) showHappiness() {
 	}
 }
 
+func (cb *CommandBar) showLeaderboard() {
+	state := cb.ctx.GetState()
+	if state == nil {
+		return
+	}
+
+	type entry struct {
+		name  string
+		score int
+	}
+	var entries []entry
+
+	for _, pl := range state.Players {
+		if pl == nil {
+			continue
+		}
+		var pop int64
+		bldgs := 0
+		stockValue := 0
+		for _, planet := range pl.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			pop += planet.Population
+			bldgs += len(planet.Buildings)
+			for resType, s := range planet.StoredResources {
+				if s != nil && state.Market != nil {
+					stockValue += int(float64(s.Amount) * state.Market.GetSellPrice(resType))
+				}
+			}
+		}
+		score := pl.Credits + stockValue + int(pop/10) + bldgs*200 + len(pl.OwnedShips)*500 + len(pl.OwnedPlanets)*2000
+		entries = append(entries, entry{pl.Name, score})
+	}
+
+	// Sort descending
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[j].score > entries[i].score {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+
+	for i, e := range entries {
+		c := utils.TextSecondary
+		if e.name == cb.ctx.GetHumanPlayer().Name {
+			c = utils.Highlight
+		}
+		cb.addFeedMessage(fmt.Sprintf("#%d %s — %d pts", i+1, e.name, e.score), c)
+	}
+}
+
 func (cb *CommandBar) showConstruction() {
 	constructionSystem := tickable.GetSystemByName("Construction")
 	if constructionSystem == nil {
@@ -677,6 +732,7 @@ func (cb *CommandBar) showHelp() {
 		{"trades", "Show recent trades"},
 		{"price <res>", "Price + sparkline trend"},
 		{"happiness", "Planet happiness summary"},
+		{"leaderboard", "Player rankings"},
 		{"building", "Construction queue"},
 		{"build <type>", "Build (mine/factory/etc)"},
 		{"buy/sell <n> <res>", "Trade resources"},

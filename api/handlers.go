@@ -252,6 +252,67 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 	}
 }
 
+func handleGetLeaderboard(p GameStateProvider) interface{} {
+	players := p.GetPlayers()
+	market := p.GetMarket()
+
+	entries := make([]LeaderboardEntry, 0, len(players))
+	for _, pl := range players {
+		if pl == nil {
+			continue
+		}
+		pType := "ai"
+		if pl.IsHuman() {
+			pType = "human"
+		}
+
+		var pop int64
+		bldgs := 0
+		stockValue := 0
+		for _, planet := range pl.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			pop += planet.Population
+			bldgs += len(planet.Buildings)
+			for resType, s := range planet.StoredResources {
+				if s != nil && market != nil {
+					stockValue += int(float64(s.Amount) * market.GetSellPrice(resType))
+				}
+			}
+		}
+
+		// Score: credits + stock market value + population/10 + buildings*200 + ships*500 + planets*2000
+		score := pl.Credits + stockValue + int(pop/10) + bldgs*200 + len(pl.OwnedShips)*500 + len(pl.OwnedPlanets)*2000
+
+		entries = append(entries, LeaderboardEntry{
+			Name:       pl.Name,
+			Type:       pType,
+			Score:      score,
+			Credits:    pl.Credits,
+			Population: pop,
+			Planets:    len(pl.OwnedPlanets),
+			Ships:      len(pl.OwnedShips),
+			Buildings:  bldgs,
+			StockValue: stockValue,
+		})
+	}
+
+	// Sort by score descending
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[j].Score > entries[i].Score {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+	for i := range entries {
+		entries[i].Rank = i + 1
+	}
+
+	return entries
+}
+
 func handleGetPlayers(p GameStateProvider) interface{} {
 	players := p.GetPlayers()
 	result := make([]PlayerInfo, 0, len(players))

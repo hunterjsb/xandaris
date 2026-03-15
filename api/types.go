@@ -290,6 +290,20 @@ type PopConsumptionRate struct {
 	PopDivisor    float64 `json:"pop_divisor"`     // per this many population
 }
 
+// LeaderboardEntry ranks a player by empire score.
+type LeaderboardEntry struct {
+	Rank       int    `json:"rank"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Score      int    `json:"score"`
+	Credits    int    `json:"credits"`
+	Population int64  `json:"population"`
+	Planets    int    `json:"planets"`
+	Ships      int    `json:"ships"`
+	Buildings  int    `json:"buildings"`
+	StockValue int    `json:"stock_value"`
+}
+
 // CatalogResource describes a tradeable resource.
 type CatalogResource struct {
 	Name      string  `json:"name"`
