@@ -93,9 +93,9 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 		if ship.Status == entities.ShipStatusMoving {
 			continue
 		}
-		// Check if we're at an unclaimed habitable planet
-		planet := findPlanetAtShipOrbit(ship, systems)
-		if planet != nil && planet.Owner == "" && planet.IsHabitable() {
+		// Check if there's an unclaimed habitable planet in this system
+		planet := findUnclaimedHabitable(ship.CurrentSystem, systems)
+		if planet != nil {
 			// Colonize!
 			planet.Owner = ship.Owner
 			planet.Population = int64(ship.Colonists)
@@ -251,6 +251,22 @@ func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.
 	if err == nil && loaded > 0 {
 		fmt.Printf("[AILogistics] %s loaded %d %s from %s\n", ship.Name, loaded, bestRes, planet.Name)
 	}
+}
+
+// findUnclaimedHabitable finds any unclaimed habitable planet in a system.
+func findUnclaimedHabitable(systemID int, systems []*entities.System) *entities.Planet {
+	for _, sys := range systems {
+		if sys.ID != systemID {
+			continue
+		}
+		for _, e := range sys.Entities {
+			if p, ok := e.(*entities.Planet); ok && p.Owner == "" && p.IsHabitable() {
+				return p
+			}
+		}
+		break
+	}
+	return nil
 }
 
 // findColonyTarget finds the nearest system with an unclaimed habitable planet.
