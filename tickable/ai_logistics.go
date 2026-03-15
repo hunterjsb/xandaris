@@ -171,8 +171,8 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 				}
 			}
 		} else {
-			// At a foreign system or not at a planet — head home
-			if hasJourney {
+			// At a foreign system or not at a planet — head home if enough fuel
+			if hasJourney && ship.CurrentFuel >= ship.FuelPerJump+10 {
 				homeSys := als.findHomeSystem(player, systems)
 				if homeSys >= 0 && homeSys != ship.CurrentSystem {
 					if journeyer.StartShipJourney(ship, homeSys) {
