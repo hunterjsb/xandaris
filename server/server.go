@@ -24,6 +24,7 @@ type GameServer struct {
 	FleetMgmtSystem  *game.FleetManagementSystem
 	CargoCommander   *game.CargoCommandExecutor
 	Events           *game.EventLog
+	Chat             *game.ChatLog
 	Registry         *game.PlayerRegistry
 	DeliveryMgr      *economy.DeliveryManager
 	cmdRegistry      *CommandRegistry
@@ -151,6 +152,7 @@ func (gs *GameServer) reconcileRegisteredPlayers() {
 func (gs *GameServer) initSimulation() {
 	gs.initCommandRegistry()
 	gs.Events = game.NewEventLog(100)
+	gs.Chat = game.NewChatLog(50)
 	if gs.Registry == nil {
 		gs.Registry = game.NewPlayerRegistry(os.Getenv("XANDARIS_API_KEY"))
 	}
@@ -186,10 +188,8 @@ func (gs *GameServer) initSimulation() {
 
 	// Register construction handler
 	handler := game.NewConstructionHandler(gs.State.Systems, gs.State.Players, gs.TickManager)
-	if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
-		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-			cs.RegisterCompletionHandler(handler.HandleConstructionComplete)
-		}
+	if cs := tickable.GetConstructionSystem(); cs != nil {
+		cs.RegisterCompletionHandler(handler.HandleConstructionComplete)
 	}
 }
 

@@ -149,6 +149,9 @@ func (gs *GameServer) GetEventLog() *game.EventLog {
 func (gs *GameServer) GetRegistry() *game.PlayerRegistry {
 	return gs.Registry
 }
+func (gs *GameServer) GetChatLog() *game.ChatLog {
+	return gs.Chat
+}
 func (gs *GameServer) GetCommandChannel() chan game.GameCommand {
 	return gs.State.Commands
 }

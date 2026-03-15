@@ -39,6 +39,15 @@ type ChatMessage struct {
 	Color  color.RGBA
 }
 
+// ChatMode determines what the command bar shows and how input is routed.
+type ChatMode int
+
+const (
+	ModeAgent     ChatMode = iota // LLM agent + slash commands
+	ModeEventsAll                 // Game events + multiplayer chat
+	ModeChatOnly                  // Multiplayer chat only
+)
+
 // CommandBar is a game console / chat / command bar.
 // Single chronological feed with push-based events — no polling.
 type CommandBar struct {
@@ -55,7 +64,7 @@ type CommandBar struct {
 	screenHeight int
 	serverURL    string
 	apiKey       string
-	showEvents   bool // show game events in feed
+	mode         ChatMode // current Tab mode
 	copyFlash    int
 	tabHeld      bool
 	copyHeld     bool
@@ -69,43 +78,60 @@ func NewCommandBar(ctx UIContext, screenWidth, screenHeight int) *CommandBar {
 		screenWidth:  screenWidth,
 		screenHeight: screenHeight,
 		serverURL:    "http://localhost:8080",
-		showEvents:   true,
+		mode:         ModeAgent,
 	}
 }
 
-// Init subscribes to the EventLog for push-based event delivery.
+// Init subscribes to EventLog and ChatLog for push-based delivery.
 func (cb *CommandBar) Init() {
-	el := cb.ctx.GetEventLog()
-	if el == nil {
-		return
-	}
-	// Backfill recent events
-	events := el.Recent(10)
-	cb.mu.Lock()
-	for i := len(events) - 1; i >= 0; i-- {
-		ev := events[i]
-		cb.feed = append(cb.feed, ChatMessage{
-			Tick: ev.Tick, Type: MsgEvent, Sender: ev.Player,
-			Text: fmt.Sprintf("[%s] %s", ev.Time, ev.Message), Color: eventColor(ev.Type),
-		})
-	}
-	cb.mu.Unlock()
-
-	// Subscribe for future events
-	el.Subscribe(func(ev game.GameEvent) {
-		if !cb.showEvents {
-			return
-		}
+	// Subscribe to game events
+	if el := cb.ctx.GetEventLog(); el != nil {
+		// Backfill
+		events := el.Recent(10)
 		cb.mu.Lock()
-		cb.feed = append(cb.feed, ChatMessage{
-			Tick: ev.Tick, Type: MsgEvent, Sender: ev.Player,
-			Text: fmt.Sprintf("[%s] %s", ev.Time, ev.Message), Color: eventColor(ev.Type),
-		})
-		if len(cb.feed) > 200 {
-			cb.feed = cb.feed[len(cb.feed)-200:]
+		for i := len(events) - 1; i >= 0; i-- {
+			ev := events[i]
+			cb.feed = append(cb.feed, ChatMessage{
+				Tick: ev.Tick, Type: MsgEvent, Sender: ev.Player,
+				Text: fmt.Sprintf("[%s] %s", ev.Time, ev.Message), Color: eventColor(ev.Type),
+			})
+		}
+		cb.mu.Unlock()
+
+		el.Subscribe(func(ev game.GameEvent) {
+			if cb.mode == ModeAgent || cb.mode == ModeChatOnly {
+				return // events only shown in ModeEventsAll
+			}
+			cb.mu.Lock()
+			cb.feed = append(cb.feed, ChatMessage{
+				Tick: ev.Tick, Type: MsgEvent, Sender: ev.Player,
+				Text: fmt.Sprintf("[%s] %s", ev.Time, ev.Message), Color: eventColor(ev.Type),
+			})
+			if len(cb.feed) > 200 {
+				cb.feed = cb.feed[len(cb.feed)-200:]
 		}
 		cb.mu.Unlock()
 	})
+	}
+
+	// Subscribe to multiplayer chat
+	if cl := cb.ctx.GetChatLog(); cl != nil {
+		cl.Subscribe(func(msg game.ChatMsg) {
+			if cb.mode == ModeAgent {
+				return // multiplayer chat not shown in agent mode
+			}
+			cb.mu.Lock()
+			cb.feed = append(cb.feed, ChatMessage{
+				Tick: msg.Tick, Type: MsgUser, Sender: msg.Player,
+				Text:  fmt.Sprintf("<%s> %s", msg.Player, msg.Message),
+				Color: color.RGBA{200, 200, 220, 255},
+			})
+			if len(cb.feed) > 200 {
+				cb.feed = cb.feed[len(cb.feed)-200:]
+			}
+			cb.mu.Unlock()
+		})
+	}
 }
 
 func eventColor(t game.EventType) color.RGBA {
@@ -170,14 +196,11 @@ func (cb *CommandBar) Update() {
 		cb.Close()
 	}
 
-	// Tab — toggle events
+	// Tab — cycle mode: Agent → Events+Chat → Chat Only → Agent
 	if ebiten.IsKeyPressed(ebiten.KeyTab) && !cb.tabHeld {
-		cb.showEvents = !cb.showEvents
-		label := "all"
-		if !cb.showEvents {
-			label = "chat only"
-		}
-		cb.addFeedMessage(fmt.Sprintf("Events: %s", label), utils.TextSecondary)
+		cb.mode = (cb.mode + 1) % 3
+		modeNames := []string{"Agent", "Events + Chat", "Chat Only"}
+		cb.addFeedMessage(fmt.Sprintf("Mode: %s", modeNames[cb.mode]), utils.TextSecondary)
 	}
 	cb.tabHeld = ebiten.IsKeyPressed(ebiten.KeyTab)
 
@@ -246,11 +269,8 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 
 	// Hints right-aligned on input bar
 	dimColor := color.RGBA{50, 60, 80, 255}
-	evLabel := "All"
-	if !cb.showEvents {
-		evLabel = "Chat"
-	}
-	hints := fmt.Sprintf("[`]close [Tab]%s [Ctrl+C]copy [/help]", evLabel)
+	modeLabel := []string{"Agent", "Events+Chat", "Chat"}[cb.mode]
+	hints := fmt.Sprintf("[`]close [Tab]%s [Ctrl+C]copy [/help]", modeLabel)
 	views.DrawText(screen, hints, barX+barWidth-len(hints)*6-10, inputY, dimColor)
 
 	if cb.copyFlash > 0 {
@@ -292,23 +312,55 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	}
 }
 
-// executeCommand parses and executes a user command.
-// Commands prefixed with / are local slash commands (instant).
-// Everything else is sent to the LLM agent for interpretation.
+// executeCommand routes input based on the current mode.
 func (cb *CommandBar) executeCommand(input string) {
 	input = strings.TrimSpace(input)
 
-	// Add the input to feed
-	cb.addFeedMessage(fmt.Sprintf("> %s", input), utils.Highlight)
-
-	// Slash commands: /help, /credits, /build factory, etc.
+	// Slash commands work in all modes
 	if strings.HasPrefix(input, "/") {
+		cb.addFeedMessage(fmt.Sprintf("> %s", input), utils.Highlight)
 		cb.executeSlashCommand(strings.TrimPrefix(input, "/"))
 		return
 	}
 
-	// Natural language → send to LLM chat endpoint
-	cb.sendToChat(input)
+	switch cb.mode {
+	case ModeAgent:
+		cb.addFeedMessage(fmt.Sprintf("> %s", input), utils.Highlight)
+		cb.sendToChat(input)
+	case ModeEventsAll, ModeChatOnly:
+		// Send as multiplayer chat
+		cb.sendMultiplayerChat(input)
+	}
+}
+
+// sendMultiplayerChat sends a message to the multiplayer chat endpoint.
+func (cb *CommandBar) sendMultiplayerChat(message string) {
+	player := ""
+	if human := cb.ctx.GetHumanPlayer(); human != nil {
+		player = human.Name
+	}
+	cb.addFeedMessage(fmt.Sprintf("<%s> %s", player, message), color.RGBA{200, 200, 220, 255})
+
+	go func() {
+		reqBody := map[string]interface{}{"message": message}
+		bodyBytes, _ := json.Marshal(reqBody)
+
+		req, err := http.NewRequest("POST", cb.serverURL+"/api/chat/send", strings.NewReader(string(bodyBytes)))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if cb.apiKey != "" {
+			req.Header.Set("X-API-Key", cb.apiKey)
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			cb.addFeedMessage("Failed to send message", utils.SystemRed)
+			return
+		}
+		resp.Body.Close()
+	}()
 }
 
 // executeSlashCommand handles /prefixed local commands.

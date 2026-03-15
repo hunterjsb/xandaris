@@ -24,8 +24,9 @@ type UIContext interface {
 	GetKeyBindings() views.KeyBindingsInterface
 	GetViewManager() views.ViewManagerInterface
 
-	// Event log and command channel
+	// Event log, chat log, and command channel
 	GetEventLog() *game.EventLog
+	GetChatLog() *game.ChatLog
 	GetCommandChannel() chan game.GameCommand
 
 	// Cargo command executor for loading/unloading cargo

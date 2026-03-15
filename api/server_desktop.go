@@ -1324,6 +1324,58 @@ func StartServer(provider GameStateProvider) {
 	// LLM chat endpoint
 	registerChatEndpoint(mux, getProvider)
 
+	// Multiplayer chat
+	mux.HandleFunc("/api/chat/send", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req struct {
+			Message string `json:"message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Message) == "" {
+			writeErr(w, http.StatusBadRequest, "message required")
+			return
+		}
+		player := getAuthPlayer(r)
+		if player == "" {
+			writeErr(w, http.StatusUnauthorized, "auth required")
+			return
+		}
+		p := getProvider()
+		tick, gameTime, _, _ := p.GetTickInfo()
+		chatLog := p.GetChatLog()
+		if chatLog == nil {
+			writeErr(w, http.StatusInternalServerError, "chat not available")
+			return
+		}
+		msg := strings.TrimSpace(req.Message)
+		if len(msg) > 200 {
+			msg = msg[:200]
+		}
+		chatLog.Send(tick, gameTime, player, msg)
+		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"status": "sent"}})
+	})
+
+	mux.HandleFunc("/api/chat/messages", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		chatLog := p.GetChatLog()
+		if chatLog == nil {
+			writeJSON(w, APIResponse{OK: true, Data: []interface{}{}})
+			return
+		}
+		messages := chatLog.Recent(20)
+		// Reverse to chronological order
+		for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+			messages[i], messages[j] = messages[j], messages[i]
+		}
+		writeJSON(w, APIResponse{OK: true, Data: messages})
+	})
+
 	// Rate limiter: 30 reads/sec, 10 writes/sec per key, burst of 60/20
 	rateLimiter := NewRateLimiter(30, 10, 60, 20)
 
