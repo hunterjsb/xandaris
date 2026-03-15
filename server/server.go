@@ -252,6 +252,41 @@ func (gs *GameServer) GetSystemByID(systemID int) *entities.System {
 	return gs.FleetCmdExecutor.GetSystemByID(systemID)
 }
 
+// NewGameWithSeed initializes a game using a specific seed (for remote sync).
+func (gs *GameServer) NewGameWithSeed(playerName string, seed int64) error {
+	gs.State.Reset()
+	gs.State.Seed = seed
+
+	gs.TickManager.Reset()
+
+	galaxyGen := game.NewGalaxyGenerator(gs.screenWidth, gs.screenHeight)
+	gs.State.Systems = galaxyGen.GenerateSystems(gs.State.Seed)
+	gs.State.Hyperlanes = galaxyGen.GenerateHyperlanes(gs.State.Systems)
+
+	playerColor := utils.PlayerGreen
+	gs.State.HumanPlayer = entities.NewPlayer(0, playerName, playerColor, entities.PlayerTypeHuman)
+	gs.State.Players = append(gs.State.Players, gs.State.HumanPlayer)
+
+	entities.InitializePlayer(gs.State.HumanPlayer, gs.State.Systems)
+	game.PrepareHomeworld(gs.State.HumanPlayer, false)
+
+	if gs.State.HumanPlayer.HomePlanet != nil {
+		gs.State.HumanPlayer.HomePlanet.AddStoredResource("Fuel", 200)
+		gs.State.HumanPlayer.HomePlanet.AddStoredResource("Oil", 150)
+	}
+
+	gs.State.Market = economy.NewMarket()
+	gs.State.TradeExec = economy.NewTradeExecutor(gs.State.Market)
+
+	// Don't seed AI factions — they exist on the remote server
+	gs.initSimulation()
+
+	fmt.Printf("[Server] Game initialized with remote seed %d (%d systems)\n",
+		seed, len(gs.State.Systems))
+
+	return nil
+}
+
 // SetRemoteSync sets the remote sync client (for --connect mode).
 func (gs *GameServer) SetRemoteSync(rs interface{}) {
 	gs.remoteSync = rs

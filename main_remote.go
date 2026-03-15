@@ -36,7 +36,15 @@ func runRemote(serverURL, playerName, password string) {
 		fmt.Printf("Logged in! Key: %s...\n", apiKey[:20])
 	}
 
-	if err := gs.NewGame(playerName); err != nil {
+	// Fetch the remote galaxy seed so we generate the same universe
+	seed, err := remote.FetchSeed()
+	if err != nil {
+		log.Fatalf("Failed to fetch galaxy seed: %v", err)
+	}
+	fmt.Printf("Galaxy seed: %d\n", seed)
+
+	// Generate the same galaxy as the remote server using the seed
+	if err := gs.NewGameWithSeed(playerName, seed); err != nil {
 		log.Fatalf("Failed to initialize: %v", err)
 	}
 
@@ -51,12 +59,14 @@ func runRemote(serverURL, playerName, password string) {
 	}
 
 	app := core.New(screenWidth, screenHeight)
+	app.Server = gs // Use the remote-synced GameServer instead of the default
 	if err := app.InitializeForMenu(); err != nil {
 		log.Fatalf("Failed to initialize: %v", err)
 	}
-	if err := app.InitializeNewGame(playerName); err != nil {
-		log.Fatalf("Failed to start: %v", err)
-	}
+	// Skip InitializeNewGame (which calls NewGame with random seed) —
+	// the GameServer already has the remote seed and state.
+	app.InitializeClientViews()
+	app.SwitchToGalaxyView()
 
 	fmt.Printf("Connected to %s! Playing as %s\n", serverURL, playerName)
 

@@ -46,9 +46,9 @@ func (a *App) initializeGameViews(buildMenu *ui.BuildMenu, constructionQueue *ui
 	a.viewManager.RegisterView(playerDirectory)
 }
 
-// initializeClientViews sets up UI components and registers game views.
-// Called after the server has a game loaded/created.
-func (a *App) initializeClientViews() {
+// InitializeClientViews sets up UI components and registers game views.
+// Called after the server has a game loaded/created. Exported for remote play.
+func (a *App) InitializeClientViews() {
 	buildMenu := ui.NewBuildMenu(a)
 	constructionQueue := ui.NewConstructionQueueUI(a)
 	resourceStorage := ui.NewResourceStorageUI(a)
@@ -58,6 +58,11 @@ func (a *App) initializeClientViews() {
 	a.initializeGameViews(buildMenu, constructionQueue, resourceStorage, shipyardUI, fleetInfoUI)
 }
 
+// SwitchToGalaxyView switches the view to the galaxy view. Used for remote play startup.
+func (a *App) SwitchToGalaxyView() {
+	a.viewManager.SwitchTo(views.ViewTypeGalaxy)
+}
+
 // InitializeNewGame creates a new game via the server and sets up client views.
 func (a *App) InitializeNewGame(playerName string) error {
 	if err := a.Server.NewGame(playerName); err != nil {
@@ -65,7 +70,7 @@ func (a *App) InitializeNewGame(playerName string) error {
 	}
 
 	// Set up client-side views
-	a.initializeClientViews()
+	a.InitializeClientViews()
 
 	// Switch to galaxy view
 	a.viewManager.SwitchTo(views.ViewTypeGalaxy)
@@ -80,7 +85,7 @@ func (a *App) LoadGameFromPath(path string) error {
 	}
 
 	// Set up client-side views
-	a.initializeClientViews()
+	a.InitializeClientViews()
 
 	return nil
 }
