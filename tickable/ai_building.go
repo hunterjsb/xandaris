@@ -176,6 +176,57 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 			fmt.Printf("[AIBuild] %s built Trading Post at %s\n", player.Name, planet.Name)
 			return
 		}
+
+		// Strategy 5: Build Shipyard if we don't have one and can afford it
+		if !hasBuilding(planet, "Shipyard") && player.Credits >= 3000 {
+			player.Credits -= 2000
+			builder.AIBuildOnPlanet(planet, "Shipyard", player.Name, systemID)
+			fmt.Printf("[AIBuild] %s built Shipyard at %s\n", player.Name, planet.Name)
+			return
+		}
+
+		// Strategy 6: Build Colony ship and expand if we have a Shipyard,
+		// only 1 planet, enough resources, and enough credits
+		if len(player.OwnedPlanets) < 3 && hasBuilding(planet, "Shipyard") && player.Credits >= 4000 {
+			// Check if we already have a colony ship
+			hasColony := false
+			for _, ship := range player.OwnedShips {
+				if ship != nil && ship.ShipType == entities.ShipTypeColony {
+					hasColony = true
+					break
+				}
+			}
+			if !hasColony && planet.GetStoredAmount("Iron") >= 100 &&
+				planet.GetStoredAmount("Fuel") >= 80 &&
+				planet.GetStoredAmount("Rare Metals") >= 20 {
+				// Deduct resources and credits (matches entities.GetShipResourceRequirements)
+				player.Credits -= 2000
+				planet.RemoveStoredResource("Iron", 100)
+				planet.RemoveStoredResource("Fuel", 80)
+				planet.RemoveStoredResource("Rare Metals", 20)
+				// Queue construction
+				location := fmt.Sprintf("planet_%d", planet.GetID())
+				if constructionSystem := GetSystemByName("Construction"); constructionSystem != nil {
+					if cs, ok := constructionSystem.(*ConstructionSystem); ok {
+						item := &ConstructionItem{
+							ID:             fmt.Sprintf("aiship_colony_%s_%d", player.Name, abs.GetContext().GetTick()),
+							Type:           "Ship",
+							Name:           string(entities.ShipTypeColony),
+							Location:       location,
+							Owner:          player.Name,
+							Progress:       0,
+							TotalTicks:     300,
+							RemainingTicks: 300,
+							Cost:           2000,
+							Started:        abs.GetContext().GetTick(),
+						}
+						cs.AddToQueue(location, item)
+						fmt.Printf("[AIBuild] %s building Colony ship at %s for expansion\n", player.Name, planet.Name)
+					}
+				}
+				return
+			}
+		}
 	}
 }
 

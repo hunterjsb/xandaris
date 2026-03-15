@@ -85,6 +85,44 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 	mover, hasMover := gameObj.(FleetMover)
 	journeyer, hasJourney := gameObj.(ShipJourney)
 
+	// Handle colony ships — find unclaimed habitable planet and colonize
+	for _, ship := range player.OwnedShips {
+		if ship == nil || ship.ShipType != entities.ShipTypeColony || ship.Colonists <= 0 {
+			continue
+		}
+		if ship.Status == entities.ShipStatusMoving {
+			continue
+		}
+		// Check if we're at an unclaimed habitable planet
+		planet := findPlanetAtShipOrbit(ship, systems)
+		if planet != nil && planet.Owner == "" && planet.IsHabitable() {
+			// Colonize!
+			planet.Owner = ship.Owner
+			planet.Population = int64(ship.Colonists)
+			planet.SetBaseOwner(ship.Owner)
+			player.AddOwnedPlanet(planet)
+			for _, resEntity := range planet.Resources {
+				if res, ok := resEntity.(*entities.Resource); ok {
+					res.Owner = ship.Owner
+				}
+			}
+			ship.Colonists = 0
+			ship.Status = entities.ShipStatusOrbiting
+			planet.RebalanceWorkforce()
+			fmt.Printf("[AIColonize] %s colonized %s with %d colonists!\n", player.Name, planet.Name, planet.Population)
+			continue
+		}
+		// Find nearest unclaimed habitable planet and fly there
+		if hasJourney && hasMover {
+			targetSys := als.findColonyTarget(ship, player, systems, mover)
+			if targetSys >= 0 && targetSys != ship.CurrentSystem {
+				if journeyer.StartShipJourney(ship, targetSys) {
+					fmt.Printf("[AIColonize] %s sending colony ship to SYS-%d\n", player.Name, targetSys)
+				}
+			}
+		}
+	}
+
 	for _, ship := range player.OwnedShips {
 		if ship == nil || ship.ShipType != entities.ShipTypeCargo {
 			continue
@@ -195,6 +233,42 @@ func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.
 	if err == nil && loaded > 0 {
 		fmt.Printf("[AILogistics] %s loaded %d %s from %s\n", ship.Name, loaded, bestRes, planet.Name)
 	}
+}
+
+// findColonyTarget finds the nearest system with an unclaimed habitable planet.
+func (als *AILogisticsSystem) findColonyTarget(ship *entities.Ship, player *entities.Player, systems []*entities.System, mover FleetMover) int {
+	// BFS from current system to find nearest unclaimed habitable planet
+	visited := map[int]bool{ship.CurrentSystem: true}
+	queue := mover.GetConnectedSystems(ship.CurrentSystem)
+	for _, id := range queue {
+		visited[id] = true
+	}
+	for len(queue) > 0 {
+		sysID := queue[0]
+		queue = queue[1:]
+		// Check if this system has unclaimed habitable planets
+		for _, sys := range systems {
+			if sys.ID != sysID {
+				continue
+			}
+			for _, e := range sys.Entities {
+				if p, ok := e.(*entities.Planet); ok && p.Owner == "" && p.IsHabitable() {
+					return sysID
+				}
+			}
+		}
+		// Expand search
+		for _, next := range mover.GetConnectedSystems(sysID) {
+			if !visited[next] {
+				visited[next] = true
+				queue = append(queue, next)
+			}
+		}
+		if len(visited) > 15 {
+			break // Don't search too far
+		}
+	}
+	return -1
 }
 
 // findPlanetAtShipOrbit finds the planet a ship is orbiting in its current system.
