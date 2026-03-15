@@ -76,13 +76,26 @@ func (gs *GameServer) initCommandRegistry() {
 	gs.cmdRegistry = cr
 }
 
+// resolvePlayer finds the player for a command. Uses cmd.PlayerName if set,
+// otherwise falls back to HumanPlayer (backwards compat for local play).
+func (gs *GameServer) resolvePlayer(cmd game.GameCommand) *entities.Player {
+	if cmd.PlayerName != "" {
+		for _, p := range gs.State.Players {
+			if p != nil && p.Name == cmd.PlayerName {
+				return p
+			}
+		}
+	}
+	return gs.State.HumanPlayer
+}
+
 func (gs *GameServer) handleTradeCommand(cmd game.GameCommand) {	td, ok := cmd.Data.(game.TradeCommandData)
 	if !ok {
 		sendResult(cmd, fmt.Errorf("invalid trade data"))
 		return
 	}
 	exec := gs.State.TradeExec
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if exec == nil || human == nil {
 		sendResult(cmd, fmt.Errorf("game not initialized"))
 		return
@@ -152,13 +165,10 @@ func (gs *GameServer) handleCargoCommand(cmd game.GameCommand) {
 		qty, err = gs.CargoCommander.UnloadCargo(ship, planet, cd.Resource, cd.Quantity)
 	}
 
-	if cmd.Result != nil {
-		if err != nil {
-			cmd.Result <- err
-		} else {
-			cmd.Result <- qty
-		}
-		close(cmd.Result)
+	if err != nil {
+		sendResult(cmd, err)
+	} else {
+		sendSuccess(cmd, qty)
 	}
 }
 
@@ -169,20 +179,27 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		return
 	}
 
-	human := gs.State.HumanPlayer
-	if human == nil {
-		sendResult(cmd, fmt.Errorf("no player"))
-		return
-	}
-
-	// Find the planet
+	// Find the planet and its owner
 	planet := gs.CargoCommander.FindPlanetByID(bd.PlanetID)
 	if planet == nil {
 		sendResult(cmd, fmt.Errorf("planet not found"))
 		return
 	}
-	if planet.Owner != human.Name {
-		sendResult(cmd, fmt.Errorf("planet not owned by player"))
+	if planet.Owner == "" {
+		sendResult(cmd, fmt.Errorf("planet is unclaimed"))
+		return
+	}
+
+	// Find the player who owns this planet
+	var human *entities.Player
+	for _, p := range gs.State.Players {
+		if p != nil && p.Name == planet.Owner {
+			human = p
+			break
+		}
+	}
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("planet owner not found"))
 		return
 	}
 
@@ -251,7 +268,7 @@ func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {
 		return
 	}
 
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -267,17 +284,7 @@ func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {
 		return
 	}
 
-	// Check for shipyard
-	hasShipyard := false
-	for _, be := range planet.Buildings {
-		if b, ok := be.(*entities.Building); ok {
-			if b.BuildingType == "Shipyard" && b.IsOperational {
-				hasShipyard = true
-				break
-			}
-		}
-	}
-	if !hasShipyard {
+	if !planet.HasOperationalBuilding("Shipyard") {
 		sendResult(cmd, fmt.Errorf("no operational shipyard on this planet"))
 		return
 	}
@@ -326,15 +333,12 @@ func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {
 		}
 	}
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"ship_type": sd.ShipType,
-			"cost":      cost,
-			"ticks":     buildTime,
-			"resources": requirements,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"ship_type": sd.ShipType,
+		"cost":      cost,
+		"ticks":     buildTime,
+		"resources": requirements,
+	})
 }
 
 func (gs *GameServer) handleMoveShipCommand(cmd game.GameCommand) {
@@ -349,21 +353,18 @@ func (gs *GameServer) handleMoveShipCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("ship not found"))
 		return
 	}
-	if ship.Owner != gs.State.HumanPlayer.Name {
+	if ship.Owner != gs.resolvePlayer(cmd).Name {
 		sendResult(cmd, fmt.Errorf("not your ship"))
 		return
 	}
 
 	helper := tickable.NewShipMovementHelper(gs.GetSystemsMap(), gs.State.Hyperlanes)
 	if helper.StartJourney(ship, md.TargetSystemID) {
-		if cmd.Result != nil {
-			cmd.Result <- map[string]interface{}{
-				"ship_id": md.ShipID,
-				"target":  md.TargetSystemID,
-				"status":  "moving",
-			}
-			close(cmd.Result)
-		}
+		sendSuccess(cmd, map[string]interface{}{
+			"ship_id": md.ShipID,
+			"target":  md.TargetSystemID,
+			"status":  "moving",
+		})
 	} else {
 		sendResult(cmd, fmt.Errorf("cannot move to system %d (no route or insufficient fuel)", md.TargetSystemID))
 	}
@@ -375,7 +376,7 @@ func (gs *GameServer) handleUpgradeCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid upgrade data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -411,14 +412,11 @@ func (gs *GameServer) handleUpgradeCommand(cmd game.GameCommand) {
 	human.Credits -= cost
 	building.Upgrade()
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"building":  building.BuildingType,
-			"new_level": building.Level,
-			"cost":      cost,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"building":  building.BuildingType,
+		"new_level": building.Level,
+		"cost":      cost,
+	})
 }
 
 func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
@@ -433,7 +431,7 @@ func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("ship not found"))
 		return
 	}
-	if ship.Owner != gs.State.HumanPlayer.Name {
+	if ship.Owner != gs.resolvePlayer(cmd).Name {
 		sendResult(cmd, fmt.Errorf("not your ship"))
 		return
 	}
@@ -473,15 +471,12 @@ func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
 	planet.RemoveStoredResource("Fuel", amount)
 	ship.Refuel(amount)
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"ship_id":  rd.ShipID,
-			"refueled": amount,
-			"fuel_now": ship.CurrentFuel,
-			"fuel_max": ship.MaxFuel,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"ship_id":  rd.ShipID,
+		"refueled": amount,
+		"fuel_now": ship.CurrentFuel,
+		"fuel_max": ship.MaxFuel,
+	})
 }
 
 func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
@@ -491,7 +486,7 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 		return
 	}
 
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -555,15 +550,12 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 	// Rebalance workforce
 	planet.RebalanceWorkforce()
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"planet":    planet.Name,
-			"planet_id": planet.GetID(),
-			"system_id": systemID,
-			"colonists": planet.Population,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"planet":    planet.Name,
+		"planet_id": planet.GetID(),
+		"system_id": systemID,
+		"colonists": planet.Population,
+	})
 }
 
 func (gs *GameServer) handleRegisterPlayerCommand(cmd game.GameCommand) {
@@ -614,10 +606,7 @@ func (gs *GameServer) handleRegisterPlayerCommand(cmd game.GameCommand) {
 
 	fmt.Printf("[Server] New player registered: %s (id=%d)\n", rd.Name, playerID)
 
-	if cmd.Result != nil {
-		cmd.Result <- playerID
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, playerID)
 }
 
 func (gs *GameServer) handleWorkforceAssignCommand(cmd game.GameCommand) {
@@ -626,7 +615,7 @@ func (gs *GameServer) handleWorkforceAssignCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid workforce data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -647,16 +636,13 @@ func (gs *GameServer) handleWorkforceAssignCommand(cmd game.GameCommand) {
 	}
 	building.SetDesiredWorkers(wd.Workers)
 	planet.RebalanceWorkforce()
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"building":  building.BuildingType,
-			"desired":   building.DesiredWorkers,
-			"assigned":  building.WorkersAssigned,
-			"required":  building.WorkersRequired,
-			"staffing":  building.GetStaffingRatio(),
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"building":  building.BuildingType,
+		"desired":   building.DesiredWorkers,
+		"assigned":  building.WorkersAssigned,
+		"required":  building.WorkersRequired,
+		"staffing":  building.GetStaffingRatio(),
+	})
 }
 
 func (gs *GameServer) handleCancelConstructionCommand(cmd game.GameCommand) {
@@ -665,7 +651,7 @@ func (gs *GameServer) handleCancelConstructionCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid cancel construction data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -707,14 +693,11 @@ func (gs *GameServer) handleCancelConstructionCommand(cmd game.GameCommand) {
 	human.Credits += refund
 	cs.RemoveFromQueue(location, cd.ConstructionID)
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"cancelled": cd.ConstructionID,
-			"refund":    refund,
-			"progress":  progress,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"cancelled": cd.ConstructionID,
+		"refund":    refund,
+		"progress":  progress,
+	})
 }
 
 func (gs *GameServer) handleFleetMoveCommand(cmd game.GameCommand) {
@@ -723,7 +706,7 @@ func (gs *GameServer) handleFleetMoveCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid fleet move data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -738,15 +721,12 @@ func (gs *GameServer) handleFleetMoveCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("no ships could move (no route or insufficient fuel)"))
 		return
 	}
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"fleet_id": fd.FleetID,
-			"target":   fd.TargetSystemID,
-			"moved":    success,
-			"failed":   fail,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"fleet_id": fd.FleetID,
+		"target":   fd.TargetSystemID,
+		"moved":    success,
+		"failed":   fail,
+	})
 }
 
 func (gs *GameServer) handleFleetCreateCommand(cmd game.GameCommand) {
@@ -755,7 +735,7 @@ func (gs *GameServer) handleFleetCreateCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid fleet create data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -770,14 +750,11 @@ func (gs *GameServer) handleFleetCreateCommand(cmd game.GameCommand) {
 		sendResult(cmd, err)
 		return
 	}
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"fleet_id": fleet.ID,
-			"ship_id":  fd.ShipID,
-			"size":     fleet.Size(),
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"fleet_id": fleet.ID,
+		"ship_id":  fd.ShipID,
+		"size":     fleet.Size(),
+	})
 }
 
 func (gs *GameServer) handleFleetDisbandCommand(cmd game.GameCommand) {
@@ -786,7 +763,7 @@ func (gs *GameServer) handleFleetDisbandCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid fleet disband data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -802,13 +779,10 @@ func (gs *GameServer) handleFleetDisbandCommand(cmd game.GameCommand) {
 		sendResult(cmd, err)
 		return
 	}
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"fleet_id":       fd.FleetID,
-			"ships_released": shipCount,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"fleet_id":       fd.FleetID,
+		"ships_released": shipCount,
+	})
 }
 
 func (gs *GameServer) handleFleetAddShipCommand(cmd game.GameCommand) {
@@ -817,7 +791,7 @@ func (gs *GameServer) handleFleetAddShipCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid fleet add ship data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -837,14 +811,11 @@ func (gs *GameServer) handleFleetAddShipCommand(cmd game.GameCommand) {
 		sendResult(cmd, err)
 		return
 	}
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"fleet_id": fd.FleetID,
-			"ship_id":  fd.ShipID,
-			"size":     fleet.Size(),
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"fleet_id": fd.FleetID,
+		"ship_id":  fd.ShipID,
+		"size":     fleet.Size(),
+	})
 }
 
 func (gs *GameServer) handleFleetRemoveShipCommand(cmd game.GameCommand) {
@@ -853,7 +824,7 @@ func (gs *GameServer) handleFleetRemoveShipCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid fleet remove ship data"))
 		return
 	}
-	human := gs.State.HumanPlayer
+	human := gs.resolvePlayer(cmd)
 	if human == nil {
 		sendResult(cmd, fmt.Errorf("no player"))
 		return
@@ -873,13 +844,10 @@ func (gs *GameServer) handleFleetRemoveShipCommand(cmd game.GameCommand) {
 		sendResult(cmd, err)
 		return
 	}
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"fleet_id": fd.FleetID,
-			"ship_id":  fd.ShipID,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"fleet_id": fd.FleetID,
+		"ship_id":  fd.ShipID,
+	})
 }
 
 func (gs *GameServer) handleStandingOrderCommand(cmd game.GameCommand) {
@@ -916,15 +884,12 @@ func (gs *GameServer) handleStandingOrderCommand(cmd game.GameCommand) {
 	fmt.Printf("[Server] Standing order #%d: %s %s %d %s on planet %d (threshold %d)\n",
 		id, order.Player, order.Action, order.Quantity, order.Resource, order.PlanetID, order.Threshold)
 
-	if cmd.Result != nil {
-		cmd.Result <- map[string]interface{}{
-			"order_id": id,
-			"action":   order.Action,
-			"resource": order.Resource,
-			"quantity": order.Quantity,
-		}
-		close(cmd.Result)
-	}
+	sendSuccess(cmd, map[string]interface{}{
+		"order_id": id,
+		"action":   order.Action,
+		"resource": order.Resource,
+		"quantity": order.Quantity,
+	})
 }
 
 func (gs *GameServer) handleCancelOrderCommand(cmd game.GameCommand) {
@@ -934,10 +899,7 @@ func (gs *GameServer) handleCancelOrderCommand(cmd game.GameCommand) {
 		return
 	}
 	if gs.State.RemoveStandingOrder(data.OrderID) {
-		if cmd.Result != nil {
-			cmd.Result <- map[string]interface{}{"cancelled": data.OrderID}
-			close(cmd.Result)
-		}
+		sendSuccess(cmd, map[string]interface{}{"cancelled": data.OrderID})
 	} else {
 		sendResult(cmd, fmt.Errorf("order #%d not found", data.OrderID))
 	}

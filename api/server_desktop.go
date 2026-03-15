@@ -37,6 +37,16 @@ func getAuthPlayer(r *http.Request) string {
 	return ""
 }
 
+// newCommand creates a GameCommand with the authenticated player name attached.
+func newCommand(r *http.Request, cmdType game.CommandType, data interface{}) game.GameCommand {
+	return game.GameCommand{
+		Type:       cmdType,
+		Data:       data,
+		Result:     make(chan interface{}, 1),
+		PlayerName: getAuthPlayer(r),
+	}
+}
+
 // isAdmin returns whether the request was authenticated with the admin key.
 func isAdmin(r *http.Request) bool {
 	if v, ok := r.Context().Value(ctxIsAdmin).(bool); ok {
@@ -483,19 +493,15 @@ func StartServer(provider GameStateProvider) {
 		}
 
 		p := getProvider()
-		resultCh := make(chan interface{}, 1)
-		p.GetCommandChannel() <- game.GameCommand{
-			Type: "build",
-			Data: game.BuildCommandData{
-				PlanetID:     req.PlanetID,
-				BuildingType: req.BuildingType,
-				ResourceID:   req.ResourceID,
-			},
-			Result: resultCh,
-		}
+		cmd := newCommand(r, game.CmdBuild, game.BuildCommandData{
+			PlanetID:     req.PlanetID,
+			BuildingType: req.BuildingType,
+			ResourceID:   req.ResourceID,
+		})
+		p.GetCommandChannel() <- cmd
 
 		select {
-		case result := <-resultCh:
+		case result := <-cmd.Result:
 			switch v := result.(type) {
 			case error:
 				writeErr(w, http.StatusBadRequest, v.Error())

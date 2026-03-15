@@ -31,6 +31,7 @@ type State struct {
 	Commands       chan GameCommand
 	StandingOrders []*StandingOrder
 	nextOrderID    int
+	systemsMap     map[int]*entities.System // cached; rebuilt on demand
 }
 
 // AddStandingOrder creates a new standing order and returns its ID.
@@ -97,9 +98,10 @@ const (
 
 // GameCommand represents a command to be executed on the main goroutine.
 type GameCommand struct {
-	Type   CommandType
-	Data   interface{}
-	Result chan interface{} // optional: for synchronous API responses
+	Type       CommandType
+	Data       interface{}
+	Result     chan interface{} // optional: for synchronous API responses
+	PlayerName string          // authenticated player name (for multiplayer scoping)
 }
 
 // TradeCommandData is the shared trade command payload used by both API and UI.
@@ -234,13 +236,21 @@ func (gs *State) GetSystems() []*entities.System {
 	return gs.Systems
 }
 
-// GetSystemsMap returns systems indexed by ID for efficient lookup
+// GetSystemsMap returns systems indexed by ID. The result is cached and
+// rebuilt only when the Systems slice changes length (galaxy generation / load).
 func (gs *State) GetSystemsMap() map[int]*entities.System {
-	systemsMap := make(map[int]*entities.System)
-	for _, system := range gs.Systems {
-		systemsMap[system.ID] = system
+	if gs.systemsMap == nil || len(gs.systemsMap) != len(gs.Systems) {
+		gs.systemsMap = make(map[int]*entities.System, len(gs.Systems))
+		for _, system := range gs.Systems {
+			gs.systemsMap[system.ID] = system
+		}
 	}
-	return systemsMap
+	return gs.systemsMap
+}
+
+// InvalidateSystemsMap forces a rebuild on next GetSystemsMap call.
+func (gs *State) InvalidateSystemsMap() {
+	gs.systemsMap = nil
 }
 
 // GetHyperlanes returns all hyperlane connections
@@ -273,4 +283,5 @@ func (gs *State) Reset() {
 	gs.Market = nil
 	gs.TradeExec = nil
 	gs.Commands = make(chan GameCommand, 64)
+	gs.systemsMap = nil
 }

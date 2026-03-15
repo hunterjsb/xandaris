@@ -17,6 +17,26 @@ import (
 	"github.com/hunterjsb/xandaris/views"
 )
 
+// MessageType categorizes chat feed messages.
+type MessageType int
+
+const (
+	MsgUser      MessageType = iota // Player input
+	MsgAssistant                    // LLM response
+	MsgEvent                        // Game event (trade, build, etc.)
+	MsgSystem                       // System messages (status, errors)
+	MsgAction                       // Agent action results
+)
+
+// ChatMessage is a single entry in the chronological feed.
+type ChatMessage struct {
+	Tick   int64
+	Type   MessageType
+	Sender string
+	Text   string
+	Color  color.RGBA
+}
+
 // CommandBar is a game console / command bar that slides up from the bottom.
 // Triggered by backtick (`). Shows event feed + text input for commands.
 type CommandBar struct {
