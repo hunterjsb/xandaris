@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/views"
@@ -29,4 +30,7 @@ type UIContext interface {
 
 	// Cargo command executor for loading/unloading cargo
 	GetCargoCommander() *game.CargoCommandExecutor
+
+	// Delivery manager for tracking in-flight trades
+	GetDeliveryManager() *economy.DeliveryManager
 }

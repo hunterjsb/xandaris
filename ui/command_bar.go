@@ -287,6 +287,8 @@ func (cb *CommandBar) executeSlashCommand(input string) {
 		cb.showOrders()
 	case lower == "scarcity" || lower == "economy" || lower == "shortages":
 		cb.showScarcity()
+	case lower == "deliveries" || lower == "cargo":
+		cb.showDeliveries()
 	case lower == "power":
 		cb.showPower()
 
@@ -566,6 +568,28 @@ func (cb *CommandBar) showHappiness() {
 		}
 		cb.addFeedMessage(fmt.Sprintf("%s: %s (%.0f%%) → %.1fx productivity",
 			planet.Name, label, planet.Happiness*100, planet.ProductivityBonus), c)
+	}
+}
+
+func (cb *CommandBar) showDeliveries() {
+	state := cb.ctx.GetState()
+	if state == nil {
+		return
+	}
+	// Access delivery manager through the server
+	dm := cb.ctx.GetDeliveryManager()
+	if dm == nil {
+		cb.addFeedMessage("No delivery system", utils.TextSecondary)
+		return
+	}
+	deliveries := dm.GetActiveDeliveries()
+	if len(deliveries) == 0 {
+		cb.addFeedMessage("No active deliveries", utils.TextSecondary)
+		return
+	}
+	for _, d := range deliveries {
+		cb.addFeedMessage(fmt.Sprintf("#%d %s→%s: %d %s (ship %d)",
+			d.ID, d.SellerName, d.BuyerName, d.Quantity, d.Resource, d.ShipID), utils.SystemBlue)
 	}
 }
 

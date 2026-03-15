@@ -44,6 +44,9 @@ func (a *App) GetCommandChannel() chan game.GameCommand {
 func (a *App) GetStandingOrders(player string) []*game.StandingOrder {
 	return a.Server.GetStandingOrders(player)
 }
+func (a *App) GetDeliveryManager() *economy.DeliveryManager {
+	return a.Server.GetDeliveryManager()
+}
 
 // GetSystemsMap returns systems indexed by ID (for UI components)
 func (a *App) GetSystemsMap() map[int]*entities.System {

@@ -28,6 +28,7 @@ type GameStateProvider interface {
 	GetTickInfo() (tick int64, gameTime string, speed string, paused bool)
 	GetCommandChannel() chan game.GameCommand
 	GetStandingOrders(player string) []*game.StandingOrder
+	GetDeliveryManager() *economy.DeliveryManager
 }
 
 // findPlayer returns the player matching the given name, or falls back to the human player.

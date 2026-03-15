@@ -421,6 +421,20 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/deliveries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		dm := p.GetDeliveryManager()
+		if dm == nil {
+			writeJSON(w, APIResponse{OK: true, Data: []interface{}{}})
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: dm.GetActiveDeliveries()})
+	})
+
 	mux.HandleFunc("/api/power", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
