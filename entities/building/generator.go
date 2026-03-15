@@ -15,11 +15,11 @@ type GeneratorGenerator struct{}
 
 func (g *GeneratorGenerator) GetWeight() float64        { return 0.0 }
 func (g *GeneratorGenerator) GetEntityType() entities.EntityType { return entities.EntityTypeBuilding }
-func (g *GeneratorGenerator) GetSubType() string         { return "Generator" }
+func (g *GeneratorGenerator) GetSubType() string         { return entities.BuildingGenerator }
 
 func (g *GeneratorGenerator) Generate(params entities.GenerationParams) entities.Entity {
 	id := params.SystemID*100000 + rand.Intn(10000)
-	gen := entities.NewBuilding(id, "Fuel Generator", "Generator", params.OrbitDistance, params.OrbitAngle,
+	gen := entities.NewBuilding(id, "Fuel Generator", entities.BuildingGenerator, params.OrbitDistance, params.OrbitAngle,
 		color.RGBA{255, 180, 50, 255})
 	gen.AttachmentType = "Planet"
 	gen.BuildCost = 1000

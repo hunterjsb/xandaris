@@ -22,7 +22,7 @@ func (g *RefineryGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *RefineryGenerator) GetSubType() string {
-	return "Refinery"
+	return entities.BuildingRefinery
 }
 
 func (g *RefineryGenerator) Generate(params entities.GenerationParams) entities.Entity {
@@ -44,7 +44,7 @@ func (g *RefineryGenerator) Generate(params entities.GenerationParams) entities.
 	refinery := entities.NewBuilding(
 		id,
 		name,
-		"Refinery",
+		entities.BuildingRefinery,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		refineryColor,

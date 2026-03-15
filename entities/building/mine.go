@@ -23,7 +23,7 @@ func (g *MineGenerator) GetEntityType() entities.EntityType {
 }
 
 func (g *MineGenerator) GetSubType() string {
-	return "Mine"
+	return entities.BuildingMine
 }
 
 func (g *MineGenerator) Generate(params entities.GenerationParams) entities.Entity {
@@ -45,7 +45,7 @@ func (g *MineGenerator) Generate(params entities.GenerationParams) entities.Enti
 	building := entities.NewBuilding(
 		id,
 		name,
-		"Mine",
+		entities.BuildingMine,
 		params.OrbitDistance,
 		params.OrbitAngle,
 		buildingColor,
@@ -61,14 +61,5 @@ func (g *MineGenerator) Generate(params entities.GenerationParams) entities.Enti
 	building.Description = "Extracts resources from deposits. Increases extraction rate."
 	building.SetWorkersRequired(80)
 
-	return building
-}
-
-// CreateMine is a helper function to create a mine on a specific resource
-func CreateMine(resourceID string, owner string, params entities.GenerationParams) *entities.Building {
-	gen := &MineGenerator{}
-	building := gen.Generate(params).(*entities.Building)
-	building.AttachedTo = resourceID
-	building.Owner = owner
 	return building
 }

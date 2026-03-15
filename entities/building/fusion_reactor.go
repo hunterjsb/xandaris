@@ -15,11 +15,11 @@ type FusionReactorGenerator struct{}
 
 func (g *FusionReactorGenerator) GetWeight() float64        { return 0.0 }
 func (g *FusionReactorGenerator) GetEntityType() entities.EntityType { return entities.EntityTypeBuilding }
-func (g *FusionReactorGenerator) GetSubType() string         { return "Fusion Reactor" }
+func (g *FusionReactorGenerator) GetSubType() string         { return entities.BuildingFusionReactor }
 
 func (g *FusionReactorGenerator) Generate(params entities.GenerationParams) entities.Entity {
 	id := params.SystemID*100000 + rand.Intn(10000)
-	reactor := entities.NewBuilding(id, "Fusion Reactor", "Fusion Reactor", params.OrbitDistance, params.OrbitAngle,
+	reactor := entities.NewBuilding(id, "Fusion Reactor", entities.BuildingFusionReactor, params.OrbitDistance, params.OrbitAngle,
 		color.RGBA{100, 220, 255, 255})
 	reactor.AttachmentType = "Planet"
 	reactor.BuildCost = 3000
