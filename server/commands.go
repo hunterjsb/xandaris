@@ -163,10 +163,8 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		Started:        gs.TickManager.GetCurrentTick(),
 	}
 
-	if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
-		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-			cs.AddToQueue(attachmentID, item)
-		}
+	if cs := tickable.GetConstructionSystem(); cs != nil {
+		cs.AddToQueue(attachmentID, item)
 	}
 
 	sendSuccess(cmd, map[string]interface{}{
@@ -243,10 +241,8 @@ func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {
 		Started:        gs.TickManager.GetCurrentTick(),
 	}
 
-	if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
-		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-			cs.AddToQueue(location, item)
-		}
+	if cs := tickable.GetConstructionSystem(); cs != nil {
+		cs.AddToQueue(location, item)
 	}
 
 	sendSuccess(cmd, map[string]interface{}{
@@ -555,14 +551,9 @@ func (gs *GameServer) handleCancelConstructionCommand(cmd game.GameCommand) {
 		return
 	}
 
-	constructionSystem := tickable.GetSystemByName("Construction")
-	if constructionSystem == nil {
+	cs := tickable.GetConstructionSystem()
+	if cs == nil {
 		sendResult(cmd, fmt.Errorf("construction system not found"))
-		return
-	}
-	cs, ok := constructionSystem.(*tickable.ConstructionSystem)
-	if !ok {
-		sendResult(cmd, fmt.Errorf("construction system type error"))
 		return
 	}
 

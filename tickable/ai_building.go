@@ -210,23 +210,21 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 				planet.RemoveStoredResource(entities.ResFuel, 50)
 				planet.RemoveStoredResource(entities.ResRareMetals, 20)
 				location := fmt.Sprintf("planet_%d", planet.GetID())
-				if constructionSystem := GetSystemByName("Construction"); constructionSystem != nil {
-					if cs, ok := constructionSystem.(*ConstructionSystem); ok {
-						item := &ConstructionItem{
-							ID:             fmt.Sprintf("aiship_colony_%s_%d", player.Name, abs.GetContext().GetTick()),
-							Type:           "Ship",
-							Name:           string(entities.ShipTypeColony),
-							Location:       location,
-							Owner:          player.Name,
-							Progress:       0,
-							TotalTicks:     300,
-							RemainingTicks: 300,
-							Cost:           2000,
-							Started:        abs.GetContext().GetTick(),
-						}
-						cs.AddToQueue(location, item)
-						logBuildEvent(game, player.Name, fmt.Sprintf("%s building Colony ship at %s", player.Name, planet.Name))
+				if cs := GetConstructionSystem(); cs != nil {
+					item := &ConstructionItem{
+						ID:             fmt.Sprintf("aiship_colony_%s_%d", player.Name, abs.GetContext().GetTick()),
+						Type:           "Ship",
+						Name:           string(entities.ShipTypeColony),
+						Location:       location,
+						Owner:          player.Name,
+						Progress:       0,
+						TotalTicks:     300,
+						RemainingTicks: 300,
+						Cost:           2000,
+						Started:        abs.GetContext().GetTick(),
 					}
+					cs.AddToQueue(location, item)
+					logBuildEvent(game, player.Name, fmt.Sprintf("%s building Colony ship at %s", player.Name, planet.Name))
 				}
 				return
 			}

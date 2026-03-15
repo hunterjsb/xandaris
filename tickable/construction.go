@@ -395,12 +395,13 @@ func (cs *ConstructionSystem) ClearQueue(location string) {
 	queue.Items = make([]*ConstructionItem, 0)
 }
 
-// PauseConstruction pauses construction at a location (for future use)
-func (cs *ConstructionSystem) PauseConstruction(location string) {
-	// Future implementation: add paused flag to queue
-}
-
-// ResumeConstruction resumes construction at a location (for future use)
-func (cs *ConstructionSystem) ResumeConstruction(location string) {
-	// Future implementation: remove paused flag from queue
+// GetConstructionSystem returns the singleton construction system, or nil if not registered.
+// Use this instead of GetSystemByName("Construction") + type assertion.
+func GetConstructionSystem() *ConstructionSystem {
+	if sys := GetSystemByName("Construction"); sys != nil {
+		if cs, ok := sys.(*ConstructionSystem); ok {
+			return cs
+		}
+	}
+	return nil
 }

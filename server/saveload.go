@@ -54,10 +54,8 @@ func (gs *GameServer) SaveGame(playerName string) error {
 	defer file.Close()
 
 	var constructionQueues map[string][]*tickable.ConstructionItem
-	if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
-		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-			constructionQueues = cs.GetAllQueues()
-		}
+	if cs := tickable.GetConstructionSystem(); cs != nil {
+		constructionQueues = cs.GetAllQueues()
 	}
 
 	saveData := struct {
@@ -110,10 +108,8 @@ func (gs *GameServer) AutoSave(path string) error {
 	}
 
 	var constructionQueues map[string][]*tickable.ConstructionItem
-	if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
-		if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-			constructionQueues = cs.GetAllQueues()
-		}
+	if cs := tickable.GetConstructionSystem(); cs != nil {
+		constructionQueues = cs.GetAllQueues()
 	}
 
 	playerName := "Server"
@@ -240,10 +236,8 @@ func (gs *GameServer) LoadGame(path string) error {
 
 	// Restore construction queues
 	if saveData.ConstructionQueues != nil {
-		if constructionSystem := tickable.GetSystemByName("Construction"); constructionSystem != nil {
-			if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
-				cs.RestoreQueues(saveData.ConstructionQueues)
-			}
+		if cs := tickable.GetConstructionSystem(); cs != nil {
+			cs.RestoreQueues(saveData.ConstructionQueues)
 		}
 	}
 
