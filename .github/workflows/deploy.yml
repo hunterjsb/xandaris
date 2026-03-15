@@ -132,10 +132,14 @@ jobs:
               const params = new URLSearchParams(hash);
               const key = params.get('key');
               if (key) {
+                const name = params.get('name') || '';
                 localStorage.setItem('xn_api_key', key);
-                localStorage.setItem('xn_name', params.get('name') || '');
+                localStorage.setItem('xn_name', name);
                 localStorage.setItem('xn_player_id', params.get('player_id') || '');
-                history.replaceState(null, '', location.pathname);
+                // Auto-redirect to game after fresh OAuth login
+                const playParams = new URLSearchParams({server:'https://api.xandaris.space',player:name,key:key});
+                location.href = 'play.html?' + playParams.toString();
+                return;
               }
             }
           })();

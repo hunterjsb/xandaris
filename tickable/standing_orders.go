@@ -83,7 +83,7 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 			continue
 		}
 
-		planet := findPlanetByID(player, order.PlanetID)
+		planet := findPlayerPlanetByID(player, order.PlanetID)
 		if planet == nil {
 			continue
 		}
@@ -107,7 +107,7 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 	}
 }
 
-func findPlanetByID(player *entities.Player, planetID int) *entities.Planet {
+func findPlayerPlanetByID(player *entities.Player, planetID int) *entities.Planet {
 	for _, p := range player.OwnedPlanets {
 		if p != nil && p.GetID() == planetID {
 			return p
