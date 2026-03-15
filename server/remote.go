@@ -169,28 +169,29 @@ func (rs *RemoteSync) syncPlayer() {
 
 	hp.Credits = resp.Data.Credits
 
-	// Rebuild OwnedPlanets from server data
-	// Create or update planet objects to match what the server says we own
-	newPlanets := make([]*entities.Planet, 0, len(resp.Data.Planets))
-
-	for _, rp := range resp.Data.Planets {
-		// Try to find existing local planet by server ID
-		var planet *entities.Planet
-		for _, lp := range hp.OwnedPlanets {
-			if lp != nil && lp.GetID() == rp.ID {
-				planet = lp
-				break
-			}
+	// Update OwnedPlanets in-place — create new ones only if needed
+	// Build index of existing planets by ID for fast lookup
+	existing := make(map[int]*entities.Planet)
+	for _, lp := range hp.OwnedPlanets {
+		if lp != nil {
+			existing[lp.GetID()] = lp
 		}
+	}
 
-		// Create a new planet object if not found locally
-		if planet == nil {
+	changed := false
+	for _, rp := range resp.Data.Planets {
+		planet, found := existing[rp.ID]
+		if !found {
+			// New planet — create it
 			planet = entities.NewPlanet(rp.ID, rp.Name, rp.PlanetType, 0, 0, color.RGBA{150, 150, 180, 255})
 			planet.Owner = rp.Owner
 			planet.Habitability = rp.Habitability
+			hp.OwnedPlanets = append(hp.OwnedPlanets, planet)
+			changed = true
 		}
+		delete(existing, rp.ID)
 
-		// Update all fields from server
+		// Update fields in-place (no new object allocation)
 		planet.Name = rp.Name
 		planet.Population = rp.Population
 		planet.Happiness = rp.Happiness
@@ -198,7 +199,6 @@ func (rs *RemoteSync) syncPlayer() {
 		planet.PowerGenerated = rp.PowerGenerated
 		planet.PowerConsumed = rp.PowerConsumed
 
-		// Sync stored resources
 		for resType, amount := range rp.StoredResources {
 			if s, ok := planet.StoredResources[resType]; ok && s != nil {
 				s.Amount = amount
@@ -209,14 +209,26 @@ func (rs *RemoteSync) syncPlayer() {
 				}
 			}
 		}
-
-		newPlanets = append(newPlanets, planet)
 	}
 
-	hp.OwnedPlanets = newPlanets
-	if len(newPlanets) > 0 && hp.HomePlanet == nil {
-		hp.HomePlanet = newPlanets[0]
+	// Remove planets we no longer own
+	if len(existing) > 0 {
+		filtered := make([]*entities.Planet, 0, len(hp.OwnedPlanets))
+		for _, lp := range hp.OwnedPlanets {
+			if lp != nil {
+				if _, removed := existing[lp.GetID()]; !removed {
+					filtered = append(filtered, lp)
+				}
+			}
+		}
+		hp.OwnedPlanets = filtered
+		changed = true
 	}
+
+	if hp.HomePlanet == nil && len(hp.OwnedPlanets) > 0 {
+		hp.HomePlanet = hp.OwnedPlanets[0]
+	}
+	_ = changed
 }
 
 // ForwardTrade sends a trade to the remote server instead of local.
