@@ -604,6 +604,25 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/market/prices", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		market := p.GetMarket()
+		if market == nil {
+			writeJSON(w, APIResponse{OK: true, Data: map[string][]float64{}})
+			return
+		}
+		snap := market.GetSnapshot()
+		result := make(map[string][]float64)
+		for name, rm := range snap.Resources {
+			result[name] = rm.PriceHistory
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
+	})
+
 	mux.HandleFunc("/api/events", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")

@@ -89,9 +89,18 @@ func (cce *CargoCommandExecutor) UnloadCargo(ship *entities.Ship, planet *entiti
 		return 0, fmt.Errorf("ship %s is not orbiting %s", ship.Name, planet.Name)
 	}
 
-	// Verify ownership
+	// Allow unloading at owned planets OR any planet with a Trading Post (foreign trade)
 	if planet.Owner != ship.Owner {
-		return 0, fmt.Errorf("planet %s is not owned by %s", planet.Name, ship.Owner)
+		hasTradingPost := false
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok && b.BuildingType == "Trading Post" && b.IsOperational {
+				hasTradingPost = true
+				break
+			}
+		}
+		if !hasTradingPost {
+			return 0, fmt.Errorf("planet %s has no Trading Post for foreign trade", planet.Name)
+		}
 	}
 
 	// Check ship has the resource

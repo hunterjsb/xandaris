@@ -162,11 +162,10 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 				}
 				als.loadSurplus(ship, planet, cargoOp)
 				if ship.GetTotalCargo() > 0 && hasMover && hasJourney {
-					// Pick a connected system and go there
+					// Pick the best connected system based on demand
 					connected := mover.GetConnectedSystems(ship.CurrentSystem)
-					if len(connected) > 0 {
-						// Pick the first connected system
-						target := connected[0]
+					target := als.pickBestTradeTarget(connected, ship, systems)
+					if target >= 0 {
 						if journeyer.StartShipJourney(ship, target) {
 							fmt.Printf("[AILogistics] %s dispatched %s to SYS-%d with cargo\n",
 								player.Name, ship.Name, target)
@@ -175,7 +174,26 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 				}
 			}
 		} else {
-			// At a foreign system — head home if enough fuel for the trip
+			// At a foreign system — try to sell cargo at a Trading Post, then head home
+			if ship.GetTotalCargo() > 0 {
+				// Find a planet with a Trading Post in this system to unload at
+				for _, sys := range systems {
+					if sys.ID != ship.CurrentSystem {
+						continue
+					}
+					for _, e := range sys.Entities {
+						if p, ok := e.(*entities.Planet); ok && p.Owner != "" {
+							// Try unloading at any planet (Trading Post check is in UnloadCargo)
+							als.unloadAllCargo(ship, p, cargoOp)
+							if ship.GetTotalCargo() == 0 {
+								break
+							}
+						}
+					}
+					break
+				}
+			}
+			// Head home if enough fuel
 			fuelForReturn := ship.FuelPerJump + int(ship.FuelPerTick*120)
 			if hasJourney && ship.CurrentFuel >= fuelForReturn {
 				homeSys := als.findHomeSystem(player, systems)
@@ -251,6 +269,61 @@ func (als *AILogisticsSystem) loadSurplus(ship *entities.Ship, planet *entities.
 	if err == nil && loaded > 0 {
 		fmt.Printf("[AILogistics] %s loaded %d %s from %s\n", ship.Name, loaded, bestRes, planet.Name)
 	}
+}
+
+// pickBestTradeTarget picks the connected system with the highest demand (lowest stock).
+// Prefers systems with owned planets (can unload) or planets with Trading Posts.
+func (als *AILogisticsSystem) pickBestTradeTarget(connected []int, ship *entities.Ship, systems []*entities.System) int {
+	if len(connected) == 0 {
+		return -1
+	}
+	bestSys := connected[0]
+	bestScore := -1
+
+	for _, sysID := range connected {
+		for _, sys := range systems {
+			if sys.ID != sysID {
+				continue
+			}
+			score := 0
+			for _, e := range sys.Entities {
+				p, ok := e.(*entities.Planet)
+				if !ok {
+					continue
+				}
+				// Prefer systems with owned planets (easy unload + refuel)
+				if p.Owner == ship.Owner {
+					score += 100
+				}
+				// Prefer systems with Trading Posts (can trade there)
+				for _, be := range p.Buildings {
+					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Trading Post" && b.IsOperational {
+						score += 50
+						break
+					}
+				}
+				// Prefer systems with low stock (high demand)
+				totalStock := 0
+				for _, s := range p.StoredResources {
+					if s != nil {
+						totalStock += s.Amount
+					}
+				}
+				if totalStock < 500 {
+					score += 30 // low stock = needs goods
+				}
+				// Prefer populated planets (consumers)
+				if p.Population > 1000 {
+					score += 20
+				}
+			}
+			if score > bestScore {
+				bestScore = score
+				bestSys = sysID
+			}
+		}
+	}
+	return bestSys
 }
 
 // findUnclaimedHabitable finds any unclaimed habitable planet in a system.
