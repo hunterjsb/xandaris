@@ -104,6 +104,7 @@ func handleGetGalaxy(p GameStateProvider) interface{} {
 		starType := ""
 		planets := 0
 		owner := ""
+		var totalPop int64
 		resSet := make(map[string]bool)
 		for _, e := range sys.Entities {
 			switch v := e.(type) {
@@ -111,6 +112,7 @@ func handleGetGalaxy(p GameStateProvider) interface{} {
 				starType = v.StarType
 			case *entities.Planet:
 				planets++
+				totalPop += v.Population
 				if v.Owner != "" && owner == "" {
 					owner = v.Owner
 				}
@@ -136,6 +138,9 @@ func handleGetGalaxy(p GameStateProvider) interface{} {
 		}
 		if owner != "" {
 			summary.Owner = owner
+		}
+		if totalPop > 0 {
+			summary.Population = totalPop
 		}
 		if len(resources) > 0 {
 			summary.Resources = resources
