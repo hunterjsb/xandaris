@@ -197,6 +197,12 @@ func (cb *CommandBar) refreshFeed() {
 		if string(ev.Type) == "event" {
 			c = utils.SystemOrange
 		}
+		if ev.Type == game.EventAlert {
+			c = utils.SystemRed
+		}
+		if ev.Type == game.EventJoin {
+			c = utils.SystemPurple
+		}
 
 		text := fmt.Sprintf("[%s] %s", ev.Time, ev.Message)
 		if len(text) > 100 {

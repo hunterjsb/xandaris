@@ -16,6 +16,8 @@ const (
 	EventUpgrade    EventType = "upgrade"
 	EventShipBuild  EventType = "ship_build"
 	EventLogistics  EventType = "logistics"
+	EventAlert      EventType = "alert"
+	EventJoin       EventType = "join"
 )
 
 // GameEvent represents something that happened in the game.
