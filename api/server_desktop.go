@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ var (
 	serverStarted  atomic.Bool
 	providerMu     sync.RWMutex
 	activeProvider GameStateProvider
+	apiKey         string // if set, POST endpoints require X-API-Key header
 )
 
 func getProvider() GameStateProvider {
@@ -35,6 +37,12 @@ func StartServer(provider GameStateProvider) {
 	providerMu.Lock()
 	activeProvider = provider
 	providerMu.Unlock()
+
+	// Load API key from environment
+	apiKey = os.Getenv("XANDARIS_API_KEY")
+	if apiKey != "" {
+		fmt.Println("[API] API key auth enabled for POST endpoints")
+	}
 
 	if serverStarted.Swap(true) {
 		fmt.Println("[API] Provider updated (server already running)")
@@ -928,9 +936,30 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"action": "save_queued"}})
 	})
 
+	// Wrap mux with auth + CORS middleware
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// CORS
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Auth for POST
+		if apiKey != "" && r.Method == http.MethodPost {
+			key := r.Header.Get("X-API-Key")
+			if key != apiKey {
+				writeErr(w, http.StatusUnauthorized, "invalid or missing X-API-Key")
+				return
+			}
+		}
+		mux.ServeHTTP(w, r)
+	})
+
 	go func() {
 		fmt.Println("[API] Starting REST server on :8080")
-		if err := http.ListenAndServe(":8080", mux); err != nil {
+		if err := http.ListenAndServe(":8080", handler); err != nil {
 			fmt.Printf("[API] Server error: %v\n", err)
 		}
 	}()

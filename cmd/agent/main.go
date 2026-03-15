@@ -127,6 +127,7 @@ var tools = []openai.Tool{
 }
 
 var serverURL string
+var gameAPIKey string
 
 func callAPI(method, endpoint string, body string) (string, error) {
 	var req *http.Request
@@ -138,6 +139,9 @@ func callAPI(method, endpoint string, body string) (string, error) {
 	} else {
 		req, err = http.NewRequest("POST", url, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+		if gameAPIKey != "" {
+			req.Header.Set("X-API-Key", gameAPIKey)
+		}
 	}
 	if err != nil {
 		return "", err
@@ -256,11 +260,13 @@ func main() {
 	apiKey := flag.String("key", os.Getenv("OPENROUTER_API_KEY"), "OpenRouter API key")
 	model := flag.String("model", "z-ai/glm-4.7-flash", "Model to use")
 	server := flag.String("server", "http://localhost:8080", "Game server URL")
+	gameKey := flag.String("game-key", os.Getenv("XANDARIS_API_KEY"), "Game server API key for POST endpoints")
 	turns := flag.Int("turns", 10, "Number of decision turns")
 	interval := flag.Duration("interval", 30*time.Second, "Time between turns")
 	flag.Parse()
 
 	serverURL = *server
+	gameAPIKey = *gameKey
 
 	if *apiKey == "" {
 		log.Fatal("Set OPENROUTER_API_KEY or use -key flag")
