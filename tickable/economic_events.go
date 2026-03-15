@@ -93,7 +93,7 @@ func (ees *EconomicEventSystem) OnTick(tick int64) {
 }
 
 func (ees *EconomicEventSystem) generateEvent(planet *entities.Planet, player *entities.Player) *economicEvent {
-	resources := []string{"Iron", "Water", "Oil", "Rare Metals", "Helium-3", "Fuel", "Electronics"}
+	resources := []string{entities.ResIron, entities.ResWater, entities.ResOil, entities.ResRareMetals, entities.ResHelium3, entities.ResFuel, entities.ResElectronics}
 	res := resources[rand.Intn(len(resources))]
 
 	roll := rand.Intn(100)

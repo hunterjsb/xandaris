@@ -371,7 +371,7 @@ func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
 		amount = needed
 	}
 
-	available := planet.GetStoredAmount("Fuel")
+	available := planet.GetStoredAmount(entities.ResFuel)
 	if available <= 0 {
 		sendResult(cmd, fmt.Errorf("no Fuel on planet"))
 		return
@@ -380,7 +380,7 @@ func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
 		amount = available
 	}
 
-	planet.RemoveStoredResource("Fuel", amount)
+	planet.RemoveStoredResource(entities.ResFuel, amount)
 	ship.Refuel(amount)
 
 	sendSuccess(cmd, map[string]interface{}{
@@ -479,8 +479,8 @@ func (gs *GameServer) handleRegisterPlayerCommand(cmd game.GameCommand) {
 
 	// Extra starting resources
 	if newPlayer.HomePlanet != nil {
-		newPlayer.HomePlanet.AddStoredResource("Fuel", 200)
-		newPlayer.HomePlanet.AddStoredResource("Oil", 150)
+		newPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
+		newPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
 	}
 
 	gs.State.Players = append(gs.State.Players, newPlayer)

@@ -140,11 +140,6 @@ func (b *BaseEntity) GetHP() (int, int) {
 	return 0, 0
 }
 
-// ColorFromRGBA creates a color.RGBA from individual components
-func ColorFromRGBA(r, g, b, a uint8) color.RGBA {
-	return color.RGBA{R: r, G: g, B: b, A: a}
-}
-
 // Attachment system methods
 
 // AttachEntity attaches a child entity to this entity

@@ -147,7 +147,7 @@ func processAIPlayer(executor *TradeExecutor, player *entities.Player, allPlayer
 
 		// Also try to buy resources that aren't in storage yet
 		// (consumption creates demand for resources the planet doesn't produce)
-		for _, resType := range []string{"Water", "Iron", "Oil", "Fuel"} {
+		for _, resType := range []string{entities.ResWater, entities.ResIron, entities.ResOil, entities.ResFuel} {
 			if planet.GetStoredAmount(resType) > 0 {
 				continue // Already in storage, handled above
 			}

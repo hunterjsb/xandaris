@@ -2,7 +2,6 @@ package tickable
 
 import (
 	"fmt"
-	"image/color"
 	"math"
 	"math/rand"
 
@@ -75,11 +74,11 @@ var surveyableResources = []struct {
 	resType string
 	weight  int
 }{
-	{"Iron", 30},
-	{"Water", 25},
-	{"Oil", 20},
-	{"Rare Metals", 10},
-	{"Helium-3", 5},
+	{entities.ResIron, 30},
+	{entities.ResWater, 25},
+	{entities.ResOil, 20},
+	{entities.ResRareMetals, 10},
+	{entities.ResHelium3, 5},
 }
 
 func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entities.Player, ship *entities.Ship, logger GameProvider) {
@@ -107,7 +106,7 @@ func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entitie
 		}
 		roll := rand.Intn(totalWeight)
 		cumulative := 0
-		selectedType := "Iron"
+		selectedType := entities.ResIron
 		for _, r := range surveyableResources {
 			cumulative += r.weight
 			if roll < cumulative {
@@ -139,7 +138,7 @@ func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entitie
 				Name:         fmt.Sprintf("%s Deposit", selectedType),
 				Type:         entities.EntityTypeResource,
 				SubType:      selectedType,
-				Color:        resourceColor(selectedType),
+				Color:        entities.ResourceColor(selectedType),
 				OrbitDistance: 8 + rand.Float64()*4,
 				OrbitAngle:   nodePos,
 			},
@@ -164,32 +163,15 @@ func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entitie
 	}
 }
 
-func resourceColor(resType string) color.RGBA {
-	switch resType {
-	case "Iron":
-		return color.RGBA{180, 120, 80, 255}
-	case "Water":
-		return color.RGBA{80, 140, 200, 255}
-	case "Oil":
-		return color.RGBA{60, 60, 60, 255}
-	case "Rare Metals":
-		return color.RGBA{200, 180, 100, 255}
-	case "Helium-3":
-		return color.RGBA{180, 220, 255, 255}
-	default:
-		return color.RGBA{150, 150, 150, 255}
-	}
-}
-
 func resourceRarity(resType string) string {
 	switch resType {
-	case "Iron", "Water":
+	case entities.ResIron, entities.ResWater:
 		return "Common"
-	case "Oil":
+	case entities.ResOil:
 		return "Uncommon"
-	case "Rare Metals":
+	case entities.ResRareMetals:
 		return "Rare"
-	case "Helium-3":
+	case entities.ResHelium3:
 		return "Very Rare"
 	default:
 		return "Common"

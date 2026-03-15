@@ -74,8 +74,8 @@ func (gs *GameServer) NewGame(playerName string) error {
 
 	// Extra starting resources for human player — enough for early infrastructure
 	if gs.State.HumanPlayer.HomePlanet != nil {
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource("Fuel", 200)
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource("Oil", 150)
+		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
+		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
 	}
 
 	// Create economy
@@ -135,8 +135,8 @@ func (gs *GameServer) reconcileRegisteredPlayers() {
 
 		game.PrepareHomeworld(newPlayer, true) // auto-mines + refinery + generator
 		if newPlayer.HomePlanet != nil {
-			newPlayer.HomePlanet.AddStoredResource("Fuel", 200)
-			newPlayer.HomePlanet.AddStoredResource("Oil", 150)
+			newPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
+			newPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
 		}
 
 		gs.State.Players = append(gs.State.Players, newPlayer)
@@ -253,8 +253,8 @@ func (gs *GameServer) NewGameWithSeed(playerName string, seed int64) error {
 	game.PrepareHomeworld(gs.State.HumanPlayer, false)
 
 	if gs.State.HumanPlayer.HomePlanet != nil {
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource("Fuel", 200)
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource("Oil", 150)
+		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
+		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
 	}
 
 	gs.State.Market = economy.NewMarket()
