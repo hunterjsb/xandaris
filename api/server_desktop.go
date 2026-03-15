@@ -1765,13 +1765,16 @@ td{padding:3px 6px}
 <table><thead><tr><th>Resource</th><th>Buy</th><th>Sell</th><th>Base</th><th>Ratio</th><th>Supply</th><th>Scarcity</th><th>Trend</th></tr></thead><tbody id="m"></tbody></table></div>
 <div class="panel"><h2>Galaxy Flows</h2>
 <table><thead><tr><th>Resource</th><th>Prod</th><th>Cons</th><th>Net</th></tr></thead><tbody id="f"></tbody></table></div>
+<div class="panel wide"><h2>Planets &amp; Power</h2>
+<table><thead><tr><th>Owner</th><th>Planet</th><th>Power</th><th>Status</th></tr></thead><tbody id="pl"></tbody></table></div>
+<div class="panel"><h2>Ships</h2><div id="sh"></div></div>
 </div>
 <div id="s" class="st">Loading...</div>
 <script>
 const B=location.origin,blocks='\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588';
 function spark(h){if(!h||h.length<3)return'';const mn=Math.min(...h),mx=Math.max(...h),rng=mx-mn||1;return'<span class="spark">'+h.slice(-20).map(v=>blocks[Math.min(7,Math.max(0,Math.round((v-mn)/rng*7)))]).join('')+'</span>'}
 async function R(){try{
-const[e,p,f,g,lb,pw,ev]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=12'].map(u=>fetch(B+u).then(r=>r.json())));
+const[e,p,f,g,lb,pw,ev,sh]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=12','/api/ships'].map(u=>fetch(B+u).then(r=>r.json())));
 const d=g.data;
 document.getElementById('top').innerHTML=[
 ['Tick',d.tick],['Time',d.game_time],['Speed',d.speed+(d.paused?' \u23F8':'')],
@@ -1796,6 +1799,16 @@ const a=new Set([...Object.keys(f.data.production),...Object.keys(f.data.consump
 document.getElementById('f').innerHTML=[...a].sort().map(r=>{
 const pr=(f.data.production[r]||0).toFixed(1),co=(f.data.consumption[r]||0).toFixed(1),n=(f.data.net_flow[r]||0).toFixed(1);
 return'<tr><td>'+r+'</td><td class="g">+'+pr+'</td><td class="r">-'+co+'</td><td class="'+(n>0?'g':n<-1?'r':'')+'">'+((n>0?'+':'')+n)+'</td></tr>'}).join('');
+// Planets (from power endpoint which has per-planet data)
+document.getElementById('pl').innerHTML=(pw.data||[]).map(x=>{
+const hc=x.ratio>0.8?'g':x.ratio>0.5?'o':'r';
+return'<tr><td>'+x.owner+'</td><td>'+x.planet_name+'</td><td>'+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+'</td><td class="'+hc+'">'+(x.ratio*100).toFixed(0)+'%</td></tr>'}).join('');
+// Ships
+const shipsByOwner={};(sh.data||[]).forEach(s=>{if(!shipsByOwner[s.owner])shipsByOwner[s.owner]=[];shipsByOwner[s.owner].push(s)});
+document.getElementById('sh').innerHTML=Object.entries(shipsByOwner).sort().map(([owner,ships])=>{
+const types={};ships.forEach(s=>{types[s.type]=(types[s.type]||0)+1});
+const moving=ships.filter(s=>s.status==='Moving').length;
+return'<div class="row"><span>'+owner+'</span><span class="d">'+Object.entries(types).map(([t,n])=>n+'x'+t).join(' ')+(moving?' ('+moving+' moving)':'')+'</span></div>'}).join('');
 document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
 }catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
