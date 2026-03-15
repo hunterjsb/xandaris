@@ -84,8 +84,8 @@ func computePower(planet *entities.Planet) {
 		// Power generation
 		switch b.BuildingType {
 		case "Generator":
-			// Burns 3 Fuel per interval → 50 MW
-			fuelNeeded := int(3.0 * levelMult)
+			// Burns 2 Fuel per interval → 50 MW
+			fuelNeeded := int(2.0 * levelMult)
 			if planet.GetStoredAmount("Fuel") >= fuelNeeded {
 				planet.RemoveStoredResource("Fuel", fuelNeeded)
 				generated += 50.0 * levelMult * staffing
