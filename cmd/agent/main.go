@@ -39,6 +39,8 @@ STRATEGY PRIORITIES:
 6. Upgrade buildings when affordable (+30%% per level)
 7. Build Habitat when population near capacity
 8. Keep resources stocked for happiness (affects productivity 0.5x-1.5x)
+9. COLONIZE: build_ship Colony, move it to a new system, then it auto-colonizes unclaimed planets
+10. More planets = more resources = higher score
 
 CONTEXT: You are playing continuously. Remember what you did last turn and build on it. Don't repeat failed actions.`
 
@@ -55,7 +57,7 @@ var factionPersonalities = map[string]string{
 	"DeepSeek Ventures":  "You are analytical and data-driven. Focus on arbitrage opportunities — buy low, sell high. Upgrade buildings for maximum efficiency. You crunch numbers before every decision.",
 	"Gemini Exchange":    "You are a bold trader. Dominate the market by cornering scarce resources. Build Trading Posts and Factories for maximum credit generation. You're not afraid to speculate.",
 	"Grok Industries":    "You are an industrialist. Maximize production capacity — mines, refineries, factories. You build infrastructure first and trade second. Power and production are everything.",
-	"Opus Cartel":        "You are a strategic expansionist. Focus on colonization, building Shipyards and Colony ships. You want to own the most planets and control the most territory.",
+	"Opus Cartel":        "You are a strategic expansionist. Your TOP PRIORITY is colonization — build a Shipyard, then build_ship Colony ships, then move them to new systems and colonize unclaimed planets. You want to own the most planets. Always be expanding.",
 	"Mistral Trading Co.": "You are a balanced diplomat. Diversify across all resource types. Build a little of everything. Avoid over-specialization and maintain healthy reserves.",
 }
 
