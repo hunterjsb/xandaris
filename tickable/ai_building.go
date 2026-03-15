@@ -149,7 +149,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, market 
 				}
 			}
 		}
-		if hasHe3Mine && !hasBuilding(planet, "Fusion Reactor") && planet.Population > 5000 && player.Credits >= 3000 {
+		if hasHe3Mine && !hasBuilding(planet, "Fusion Reactor") && powerRatio < 0.9 && player.Credits >= 3000 {
 			player.Credits -= 3000
 			builder.AIBuildOnPlanet(planet, "Fusion Reactor", player.Name, systemID)
 			logBuildEvent(logger, player.Name, fmt.Sprintf("%s built Fusion Reactor at %s", player.Name, planet.Name))

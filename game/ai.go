@@ -87,9 +87,10 @@ func PrepareHomeworld(player *entities.Player, buildMines bool) {
 		BuildMinesOnResources(planet, player.Name, systemID)
 	}
 
-	// Give AI a starting refinery so they produce Fuel
+	// Give AI a starting refinery so they produce Fuel + a generator for power
 	if buildMines {
 		AddBuildingToPlanet(planet, "Refinery", player.Name, systemID)
+		AddBuildingToPlanet(planet, "Generator", player.Name, systemID)
 	}
 
 	// Give non-human players a starting cargo ship for logistics
