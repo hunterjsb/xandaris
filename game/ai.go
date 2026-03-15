@@ -77,6 +77,9 @@ func PrepareHomeworld(player *entities.Player, buildMines bool) {
 		AddTradingPostToPlanet(planet, player.Name, systemID)
 	}
 
+	// Ensure home planet has Rare Metals for Factory production chain
+	EnsureResourceDeposit(planet, "Rare Metals", player.Name)
+
 	SeedInitialCommodities(planet, player.Name)
 
 	// Build mines on all owned resources (AI gets productive immediately)
@@ -184,6 +187,38 @@ func GetBuildingCost(buildingType string) int {
 // AddTradingPostToPlanet creates and attaches a Trading Post to a planet.
 func AddTradingPostToPlanet(planet *entities.Planet, owner string, systemID int) {
 	AddBuildingToPlanet(planet, "Trading Post", owner, systemID)
+}
+
+// EnsureResourceDeposit adds a resource deposit to a planet if it doesn't have one of that type.
+func EnsureResourceDeposit(planet *entities.Planet, resType string, owner string) {
+	for _, res := range planet.Resources {
+		if r, ok := res.(*entities.Resource); ok && r.ResourceType == resType {
+			return // Already has this type
+		}
+	}
+
+	// Create a new deposit
+	deposit := &entities.Resource{
+		BaseEntity: entities.BaseEntity{
+			ID:           rand.Intn(100000) + 900000,
+			Name:         fmt.Sprintf("%s Deposit", resType),
+			Type:         entities.EntityTypeResource,
+			SubType:      resType,
+			Color:        entities.ResourceColor(resType),
+			OrbitDistance: 6 + rand.Float64()*4,
+			OrbitAngle:   rand.Float64() * 2 * math.Pi,
+		},
+		ResourceType:   resType,
+		Abundance:      40 + rand.Intn(30),
+		ExtractionRate: math.Round((0.5+rand.Float64()*0.5)*10) / 10,
+		Rarity:         "Uncommon",
+		Size:           3,
+		Quality:        50 + rand.Intn(40),
+		Owner:          owner,
+		NodePosition:   rand.Float64() * 2 * math.Pi,
+	}
+
+	planet.Resources = append(planet.Resources, deposit)
 }
 
 // AddBuildingToPlanet creates and attaches a building of the given type to a planet.

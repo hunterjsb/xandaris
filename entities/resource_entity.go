@@ -19,6 +19,24 @@ type Resource struct {
 	NodePosition   float64 // Fixed angle position on planet surface (0 to 2π radians)
 }
 
+// ResourceColor returns the default color for a resource type.
+func ResourceColor(resType string) color.RGBA {
+	switch resType {
+	case "Iron":
+		return color.RGBA{180, 120, 80, 255}
+	case "Water":
+		return color.RGBA{80, 140, 200, 255}
+	case "Oil":
+		return color.RGBA{60, 60, 60, 255}
+	case "Rare Metals":
+		return color.RGBA{200, 180, 100, 255}
+	case "Helium-3":
+		return color.RGBA{180, 220, 255, 255}
+	default:
+		return color.RGBA{150, 150, 150, 255}
+	}
+}
+
 // NewResource creates a new resource entity
 func NewResource(id int, name, resourceType string, orbitDistance, orbitAngle float64, c color.RGBA) *Resource {
 	return &Resource{
