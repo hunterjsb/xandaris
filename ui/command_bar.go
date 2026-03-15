@@ -19,7 +19,8 @@ type CommandBar struct {
 	input        string
 	history      []string // command history
 	historyIdx   int
-	feedMessages []feedMessage
+	userMessages []feedMessage // command output (persists until cleared)
+	feedMessages []feedMessage // combined display: user msgs + events
 	maxFeed      int
 	screenWidth  int
 	screenHeight int
@@ -50,6 +51,7 @@ func (cb *CommandBar) Toggle() {
 	cb.isOpen = !cb.isOpen
 	if cb.isOpen {
 		cb.input = ""
+		cb.userMessages = nil // Clear old command output
 		cb.refreshFeed()
 	}
 }
@@ -157,16 +159,28 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	views.DrawText(screen, inputText, barX+12, inputY, utils.Highlight)
 }
 
-// refreshFeed loads recent events into the feed display.
+// refreshFeed rebuilds the display by merging user messages (top) with recent events.
 func (cb *CommandBar) refreshFeed() {
+	// Start with user messages (command output)
+	cb.feedMessages = make([]feedMessage, 0, cb.maxFeed)
+	for _, msg := range cb.userMessages {
+		if len(cb.feedMessages) >= cb.maxFeed {
+			break
+		}
+		cb.feedMessages = append(cb.feedMessages, msg)
+	}
+
+	// Fill remaining space with event log entries
 	el := cb.ctx.GetEventLog()
 	if el == nil {
 		return
 	}
+	remaining := cb.maxFeed - len(cb.feedMessages)
+	if remaining <= 0 {
+		return
+	}
 
-	events := el.Recent(cb.maxFeed)
-	cb.feedMessages = make([]feedMessage, 0, len(events))
-
+	events := el.Recent(remaining)
 	for _, ev := range events {
 		c := utils.TextSecondary
 		switch game.EventType(ev.Type) {
@@ -177,7 +191,6 @@ func (cb *CommandBar) refreshFeed() {
 		case game.EventColonize:
 			c = utils.SystemPurple
 		}
-		// Check for "event" type (economic events)
 		if string(ev.Type) == "event" {
 			c = utils.SystemOrange
 		}
@@ -254,10 +267,12 @@ func (cb *CommandBar) executeCommand(input string) {
 }
 
 func (cb *CommandBar) addFeedMessage(text string, c color.RGBA) {
-	cb.feedMessages = append([]feedMessage{{Text: text, Color: c}}, cb.feedMessages...)
-	if len(cb.feedMessages) > cb.maxFeed {
-		cb.feedMessages = cb.feedMessages[:cb.maxFeed]
+	cb.userMessages = append([]feedMessage{{Text: text, Color: c}}, cb.userMessages...)
+	if len(cb.userMessages) > cb.maxFeed {
+		cb.userMessages = cb.userMessages[:cb.maxFeed]
 	}
+	// Immediately rebuild display
+	cb.refreshFeed()
 }
 
 func (cb *CommandBar) navigateHome() {
