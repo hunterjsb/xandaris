@@ -17,12 +17,12 @@ const (
 
 var (
 	AIPlayerNames = []string{
-		"Orion Exchange",
-		"Lyra Cartel",
-		"Helios Commodities",
-		"Ceres Brokers",
-		"Nova Frontier Co.",
-		"Zenith Trade League",
+		"Llama Logistics",      // Meta Llama
+		"DeepSeek Ventures",    // DeepSeek
+		"Gemini Exchange",      // Google Gemini
+		"Grok Industries",      // xAI Grok
+		"Opus Cartel",          // Anthropic Claude
+		"Mistral Trading Co.",  // Mistral AI
 	}
 )
 
