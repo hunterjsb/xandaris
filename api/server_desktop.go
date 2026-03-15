@@ -1028,10 +1028,14 @@ a{color:#446}
 <p style="font-size:10px;color:#334;margin-top:4px"><a href="/data">Data View</a> · <a href="/api/game" target="_blank">API</a> · <a href="https://github.com/hunterjsb/xandaris" target="_blank">GitHub</a></p>
 </div>
 <div id="tooltip"></div>
+<div id="detail" style="display:none;position:fixed;bottom:10px;left:10px;background:rgba(8,12,24,0.95);border:1px solid #1a2040;border-radius:8px;padding:14px;color:#b0b8c8;font-size:12px;width:320px;max-height:50vh;overflow-y:auto;backdrop-filter:blur(8px)">
+<div style="display:flex;justify-content:space-between"><span id="dtitle" style="color:#7fdbca;font-size:14px"></span><span onclick="selected=null;this.parentElement.parentElement.style.display='none'" style="cursor:pointer;color:#556">✕</span></div>
+<div id="dbody" style="margin-top:8px"></div>
+</div>
 <div id="status">Connecting...</div>
 <script>
 const B=location.origin,C=document.getElementById('c'),X=C.getContext('2d');
-let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null,t=0;
+let W,H,systems=[],ships=[],players=[],economy={},flows={},mx=0,my=0,hover=null,selected=null,detail=null,t=0;
 const COLORS={Human:'#4caf50','Orion Exchange':'#ff9800','Lyra Cartel':'#e84040','Helios Commodities':'#8bc34a','Ceres Brokers':'#ffca28','Nova Frontier Co.':'#ab47bc',Server:'#4caf50'};
 // Background stars
 let stars=[];
@@ -1040,6 +1044,18 @@ initStars();
 function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
 addEventListener('resize',()=>{resize();initStars()});resize();
 C.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
+C.addEventListener('click',e=>{
+if(hover){selected=hover;loadDetail(hover.id)}else{selected=null;document.getElementById('detail').style.display='none'}});
+// Zoom
+let zoom=1,panX=0,panY=0,dragging=false,dragX=0,dragY=0;
+C.addEventListener('wheel',e=>{
+const oz=zoom;zoom=Math.max(0.5,Math.min(3,zoom*(e.deltaY>0?0.9:1.1)));
+// Zoom toward cursor
+panX+=(mx-W/2)*(1-zoom/oz);panY+=(my-H/2)*(1-zoom/oz);
+e.preventDefault()},{passive:false});
+C.addEventListener('mousedown',e=>{if(e.button===0&&!hover){dragging=true;dragX=e.clientX-panX;dragY=e.clientY-panY}});
+C.addEventListener('mouseup',()=>{dragging=false});
+C.addEventListener('mousemove',e=>{if(dragging){panX=e.clientX-dragX;panY=e.clientY-dragY}});
 function pc(name){return COLORS[name]||'#6688aa'}
 function hexA(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
 async function load(){
@@ -1059,7 +1075,40 @@ document.getElementById('info').innerHTML=
 '<div class="row"><span>Trade Volume</span><span>'+(economy.trade_volume||0).toFixed(0)+'</span></div>'+
 Object.entries(nf).sort().map(([n,v])=>'<div class="row"><span>'+n+'</span><span class="'+(v>0?'g':v<-1?'r':'d')+'">'+((v>0?'+':'')+v.toFixed(0))+'/int</span></div>').join('');
 }catch(e){document.getElementById('status').textContent='Disconnected';document.getElementById('status').style.color='#a44'}}
-function sp(s){const pad=80;return[(s.x/1280)*(W-pad*2)+pad,(s.y/720)*(H-pad*2)+pad]}
+async function loadDetail(sysId){
+const dp=document.getElementById('detail');dp.style.display='block';
+document.getElementById('dtitle').textContent=selected?.name||'';
+document.getElementById('dbody').innerHTML='Loading...';
+try{
+const sys=await fetch(B+'/api/systems/'+sysId).then(r=>r.json());
+const planets=sys.data.planets||[];
+let h='<div style="color:#556">'+selected?.star_type+' · '+planets.length+' planets</div>';
+if(selected?.resources?.length)h+='<div style="margin:6px 0;color:#889">Resources: '+selected.resources.join(', ')+'</div>';
+planets.forEach(p=>{
+h+='<div style="margin-top:8px;border-top:1px solid #1a2040;padding-top:6px">';
+h+='<b style="color:#7fdbca">'+p.name+'</b> <span style="color:#556">('+p.planet_type+')</span>';
+h+='<div style="color:#889">Pop: '+p.population.toLocaleString()+' / '+p.population_cap.toLocaleString()+'</div>';
+if(p.owner)h+='<div>Owner: <span style="color:'+pc(p.owner)+'">'+p.owner+'</span></div>';
+if(p.buildings?.length){h+='<div style="margin-top:4px">';
+p.buildings.forEach(b=>{
+const col=b.is_operational?'#6c6':'#c55';
+h+='<span style="color:'+col+';margin-right:8px">'+b.type+(b.level>1?' L'+b.level:'')+'</span>'});
+h+='</div>'}
+if(p.stored_resources){h+='<div style="margin-top:4px;font-size:11px">';
+Object.entries(p.stored_resources).sort().forEach(([k,v])=>{
+const col=v===0?'#c55':v>800?'#6c6':'#889';
+h+='<span style="color:'+col+';margin-right:8px">'+k+':'+v+'</span>'});
+h+='</div>'}
+h+='</div>'});
+// Ships at this system
+const sysShips=ships.filter(s=>s.system_id===sysId);
+if(sysShips.length){h+='<div style="margin-top:8px;border-top:1px solid #1a2040;padding-top:6px;color:#889">Ships: ';
+sysShips.forEach(s=>{h+='<span style="color:'+pc(s.owner)+'">'+s.name+'</span> '});h+='</div>'}
+document.getElementById('dbody').innerHTML=h;
+}catch(e){document.getElementById('dbody').innerHTML='<span style="color:#c55">Failed to load</span>'}}
+function sp(s){const pad=80;
+const bx=(s.x/1280)*(W-pad*2)+pad,by=(s.y/720)*(H-pad*2)+pad;
+return[(bx-W/2)*zoom+W/2+panX,(by-H/2)*zoom+H/2+panY]}
 function draw(){
 t+=0.016;
 // Background
@@ -1123,8 +1172,12 @@ if(owner){
 const pl=players.find(p=>p.name===owner);
 X.fillStyle=hexA(c,0.8);X.font='9px monospace';
 X.fillText((owner.length>10?owner.slice(0,8)+'..':owner)+' '+(pl?pl.stock:''),sx,sy+nP*5+26)}
+// Selection ring
+if(selected&&selected.id===s.id){
+X.strokeStyle='#7fdbca';X.lineWidth=2;X.setLineDash([4,4]);
+X.beginPath();X.arc(sx,sy,25+nP*3,0,Math.PI*2);X.stroke();X.setLineDash([])}
 // Hover
-if((mx-sx)**2+(my-sy)**2<500)hover=s});
+if((mx-sx)**2+(my-sy)**2<500*zoom)hover=s});
 // Docked ships
 ships.filter(s=>s.status!=='Moving').forEach(s=>{
 const sys=systems.find(x=>x.id===s.system_id);if(!sys)return;
