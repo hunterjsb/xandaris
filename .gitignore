@@ -20,3 +20,4 @@ xandaris-agent
 *.bak
 xandaris-agent-bin
 server.test
+# manual rebuild trigger
