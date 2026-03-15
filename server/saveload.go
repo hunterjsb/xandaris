@@ -250,6 +250,9 @@ func (gs *GameServer) LoadGame(path string) error {
 	// Start API
 	api.StartServer(gs)
 
+	// Reconcile registered accounts that don't have in-game players
+	gs.reconcileRegisteredPlayers()
+
 	fmt.Printf("[Server] Game loaded: %s, tick %d\n", saveData.PlayerName, saveData.Tick)
 	return nil
 }
