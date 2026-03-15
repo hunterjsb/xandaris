@@ -22,6 +22,7 @@ type GameServer struct {
 	FleetCmdExecutor *game.FleetCommandExecutor
 	FleetMgmtSystem  *game.FleetManagementSystem
 	CargoCommander   *game.CargoCommandExecutor
+	Events           *game.EventLog
 
 	screenWidth  int
 	screenHeight int
@@ -91,6 +92,7 @@ func (gs *GameServer) NewGame(playerName string) error {
 
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
 func (gs *GameServer) initSimulation() {
+	gs.Events = game.NewEventLog(100)
 	gs.FleetCmdExecutor = game.NewFleetCommandExecutor(gs.State.Systems, gs.State.Hyperlanes)
 	gs.FleetMgmtSystem = game.NewFleetManagementSystem(gs.State)
 	gs.CargoCommander = game.NewCargoCommandExecutor(gs.State.Systems)
@@ -171,6 +173,9 @@ func (gs *GameServer) GetCargoCommander() *game.CargoCommandExecutor {
 }
 func (gs *GameServer) GetFleetManagementSystem() *game.FleetManagementSystem {
 	return gs.FleetMgmtSystem
+}
+func (gs *GameServer) GetEventLog() *game.EventLog {
+	return gs.Events
 }
 func (gs *GameServer) GetCommandChannel() chan game.GameCommand {
 	return gs.State.Commands

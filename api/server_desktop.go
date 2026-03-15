@@ -604,6 +604,26 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/events", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		limit := 30
+		if l := r.URL.Query().Get("limit"); l != "" {
+			if n, err := strconv.Atoi(l); err == nil && n > 0 {
+				limit = n
+			}
+		}
+		p := getProvider()
+		el := p.GetEventLog()
+		if el == nil {
+			writeJSON(w, APIResponse{OK: true, Data: []game.GameEvent{}})
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: el.Recent(limit)})
+	})
+
 	mux.HandleFunc("/api/deposits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
@@ -1025,6 +1045,9 @@ a{color:#446}
 <div class="section">Economy</div>
 <div id="info"></div>
 <hr>
+<div class="section">Events</div>
+<div id="events" style="font-size:10px;max-height:120px;overflow-y:auto;color:#889"></div>
+<hr>
 <p style="font-size:10px;color:#334;margin-top:4px"><a href="/data">Data View</a> · <a href="/api/game" target="_blank">API</a> · <a href="https://github.com/hunterjsb/xandaris" target="_blank">GitHub</a></p>
 </div>
 <div id="tooltip"></div>
@@ -1062,7 +1085,7 @@ function pc(name){return COLORS[name]||'#6688aa'}
 function hexA(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
 async function load(){
 try{
-const[g,s,p,e,f]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows'].map(u=>fetch(B+u).then(r=>r.json())));
+const[g,s,p,e,f,ev]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows','/api/events?limit=15'].map(u=>fetch(B+u).then(r=>r.json())));
 systems=g.data;ships=s.data;players=p.data;economy=e.data;flows=f.data;
 document.getElementById('status').textContent='Live · '+new Date().toLocaleTimeString();
 document.getElementById('players').innerHTML=players.sort((a,b)=>b.credits-a.credits).map(p=>{
@@ -1076,6 +1099,11 @@ document.getElementById('info').innerHTML=
 '<div class="row"><span>Population</span><span>'+(economy.total_population||0).toLocaleString()+'</span></div>'+
 '<div class="row"><span>Trade Volume</span><span>'+(economy.trade_volume||0).toFixed(0)+'</span></div>'+
 Object.entries(nf).sort().map(([n,v])=>'<div class="row"><span>'+n+'</span><span class="'+(v>0?'g':v<-1?'r':'d')+'">'+((v>0?'+':'')+v.toFixed(0))+'/int</span></div>').join('');
+// Events
+const evts=ev.data||[];
+document.getElementById('events').innerHTML=evts.map(x=>{
+const c=x.type==='trade'?'#889':x.type==='colonize'?'#7fdbca':x.type==='build'?'#6c6':'#889';
+return'<div style="color:'+c+';padding:1px 0">'+x.time+' '+x.message+'</div>'}).join('');
 }catch(e){document.getElementById('status').textContent='Disconnected';document.getElementById('status').style.color='#a44'}}
 async function loadDetail(sysId){
 const dp=document.getElementById('detail');dp.style.display='block';

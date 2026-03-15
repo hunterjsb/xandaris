@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
@@ -103,6 +104,16 @@ func (gs *GameServer) handleTradeCommand(cmd game.GameCommand) {
 			cmd.Result <- err
 		} else {
 			cmd.Result <- result
+			// Log trade event
+			if record, ok := result.(economy.TradeRecord); ok && gs.Events != nil {
+				action := "bought"
+				if record.Action == "sell" {
+					action = "sold"
+				}
+				_, gt, _, _ := gs.GetTickInfo()
+				gs.Events.Addf(gs.TickManager.GetCurrentTick(), gt, game.EventTrade, record.Player,
+					"%s %s %d %s @ %.0f = %dcr", record.Player, action, record.Quantity, record.Resource, record.UnitPrice, record.Total)
+			}
 		}
 		close(cmd.Result)
 	}

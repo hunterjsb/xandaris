@@ -20,6 +20,9 @@ func (a *App) GetTradeExecutor() *economy.TradeExecutor { return a.Server.GetTra
 func (a *App) GetCargoCommander() *game.CargoCommandExecutor {
 	return a.Server.GetCargoCommander()
 }
+func (a *App) GetEventLog() *game.EventLog {
+	return a.Server.GetEventLog()
+}
 
 func (a *App) GetSaveLoad() views.SaveLoadInterface { return a }
 
