@@ -81,7 +81,7 @@ jobs:
             <p id="load-status">Loading game...</p>
           </div>
           <div id="server-info">
-            Live server: <a href="http://3.84.241.200:8080/api/game" target="_blank">API</a>
+            Live server: <a href="https://api.xandaris.space/api/game" target="_blank">API</a>
           </div>
           <script src="wasm_exec.js"></script>
           <script>
@@ -172,7 +172,7 @@ jobs:
           </div>
           <div id="statusbar" class="status">Connecting...</div>
           <script>
-          const API = 'http://3.84.241.200:8080';
+          const API = 'https://api.xandaris.space';
           async function refresh() {
             try {
               const [econ, players, flows, game] = await Promise.all([
