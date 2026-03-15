@@ -65,10 +65,10 @@ var chatTools = []map[string]interface{}{
 		"parameters": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
 	}},
 	{"type": "function", "function": map[string]interface{}{
-		"name": "navigate", "description": "Navigate the player's UI to a location: galaxy map, a system, a planet, the market, or player directory",
+		"name": "navigate", "description": "Navigate the player's UI to a location. For planet/system targets, you MUST provide the actual numeric ID from get_status or get_planet results. Do NOT use 0 as an ID.",
 		"parameters": map[string]interface{}{"type": "object", "properties": map[string]interface{}{
 			"target": map[string]interface{}{"type": "string", "enum": []string{"galaxy", "system", "planet", "market", "players"}},
-			"id":     map[string]interface{}{"type": "integer", "description": "System or planet ID (required for system/planet targets)"},
+			"id":     map[string]interface{}{"type": "integer", "description": "The planet_id or system_id from get_status/get_planet. Required and must be non-zero for system/planet targets."},
 		}, "required": []string{"target"}},
 	}},
 }
@@ -259,6 +259,9 @@ func executeToolCall(p GameStateProvider, playerName, fnName, fnArgs string) str
 	case "navigate":
 		target, _ := args["target"].(string)
 		id := int(getFloat(args, "id"))
+		if (target == "planet" || target == "system") && id == 0 {
+			return `{"error":"navigate to planet/system requires a valid non-zero id from get_status"}`
+		}
 		return fmt.Sprintf(`{"ok":true,"navigate":"%s","id":%d}`, target, id)
 
 	default:
