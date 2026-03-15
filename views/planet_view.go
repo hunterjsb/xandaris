@@ -352,28 +352,42 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	title := fmt.Sprintf("Planet View: %s", pv.planet.Name)
-	DrawText(screen, title, 10, 10, utils.TextPrimary)
+	accentColor := color.RGBA{127, 219, 202, 255}
+	dimColor := color.RGBA{80, 95, 115, 255}
+	textLight := color.RGBA{192, 200, 216, 255}
 
-	infoY := 25
-	for _, line := range formatPlanetDetails(pv.planet) {
-		color := utils.TextSecondary
+	details := formatPlanetDetails(pv.planet)
+	panelHeight := 22 + len(details)*15 + 20
+	humanPlayer := pv.ctx.GetHumanPlayer()
+	isOwned := humanPlayer != nil && pv.planet.Owner == humanPlayer.Name
+
+	infoPanel := NewUIPanel(6, 6, 260, panelHeight)
+	infoPanel.BgColor = color.RGBA{12, 16, 28, 220}
+	infoPanel.BorderColor = color.RGBA{30, 40, 68, 255}
+	infoPanel.Draw(screen)
+
+	DrawText(screen, pv.planet.Name, 14, 14, accentColor)
+	if pv.planet.Owner != "" {
+		ownerX := 14 + len(pv.planet.Name)*6 + 8
+		DrawText(screen, pv.planet.Owner, ownerX, 14, dimColor)
+	}
+
+	infoY := 32
+	for _, line := range details {
+		lineColor := dimColor
 		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
-			color = utils.TextPrimary
+			lineColor = textLight
 		}
-		DrawText(screen, line, 10, infoY, color)
+		DrawText(screen, line, 14, infoY, lineColor)
 		infoY += 15
 	}
 
-	infoY += 10
-
-	// Show build hints if player owns this planet
-	humanPlayer := pv.ctx.GetHumanPlayer()
-	if humanPlayer != nil && pv.planet.Owner == humanPlayer.Name {
-		DrawText(screen, "[B] Build on planet  [Shift+Click] Build on resource", 10, infoY, utils.TextSecondary)
-		DrawText(screen, "Press ESC to return to system", 10, infoY+15, utils.TextSecondary)
+	// Hints at bottom of panel
+	infoY += 4
+	if isOwned {
+		DrawText(screen, "[B] Build  [Shift+Click] Mine  [Esc] Back", 14, infoY, dimColor)
 	} else {
-		DrawText(screen, "Press ESC to return to system", 10, infoY, utils.TextSecondary)
+		DrawText(screen, "[Esc] Back to system", 14, infoY, dimColor)
 	}
 
 	pv.drawWorkforceToggleButton(screen)
