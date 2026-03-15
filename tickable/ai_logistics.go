@@ -46,8 +46,12 @@ func (als *AILogisticsSystem) OnTick(tick int64) {
 }
 
 func (als *AILogisticsSystem) processAILogistics(player *entities.Player, game GameProvider, systems []*entities.System) {
+	als.processColonyShips(player, game, systems)
+	als.processCargoShips(player, game, systems)
+}
 
-	// Handle colony ships — find unclaimed habitable planet and colonize
+// processColonyShips handles AI colony ship navigation and colonization.
+func (als *AILogisticsSystem) processColonyShips(player *entities.Player, game GameProvider, systems []*entities.System) {
 	for _, ship := range player.OwnedShips {
 		if ship == nil || ship.ShipType != entities.ShipTypeColony || ship.Colonists <= 0 {
 			continue
@@ -58,7 +62,6 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, game G
 		// Check if there's an unclaimed habitable planet in this system
 		planet := findUnclaimedHabitable(ship.CurrentSystem, systems)
 		if planet != nil {
-			// Colonize!
 			planet.Owner = ship.Owner
 			planet.Population = int64(ship.Colonists)
 			planet.SetBaseOwner(ship.Owner)
@@ -87,7 +90,10 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, game G
 			}
 		}
 	}
+}
 
+// processCargoShips handles AI cargo ship trade routes: load surplus, deliver, return.
+func (als *AILogisticsSystem) processCargoShips(player *entities.Player, game GameProvider, systems []*entities.System) {
 	for _, ship := range player.OwnedShips {
 		if ship == nil || ship.ShipType != entities.ShipTypeCargo {
 			continue

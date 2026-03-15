@@ -29,7 +29,7 @@ func (a *App) GetRegistry() *game.PlayerRegistry {
 
 func (a *App) GetSaveLoad() views.SaveLoadInterface { return a }
 
-// GetMarketEngine implements tickable.MarketProvider (for backward compat)
+// GetMarketEngine implements tickable.GameProvider
 func (a *App) GetMarketEngine() *economy.Market { return a.Server.GetMarketEngine() }
 
 // GetTickInfo implements api.GameStateProvider

@@ -55,7 +55,7 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 			// Each TP level captures a share of total trade activity
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok {
-					if b.BuildingType == "Trading Post" && b.IsOperational {
+					if b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
 						// Base: 2cr per level + share of trade volume
 						tradeShare := int(totalTradeVolume * 0.01 * float64(b.Level))
 						production += 2*b.Level + tradeShare

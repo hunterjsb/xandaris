@@ -5,6 +5,17 @@ import (
 	"image/color"
 )
 
+// ResourceType constants — use these instead of raw strings.
+const (
+	ResIron       = "Iron"
+	ResWater      = "Water"
+	ResOil        = "Oil"
+	ResFuel       = "Fuel"
+	ResRareMetals = "Rare Metals"
+	ResHelium3    = "Helium-3"
+	ResElectronics = "Electronics"
+)
+
 // Resource represents a resource node entity on a planet
 type Resource struct {
 	BaseEntity

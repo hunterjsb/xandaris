@@ -38,7 +38,7 @@ func (fps *FactoryProductionSystem) OnTick(tick int64) {
 func (fps *FactoryProductionSystem) processFactories(planet *entities.Planet) {
 	for _, buildingEntity := range planet.Buildings {
 		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == "Factory" && building.IsOperational {
+			if building.BuildingType == entities.BuildingFactory && building.IsOperational {
 				fps.processFactory(planet, building)
 			}
 		}
@@ -64,12 +64,12 @@ func (fps *FactoryProductionSystem) processFactory(planet *entities.Planet, fact
 	}
 
 	// Ensure Electronics storage exists
-	if _, has := planet.StoredResources["Electronics"]; !has {
-		planet.AddStoredResource("Electronics", 0)
+	if _, has := planet.StoredResources[entities.ResElectronics]; !has {
+		planet.AddStoredResource(entities.ResElectronics, 0)
 	}
 
 	// Market-responsive: idle if Electronics storage >80% capacity
-	elecStorage := planet.StoredResources["Electronics"]
+	elecStorage := planet.StoredResources[entities.ResElectronics]
 	if elecStorage != nil && elecStorage.Capacity > 0 {
 		ratio := float64(elecStorage.Amount) / float64(elecStorage.Capacity)
 		if ratio > 0.8 {
@@ -78,37 +78,22 @@ func (fps *FactoryProductionSystem) processFactory(planet *entities.Planet, fact
 	}
 
 	// Check inputs
-	storedRM, hasRM := planet.StoredResources["Rare Metals"]
-	storedIron, hasIron := planet.StoredResources["Iron"]
+	storedRM, hasRM := planet.StoredResources[entities.ResRareMetals]
+	storedIron, hasIron := planet.StoredResources[entities.ResIron]
 	if !hasRM || storedRM.Amount < rareMetalsNeeded || !hasIron || storedIron.Amount < ironNeeded {
 		return
 	}
 
 	// Consume inputs
-	planet.RemoveStoredResource("Rare Metals", rareMetalsNeeded)
-	planet.RemoveStoredResource("Iron", ironNeeded)
+	planet.RemoveStoredResource(entities.ResRareMetals, rareMetalsNeeded)
+	planet.RemoveStoredResource(entities.ResIron, ironNeeded)
 
 	// Produce Electronics
-	actual := planet.AddStoredResource("Electronics", electronicsProduced)
+	actual := planet.AddStoredResource(entities.ResElectronics, electronicsProduced)
 	if actual == 0 {
 		// Storage full — return inputs
-		planet.AddStoredResource("Rare Metals", rareMetalsNeeded)
-		planet.AddStoredResource("Iron", ironNeeded)
+		planet.AddStoredResource(entities.ResRareMetals, rareMetalsNeeded)
+		planet.AddStoredResource(entities.ResIron, ironNeeded)
 	}
 }
 
-// GetFactoryInfo returns production info for factories on a planet.
-func GetFactoryInfo(planet *entities.Planet) (count int, rareMetalsPerInterval int, ironPerInterval int, electronicsPerInterval int) {
-	for _, buildingEntity := range planet.Buildings {
-		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == "Factory" && building.IsOperational {
-				count++
-				levelMultiplier := 1.0 + float64(building.Level-1)*0.3
-				rareMetalsPerInterval += int(2.0 * levelMultiplier)
-				ironPerInterval += int(1.0 * levelMultiplier)
-				electronicsPerInterval += int(2.0 * levelMultiplier)
-			}
-		}
-	}
-	return
-}

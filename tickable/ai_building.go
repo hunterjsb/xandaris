@@ -3,6 +3,7 @@ package tickable
 import (
 	"fmt"
 
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -71,7 +72,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 			mineCount := 0
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok {
-					if b.BuildingType == "Mine" && b.AttachedTo == resIDStr {
+					if b.BuildingType == entities.BuildingMine && b.AttachedTo == resIDStr {
 						mineCount++
 					}
 				}
@@ -79,10 +80,10 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 
 			if mineCount == 0 && player.Credits >= 500 {
 				player.Credits -= 500
-				game.AIBuildOnPlanet(planet, "Mine", player.Name, systemID)
+				game.AIBuildOnPlanet(planet, entities.BuildingMine, player.Name, systemID)
 				for i := len(planet.Buildings) - 1; i >= 0; i-- {
 					if b, ok := planet.Buildings[i].(*entities.Building); ok {
-						if b.BuildingType == "Mine" && b.AttachedTo == fmt.Sprintf("%d", planet.GetID()) {
+						if b.BuildingType == entities.BuildingMine && b.AttachedTo == fmt.Sprintf("%d", planet.GetID()) {
 							b.AttachedTo = resIDStr
 							b.AttachmentType = "Resource"
 							break
@@ -99,79 +100,39 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 		// PRIORITY 2: Build Generators for power (critical for productivity)
 		// Need enough generators to cover demand — build more if power ratio < 80%
 		powerRatio := planet.GetPowerRatio()
-		genCount := planet.CountBuildings("Generator")
+		genCount := planet.CountBuildings(entities.BuildingGenerator)
 		if (genCount == 0 || (powerRatio < 0.8 && genCount < 4)) && planet.Population > 500 && player.Credits >= 1000 {
 			player.Credits -= 1000
-			game.AIBuildOnPlanet(planet, "Generator", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingGenerator, player.Name, systemID)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Generator #%d at %s (power %.0f%%)",
 				player.Name, genCount+1, planet.Name, powerRatio*100))
 			return
 		}
 
 		// PRIORITY 2b: Build Fusion Reactor if we have He-3 and high population
-		hasHe3Mine := false
-		for _, resEntity := range planet.Resources {
-			if res, ok := resEntity.(*entities.Resource); ok && res.ResourceType == "Helium-3" {
-				resIDStr := fmt.Sprintf("%d", res.GetID())
-				for _, be := range planet.Buildings {
-					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" && b.AttachedTo == resIDStr {
-						hasHe3Mine = true
-						break
-					}
-				}
-			}
-		}
-		if hasHe3Mine && !planet.HasBuilding("Fusion Reactor") && powerRatio < 0.9 && player.Credits >= 3000 {
+		if hasMinedResource(planet, entities.ResHelium3) && !planet.HasBuilding(entities.BuildingFusionReactor) && powerRatio < 0.9 && player.Credits >= 3000 {
 			player.Credits -= 3000
-			game.AIBuildOnPlanet(planet, "Fusion Reactor", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingFusionReactor, player.Name, systemID)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Fusion Reactor at %s", player.Name, planet.Name))
 			return
 		}
 
 		// PRIORITY 3: Build Refinery if we have Oil mines but no refinery
-		hasOilMine := false
-		for _, resEntity := range planet.Resources {
-			if res, ok := resEntity.(*entities.Resource); ok && res.ResourceType == "Oil" {
-				resIDStr := fmt.Sprintf("%d", res.GetID())
-				for _, be := range planet.Buildings {
-					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" && b.AttachedTo == resIDStr {
-						hasOilMine = true
-						break
-					}
-				}
-			}
-		}
-		refineryCount := planet.CountBuildings("Refinery")
+		hasOilMine := hasMinedResource(planet, entities.ResOil)
+		refineryCount := planet.CountBuildings(entities.BuildingRefinery)
 		if hasOilMine && refineryCount == 0 && player.Credits >= 1500 {
 			player.Credits -= 1500
-			game.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingRefinery, player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built refinery at %s\n", player.Name, planet.Name)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Refinery at %s", player.Name, planet.Name))
 			return
 		}
 
-		// PRIORITY 3: Build Factory if we have Rare Metals and Iron mines
-		hasRMmine := false
-		hasIronMine := false
-		for _, resEntity := range planet.Resources {
-			if res, ok := resEntity.(*entities.Resource); ok {
-				resIDStr := fmt.Sprintf("%d", res.GetID())
-				for _, be := range planet.Buildings {
-					if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" && b.AttachedTo == resIDStr {
-						if res.ResourceType == "Rare Metals" {
-							hasRMmine = true
-						}
-						if res.ResourceType == "Iron" {
-							hasIronMine = true
-						}
-					}
-				}
-			}
-		}
-		factoryCount := planet.CountBuildings("Factory")
-		if hasRMmine && hasIronMine && factoryCount == 0 && player.Credits >= 2000 {
+		// PRIORITY 3b: Build Factory if we have Rare Metals and Iron mines
+		factoryCount := planet.CountBuildings(entities.BuildingFactory)
+		if hasMinedResource(planet, entities.ResRareMetals) && hasMinedResource(planet, entities.ResIron) && factoryCount == 0 && player.Credits >= 2000 {
 			player.Credits -= 2000
-			game.AIBuildOnPlanet(planet, "Factory", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingFactory, player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built factory at %s\n", player.Name, planet.Name)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Factory at %s", player.Name, planet.Name))
 			return
@@ -180,20 +141,20 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 		// PRIORITY 4: Build Habitat when population at 85%+ capacity
 		// Only build if power is stable (>60%) and max 5 habitats per planet
 		capacity := planet.GetTotalPopulationCapacity()
-		habitatCount := planet.CountBuildings("Habitat")
+		habitatCount := planet.CountBuildings(entities.BuildingHabitat)
 		if capacity > 0 && planet.Population > int64(float64(capacity)*0.85) &&
 			habitatCount < 5 && powerRatio > 0.6 && player.Credits >= 800 {
 			player.Credits -= 800
-			game.AIBuildOnPlanet(planet, "Habitat", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingHabitat, player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built habitat at %s (pop %d/%d)\n",
 				player.Name, planet.Name, planet.Population, capacity)
 			return
 		}
 
 		// PRIORITY 5: Build Trading Post if missing
-		if !planet.HasBuilding("Trading Post") && player.Credits >= 1200 {
+		if !planet.HasBuilding(entities.BuildingTradingPost) && player.Credits >= 1200 {
 			player.Credits -= 1200
-			game.AIBuildOnPlanet(planet, "Trading Post", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingTradingPost, player.Name, systemID)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Trading Post at %s", player.Name, planet.Name))
 			return
 		}
@@ -205,12 +166,12 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 				continue
 			}
 			buyPrice := game.GetMarketEngine().GetBuyPrice(res.ResourceType)
-			basePrice := getBasePrice(res.ResourceType)
+			basePrice := economy.GetBasePrice(res.ResourceType)
 			resIDStr := fmt.Sprintf("%d", res.GetID())
 
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok {
-					if b.BuildingType == "Mine" && b.AttachedTo == resIDStr && b.CanUpgrade() {
+					if b.BuildingType == entities.BuildingMine && b.AttachedTo == resIDStr && b.CanUpgrade() {
 						if buyPrice > basePrice*1.2 && player.Credits >= b.GetUpgradeCost() {
 							player.Credits -= b.GetUpgradeCost()
 							b.Upgrade()
@@ -225,15 +186,15 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 		}
 
 		// PRIORITY 7: Build Shipyard when affordable
-		if !planet.HasBuilding("Shipyard") && player.Credits >= 2500 {
+		if !planet.HasBuilding(entities.BuildingShipyard) && player.Credits >= 2500 {
 			player.Credits -= 2000
-			game.AIBuildOnPlanet(planet, "Shipyard", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingShipyard, player.Name, systemID)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Shipyard at %s", player.Name, planet.Name))
 			return
 		}
 
 		// PRIORITY 8: Build Colony ship for expansion
-		if len(player.OwnedPlanets) < 3 && planet.HasBuilding("Shipyard") && player.Credits >= 3000 {
+		if len(player.OwnedPlanets) < 3 && planet.HasBuilding(entities.BuildingShipyard) && player.Credits >= 3000 {
 			hasColony := false
 			for _, ship := range player.OwnedShips {
 				if ship != nil && ship.ShipType == entities.ShipTypeColony {
@@ -241,13 +202,13 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 					break
 				}
 			}
-			if !hasColony && planet.GetStoredAmount("Iron") >= 100 &&
-				planet.GetStoredAmount("Fuel") >= 50 &&
-				planet.GetStoredAmount("Rare Metals") >= 20 {
+			if !hasColony && planet.GetStoredAmount(entities.ResIron) >= 100 &&
+				planet.GetStoredAmount(entities.ResFuel) >= 50 &&
+				planet.GetStoredAmount(entities.ResRareMetals) >= 20 {
 				player.Credits -= 2000
-				planet.RemoveStoredResource("Iron", 100)
-				planet.RemoveStoredResource("Fuel", 50)
-				planet.RemoveStoredResource("Rare Metals", 20)
+				planet.RemoveStoredResource(entities.ResIron, 100)
+				planet.RemoveStoredResource(entities.ResFuel, 50)
+				planet.RemoveStoredResource(entities.ResRareMetals, 20)
 				location := fmt.Sprintf("planet_%d", planet.GetID())
 				if constructionSystem := GetSystemByName("Construction"); constructionSystem != nil {
 					if cs, ok := constructionSystem.(*ConstructionSystem); ok {
@@ -272,20 +233,33 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 		}
 
 		// PRIORITY 9: Build second refinery when generators need more Fuel
-		fuelStored := planet.GetStoredAmount("Fuel")
+		fuelStored := planet.GetStoredAmount(entities.ResFuel)
 		if hasOilMine && refineryCount < 3 && (fuelStored < 50 || refineryCount < genCount) && player.Credits >= 1500 {
 			player.Credits -= 1500
-			game.AIBuildOnPlanet(planet, "Refinery", player.Name, systemID)
+			game.AIBuildOnPlanet(planet, entities.BuildingRefinery, player.Name, systemID)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Refinery #2 at %s", player.Name, planet.Name))
 			return
 		}
 	}
 }
 
-func logBuildEvent(logger GameProvider, player, msg string) {
-	if logger != nil {
-		logger.LogEvent("build", player, msg)
+func logBuildEvent(game GameProvider, player, msg string) {
+	game.LogEvent("build", player, msg)
+}
+
+// hasMinedResource returns true if the planet has a mine attached to a deposit of the given type.
+func hasMinedResource(planet *entities.Planet, resourceType string) bool {
+	for _, resEntity := range planet.Resources {
+		if res, ok := resEntity.(*entities.Resource); ok && res.ResourceType == resourceType {
+			resIDStr := fmt.Sprintf("%d", res.GetID())
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingMine && b.AttachedTo == resIDStr {
+					return true
+				}
+			}
+		}
 	}
+	return false
 }
 
 func findSystemIDForPlanet(planet *entities.Planet, systems []*entities.System) int {
@@ -297,26 +271,4 @@ func findSystemIDForPlanet(planet *entities.Planet, systems []*entities.System) 
 		}
 	}
 	return 0
-}
-
-// getBasePrice returns the equilibrium price for a resource.
-// Duplicated from economy.BasePrices — can't import economy from tickable (cycle).
-func getBasePrice(resourceType string) float64 {
-	switch resourceType {
-	case "Iron":
-		return 75
-	case "Water":
-		return 100
-	case "Oil":
-		return 150
-	case "Fuel":
-		return 200
-	case "Rare Metals":
-		return 500
-	case "Helium-3":
-		return 600
-	case "Electronics":
-		return 800
-	}
-	return 100
 }

@@ -1,8 +1,6 @@
 package tickable
 
 import (
-	"sync"
-
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
@@ -102,28 +100,8 @@ func GetSystemByName(name string) TickableSystem {
 	return nil
 }
 
-// UpdateAllSystems updates all enabled systems for the given tick concurrently
-func UpdateAllSystems(tick int64) {
-	var wg sync.WaitGroup
-
-	// Process all enabled systems concurrently
-	for _, system := range registry {
-		if system.IsEnabled() {
-			wg.Add(1)
-			// Capture system in local scope for goroutine
-			sys := system
-			go func() {
-				defer wg.Done()
-				sys.OnTick(tick)
-			}()
-		}
-	}
-
-	// Wait for all systems to complete
-	wg.Wait()
-}
-
-// UpdateAllSystemsSequential updates systems one by one (useful for debugging)
+// UpdateAllSystemsSequential updates systems one by one in priority order.
+// Sequential execution ensures correct data dependencies (Power→Happiness→Resources→Population).
 func UpdateAllSystemsSequential(tick int64) {
 	for _, system := range registry {
 		if system.IsEnabled() {

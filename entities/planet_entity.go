@@ -268,6 +268,16 @@ func (p *Planet) HasBuilding(buildingType string) bool {
 	return p.CountBuildings(buildingType) > 0
 }
 
+// HasOperationalBuilding returns true if the planet has at least one operational building of the given type.
+func (p *Planet) HasOperationalBuilding(buildingType string) bool {
+	for _, be := range p.Buildings {
+		if b, ok := be.(*Building); ok && b.BuildingType == buildingType && b.IsOperational {
+			return true
+		}
+	}
+	return false
+}
+
 // GetAvailablePopulationCapacity returns the remaining space before reaching capacity
 func (p *Planet) GetAvailablePopulationCapacity() int64 {
 	capacity := p.GetTotalPopulationCapacity()

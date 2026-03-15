@@ -29,18 +29,20 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		return
 	}
 
+	systemsMap := game.GetSystemsMap()
+
 	// Process all ships across all systems
-	for _, system := range game.GetSystemsMap() {
+	for _, system := range systemsMap {
 		for _, entity := range system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
-				sms.processShipMovement(ship, game)
+				sms.processShipMovement(ship, systemsMap)
 			}
 		}
 	}
 }
 
 // processShipMovement handles movement for a single ship
-func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, game GameProvider) {
+func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, systems map[int]*entities.System) {
 	// Only process ships that are moving
 	if ship.Status != entities.ShipStatusMoving {
 		return
@@ -53,7 +55,7 @@ func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, game Gam
 	}
 
 	// Get target system
-	targetSystem := game.GetSystemsMap()[ship.TargetSystem]
+	targetSystem := systems[ship.TargetSystem]
 	if targetSystem == nil {
 		// Invalid target, stop moving
 		ship.Status = entities.ShipStatusOrbiting
@@ -80,7 +82,7 @@ func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, game Gam
 
 	// Check if ship has arrived
 	if ship.TravelProgress >= 1.0 {
-		sms.arriveAtSystem(ship, targetSystem, game.GetSystemsMap())
+		sms.arriveAtSystem(ship, targetSystem, systems)
 	}
 }
 

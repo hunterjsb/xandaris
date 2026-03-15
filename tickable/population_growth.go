@@ -64,7 +64,7 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 
 	// Resource-dependent growth: population only grows if essential resources are available.
 	// Water is the critical life-support resource.
-	waterAvail := planet.GetStoredAmount("Water")
+	waterAvail := planet.GetStoredAmount(entities.ResWater)
 	foodSufficiency := 1.0
 	if planet.Population > 0 {
 		// How many intervals of Water consumption can we sustain?

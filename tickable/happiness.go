@@ -53,13 +53,13 @@ func (hs *HappinessSystem) OnTick(tick int64) {
 
 // resourceWeight defines how much each resource affects happiness.
 var resourceWeights = map[string]float64{
-	"Water":       3.0, // Most critical
-	"Iron":        1.0,
-	"Oil":         1.0,
-	"Fuel":        0.5,
-	"Electronics": 1.0,
-	"Rare Metals": 0.3,
-	"Helium-3":    0.3,
+	entities.ResWater:      3.0, // Most critical
+	entities.ResIron:       1.0,
+	entities.ResOil:        1.0,
+	entities.ResFuel:       0.5,
+	entities.ResElectronics: 1.0,
+	entities.ResRareMetals: 0.3,
+	entities.ResHelium3:    0.3,
 }
 
 func computeHappiness(planet *entities.Planet) {

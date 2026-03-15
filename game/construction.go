@@ -55,13 +55,13 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 						// Initialize product storage when production buildings are built
 						if b, ok := building.(*entities.Building); ok {
 							switch b.BuildingType {
-							case "Refinery":
-								if _, exists := planet.StoredResources["Fuel"]; !exists {
-									planet.AddStoredResource("Fuel", 0)
+							case entities.BuildingRefinery:
+								if _, exists := planet.StoredResources[entities.ResFuel]; !exists {
+									planet.AddStoredResource(entities.ResFuel, 0)
 								}
-							case "Factory":
-								if _, exists := planet.StoredResources["Electronics"]; !exists {
-									planet.AddStoredResource("Electronics", 0)
+							case entities.BuildingFactory:
+								if _, exists := planet.StoredResources[entities.ResElectronics]; !exists {
+									planet.AddStoredResource(entities.ResElectronics, 0)
 								}
 							}
 						}
@@ -179,14 +179,14 @@ func (ch *ConstructionHandler) createBuildingFromCompletion(completion tickable.
 			gen.GetSubType()+" Module" == completion.Item.Name ||
 			"Orbital "+gen.GetSubType() == completion.Item.Name ||
 			"Oil "+gen.GetSubType() == completion.Item.Name ||
-			"Mining Complex" == completion.Item.Name && gen.GetSubType() == "Mine" {
+			"Mining Complex" == completion.Item.Name && gen.GetSubType() == entities.BuildingMine {
 			building := gen.Generate(params)
 			if b, ok := building.(*entities.Building); ok {
 				b.Owner = completion.Owner
 				b.AttachedTo = completion.Location
 
 				// If building a mine on a resource, link it to the resource node
-				if b.BuildingType == "Mine" {
+				if b.BuildingType == entities.BuildingMine {
 					if resource, ok := attachedTo.(*entities.Resource); ok {
 						b.ResourceNodeID = resource.GetID()
 						b.AttachmentType = "Resource"

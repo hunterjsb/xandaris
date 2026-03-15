@@ -46,7 +46,7 @@ func (tls *TechLevelSystem) OnTick(tick int64) {
 }
 
 func updateTechLevel(planet *entities.Planet) {
-	elecStored := float64(planet.GetStoredAmount("Electronics"))
+	elecStored := float64(planet.GetStoredAmount(entities.ResElectronics))
 	pop := float64(planet.Population)
 
 	if pop <= 0 {

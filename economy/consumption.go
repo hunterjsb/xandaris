@@ -14,12 +14,12 @@ type ConsumptionRate struct {
 // PopulationConsumption defines resource drain from population.
 // These rates apply per 10-tick interval (~1 second at 1x speed).
 var PopulationConsumption = []ConsumptionRate{
-	{"Water", 1, 250},         // 1 per 250 pop — life support (heaviest)
-	{"Iron", 1, 500},          // 1 per 500 pop — infrastructure
-	{"Oil", 1, 800},           // 1 per 800 pop — industry
-	{"Rare Metals", 1, 5000},  // 1 per 5000 pop — raw materials (luxury)
-	{"Helium-3", 1, 10000},    // 1 per 10000 pop — fusion (luxury)
-	{"Electronics", 1, 3000},  // 1 per 3000 pop — technology goods
+	{entities.ResWater, 1, 250},        // 1 per 250 pop — life support (heaviest)
+	{entities.ResIron, 1, 500},         // 1 per 500 pop — infrastructure
+	{entities.ResOil, 1, 800},          // 1 per 800 pop — industry
+	{entities.ResRareMetals, 1, 5000},  // 1 per 5000 pop — raw materials (luxury)
+	{entities.ResHelium3, 1, 10000},    // 1 per 10000 pop — fusion (luxury)
+	{entities.ResElectronics, 1, 3000}, // 1 per 3000 pop — technology goods
 	// Fuel consumed by buildings only (Shipyard: 2/interval, Refinery upkeep)
 }
 
@@ -28,25 +28,25 @@ var BuildingResourceUpkeep = map[string][]struct {
 	ResourceType string
 	Amount       int
 }{
-	"Mine":         {{"Iron", 1}},
-	"Trading Post": {{"Oil", 1}},
-	"Refinery":     {{"Oil", 2}, {"Iron", 1}},
-	"Factory":      {{"Iron", 1}, {"Oil", 1}},
-	"Shipyard":     {{"Fuel", 2}, {"Iron", 1}, {"Electronics", 1}},
-	"Habitat":      {{"Water", 1}},
-	"Base":         {},
+	entities.BuildingMine:        {{entities.ResIron, 1}},
+	entities.BuildingTradingPost: {{entities.ResOil, 1}},
+	entities.BuildingRefinery:    {{entities.ResOil, 2}, {entities.ResIron, 1}},
+	entities.BuildingFactory:     {{entities.ResIron, 1}, {entities.ResOil, 1}},
+	entities.BuildingShipyard:    {{entities.ResFuel, 2}, {entities.ResIron, 1}, {entities.ResElectronics, 1}},
+	entities.BuildingHabitat:     {{entities.ResWater, 1}},
+	entities.BuildingBase:        {},
 }
 
 // BuildingCreditUpkeep defines the credit cost per building per interval (+ level - 1).
 var BuildingCreditUpkeep = map[string]int{
-	"Mine":           2,
-	"Trading Post":   3,
-	"Habitat":        1,
-	"Refinery":       4,
-	"Factory":        5,
-	"Shipyard":       6,
-	"Generator":      3,
-	"Fusion Reactor": 8,
+	entities.BuildingMine:          2,
+	entities.BuildingTradingPost:   3,
+	entities.BuildingHabitat:       1,
+	entities.BuildingRefinery:      4,
+	entities.BuildingFactory:       5,
+	entities.BuildingShipyard:      6,
+	entities.BuildingGenerator:     3,
+	entities.BuildingFusionReactor: 8,
 }
 
 // ConsumptionResult contains both demand signals and credit drain info.

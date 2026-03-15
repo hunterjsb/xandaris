@@ -22,15 +22,15 @@ type PowerSystem struct {
 
 // Power draw per building type (MW)
 var buildingPowerDraw = map[string]float64{
-	"Base":           10,
-	"Mine":           15,
-	"Habitat":        10,
-	"Trading Post":   10,
-	"Refinery":       25,
-	"Factory":        30,
-	"Shipyard":       35,
-	"Generator":      5,
-	"Fusion Reactor": 10,
+	entities.BuildingBase:          10,
+	entities.BuildingMine:          15,
+	entities.BuildingHabitat:       10,
+	entities.BuildingTradingPost:   10,
+	entities.BuildingRefinery:      25,
+	entities.BuildingFactory:       30,
+	entities.BuildingShipyard:      35,
+	entities.BuildingGenerator:     5,
+	entities.BuildingFusionReactor: 10,
 }
 
 func (ps *PowerSystem) OnTick(tick int64) {
@@ -76,21 +76,21 @@ func computePower(planet *entities.Planet) {
 
 		// Power generation
 		switch b.BuildingType {
-		case "Generator":
+		case entities.BuildingGenerator:
 			// Burns 2 Fuel per interval → 50 MW
 			fuelNeeded := int(2.0 * levelMult)
-			if planet.GetStoredAmount("Fuel") >= fuelNeeded {
-				planet.RemoveStoredResource("Fuel", fuelNeeded)
+			if planet.GetStoredAmount(entities.ResFuel) >= fuelNeeded {
+				planet.RemoveStoredResource(entities.ResFuel, fuelNeeded)
 				generated += 50.0 * levelMult * staffing
 			}
-		case "Fusion Reactor":
+		case entities.BuildingFusionReactor:
 			// Burns 1 Helium-3 per interval → 200 MW
 			he3Needed := int(1.0 * levelMult)
 			if he3Needed < 1 {
 				he3Needed = 1
 			}
-			if planet.GetStoredAmount("Helium-3") >= he3Needed {
-				planet.RemoveStoredResource("Helium-3", he3Needed)
+			if planet.GetStoredAmount(entities.ResHelium3) >= he3Needed {
+				planet.RemoveStoredResource(entities.ResHelium3, he3Needed)
 				generated += 200.0 * levelMult * staffing
 			}
 		}

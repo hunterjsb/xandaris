@@ -30,11 +30,12 @@ type GameEvent struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// EventLog is a thread-safe ring buffer of recent events.
+// EventLog is a thread-safe ring buffer of recent events with subscriber support.
 type EventLog struct {
-	mu     sync.RWMutex
-	events []GameEvent
-	max    int
+	mu        sync.RWMutex
+	events    []GameEvent
+	max       int
+	listeners []func(GameEvent)
 }
 
 // NewEventLog creates a new event log.
@@ -45,20 +46,35 @@ func NewEventLog(maxEvents int) *EventLog {
 	}
 }
 
-// Add records a new event.
-func (el *EventLog) Add(tick int64, gameTime string, eventType EventType, player string, msg string) {
+// Subscribe registers a callback that fires on every new event.
+func (el *EventLog) Subscribe(fn func(GameEvent)) {
 	el.mu.Lock()
 	defer el.mu.Unlock()
-	el.events = append(el.events, GameEvent{
+	el.listeners = append(el.listeners, fn)
+}
+
+// Add records a new event and notifies subscribers.
+func (el *EventLog) Add(tick int64, gameTime string, eventType EventType, player string, msg string) {
+	el.mu.Lock()
+	ev := GameEvent{
 		Tick:      tick,
 		Time:      gameTime,
 		Type:      eventType,
 		Player:    player,
 		Message:   msg,
 		Timestamp: time.Now(),
-	})
+	}
+	el.events = append(el.events, ev)
 	if len(el.events) > el.max {
 		el.events = el.events[len(el.events)-el.max:]
+	}
+	// Copy listeners to call outside lock
+	listeners := make([]func(GameEvent), len(el.listeners))
+	copy(listeners, el.listeners)
+	el.mu.Unlock()
+
+	for _, fn := range listeners {
+		fn(ev)
 	}
 }
 

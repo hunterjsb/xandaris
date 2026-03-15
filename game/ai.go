@@ -73,7 +73,7 @@ func PrepareHomeworld(player *entities.Player, buildMines bool) {
 		systemID = player.HomeSystem.ID
 	}
 
-	if !PlanetHasTradingPost(planet) {
+	if !planet.HasBuilding(entities.BuildingTradingPost) {
 		AddTradingPostToPlanet(planet, player.Name, systemID)
 	}
 
@@ -90,8 +90,8 @@ func PrepareHomeworld(player *entities.Player, buildMines bool) {
 
 	// Give AI a starting refinery so they produce Fuel + a generator for power
 	if buildMines {
-		AddBuildingToPlanet(planet, "Refinery", player.Name, systemID)
-		AddBuildingToPlanet(planet, "Generator", player.Name, systemID)
+		AddBuildingToPlanet(planet, entities.BuildingRefinery, player.Name, systemID)
+		AddBuildingToPlanet(planet, entities.BuildingGenerator, player.Name, systemID)
 	}
 
 	// Give non-human players a starting cargo ship for logistics
@@ -118,7 +118,7 @@ func BuildMinesOnResources(planet *entities.Planet, owner string, systemID int) 
 	generators := entities.GetGeneratorsByType(entities.EntityTypeBuilding)
 	var mineGen entities.EntityGenerator
 	for _, gen := range generators {
-		if gen.GetSubType() == "Mine" {
+		if gen.GetSubType() == entities.BuildingMine {
 			mineGen = gen
 			break
 		}
@@ -128,7 +128,7 @@ func BuildMinesOnResources(planet *entities.Planet, owner string, systemID int) 
 	}
 
 	// Build mines on essential deposits — Water (survival), Iron (building), Oil (refining)
-	targetTypes := map[string]bool{"Water": true, "Iron": true, "Oil": true}
+	targetTypes := map[string]bool{entities.ResWater: true, entities.ResIron: true, entities.ResOil: true}
 
 	for _, resourceEntity := range planet.Resources {
 		resource, ok := resourceEntity.(*entities.Resource)
@@ -159,18 +159,6 @@ func BuildMinesOnResources(planet *entities.Planet, owner string, systemID int) 
 	planet.RebalanceWorkforce()
 }
 
-// PlanetHasTradingPost checks if a planet has a Trading Post building.
-func PlanetHasTradingPost(planet *entities.Planet) bool {
-	for _, entity := range planet.Buildings {
-		if building, ok := entity.(*entities.Building); ok {
-			if building.BuildingType == "Trading Post" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // GetBuildingCost returns the credit cost for a building type by querying the generator.
 func GetBuildingCost(buildingType string) int {
 	generators := entities.GetGeneratorsByType(entities.EntityTypeBuilding)
@@ -188,7 +176,7 @@ func GetBuildingCost(buildingType string) int {
 
 // AddTradingPostToPlanet creates and attaches a Trading Post to a planet.
 func AddTradingPostToPlanet(planet *entities.Planet, owner string, systemID int) {
-	AddBuildingToPlanet(planet, "Trading Post", owner, systemID)
+	AddBuildingToPlanet(planet, entities.BuildingTradingPost, owner, systemID)
 }
 
 // EnsureResourceDeposit adds a resource deposit to a planet if it doesn't have one of that type.

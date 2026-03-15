@@ -41,7 +41,7 @@ func (rps *RefineryProductionSystem) processRefineries(planet *entities.Planet) 
 	// Find all operational refineries on this planet
 	for _, buildingEntity := range planet.Buildings {
 		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == "Refinery" && building.IsOperational {
+			if building.BuildingType == entities.BuildingRefinery && building.IsOperational {
 				rps.processRefinery(planet, building)
 			}
 		}
@@ -61,14 +61,14 @@ func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, re
 	fuelProduced := int(float64(baseFuelProduction) * levelMultiplier)
 
 	// Ensure Fuel storage exists
-	if _, hasFuel := planet.StoredResources["Fuel"]; !hasFuel {
-		planet.AddStoredResource("Fuel", 0)
+	if _, hasFuel := planet.StoredResources[entities.ResFuel]; !hasFuel {
+		planet.AddStoredResource(entities.ResFuel, 0)
 	}
 
 	// Market-responsive: if Fuel storage is over 80% capacity, idle the refinery.
 	// This prevents overproduction and conserves Oil for other uses.
 	// The refinery restarts when Fuel drops below 60%.
-	fuelStorage := planet.StoredResources["Fuel"]
+	fuelStorage := planet.StoredResources[entities.ResFuel]
 	if fuelStorage != nil && fuelStorage.Capacity > 0 {
 		fuelRatio := float64(fuelStorage.Amount) / float64(fuelStorage.Capacity)
 		if fuelRatio > 0.8 {
@@ -77,20 +77,20 @@ func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, re
 	}
 
 	// Check if planet has enough oil
-	storedOil, hasOil := planet.StoredResources["Oil"]
+	storedOil, hasOil := planet.StoredResources[entities.ResOil]
 	if !hasOil || storedOil.Amount < oilNeeded {
 		return
 	}
 
 	// Consume oil
-	planet.RemoveStoredResource("Oil", oilNeeded)
+	planet.RemoveStoredResource(entities.ResOil, oilNeeded)
 
 	// Produce fuel
-	actualFuel := planet.AddStoredResource("Fuel", fuelProduced)
+	actualFuel := planet.AddStoredResource(entities.ResFuel, fuelProduced)
 
 	// If we couldn't add fuel (storage full), put the oil back
 	if actualFuel == 0 {
-		planet.AddStoredResource("Oil", oilNeeded)
+		planet.AddStoredResource(entities.ResOil, oilNeeded)
 	}
 }
 
@@ -103,7 +103,7 @@ func (rps *RefineryProductionSystem) GetRefineryInfo(planet *entities.Planet) (c
 
 	for _, buildingEntity := range planet.Buildings {
 		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == "Refinery" && building.IsOperational {
+			if building.BuildingType == entities.BuildingRefinery && building.IsOperational {
 				count++
 				levelMultiplier := 1.0 + float64(building.Level-1)*0.3
 				totalOil += int(2.0 * levelMultiplier)

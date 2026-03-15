@@ -60,6 +60,7 @@ func (a *App) InitializeClientViews() {
 
 	// Command bar (overlay on all views)
 	a.commandBar = ui.NewCommandBar(a, a.screenWidth, a.screenHeight)
+	a.commandBar.Init()
 }
 
 // ConfigureCommandBar sets server URL and API key for the command bar's chat feature.

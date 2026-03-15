@@ -5,6 +5,19 @@ import (
 	"image/color"
 )
 
+// BuildingType constants — use these instead of raw strings to prevent typo bugs.
+const (
+	BuildingBase          = "Base"
+	BuildingMine          = "Mine"
+	BuildingGenerator     = "Generator"
+	BuildingFusionReactor = "Fusion Reactor"
+	BuildingRefinery      = "Refinery"
+	BuildingFactory       = "Factory"
+	BuildingHabitat       = "Habitat"
+	BuildingTradingPost   = "Trading Post"
+	BuildingShipyard      = "Shipyard"
+)
+
 // Building represents a building entity on a planet or resource
 type Building struct {
 	BaseEntity

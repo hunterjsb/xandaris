@@ -17,3 +17,5 @@ agent-bin
 xandaris-bin
 xandaris-server
 xandaris-agent
+*.bak
+xandaris-agent-bin

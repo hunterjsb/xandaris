@@ -57,19 +57,19 @@ func (as *AlertSystem) checkAlerts(player *entities.Player, tick int64, logger G
 		}
 
 		// Alert: Water critically low (< 20 units with population > 500)
-		water := planet.GetStoredAmount("Water")
+		water := planet.GetStoredAmount(entities.ResWater)
 		if water < 20 && planet.Population > 500 {
 			as.alert(player.Name, "water_critical", tick, logger,
 				fmt.Sprintf("Water critical on %s! (%d units, %d pop)", planet.Name, water, planet.Population))
 		}
 
 		// Alert: Fuel depleted (0 units, has buildings that need it)
-		fuel := planet.GetStoredAmount("Fuel")
+		fuel := planet.GetStoredAmount(entities.ResFuel)
 		if fuel == 0 {
 			hasFuelBuilding := false
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok {
-					if b.BuildingType == "Base" || b.BuildingType == "Habitat" || b.BuildingType == "Shipyard" {
+					if b.BuildingType == entities.BuildingBase || b.BuildingType == entities.BuildingHabitat || b.BuildingType == entities.BuildingShipyard {
 						hasFuelBuilding = true
 						break
 					}

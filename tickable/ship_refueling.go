@@ -49,7 +49,7 @@ func (srs *ShipRefuelingSystem) OnTick(tick int64) {
 
 			// Refuel from planet's Fuel storage
 			needed := ship.MaxFuel - ship.CurrentFuel
-			available := planet.GetStoredAmount("Fuel")
+			available := planet.GetStoredAmount(entities.ResFuel)
 			if available <= 0 {
 				continue
 			}
@@ -63,7 +63,7 @@ func (srs *ShipRefuelingSystem) OnTick(tick int64) {
 				refuelAmount = available
 			}
 
-			planet.RemoveStoredResource("Fuel", refuelAmount)
+			planet.RemoveStoredResource(entities.ResFuel, refuelAmount)
 			ship.Refuel(refuelAmount)
 		}
 	}
