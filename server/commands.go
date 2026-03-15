@@ -76,6 +76,12 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 	case "cancel_construction":
 		gs.handleCancelConstructionCommand(cmd)
 
+	case "standing_order":
+		gs.handleStandingOrderCommand(cmd)
+
+	case "cancel_order":
+		gs.handleCancelOrderCommand(cmd)
+
 	case "fleet_move":
 		gs.handleFleetMoveCommand(cmd)
 
@@ -900,6 +906,74 @@ func (gs *GameServer) handleFleetRemoveShipCommand(cmd game.GameCommand) {
 		}
 		close(cmd.Result)
 	}
+}
+
+func (gs *GameServer) handleStandingOrderCommand(cmd game.GameCommand) {
+	data, ok := cmd.Data.(game.StandingOrderCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid standing order data"))
+		return
+	}
+
+	order := &game.StandingOrder{
+		Player:    getCommandPlayer(cmd),
+		PlanetID:  data.PlanetID,
+		Resource:  data.Resource,
+		Action:    data.Action,
+		Quantity:  data.Quantity,
+		Threshold: data.Threshold,
+		MaxPrice:  data.MaxPrice,
+		MinPrice:  data.MinPrice,
+	}
+
+	// If no player name from auth context, try to find from planet ownership
+	if order.Player == "" {
+		for _, p := range gs.State.Players {
+			for _, planet := range p.OwnedPlanets {
+				if planet != nil && planet.GetID() == data.PlanetID {
+					order.Player = p.Name
+					break
+				}
+			}
+		}
+	}
+
+	id := gs.State.AddStandingOrder(order)
+	fmt.Printf("[Server] Standing order #%d: %s %s %d %s on planet %d (threshold %d)\n",
+		id, order.Player, order.Action, order.Quantity, order.Resource, order.PlanetID, order.Threshold)
+
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"order_id": id,
+			"action":   order.Action,
+			"resource": order.Resource,
+			"quantity": order.Quantity,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleCancelOrderCommand(cmd game.GameCommand) {
+	data, ok := cmd.Data.(game.CancelOrderCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid cancel order data"))
+		return
+	}
+	if gs.State.RemoveStandingOrder(data.OrderID) {
+		if cmd.Result != nil {
+			cmd.Result <- map[string]interface{}{"cancelled": data.OrderID}
+			close(cmd.Result)
+		}
+	} else {
+		sendResult(cmd, fmt.Errorf("order #%d not found", data.OrderID))
+	}
+}
+
+// getCommandPlayer extracts the player name from a command (if set by auth middleware).
+func getCommandPlayer(cmd game.GameCommand) string {
+	// The Result channel approach doesn't carry auth context — for now return empty
+	// and let the handler resolve from planet ownership.
+	return ""
 }
 
 func sendResult(cmd game.GameCommand, err error) {

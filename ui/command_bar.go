@@ -264,6 +264,10 @@ func (cb *CommandBar) executeCommand(input string) {
 		cb.handleBuild(strings.TrimPrefix(lower, "build "))
 	case strings.HasPrefix(lower, "sell ") || strings.HasPrefix(lower, "buy "):
 		cb.handleTrade(lower)
+	case strings.HasPrefix(lower, "order "):
+		cb.handleOrder(strings.TrimPrefix(lower, "order "))
+	case lower == "orders":
+		cb.showOrders()
 
 	case strings.Contains(lower, "help"):
 		cb.showHelp()
@@ -725,6 +729,116 @@ func (cb *CommandBar) handleTrade(input string) {
 	cb.addFeedMessage(fmt.Sprintf("%s %d %s...", verb, qty, resource), utils.SystemGreen)
 }
 
+func (cb *CommandBar) handleOrder(input string) {
+	// Parse: "sell iron above 300" or "buy water below 100"
+	// Format: order sell <resource> above <threshold> [qty <n>]
+	// Format: order buy <resource> below <threshold> [qty <n>]
+	parts := strings.Fields(input)
+	if len(parts) < 4 {
+		cb.addFeedMessage("Usage: order sell <resource> above <threshold>", utils.SystemRed)
+		cb.addFeedMessage("       order buy <resource> below <threshold>", utils.SystemRed)
+		return
+	}
+
+	action := parts[0]
+	if action != "buy" && action != "sell" {
+		cb.addFeedMessage("Order action must be 'buy' or 'sell'", utils.SystemRed)
+		return
+	}
+
+	resource := parts[1]
+	// Normalize
+	words := strings.Fields(resource)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		}
+	}
+	resource = strings.Join(words, " ")
+	switch strings.ToLower(resource) {
+	case "rm":
+		resource = "Rare Metals"
+	case "he3":
+		resource = "Helium-3"
+	case "elec":
+		resource = "Electronics"
+	}
+
+	// Parse threshold
+	threshold, err := strconv.Atoi(parts[3])
+	if err != nil {
+		cb.addFeedMessage("Invalid threshold number", utils.SystemRed)
+		return
+	}
+
+	qty := 10 // default
+	for i, p := range parts {
+		if p == "qty" && i+1 < len(parts) {
+			if q, err := strconv.Atoi(parts[i+1]); err == nil {
+				qty = q
+			}
+		}
+	}
+
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil || len(player.OwnedPlanets) == 0 {
+		cb.addFeedMessage("No planet to trade from", utils.SystemRed)
+		return
+	}
+
+	cmdCh := cb.ctx.GetCommandChannel()
+	if cmdCh == nil {
+		cb.addFeedMessage("Command channel unavailable", utils.SystemRed)
+		return
+	}
+
+	cmdCh <- game.GameCommand{
+		Type: "standing_order",
+		Data: game.StandingOrderCommandData{
+			PlanetID:  player.OwnedPlanets[0].GetID(),
+			Resource:  resource,
+			Action:    action,
+			Quantity:  qty,
+			Threshold: threshold,
+		},
+	}
+
+	direction := "above"
+	if action == "buy" {
+		direction = "below"
+	}
+	cb.addFeedMessage(fmt.Sprintf("Standing order: %s %d %s when stock %s %d",
+		action, qty, resource, direction, threshold), utils.SystemGreen)
+}
+
+func (cb *CommandBar) showOrders() {
+	state := cb.ctx.GetState()
+	if state == nil {
+		return
+	}
+	player := cb.ctx.GetHumanPlayer()
+	if player == nil {
+		return
+	}
+	orders := state.GetStandingOrders(player.Name)
+	if len(orders) == 0 {
+		cb.addFeedMessage("No standing orders", utils.TextSecondary)
+		return
+	}
+	for _, o := range orders {
+		status := "active"
+		if !o.Active {
+			status = "paused"
+		}
+		direction := "above"
+		if o.Action == "buy" {
+			direction = "below"
+		}
+		cb.addFeedMessage(fmt.Sprintf("#%d %s %d %s when %s %d [%s]",
+			o.ID, o.Action, o.Quantity, o.Resource, direction, o.Threshold, status), utils.TextPrimary)
+	}
+}
+
 func (cb *CommandBar) showHelp() {
 	commands := []struct {
 		cmd  string
@@ -742,6 +856,8 @@ func (cb *CommandBar) showHelp() {
 		{"building", "Construction queue"},
 		{"build <type>", "Build (mine/factory/etc)"},
 		{"buy/sell <n> <res>", "Trade resources"},
+		{"order sell iron above 300", "Auto-trade rule"},
+		{"orders", "List standing orders"},
 		{"status", "Game status"},
 		{"pause / 1x-8x", "Speed control"},
 	}

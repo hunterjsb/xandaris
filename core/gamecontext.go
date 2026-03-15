@@ -41,6 +41,9 @@ func (a *App) GetTickInfo() (tick int64, gameTime string, speed string, paused b
 func (a *App) GetCommandChannel() chan game.GameCommand {
 	return a.Server.GetCommandChannel()
 }
+func (a *App) GetStandingOrders(player string) []*game.StandingOrder {
+	return a.Server.GetStandingOrders(player)
+}
 
 // GetSystemsMap returns systems indexed by ID (for UI components)
 func (a *App) GetSystemsMap() map[int]*entities.System {

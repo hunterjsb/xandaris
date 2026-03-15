@@ -203,6 +203,9 @@ func (gs *GameServer) GetRegistry() *game.PlayerRegistry {
 func (gs *GameServer) GetCommandChannel() chan game.GameCommand {
 	return gs.State.Commands
 }
+func (gs *GameServer) GetStandingOrders(player string) []*game.StandingOrder {
+	return gs.State.GetStandingOrders(player)
+}
 func (gs *GameServer) GetTickInfo() (tick int64, gameTime string, speed string, paused bool) {
 	if gs.TickManager == nil {
 		return 0, "0:00", "1x", false
@@ -309,6 +312,67 @@ func (gs *GameServer) StartShipJourney(ship *entities.Ship, targetSystemID int) 
 // GetSystemsMap returns systems indexed by ID.
 func (gs *GameServer) GetSystemsMap() map[int]*entities.System {
 	return gs.State.GetSystemsMap()
+}
+
+// --- Standing order support ---
+
+// GetStandingOrderInfos implements tickable.StandingOrderProvider.
+func (gs *GameServer) GetStandingOrderInfos() []tickable.StandingOrderInfo {
+	result := make([]tickable.StandingOrderInfo, 0, len(gs.State.StandingOrders))
+	for _, o := range gs.State.StandingOrders {
+		result = append(result, tickable.StandingOrderInfo{
+			ID: o.ID, Player: o.Player, PlanetID: o.PlanetID,
+			Resource: o.Resource, Action: o.Action, Quantity: o.Quantity,
+			Threshold: o.Threshold, Active: o.Active,
+		})
+	}
+	return result
+}
+
+// ExecuteStandingOrderTrade implements tickable.StandingOrderProvider.
+func (gs *GameServer) ExecuteStandingOrderTrade(order tickable.StandingOrderInfo, player *entities.Player) error {
+	if gs.State.TradeExec == nil || gs.State.Market == nil {
+		return fmt.Errorf("market not available")
+	}
+
+	// Price check from original order (if set)
+	for _, o := range gs.State.StandingOrders {
+		if o.ID == order.ID {
+			if o.Action == "buy" && o.MaxPrice > 0 {
+				price := gs.State.Market.GetBuyPrice(order.Resource)
+				if int(price) > o.MaxPrice {
+					return fmt.Errorf("price too high")
+				}
+			}
+			if o.Action == "sell" && o.MinPrice > 0 {
+				price := gs.State.Market.GetSellPrice(order.Resource)
+				if int(price) < o.MinPrice {
+					return fmt.Errorf("price too low")
+				}
+			}
+			break
+		}
+	}
+
+	// Find the planet
+	var planet *entities.Planet
+	for _, p := range player.OwnedPlanets {
+		if p != nil && p.GetID() == order.PlanetID {
+			planet = p
+			break
+		}
+	}
+	if planet == nil {
+		return fmt.Errorf("planet not found")
+	}
+
+	var err error
+	if order.Action == "buy" {
+		_, err = gs.State.TradeExec.Buy(player, gs.State.Players, order.Resource, order.Quantity, planet)
+	} else {
+		_, err = gs.State.TradeExec.Sell(player, gs.State.Players, order.Resource, order.Quantity, planet)
+	}
+	return err
 }
 
 // --- serverSystemContext implements tickable.SystemContext ---

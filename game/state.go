@@ -5,16 +5,66 @@ import (
 	"github.com/hunterjsb/xandaris/entities"
 )
 
+// StandingOrder is an automated trade rule that executes when conditions are met.
+type StandingOrder struct {
+	ID        int    `json:"id"`
+	Player    string `json:"player"`
+	PlanetID  int    `json:"planet_id"`
+	Resource  string `json:"resource"`
+	Action    string `json:"action"`    // "buy" or "sell"
+	Quantity  int    `json:"quantity"`   // units per execution
+	Threshold int    `json:"threshold"`  // sell when stock > threshold, buy when stock < threshold
+	MaxPrice  int    `json:"max_price"`  // buy only if price <= this (0 = any)
+	MinPrice  int    `json:"min_price"`  // sell only if price >= this (0 = any)
+	Active    bool   `json:"active"`
+}
+
 // State represents the core game state (pure data, no behavior)
 type State struct {
-	Systems     []*entities.System
-	Hyperlanes  []entities.Hyperlane
-	Players     []*entities.Player
-	HumanPlayer *entities.Player
-	Seed        int64
-	Market        *economy.Market
-	TradeExec     *economy.TradeExecutor
-	Commands      chan GameCommand
+	Systems        []*entities.System
+	Hyperlanes     []entities.Hyperlane
+	Players        []*entities.Player
+	HumanPlayer    *entities.Player
+	Seed           int64
+	Market         *economy.Market
+	TradeExec      *economy.TradeExecutor
+	Commands       chan GameCommand
+	StandingOrders []*StandingOrder
+	nextOrderID    int
+}
+
+// AddStandingOrder creates a new standing order and returns its ID.
+func (gs *State) AddStandingOrder(order *StandingOrder) int {
+	gs.nextOrderID++
+	order.ID = gs.nextOrderID
+	order.Active = true
+	gs.StandingOrders = append(gs.StandingOrders, order)
+	return order.ID
+}
+
+// RemoveStandingOrder removes an order by ID. Returns true if found.
+func (gs *State) RemoveStandingOrder(id int) bool {
+	for i, o := range gs.StandingOrders {
+		if o.ID == id {
+			gs.StandingOrders = append(gs.StandingOrders[:i], gs.StandingOrders[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// GetStandingOrders returns orders for a player (empty string = all).
+func (gs *State) GetStandingOrders(player string) []*StandingOrder {
+	if player == "" {
+		return gs.StandingOrders
+	}
+	var result []*StandingOrder
+	for _, o := range gs.StandingOrders {
+		if o.Player == player {
+			result = append(result, o)
+		}
+	}
+	return result
 }
 
 // GameCommand represents a command to be executed on the main goroutine.
@@ -95,6 +145,22 @@ type WorkforceAssignCommandData struct {
 // CancelConstructionCommandData is the payload for cancelling a construction.
 type CancelConstructionCommandData struct {
 	ConstructionID string // ID of the construction item
+}
+
+// StandingOrderCommandData is the payload for creating a standing trade order.
+type StandingOrderCommandData struct {
+	PlanetID  int
+	Resource  string
+	Action    string // "buy" or "sell"
+	Quantity  int
+	Threshold int
+	MaxPrice  int // buy only if <= this (0 = any)
+	MinPrice  int // sell only if >= this (0 = any)
+}
+
+// CancelOrderCommandData is the payload for cancelling a standing order.
+type CancelOrderCommandData struct {
+	OrderID int
 }
 
 // FleetMoveCommandData is the payload for moving a fleet to another system.

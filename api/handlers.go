@@ -27,6 +27,7 @@ type GameStateProvider interface {
 	GetRegistry() *game.PlayerRegistry
 	GetTickInfo() (tick int64, gameTime string, speed string, paused bool)
 	GetCommandChannel() chan game.GameCommand
+	GetStandingOrders(player string) []*game.StandingOrder
 }
 
 // findPlayer returns the player matching the given name, or falls back to the human player.

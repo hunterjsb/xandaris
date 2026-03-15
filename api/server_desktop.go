@@ -334,6 +334,93 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetPlayers(getProvider())})
 	})
 
+	mux.HandleFunc("/api/orders", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		switch r.Method {
+		case http.MethodGet:
+			player := getAuthPlayer(r)
+			orders := p.GetStandingOrders(player)
+			if orders == nil {
+				orders = []*game.StandingOrder{}
+			}
+			writeJSON(w, APIResponse{OK: true, Data: orders})
+		case http.MethodPost:
+			var req struct {
+				PlanetID  int    `json:"planet_id"`
+				Resource  string `json:"resource"`
+				Action    string `json:"action"`
+				Quantity  int    `json:"quantity"`
+				Threshold int    `json:"threshold"`
+				MaxPrice  int    `json:"max_price"`
+				MinPrice  int    `json:"min_price"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, "invalid JSON")
+				return
+			}
+			if req.Action != "buy" && req.Action != "sell" {
+				writeErr(w, http.StatusBadRequest, "action must be 'buy' or 'sell'")
+				return
+			}
+			if req.Quantity <= 0 {
+				writeErr(w, http.StatusBadRequest, "quantity must be positive")
+				return
+			}
+			resultCh := make(chan interface{}, 1)
+			p.GetCommandChannel() <- game.GameCommand{
+				Type: "standing_order",
+				Data: game.StandingOrderCommandData{
+					PlanetID:  req.PlanetID,
+					Resource:  req.Resource,
+					Action:    req.Action,
+					Quantity:  req.Quantity,
+					Threshold: req.Threshold,
+					MaxPrice:  req.MaxPrice,
+					MinPrice:  req.MinPrice,
+				},
+				Result: resultCh,
+			}
+			select {
+			case result := <-resultCh:
+				switch v := result.(type) {
+				case error:
+					writeErr(w, http.StatusBadRequest, v.Error())
+				default:
+					writeJSON(w, APIResponse{OK: true, Data: v})
+				}
+			case <-time.After(5 * time.Second):
+				writeErr(w, http.StatusGatewayTimeout, "timed out")
+			}
+		case http.MethodDelete:
+			var req struct {
+				OrderID int `json:"order_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, "invalid JSON")
+				return
+			}
+			resultCh := make(chan interface{}, 1)
+			p.GetCommandChannel() <- game.GameCommand{
+				Type:   "cancel_order",
+				Data:   game.CancelOrderCommandData{OrderID: req.OrderID},
+				Result: resultCh,
+			}
+			select {
+			case result := <-resultCh:
+				switch v := result.(type) {
+				case error:
+					writeErr(w, http.StatusBadRequest, v.Error())
+				default:
+					writeJSON(w, APIResponse{OK: true, Data: v})
+				}
+			case <-time.After(5 * time.Second):
+				writeErr(w, http.StatusGatewayTimeout, "timed out")
+			}
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET, POST, or DELETE")
+		}
+	})
+
 	mux.HandleFunc("/api/leaderboard", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
