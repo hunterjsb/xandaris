@@ -20,18 +20,22 @@ import (
 // CommandBar is a game console / command bar that slides up from the bottom.
 // Triggered by backtick (`). Shows event feed + text input for commands.
 type CommandBar struct {
-	ctx          UIContext
-	isOpen       bool
-	input        string
-	history      []string // command history
-	historyIdx   int
-	userMessages []feedMessage // command output (persists until cleared)
-	feedMessages []feedMessage // combined display: user msgs + events
-	maxFeed      int
-	screenWidth  int
-	screenHeight int
-	serverURL    string // base URL for API calls (e.g. "https://api.xandaris.space")
-	apiKey       string // player's API key for authenticated requests
+	ctx              UIContext
+	isOpen           bool
+	input            string
+	history          []string      // command history
+	historyIdx       int
+	userMessages     []feedMessage // command output (persists until cleared)
+	feedMessages     []feedMessage // combined display: user msgs + events
+	maxFeed          int
+	screenWidth      int
+	screenHeight     int
+	serverURL        string // base URL for API calls (e.g. "https://api.xandaris.space")
+	apiKey           string // player's API key for authenticated requests
+	showGlobalEvents bool // whether to show global events or just chat/own actions
+	copyFlashTimer   int  // frames remaining for "Copied!" flash
+	tabHeld          bool // debounce for tab key
+	copyHeld         bool // debounce for ctrl+c
 }
 
 type feedMessage struct {
@@ -42,11 +46,12 @@ type feedMessage struct {
 // NewCommandBar creates a new command bar.
 func NewCommandBar(ctx UIContext, screenWidth, screenHeight int) *CommandBar {
 	return &CommandBar{
-		ctx:          ctx,
-		maxFeed:      12,
-		screenWidth:  screenWidth,
-		screenHeight: screenHeight,
-		serverURL:    "http://localhost:8080",
+		ctx:              ctx,
+		maxFeed:          12,
+		screenWidth:      screenWidth,
+		screenHeight:     screenHeight,
+		serverURL:        "http://localhost:8080",
+		showGlobalEvents: true,
 	}
 }
 
@@ -114,6 +119,28 @@ func (cb *CommandBar) Update() {
 		cb.Close()
 	}
 
+	// Tab — toggle global events
+	if ebiten.IsKeyPressed(ebiten.KeyTab) && !cb.tabHeld {
+		cb.showGlobalEvents = !cb.showGlobalEvents
+		if cb.showGlobalEvents {
+			cb.addFeedMessage("Events: all", utils.TextSecondary)
+		} else {
+			cb.addFeedMessage("Events: chat only", utils.TextSecondary)
+		}
+		cb.refreshFeed()
+	}
+	cb.tabHeld = ebiten.IsKeyPressed(ebiten.KeyTab)
+
+	// Ctrl+C — copy feed to clipboard
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && ebiten.IsKeyPressed(ebiten.KeyC) && !cb.copyHeld {
+		cb.copyFeedToClipboard()
+	}
+	cb.copyHeld = ebiten.IsKeyPressed(ebiten.KeyControl) && ebiten.IsKeyPressed(ebiten.KeyC)
+
+	if cb.copyFlashTimer > 0 {
+		cb.copyFlashTimer--
+	}
+
 	// Refresh feed periodically (every 60 frames = ~1 second)
 	tick := cb.ctx.GetTickManager().GetCurrentTick()
 	if tick%10 == 0 {
@@ -140,8 +167,17 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	}
 	bgPanel.Draw(screen)
 
-	// Title
-	views.DrawText(screen, "Chat  [` close | /help commands]", barX+10, barY+12, utils.TextSecondary)
+	// Title with toggle state
+	eventsLabel := "All Events"
+	if !cb.showGlobalEvents {
+		eventsLabel = "Chat Only"
+	}
+	titleText := fmt.Sprintf("Chat  [` close | Tab: %s | Ctrl+C copy | /help]", eventsLabel)
+	views.DrawText(screen, titleText, barX+10, barY+12, utils.TextSecondary)
+
+	if cb.copyFlashTimer > 0 {
+		views.DrawText(screen, "Copied!", barX+barWidth-60, barY+12, utils.SystemGreen)
+	}
 
 	// Event feed (above the input)
 	feedY := barY + 28
@@ -185,7 +221,11 @@ func (cb *CommandBar) refreshFeed() {
 		cb.feedMessages = append(cb.feedMessages, msg)
 	}
 
-	// Fill remaining space with event log entries
+	// Fill remaining space with event log entries (if enabled)
+	if !cb.showGlobalEvents {
+		return
+	}
+
 	el := cb.ctx.GetEventLog()
 	if el == nil {
 		return
@@ -195,8 +235,23 @@ func (cb *CommandBar) refreshFeed() {
 		return
 	}
 
-	events := el.Recent(remaining)
+	// Get human player name for filtering
+	humanName := ""
+	if human := cb.ctx.GetHumanPlayer(); human != nil {
+		humanName = human.Name
+	}
+
+	events := el.Recent(remaining * 2) // fetch extra to account for filtering
 	for _, ev := range events {
+		if len(cb.feedMessages) >= cb.maxFeed {
+			break
+		}
+
+		// In "chat only" mode, skip events not involving the player
+		if !cb.showGlobalEvents && humanName != "" && ev.Player != humanName {
+			continue
+		}
+
 		c := utils.TextSecondary
 		switch game.EventType(ev.Type) {
 		case game.EventTrade:
@@ -323,6 +378,21 @@ func (cb *CommandBar) executeSlashCommand(input string) {
 	default:
 		cb.addFeedMessage(fmt.Sprintf("Unknown command: /%s (try /help)", input), utils.SystemRed)
 	}
+}
+
+// copyFeedToClipboard copies all visible feed messages to the system clipboard.
+func (cb *CommandBar) copyFeedToClipboard() {
+	var sb strings.Builder
+	for _, msg := range cb.feedMessages {
+		sb.WriteString(msg.Text)
+		sb.WriteString("\n")
+	}
+	text := strings.TrimSpace(sb.String())
+	if text == "" {
+		return
+	}
+	copyToClipboard(text)
+	cb.copyFlashTimer = 90 // ~1.5 seconds
 }
 
 // handleNavigateAction processes a navigate:target:id action from the agent.
