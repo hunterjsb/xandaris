@@ -150,11 +150,19 @@ func (rs *RemoteSync) syncPlayer() {
 				PowerGenerated    float64        `json:"power_generated"`
 				PowerConsumed     float64        `json:"power_consumed"`
 				SystemID          int            `json:"system_id"`
-				Buildings         []struct {
-					Type          string `json:"type"`
-					Level         int    `json:"level"`
-					IsOperational bool   `json:"is_operational"`
+				Buildings []struct {
+					Type          string  `json:"type"`
+					Level         int     `json:"level"`
+					IsOperational bool    `json:"is_operational"`
+					Staffing      float64 `json:"staffing"`
 				} `json:"buildings"`
+				ResourceDeposits []struct {
+					ID             int     `json:"id"`
+					ResourceType   string  `json:"resource_type"`
+					Abundance      int     `json:"abundance"`
+					ExtractionRate float64 `json:"extraction_rate"`
+					HasMine        bool    `json:"has_mine"`
+				} `json:"resource_deposits"`
 			} `json:"planets"`
 		} `json:"data"`
 	}
