@@ -88,14 +88,19 @@ func findPlanetAtOrbit(ship *entities.Ship, systems []*entities.System) *entitie
 		if sys.ID != ship.CurrentSystem {
 			continue
 		}
+		// Find the closest owned planet in this system
+		var best *entities.Planet
+		bestDist := 999.0
 		for _, e := range sys.Entities {
 			if planet, ok := e.(*entities.Planet); ok {
-				if math.Abs(ship.GetOrbitDistance()-planet.GetOrbitDistance()) < 5.0 {
-					return planet
+				dist := math.Abs(ship.GetOrbitDistance() - planet.GetOrbitDistance())
+				if dist < bestDist {
+					bestDist = dist
+					best = planet
 				}
 			}
 		}
-		break
+		return best // return closest planet in the system
 	}
 	return nil
 }
