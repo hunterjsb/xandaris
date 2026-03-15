@@ -17,7 +17,10 @@ func (a *App) drawTickInfo(screen *ebiten.Image) {
 		return
 	}
 
-	a.drawStatusBar(screen)
+	// Hide status bar when command bar is open to avoid overlap
+	if a.commandBar == nil || !a.commandBar.IsOpen() {
+		a.drawStatusBar(screen)
+	}
 	a.drawEmpirePanel(screen)
 }
 

@@ -172,59 +172,57 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	barHeight := 180
+	barHeight := 160
 	barY := cb.screenHeight - barHeight
 	barX := 0
 	barWidth := cb.screenWidth
-	lineHeight := 13
+	lineHeight := 14
 
-	// Semi-transparent background
+	// Background
 	bgPanel := &views.UIPanel{
 		X: barX, Y: barY, Width: barWidth, Height: barHeight,
-		BgColor:     color.RGBA{10, 12, 22, 230},
+		BgColor:     color.RGBA{8, 10, 20, 235},
 		BorderColor: color.RGBA{30, 40, 68, 255},
 	}
 	bgPanel.Draw(screen)
 
-	// Input line at the bottom
-	inputY := barY + barHeight - 22
+	dimColor := color.RGBA{50, 60, 80, 255}
 
-	// Input background
+	// Input bar at very bottom
+	inputY := barY + barHeight - 18
+
 	inputBg := &views.UIPanel{
-		X: barX + 5, Y: inputY - 4, Width: barWidth - 10, Height: 20,
-		BgColor:     color.RGBA{20, 20, 40, 255},
-		BorderColor: color.RGBA{40, 50, 80, 255},
+		X: barX + 4, Y: inputY - 3, Width: barWidth - 8, Height: 18,
+		BgColor:     color.RGBA{16, 18, 35, 255},
+		BorderColor: color.RGBA{35, 45, 70, 255},
 	}
 	inputBg.Draw(screen)
 
-	// Prompt + text
 	cursor := "_"
 	tick := cb.ctx.GetTickManager().GetCurrentTick()
 	if tick%20 < 10 {
 		cursor = " "
 	}
-	inputText := fmt.Sprintf("> %s%s", cb.input, cursor)
-	views.DrawText(screen, inputText, barX+12, inputY, utils.Highlight)
+	views.DrawText(screen, fmt.Sprintf("> %s%s", cb.input, cursor), barX+10, inputY, utils.Highlight)
 
-	// Title bar (top of panel)
+	// Hints on the right side of input bar
 	eventsLabel := "All"
 	if !cb.showGlobalEvents {
 		eventsLabel = "Chat"
 	}
-	dimColor := color.RGBA{60, 70, 90, 255}
-	titleText := fmt.Sprintf("[`] close  [Tab] %s  [Ctrl+C] copy  [/help]", eventsLabel)
-	views.DrawText(screen, titleText, barX+10, barY+8, dimColor)
+	hints := fmt.Sprintf("[`]close [Tab]%s [Ctrl+C]copy", eventsLabel)
+	hintsW := len(hints) * 6
+	views.DrawText(screen, hints, barX+barWidth-hintsW-10, inputY, dimColor)
 
 	if cb.copyFlashTimer > 0 {
-		views.DrawText(screen, "Copied!", barX+barWidth-60, barY+8, utils.SystemGreen)
+		views.DrawText(screen, "Copied!", barX+barWidth-50, barY+4, utils.SystemGreen)
 	}
 
-	// Feed area: messages rendered bottom-up (newest at bottom, just above input)
+	// Feed area: bottom-up, newest near input
 	feedBottom := inputY - 8
-	feedTop := barY + 22
+	feedTop := barY + 4
 	maxVisible := (feedBottom - feedTop) / lineHeight
 
-	// Determine which messages to show (with scroll)
 	totalMsgs := len(cb.feedMessages)
 	endIdx := totalMsgs - cb.scrollOffset
 	if endIdx < 0 {
@@ -235,7 +233,6 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 		startIdx = 0
 	}
 
-	// Draw from bottom up
 	y := feedBottom
 	for i := endIdx - 1; i >= startIdx; i-- {
 		if y < feedTop {
@@ -245,63 +242,56 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 		y -= lineHeight
 	}
 
-	// Scroll indicator
 	if cb.scrollOffset > 0 {
-		views.DrawText(screen, fmt.Sprintf("^ %d more ^", cb.scrollOffset), barX+barWidth/2-30, feedTop, dimColor)
+		views.DrawText(screen, fmt.Sprintf("^ scroll up: %d more ^", cb.scrollOffset), barX+barWidth/2-60, feedTop, dimColor)
 	}
 }
 
 // refreshFeed rebuilds the display by merging user messages (top) with recent events.
 func (cb *CommandBar) refreshFeed() {
-	// Build feed: events at top, then user messages at bottom
-	cb.feedMessages = make([]feedMessage, 0, 50)
+	// User messages are the primary chronological feed
+	cb.feedMessages = make([]feedMessage, 0, len(cb.userMessages)+20)
+	cb.feedMessages = append(cb.feedMessages, cb.userMessages...)
 
-	// Add event log entries first (if enabled)
+	// Append new events at the end (if enabled)
 	if cb.showGlobalEvents {
 		el := cb.ctx.GetEventLog()
 		if el != nil {
-			humanName := ""
-			if human := cb.ctx.GetHumanPlayer(); human != nil {
-				humanName = human.Name
-			}
-
-			events := el.Recent(20)
+			events := el.Recent(5) // just the latest few
 			for _, ev := range events {
-				// In "chat only" mode, skip events not involving the player
-				if !cb.showGlobalEvents && humanName != "" && ev.Player != humanName {
+				// Skip if we already have this event (check by message text)
+				text := fmt.Sprintf("[%s] %s", ev.Time, ev.Message)
+				if len(text) > 100 {
+					text = text[:97] + "..."
+				}
+				// Avoid duplicates
+				alreadyShown := false
+				for i := len(cb.feedMessages) - 1; i >= 0 && i >= len(cb.feedMessages)-10; i-- {
+					if cb.feedMessages[i].Text == text {
+						alreadyShown = true
+						break
+					}
+				}
+				if alreadyShown {
 					continue
 				}
 
 				c := utils.TextSecondary
 				switch game.EventType(ev.Type) {
 				case game.EventTrade:
-					c = utils.SystemGreen
+					c = color.RGBA{80, 140, 80, 255}
 				case game.EventBuild:
-					c = utils.SystemBlue
+					c = color.RGBA{80, 100, 160, 255}
 				case game.EventColonize:
-					c = utils.SystemPurple
-				}
-				if string(ev.Type) == "event" {
-					c = utils.SystemOrange
+					c = color.RGBA{140, 80, 160, 255}
 				}
 				if ev.Type == game.EventAlert {
-					c = utils.SystemRed
-				}
-				if ev.Type == game.EventJoin {
-					c = utils.SystemPurple
-				}
-
-				text := fmt.Sprintf("[%s] %s", ev.Time, ev.Message)
-				if len(text) > 100 {
-					text = text[:97] + "..."
+					c = color.RGBA{180, 80, 80, 255}
 				}
 				cb.feedMessages = append(cb.feedMessages, feedMessage{Text: text, Color: c})
 			}
 		}
 	}
-
-	// Append user messages (chat, command output) — these appear at the bottom
-	cb.feedMessages = append(cb.feedMessages, cb.userMessages...)
 }
 
 // executeCommand parses and executes a user command.
