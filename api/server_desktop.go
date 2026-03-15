@@ -670,6 +670,36 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetCatalog()})
 	})
 
+	mux.HandleFunc("/api/workforce/assign", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req WorkforceAssignRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		p := getProvider()
+		resultCh := make(chan interface{}, 1)
+		p.GetCommandChannel() <- game.GameCommand{
+			Type:   "workforce_assign",
+			Data:   game.WorkforceAssignCommandData{PlanetID: req.PlanetID, BuildingIndex: req.BuildingIndex, Workers: req.Workers},
+			Result: resultCh,
+		}
+		select {
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
 	mux.HandleFunc("/api/construction/cancel", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeErr(w, http.StatusMethodNotAllowed, "POST only")

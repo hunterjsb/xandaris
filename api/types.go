@@ -322,6 +322,13 @@ type WorkforceEntry struct {
 	Online   bool    `json:"online"`
 }
 
+// WorkforceAssignRequest is the body for POST /api/workforce/assign.
+type WorkforceAssignRequest struct {
+	PlanetID      int `json:"planet_id"`
+	BuildingIndex int `json:"building_index"`
+	Workers       int `json:"workers"` // -1 = auto, 0 = disable, N = set target
+}
+
 // SystemPrices shows local prices for a system (for trade route planning).
 type SystemPrices struct {
 	SystemID   int                `json:"system_id"`

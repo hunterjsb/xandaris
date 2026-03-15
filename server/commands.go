@@ -52,6 +52,9 @@ func (gs *GameServer) executeCommand(cmd game.GameCommand) {
 	case "colonize":
 		gs.handleColonizeCommand(cmd)
 
+	case "workforce_assign":
+		gs.handleWorkforceAssignCommand(cmd)
+
 	case "cancel_construction":
 		gs.handleCancelConstructionCommand(cmd)
 
@@ -561,6 +564,45 @@ func (gs *GameServer) handleColonizeCommand(cmd game.GameCommand) {
 			"planet_id": planet.GetID(),
 			"system_id": systemID,
 			"colonists": planet.Population,
+		}
+		close(cmd.Result)
+	}
+}
+
+func (gs *GameServer) handleWorkforceAssignCommand(cmd game.GameCommand) {
+	wd, ok := cmd.Data.(game.WorkforceAssignCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid workforce data"))
+		return
+	}
+	human := gs.State.HumanPlayer
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	planet := gs.CargoCommander.FindPlanetByID(wd.PlanetID)
+	if planet == nil || planet.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("planet not found or not owned"))
+		return
+	}
+	if wd.BuildingIndex < 0 || wd.BuildingIndex >= len(planet.Buildings) {
+		sendResult(cmd, fmt.Errorf("invalid building index"))
+		return
+	}
+	building, ok := planet.Buildings[wd.BuildingIndex].(*entities.Building)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid building"))
+		return
+	}
+	building.SetDesiredWorkers(wd.Workers)
+	planet.RebalanceWorkforce()
+	if cmd.Result != nil {
+		cmd.Result <- map[string]interface{}{
+			"building":  building.BuildingType,
+			"desired":   building.DesiredWorkers,
+			"assigned":  building.WorkersAssigned,
+			"required":  building.WorkersRequired,
+			"staffing":  building.GetStaffingRatio(),
 		}
 		close(cmd.Result)
 	}

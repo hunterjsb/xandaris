@@ -79,6 +79,13 @@ type ShipRefuelCommandData struct {
 	Amount   int // amount of Fuel to transfer (0 = fill up)
 }
 
+// WorkforceAssignCommandData is the payload for assigning workforce.
+type WorkforceAssignCommandData struct {
+	PlanetID      int
+	BuildingIndex int
+	Workers       int // -1 = auto, 0 = disable, N = set target
+}
+
 // CancelConstructionCommandData is the payload for cancelling a construction.
 type CancelConstructionCommandData struct {
 	ConstructionID string // ID of the construction item
