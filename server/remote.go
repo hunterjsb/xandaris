@@ -55,6 +55,33 @@ func (rs *RemoteSync) Stop() {
 // syncAll fetches everything from the remote server.
 func (rs *RemoteSync) syncAll() {
 	rs.syncPlayer()
+	rs.syncEconomy()
+}
+
+// syncEconomy updates market prices from the remote server.
+func (rs *RemoteSync) syncEconomy() {
+	data, err := rs.apiGet("/api/economy")
+	if err != nil {
+		return
+	}
+	var resp struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Resources map[string]struct {
+				BuyPrice  float64 `json:"buy_price"`
+				SellPrice float64 `json:"sell_price"`
+			} `json:"resources"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil || !resp.OK {
+		return
+	}
+	// Update local market with remote prices
+	if rs.gs.State.Market != nil {
+		for name, r := range resp.Data.Resources {
+			rs.gs.State.Market.SetPrice(name, r.BuyPrice, r.SellPrice)
+		}
+	}
 }
 
 // syncPlayer updates the human player's credits and storage from remote.

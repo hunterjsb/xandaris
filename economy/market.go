@@ -189,6 +189,16 @@ func (m *Market) updatePricesLocked(supply map[string]float64) {
 	}
 }
 
+// SetPrice directly sets buy and sell prices for a resource (used by remote sync).
+func (m *Market) SetPrice(resourceType string, buyPrice, sellPrice float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rm := m.getOrCreate(resourceType)
+	rm.BuyPrice = buyPrice
+	rm.SellPrice = sellPrice
+	rm.CurrentPrice = (buyPrice + sellPrice) / 2
+}
+
 // SetDemand sets the consumption rate for a resource (units per interval).
 func (m *Market) SetDemand(resourceType string, demand float64) {
 	m.mu.Lock()
