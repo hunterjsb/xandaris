@@ -93,7 +93,10 @@ func (a *App) Update() error {
 		a.Server.TickManager.Update()
 	}
 
-	// Update current view (client-side rendering)
+	// Update current view (skip input processing when command bar is open)
+	if a.commandBar != nil && a.commandBar.IsOpen() {
+		return nil
+	}
 	return a.viewManager.Update()
 }
 

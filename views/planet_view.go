@@ -9,7 +9,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/rendering"
 	"github.com/hunterjsb/xandaris/utils"
@@ -771,108 +770,38 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		return nil
 	}
 
-	owner := planet.Owner
-	if owner == "" {
-		owner = "Unclaimed"
-	}
+	var lines []string
 
-	lines := []string{
-		fmt.Sprintf("Owner: %s", owner),
-		fmt.Sprintf("Type: %s", planet.PlanetType),
-		fmt.Sprintf("Atmosphere: %s", planet.Atmosphere),
-		fmt.Sprintf("Temperature: %d°C", planet.Temperature),
-		fmt.Sprintf("Habitability: %d%%", planet.Habitability),
-	}
-
-	populationStr := utils.FormatInt64WithCommas(planet.Population)
-	capacity := planet.GetTotalPopulationCapacity()
-	if capacity > 0 {
-		capacityStr := utils.FormatInt64WithCommas(capacity)
-		lines = append(lines, fmt.Sprintf("Population: %s / %s", populationStr, capacityStr))
-
-		baseHousing := planet.GetBaseHousingCapacity()
-		otherHousing := capacity - baseHousing
-		if otherHousing < 0 {
-			otherHousing = 0
-		}
-
-		lines = append(lines, fmt.Sprintf(
-			"Housing: %s (Base %s | Buildings %s)",
-			capacityStr,
-			utils.FormatInt64WithCommas(baseHousing),
-			utils.FormatInt64WithCommas(otherHousing),
-		))
+	// Population
+	pop := utils.FormatInt64WithCommas(planet.Population)
+	cap := planet.GetTotalPopulationCapacity()
+	if cap > 0 {
+		lines = append(lines, fmt.Sprintf("Pop: %s / %s", pop, utils.FormatInt64WithCommas(cap)))
 	} else {
-		lines = append(lines, fmt.Sprintf("Population: %s (no housing)", populationStr))
+		lines = append(lines, fmt.Sprintf("Pop: %s", pop))
 	}
 
-	// Happiness indicator
+	// Happiness + productivity (compact)
 	if planet.Population > 0 {
-		happinessLabel := "Neutral"
-		if planet.Happiness >= 0.8 {
-			happinessLabel = "Thriving"
-		} else if planet.Happiness >= 0.6 {
-			happinessLabel = "Content"
-		} else if planet.Happiness >= 0.4 {
-			happinessLabel = "Uneasy"
-		} else if planet.Happiness >= 0.2 {
-			happinessLabel = "Unhappy"
-		} else {
-			happinessLabel = "Miserable"
-		}
-		techLabel := "None"
-		if planet.TechLevel >= 3.0 {
-			techLabel = "Advanced"
-		} else if planet.TechLevel >= 2.0 {
-			techLabel = "Developed"
-		} else if planet.TechLevel >= 1.0 {
-			techLabel = "Basic"
-		} else if planet.TechLevel >= 0.3 {
-			techLabel = "Primitive"
-		}
-		lines = append(lines, fmt.Sprintf("Happiness: %s (%.0f%%) → %.1fx prod | Tech: %s (%.1f)",
-			happinessLabel, planet.Happiness*100, planet.ProductivityBonus, techLabel, planet.TechLevel))
-
-		// Power status
-		if planet.PowerConsumed > 0 {
-			powerPct := planet.GetPowerRatio() * 100
-			powerStatus := "OK"
-			if powerPct < 50 {
-				powerStatus = "CRITICAL"
-			} else if powerPct < 80 {
-				powerStatus = "Low"
-			}
-			lines = append(lines, fmt.Sprintf("Power: %.0f / %.0f MW (%s)",
-				planet.PowerGenerated, planet.PowerConsumed, powerStatus))
-		}
+		lines = append(lines, fmt.Sprintf("Happiness: %.0f%% (%.1fx prod)",
+			planet.Happiness*100, planet.ProductivityBonus))
 	}
 
+	// Power (compact)
+	if planet.PowerConsumed > 0 {
+		lines = append(lines, fmt.Sprintf("Power: %.0f/%.0f MW (%.0f%%)",
+			planet.PowerGenerated, planet.PowerConsumed, planet.GetPowerRatio()*100))
+	}
+
+	// Workforce
 	if planet.WorkforceTotal > 0 {
-		lines = append(lines, fmt.Sprintf(
-			"Workforce: %s / %s",
+		lines = append(lines, fmt.Sprintf("Workforce: %s / %s",
 			utils.FormatInt64WithCommas(planet.WorkforceUsed),
-			utils.FormatInt64WithCommas(planet.WorkforceTotal),
-		))
+			utils.FormatInt64WithCommas(planet.WorkforceTotal)))
 	}
 
-	lines = append(lines, fmt.Sprintf("Resources: %d deposits", len(planet.Resources)))
-	lines = append(lines, fmt.Sprintf("Buildings: %d", len(planet.Buildings)))
-
-	// Credit income/upkeep summary
-	creditIncome := int(planet.Population / 100)     // 1cr per 100 pop
-	creditUpkeep := int(planet.Population / 1000)     // admin costs
-	for _, be := range planet.Buildings {
-		if b, ok := be.(*entities.Building); ok && b.IsOperational {
-			if cost, found := economy.BuildingCreditUpkeep[b.BuildingType]; found {
-				creditUpkeep += cost + (b.Level - 1)
-			}
-			if b.BuildingType == "Trading Post" {
-				creditIncome += 2 * b.Level
-			}
-		}
-	}
-	netCredits := creditIncome - creditUpkeep
-	lines = append(lines, fmt.Sprintf("Credits: +%d income  -%d upkeep  =%d net", creditIncome, creditUpkeep, netCredits))
+	// Buildings + deposits count
+	lines = append(lines, fmt.Sprintf("%d buildings  %d deposits", len(planet.Buildings), len(planet.Resources)))
 
 	return lines
 }
