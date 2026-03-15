@@ -444,10 +444,10 @@ func (cb *CommandBar) handleNavigateAction(action string) {
 		}
 		cb.addFeedMessage(fmt.Sprintf("  -> System %d not found", id), utils.SystemRed)
 	case "planet":
-		// Switch to planet view for the given planet ID
 		if planetView, ok := vm.GetView(views.ViewTypePlanet).(interface {
 			SetPlanet(*entities.Planet)
 		}); ok {
+			// First try: match by ID in all systems
 			for _, sys := range cb.ctx.GetSystems() {
 				for _, e := range sys.Entities {
 					if p, ok := e.(*entities.Planet); ok && p.GetID() == id {
@@ -456,6 +456,24 @@ func (cb *CommandBar) handleNavigateAction(action string) {
 						cb.addFeedMessage(fmt.Sprintf("  -> Navigated to %s", p.Name), utils.SystemGreen)
 						return
 					}
+				}
+			}
+			// Fallback: match by owned planet ID (remote play — local IDs differ)
+			if human := cb.ctx.GetHumanPlayer(); human != nil {
+				for _, p := range human.OwnedPlanets {
+					if p != nil && p.GetID() == id {
+						planetView.SetPlanet(p)
+						vm.SwitchTo(views.ViewTypePlanet)
+						cb.addFeedMessage(fmt.Sprintf("  -> Navigated to %s", p.Name), utils.SystemGreen)
+						return
+					}
+				}
+				// Last resort: just go to first owned planet
+				if len(human.OwnedPlanets) > 0 && human.OwnedPlanets[0] != nil {
+					planetView.SetPlanet(human.OwnedPlanets[0])
+					vm.SwitchTo(views.ViewTypePlanet)
+					cb.addFeedMessage(fmt.Sprintf("  -> Navigated to %s", human.OwnedPlanets[0].Name), utils.SystemGreen)
+					return
 				}
 			}
 		}
@@ -585,16 +603,37 @@ func (cb *CommandBar) addFeedMessage(text string, c color.RGBA) {
 
 func (cb *CommandBar) navigateHome() {
 	player := cb.ctx.GetHumanPlayer()
-	if player == nil || player.HomeSystem == nil {
-		cb.addFeedMessage("No home system found", utils.SystemRed)
+	if player == nil {
+		cb.addFeedMessage("No player found", utils.SystemRed)
 		return
 	}
-	cb.ctx.GetViewManager().SwitchTo(views.ViewTypeGalaxy)
-	homeName := "home"
+
+	// Try to navigate to home planet
+	vm := cb.ctx.GetViewManager()
 	if player.HomePlanet != nil {
-		homeName = player.HomePlanet.Name
+		if planetView, ok := vm.GetView(views.ViewTypePlanet).(interface {
+			SetPlanet(*entities.Planet)
+		}); ok {
+			planetView.SetPlanet(player.HomePlanet)
+			vm.SwitchTo(views.ViewTypePlanet)
+			cb.addFeedMessage(fmt.Sprintf("Navigated to %s", player.HomePlanet.Name), utils.SystemGreen)
+			return
+		}
 	}
-	cb.addFeedMessage(fmt.Sprintf("Navigated to %s", homeName), utils.SystemGreen)
+	// Fallback: first owned planet
+	if len(player.OwnedPlanets) > 0 && player.OwnedPlanets[0] != nil {
+		if planetView, ok := vm.GetView(views.ViewTypePlanet).(interface {
+			SetPlanet(*entities.Planet)
+		}); ok {
+			planetView.SetPlanet(player.OwnedPlanets[0])
+			vm.SwitchTo(views.ViewTypePlanet)
+			cb.addFeedMessage(fmt.Sprintf("Navigated to %s", player.OwnedPlanets[0].Name), utils.SystemGreen)
+			return
+		}
+	}
+	// Last fallback: galaxy view
+	vm.SwitchTo(views.ViewTypeGalaxy)
+	cb.addFeedMessage("Navigated to galaxy", utils.SystemGreen)
 }
 
 func (cb *CommandBar) showCredits() {
