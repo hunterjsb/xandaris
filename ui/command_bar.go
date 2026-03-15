@@ -616,10 +616,10 @@ func (cb *CommandBar) callChatAPI(message string) (string, error) {
 		req.Header.Set("X-API-Key", cb.apiKey)
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to reach server: %v", err)
+		return "", fmt.Errorf("connection failed: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -633,6 +633,12 @@ func (cb *CommandBar) callChatAPI(message string) (string, error) {
 	}
 
 	respBody, _ := io.ReadAll(resp.Body)
+	if len(respBody) == 0 {
+		return "", fmt.Errorf("empty response (server may have timed out)")
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("server error %d: %s", resp.StatusCode, string(respBody)[:min(len(respBody), 80)])
+	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		// Show what we actually got for debugging
 		snippet := string(respBody)

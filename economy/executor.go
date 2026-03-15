@@ -43,7 +43,9 @@ type TradeExecutor struct {
 
 	// Systems reference for system-scoped trading.
 	// When set, human trades are scoped to the trading planet's system.
-	systems []*entities.System
+	systems        []*entities.System
+	planetToSystem map[int]int        // planetID → systemID, cached
+	systemPlanets  map[int]map[int]bool // systemID → set of planetIDs, cached
 }
 
 // NewTradeExecutor creates a new executor bound to the given market.
@@ -59,6 +61,35 @@ func (te *TradeExecutor) SetSystems(systems []*entities.System) {
 	te.mu.Lock()
 	defer te.mu.Unlock()
 	te.systems = systems
+	te.rebuildPlanetIndex()
+}
+
+// rebuildPlanetIndex builds the planetID→systemID and systemID→planetIDs caches.
+// Must be called with te.mu held.
+func (te *TradeExecutor) rebuildPlanetIndex() {
+	te.planetToSystem = make(map[int]int, len(te.systems)*4)
+	te.systemPlanets = make(map[int]map[int]bool, len(te.systems))
+	for _, system := range te.systems {
+		ids := make(map[int]bool)
+		for _, entity := range system.Entities {
+			if planet, ok := entity.(*entities.Planet); ok {
+				ids[planet.GetID()] = true
+				te.planetToSystem[planet.GetID()] = system.ID
+			}
+		}
+		te.systemPlanets[system.ID] = ids
+	}
+}
+
+// getCachedSystemPlanets returns the planet ID set for a system, using the cache.
+func (te *TradeExecutor) getCachedSystemPlanets(systemID int) map[int]bool {
+	if te.systemPlanets != nil {
+		if ids, ok := te.systemPlanets[systemID]; ok {
+			return ids
+		}
+	}
+	// Fallback: compute on the fly (shouldn't happen after SetSystems)
+	return getPlanetIDsInSystem(systemID, te.systems)
 }
 
 // SetMarket swaps the market reference (used after load game).
@@ -122,7 +153,7 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 	if player.IsHuman() {
 		systemID = te.getSystemForPlanet(destPlanet)
 		if systemID >= 0 {
-			npcAvail = aggregateOtherStockInSystem(players, player, resource, systemID, te.systems)
+			npcAvail = te.aggregateOtherStockInSystem(players, player, resource, systemID)
 			if npcAvail >= quantity {
 				useSystemScope = true
 			}
@@ -198,7 +229,7 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 
 			// Execute: deduct credits, remove from seller, load cargo, dispatch
 			player.Credits -= total
-			removeFromOthersInSystem(players, player, resource, quantity, sourceSystemID, te.systems)
+			te.removeFromOthersInSystem(players, player, resource, quantity, sourceSystemID)
 			ship.CargoHold[resource] += quantity
 
 			// Set up delivery route
@@ -222,7 +253,7 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		}
 	} else {
 		// Same-system trade — instant, no fee
-		removeFromOthersInSystem(players, player, resource, quantity, systemID, te.systems)
+		te.removeFromOthersInSystem(players, player, resource, quantity, systemID)
 		destPlanet.AddStoredResource(resource, quantity)
 		player.Credits -= total
 	}
@@ -459,8 +490,8 @@ func aggregateOtherStock(players []*entities.Player, exclude *entities.Player, r
 }
 
 // aggregateOtherStockInSystem sums NPC stock only on planets in the same system.
-func aggregateOtherStockInSystem(players []*entities.Player, exclude *entities.Player, resource string, systemID int, systems []*entities.System) int {
-	planetIDs := getPlanetIDsInSystem(systemID, systems)
+func (te *TradeExecutor) aggregateOtherStockInSystem(players []*entities.Player, exclude *entities.Player, resource string, systemID int) int {
+	planetIDs := te.getCachedSystemPlanets(systemID)
 	total := 0
 	for _, p := range players {
 		if p == nil || p == exclude {
@@ -505,8 +536,8 @@ func removeFromOthers(players []*entities.Player, exclude *entities.Player, reso
 }
 
 // removeFromOthersInSystem removes from NPC planets only in the specified system.
-func removeFromOthersInSystem(players []*entities.Player, exclude *entities.Player, resource string, qty int, systemID int, systems []*entities.System) {
-	planetIDs := getPlanetIDsInSystem(systemID, systems)
+func (te *TradeExecutor) removeFromOthersInSystem(players []*entities.Player, exclude *entities.Player, resource string, qty int, systemID int) {
+	planetIDs := te.getCachedSystemPlanets(systemID)
 	remaining := qty
 	for _, p := range players {
 		if p == nil || p == exclude || remaining <= 0 {
@@ -589,7 +620,7 @@ func (te *TradeExecutor) findSourceSystem(players []*entities.Player, exclude *e
 		return -1
 	}
 	for _, system := range te.systems {
-		stock := aggregateOtherStockInSystem(players, exclude, resource, system.ID, te.systems)
+		stock := te.aggregateOtherStockInSystem(players, exclude, resource, system.ID)
 		if stock >= qty {
 			return system.ID
 		}
