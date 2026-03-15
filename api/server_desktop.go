@@ -1188,7 +1188,10 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
-	// Wrap mux with auth + CORS middleware
+	// Rate limiter: 30 reads/sec, 10 writes/sec per key, burst of 60/20
+	rateLimiter := NewRateLimiter(30, 10, 60, 20)
+
+	// Wrap mux with auth + CORS + rate limiting middleware
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CORS
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -1198,6 +1201,18 @@ func StartServer(provider GameStateProvider) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
+		// Rate limiting
+		rlKey := r.Header.Get("X-API-Key")
+		if rlKey == "" {
+			rlKey = r.RemoteAddr
+		}
+		if !rateLimiter.Allow(rlKey, r.Method == http.MethodPost) {
+			w.Header().Set("Retry-After", "1")
+			writeErr(w, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+
 		// Auth — inject player identity into context
 		key := r.Header.Get("X-API-Key")
 		if key != "" {
