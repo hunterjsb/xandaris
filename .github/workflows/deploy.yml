@@ -95,7 +95,7 @@ jobs:
                     </div>
                   </div>
                   <div class="actions">
-                    <a href="play.html">Play WASM<span>Singleplayer</span></a>
+                    <a id="play-link" href="play.html">Play Online<span>Join live server</span></a>
                     <a href="https://api.xandaris.space/" target="_blank">Spectator<span>Live server</span></a>
                     <a href="live.html">Dashboard<span>Economy data</span></a>
                   </div>
@@ -156,6 +156,9 @@ jobs:
             document.getElementById('guest-cards').style.display = 'none';
             document.getElementById('welcome').textContent = 'Welcome, ' + name;
             document.getElementById('api-key').textContent = apiKey;
+            // Set play link to connect to live server with credentials
+            const playParams = new URLSearchParams({server:'https://api.xandaris.space',player:name,key:apiKey});
+            document.getElementById('play-link').href = 'play.html?' + playParams.toString();
           }
 
           // Live stats

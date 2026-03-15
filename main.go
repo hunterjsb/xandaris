@@ -35,7 +35,7 @@ func main() {
 	playerName := flag.String("player", "Player", "Player name")
 	loadPath := flag.String("load", "", "Path to save file to load")
 	connectURL := flag.String("connect", "", "Connect to remote server (e.g. https://api.xandaris.space)")
-	password := flag.String("password", "", "Password for remote server registration/login")
+	apiKeyFlag := flag.String("key", "", "API key for remote server authentication")
 	flag.Parse()
 
 	if *headless {
@@ -44,8 +44,17 @@ func main() {
 	}
 
 	if *connectURL != "" {
-		runRemote(*connectURL, *playerName, *password)
+		runRemote(*connectURL, *playerName, *apiKeyFlag)
 		return
+	}
+
+	// In WASM, check URL params for remote connection
+	if runtime.GOARCH == "wasm" {
+		serverURL, player, key := getWASMConnectParams()
+		if serverURL != "" && key != "" {
+			runRemote(serverURL, player, key)
+			return
+		}
 	}
 
 	runGUI(*autoStart, *playerName, *startView)

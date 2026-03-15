@@ -1,5 +1,3 @@
-//go:build !js
-
 package main
 
 import (
@@ -13,28 +11,15 @@ import (
 )
 
 // runRemote connects to a remote server and runs the GUI client.
-func runRemote(serverURL, playerName, password string) {
-	if password == "" {
-		password = "default123"
+func runRemote(serverURL, playerName, apiKey string) {
+	if apiKey == "" {
+		log.Fatal("API key required for remote play. Sign in at the web portal to get one.")
 	}
 
 	fmt.Printf("Connecting to %s as %s...\n", serverURL, playerName)
 
 	gs := server.New(screenWidth, screenHeight)
-	remote := server.NewRemoteSync(gs, serverURL, "")
-
-	// Try login first, then register
-	apiKey, err := remote.Login(playerName, password)
-	if err != nil {
-		fmt.Printf("Login failed (%v), registering...\n", err)
-		apiKey, err = remote.Register(playerName, password)
-		if err != nil {
-			log.Fatalf("Failed to register: %v", err)
-		}
-		fmt.Printf("Registered! Key: %s...\n", apiKey[:20])
-	} else {
-		fmt.Printf("Logged in! Key: %s...\n", apiKey[:20])
-	}
+	remote := server.NewRemoteSync(gs, serverURL, apiKey)
 
 	// Fetch the remote galaxy seed so we generate the same universe
 	seed, err := remote.FetchSeed()
