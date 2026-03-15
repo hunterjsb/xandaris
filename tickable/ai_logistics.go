@@ -116,8 +116,9 @@ func (als *AILogisticsSystem) processAILogistics(player *entities.Player, cargoO
 			}
 			continue
 		}
-		// Find nearest unclaimed habitable planet and fly there
-		if hasJourney && hasMover {
+		// Find nearest unclaimed habitable planet and fly there (if enough fuel)
+		fuelNeeded := ship.FuelPerJump + int(ship.FuelPerTick*120)
+		if hasJourney && hasMover && ship.CurrentFuel >= fuelNeeded {
 			targetSys := als.findColonyTarget(ship, player, systems, mover)
 			if targetSys >= 0 && targetSys != ship.CurrentSystem {
 				if journeyer.StartShipJourney(ship, targetSys) {
