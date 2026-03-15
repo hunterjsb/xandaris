@@ -132,7 +132,7 @@ func (gs *GameServer) reconcileRegisteredPlayers() {
 			continue
 		}
 
-		game.PrepareHomeworld(newPlayer, false)
+		game.PrepareHomeworld(newPlayer, true) // auto-mines + refinery + generator
 		if newPlayer.HomePlanet != nil {
 			newPlayer.HomePlanet.AddStoredResource("Fuel", 200)
 			newPlayer.HomePlanet.AddStoredResource("Oil", 150)
