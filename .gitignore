@@ -19,3 +19,4 @@ xandaris-server
 xandaris-agent
 *.bak
 xandaris-agent-bin
+server.test
