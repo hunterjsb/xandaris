@@ -136,6 +136,17 @@ func (pr *PlayerRegistry) GetAccountByDiscordID(discordID string) *PlayerAccount
 	return pr.discordIDs[discordID]
 }
 
+// GetAllAccounts returns all registered accounts.
+func (pr *PlayerRegistry) GetAllAccounts() []*PlayerAccount {
+	pr.mu.RLock()
+	defer pr.mu.RUnlock()
+	result := make([]*PlayerAccount, 0, len(pr.accounts))
+	for _, acc := range pr.accounts {
+		result = append(result, acc)
+	}
+	return result
+}
+
 // Save persists all accounts to disk (thread-safe).
 func (pr *PlayerRegistry) Save() {
 	pr.mu.RLock()

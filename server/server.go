@@ -90,10 +90,61 @@ func (gs *GameServer) NewGame(playerName string) error {
 	// Start API server
 	api.StartServer(gs)
 
+	// Reconcile: create Player objects for registered accounts that don't have one
+	gs.reconcileRegisteredPlayers()
+
 	fmt.Printf("[Server] New game started for %s (%d systems, %d players)\n",
 		playerName, len(gs.State.Systems), len(gs.State.Players))
 
 	return nil
+}
+
+// reconcileRegisteredPlayers creates in-game Player objects for any registered
+// accounts (from accounts.json) that don't already have a matching player.
+func (gs *GameServer) reconcileRegisteredPlayers() {
+	if gs.Registry == nil {
+		return
+	}
+
+	accounts := gs.Registry.GetAllAccounts()
+	for _, acc := range accounts {
+		// Check if player already exists in game
+		exists := false
+		for _, p := range gs.State.Players {
+			if p != nil && p.Name == acc.Name {
+				exists = true
+				break
+			}
+		}
+		if exists {
+			continue
+		}
+
+		// Create a new player for this account
+		playerID := len(gs.State.Players)
+		colors := utils.GetAIPlayerColors()
+		playerColor := colors[playerID%len(colors)]
+		newPlayer := entities.NewPlayer(playerID, acc.Name, playerColor, entities.PlayerTypeHuman)
+
+		entities.InitializePlayer(newPlayer, gs.State.Systems)
+		if newPlayer.HomePlanet == nil {
+			fmt.Printf("[Server] WARNING: Could not find homeworld for %s\n", acc.Name)
+			continue
+		}
+
+		game.PrepareHomeworld(newPlayer, false)
+		if newPlayer.HomePlanet != nil {
+			newPlayer.HomePlanet.AddStoredResource("Fuel", 200)
+			newPlayer.HomePlanet.AddStoredResource("Oil", 150)
+		}
+
+		gs.State.Players = append(gs.State.Players, newPlayer)
+		acc.PlayerID = playerID
+		gs.Registry.Save()
+
+		fmt.Printf("[Server] Reconciled player: %s (id=%d, planet=%s)\n",
+			acc.Name, playerID, newPlayer.HomePlanet.Name)
+	}
 }
 
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
@@ -180,7 +231,7 @@ func (gs *GameServer) DrainCommands() {
 	}
 }
 
-// AIBuildOnPlanet implements tickable.BuildingAdder — lets AI build infrastructure.
+// AIBuildOnPlanet lets AI build infrastructure (part of tickable.GameProvider).
 func (gs *GameServer) AIBuildOnPlanet(planet *entities.Planet, buildingType string, owner string, systemID int) {
 	game.AddBuildingToPlanet(planet, buildingType, owner, systemID)
 }
@@ -224,12 +275,10 @@ func (gs *GameServer) GetTickInfo() (tick int64, gameTime string, speed string, 
 		gs.TickManager.IsPaused()
 }
 
-// --- Tickable system provider interfaces ---
+// --- tickable.GameProvider methods ---
 
-// GetMarketEngine implements tickable.MarketProvider
 func (gs *GameServer) GetMarketEngine() *economy.Market { return gs.State.Market }
 
-// LoadCargo implements tickable.CargoOperator
 func (gs *GameServer) LoadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error) {
 	if gs.CargoCommander == nil {
 		return 0, fmt.Errorf("cargo system not initialized")
@@ -237,7 +286,6 @@ func (gs *GameServer) LoadCargo(ship *entities.Ship, planet *entities.Planet, re
 	return gs.CargoCommander.LoadCargo(ship, planet, resource, qty)
 }
 
-// UnloadCargo implements tickable.CargoOperator
 func (gs *GameServer) UnloadCargo(ship *entities.Ship, planet *entities.Planet, resource string, qty int) (int, error) {
 	if gs.CargoCommander == nil {
 		return 0, fmt.Errorf("cargo system not initialized")
@@ -303,7 +351,6 @@ func (gs *GameServer) SetRemoteSync(rs interface{}) {
 	gs.remoteSync = rs
 }
 
-// LogEvent implements tickable.EventLogger for game event tracking.
 func (gs *GameServer) LogEvent(eventType string, player string, message string) {
 	if gs.Events != nil {
 		gs.Events.Add(gs.TickManager.GetCurrentTick(), gs.TickManager.GetGameTimeFormatted(),
@@ -311,20 +358,18 @@ func (gs *GameServer) LogEvent(eventType string, player string, message string) 
 	}
 }
 
-// StartShipJourney moves a single ship to a target system (for AI logistics).
 func (gs *GameServer) StartShipJourney(ship *entities.Ship, targetSystemID int) bool {
 	helper := tickable.NewShipMovementHelper(gs.GetSystemsMap(), gs.State.Hyperlanes)
 	return helper.StartJourney(ship, targetSystemID)
 }
 
-// GetSystemsMap returns systems indexed by ID.
 func (gs *GameServer) GetSystemsMap() map[int]*entities.System {
 	return gs.State.GetSystemsMap()
 }
 
-// --- Standing order support ---
+// --- Standing order support (part of tickable.GameProvider) ---
 
-// GetStandingOrderInfos implements tickable.StandingOrderProvider.
+
 func (gs *GameServer) GetStandingOrderInfos() []tickable.StandingOrderInfo {
 	result := make([]tickable.StandingOrderInfo, 0, len(gs.State.StandingOrders))
 	for _, o := range gs.State.StandingOrders {
@@ -337,7 +382,6 @@ func (gs *GameServer) GetStandingOrderInfos() []tickable.StandingOrderInfo {
 	return result
 }
 
-// ExecuteStandingOrderTrade implements tickable.StandingOrderProvider.
 func (gs *GameServer) ExecuteStandingOrderTrade(order tickable.StandingOrderInfo, player *entities.Player) error {
 	if gs.State.TradeExec == nil || gs.State.Market == nil {
 		return fmt.Errorf("market not available")
