@@ -28,11 +28,11 @@ var BuildingResourceUpkeep = map[string][]struct {
 	ResourceType string
 	Amount       int
 }{
-	entities.BuildingMine:        {{entities.ResIron, 1}},
+	entities.BuildingMine:        {},
 	entities.BuildingTradingPost: {{entities.ResOil, 1}},
-	entities.BuildingRefinery:    {{entities.ResOil, 2}, {entities.ResIron, 1}},
-	entities.BuildingFactory:     {{entities.ResIron, 1}, {entities.ResOil, 1}},
-	entities.BuildingShipyard:    {{entities.ResFuel, 2}, {entities.ResIron, 1}, {entities.ResElectronics, 1}},
+	entities.BuildingRefinery:    {{entities.ResOil, 2}},
+	entities.BuildingFactory:     {{entities.ResOil, 1}},
+	entities.BuildingShipyard:    {{entities.ResFuel, 2}, {entities.ResElectronics, 1}},
 	entities.BuildingHabitat:     {{entities.ResWater, 1}},
 	entities.BuildingBase:        {},
 }
