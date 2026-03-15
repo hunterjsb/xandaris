@@ -293,6 +293,21 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
 	planets := system.GetEntitiesByType(entities.EntityTypePlanet)
 
+	// Territory glow for owned systems
+	for _, entity := range system.Entities {
+		if p, ok := entity.(*entities.Planet); ok && p.Owner != "" {
+			if ownerColor, ok := gv.getOwnerColor(p.Owner); ok {
+				glowRadius := 12 + len(planets)*4
+				glowColor := color.RGBA{ownerColor.R, ownerColor.G, ownerColor.B, 25}
+				glowImg := galaxyCircleCache.GetOrCreate(glowRadius, glowColor)
+				glowOpts := &ebiten.DrawImageOptions{}
+				glowOpts.GeoM.Translate(float64(centerX-glowRadius), float64(centerY-glowRadius))
+				screen.DrawImage(glowImg, glowOpts)
+			}
+			break // one glow per system
+		}
+	}
+
 	// Draw a small circle for the star
 	starRadius := 4
 	starImg := galaxyCircleCache.GetOrCreate(starRadius, star.Color)

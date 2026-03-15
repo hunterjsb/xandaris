@@ -26,6 +26,10 @@ type App struct {
 
 	// Empire panel click regions (planet ID → y range)
 	empirePlanetHits []empirePlanetHit
+
+	// Remote connection details (stored for UI components)
+	remoteServerURL string
+	remoteAPIKey    string
 }
 
 type empirePlanetHit struct {
@@ -67,6 +71,7 @@ func (a *App) GetKeyBindings() views.KeyBindingsInterface {
 func (a *App) IsRemote() bool {
 	return a.Server.IsRemote()
 }
+
 
 // GetFleetCommander returns the fleet command interface (delegates to server).
 func (a *App) GetFleetCommander() views.FleetCommandInterface {
