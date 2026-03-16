@@ -38,15 +38,18 @@ var BuildingResourceUpkeep = map[string][]struct {
 }
 
 // BuildingCreditUpkeep defines the credit cost per building per interval (+ level - 1).
+// Core production buildings (Mine, Generator, Habitat, Base, TP) have zero upkeep
+// so colonies can always sustain basic resource extraction. Only advanced buildings
+// that transform resources (Refinery, Factory) or enable expansion (Shipyard) cost credits.
 var BuildingCreditUpkeep = map[string]int{
-	entities.BuildingMine:          2,
-	entities.BuildingTradingPost:   3,
-	entities.BuildingHabitat:       1,
-	entities.BuildingRefinery:      4,
-	entities.BuildingFactory:       5,
-	entities.BuildingShipyard:      6,
-	entities.BuildingGenerator:     3,
-	entities.BuildingFusionReactor: 8,
+	entities.BuildingMine:          0, // free — core production must always work
+	entities.BuildingTradingPost:   0, // free — trade infrastructure is essential
+	entities.BuildingHabitat:       0, // free — population growth is essential
+	entities.BuildingGenerator:     0, // free — power is essential
+	entities.BuildingFusionReactor: 2, // low — advanced power
+	entities.BuildingRefinery:      3, // moderate — resource processing
+	entities.BuildingFactory:       5, // higher — manufacturing
+	entities.BuildingShipyard:      6, // highest — ship construction
 }
 
 // ConsumptionResult contains both demand signals and credit drain info.

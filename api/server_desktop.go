@@ -1689,9 +1689,13 @@ func StartServer(provider GameStateProvider) {
 		var priced []PricedStock
 		if market != nil {
 			for res, amt := range result.BuyableStock {
+				baseBuy := market.GetBuyPrice(res)
+				baseSell := market.GetSellPrice(res)
+				localBuyMult := economy.LocalPriceMultiplier(amt, 0)
+				localSellMult := economy.LocalSellPriceMultiplier(amt)
 				priced = append(priced, PricedStock{
 					Resource: res, Available: amt,
-					BuyPrice: market.GetBuyPrice(res), SellPrice: market.GetSellPrice(res),
+					BuyPrice: baseBuy * localBuyMult, SellPrice: baseSell * localSellMult,
 				})
 			}
 		}

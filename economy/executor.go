@@ -122,17 +122,7 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 	te.mu.Lock()
 	defer te.mu.Unlock()
 
-	price := te.market.GetBuyPrice(resource)
-	total := int(math.Round(price * float64(quantity)))
-	if total <= 0 {
-		total = quantity
-	}
-
-	if player.Credits < total {
-		return TradeRecord{}, fmt.Errorf("insufficient credits (need %d, have %d)", total, player.Credits)
-	}
-
-	// Determine the trading planet
+	// Determine the trading planet first (needed for local price calc)
 	var destPlanet *entities.Planet
 	if len(tradingPlanet) > 0 && tradingPlanet[0] != nil {
 		destPlanet = tradingPlanet[0]
@@ -149,6 +139,31 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		return TradeRecord{}, fmt.Errorf("build a Trading Post on %s to trade", destPlanet.Name)
 	}
 
+	// LOCAL ONLY: resources must come from other players' planets in THIS system
+	systemID := te.getSystemForPlanet(destPlanet)
+	if systemID < 0 {
+		return TradeRecord{}, fmt.Errorf("planet not found in any system")
+	}
+
+	localStock := te.aggregateOtherStockInSystem(players, player, resource, systemID)
+	if localStock < quantity {
+		return TradeRecord{}, fmt.Errorf("insufficient local stock in system (need %d, available %d in this system — use cargo ships for cross-system trade)", quantity, localStock)
+	}
+
+	// Local price: base market price adjusted by local supply scarcity
+	// More local stock = cheaper (buyer's market). Less = more expensive.
+	basePrice := te.market.GetBuyPrice(resource)
+	localPriceMult := LocalPriceMultiplier(localStock, quantity)
+	price := basePrice * localPriceMult
+	total := int(math.Round(price * float64(quantity)))
+	if total <= 0 {
+		total = quantity
+	}
+
+	if player.Credits < total {
+		return TradeRecord{}, fmt.Errorf("insufficient credits (need %d, have %d)", total, player.Credits)
+	}
+
 	// Throughput check
 	throughput := TradingPostThroughput(tp.Level)
 	if throughput > 0 && quantity > throughput {
@@ -163,17 +178,6 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		if player.Credits < total {
 			return TradeRecord{}, fmt.Errorf("insufficient credits with %.1f%% TP fee (need %d, have %d)", tpFee*100, total, player.Credits)
 		}
-	}
-
-	// LOCAL ONLY: resources must come from other players' planets in THIS system
-	systemID := te.getSystemForPlanet(destPlanet)
-	if systemID < 0 {
-		return TradeRecord{}, fmt.Errorf("planet not found in any system")
-	}
-
-	localStock := te.aggregateOtherStockInSystem(players, player, resource, systemID)
-	if localStock < quantity {
-		return TradeRecord{}, fmt.Errorf("insufficient local stock in system (need %d, available %d in this system — use cargo ships for cross-system trade)", quantity, localStock)
 	}
 
 	// Execute: remove from local sellers, deduct credits, create local delivery
@@ -232,12 +236,6 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 	te.mu.Lock()
 	defer te.mu.Unlock()
 
-	price := te.market.GetSellPrice(resource)
-	total := int(math.Round(price * float64(quantity)))
-	if total <= 0 {
-		total = quantity
-	}
-
 	// Determine source planet
 	var srcPlanet *entities.Planet
 	if len(tradingPlanet) > 0 && tradingPlanet[0] != nil {
@@ -253,6 +251,21 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 	tp := getTradingPost(srcPlanet)
 	if tp == nil {
 		return TradeRecord{}, fmt.Errorf("build a Trading Post on %s to trade", srcPlanet.Name)
+	}
+
+	// LOCAL ONLY: must have a buyer in this system
+	sellSystemID := te.getSystemForPlanet(srcPlanet)
+
+	// Local sell price: base market price adjusted by local demand
+	// Selling into a system with LOW stock of this resource = higher price (scarcity premium)
+	// Selling into a system already FLOODED = lower price
+	basePrice := te.market.GetSellPrice(resource)
+	localStock := te.aggregateOtherStockInSystem(players, player, resource, sellSystemID)
+	localPriceMult := LocalSellPriceMultiplier(localStock)
+	price := basePrice * localPriceMult
+	total := int(math.Round(price * float64(quantity)))
+	if total <= 0 {
+		total = quantity
 	}
 
 	// Throughput check
@@ -281,8 +294,6 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 		return TradeRecord{}, fmt.Errorf("insufficient stock on %s (need %d, have %d)", srcPlanet.Name, quantity, planetStock)
 	}
 
-	// LOCAL ONLY: must have a buyer in this system
-	sellSystemID := te.getSystemForPlanet(srcPlanet)
 	if sellSystemID < 0 {
 		return TradeRecord{}, fmt.Errorf("planet not found in any system")
 	}
@@ -609,6 +620,52 @@ func TradingPostCreditLimit(level int) int {
 		return 200000
 	default:
 		return 0 // level 5 = unlimited (0 means no limit)
+	}
+}
+
+// LocalPriceMultiplier adjusts buy price based on local supply scarcity.
+// High local stock = cheaper (0.5x at 1000+ units). Low stock = expensive (2.0x at <50 units).
+func LocalPriceMultiplier(localStock, buyQuantity int) float64 {
+	available := localStock - buyQuantity
+	if available < 0 {
+		available = 0
+	}
+	switch {
+	case available > 1000:
+		return 0.5 // flooded market, cheap
+	case available > 500:
+		return 0.7
+	case available > 200:
+		return 0.9
+	case available > 100:
+		return 1.0 // fair price
+	case available > 50:
+		return 1.3 // getting scarce
+	case available > 10:
+		return 1.6 // scarce
+	default:
+		return 2.0 // very scarce, premium price
+	}
+}
+
+// LocalSellPriceMultiplier adjusts sell price based on how much local stock already exists.
+// Selling into a market with LOW stock = premium (1.5x). HIGH stock = depressed (0.5x).
+func LocalSellPriceMultiplier(localBuyerStock int) float64 {
+	switch {
+	case localBuyerStock > 1000:
+		return 0.5 // buyers already have plenty, low demand
+	case localBuyerStock > 500:
+		return 0.7
+	case localBuyerStock > 200:
+		return 0.9
+	case localBuyerStock > 100:
+		return 1.0 // fair
+	case localBuyerStock > 50:
+		return 1.2 // buyers want this
+	case localBuyerStock > 10:
+		return 1.4
+	default:
+		return 1.5 // buyers desperately need this, premium
 	}
 }
 
