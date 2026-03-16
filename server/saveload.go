@@ -344,6 +344,9 @@ func (gs *GameServer) LoadGame(path string) error {
 	// Reconcile registered accounts that don't have in-game players
 	gs.reconcileRegisteredPlayers()
 
+	// One-time cleanup: remove known bot-created players that shouldn't exist
+	gs.cleanupBotPlayers()
+
 	fmt.Printf("[Server] Game loaded: %s, tick %d\n", saveData.PlayerName, saveData.Tick)
 	return nil
 }

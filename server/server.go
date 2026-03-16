@@ -166,6 +166,17 @@ func (gs *GameServer) reconcileRegisteredPlayers() {
 	}
 }
 
+// cleanupBotPlayers removes players that were erroneously created by AI agents.
+// This is a one-time migration — once the save is clean, this is a no-op.
+func (gs *GameServer) cleanupBotPlayers() {
+	remove := []string{"Claude", "ClaudeBot"}
+	for _, name := range remove {
+		if gs.RemovePlayer(name) {
+			fmt.Printf("[Cleanup] Removed bot player: %s\n", name)
+		}
+	}
+}
+
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
 func (gs *GameServer) initSimulation() {
 	gs.initCommandRegistry()
