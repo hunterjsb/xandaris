@@ -32,6 +32,7 @@ type GameStateProvider interface {
 	GetDeliveryManager() *economy.DeliveryManager
 	GetShippingManager() *game.ShippingManager
 	GetCreditLedger() *economy.CreditLedger
+	RemovePlayer(name string) bool
 }
 
 // findPlayer returns the player matching the given name, or falls back to the human player.
@@ -376,6 +377,13 @@ func handleGetLeaderboard(p GameStateProvider) interface{} {
 	}
 
 	return entries
+}
+
+func handleRemovePlayer(p GameStateProvider, name string) (interface{}, error) {
+	if p.RemovePlayer(name) {
+		return map[string]string{"removed": name}, nil
+	}
+	return nil, fmt.Errorf("player not found: %s", name)
 }
 
 func handleGetPlayers(p GameStateProvider) interface{} {

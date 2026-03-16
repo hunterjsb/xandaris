@@ -303,6 +303,56 @@ func (gs *GameServer) FindPath(fromID, toID int) []int {
 	return helper.FindPath(fromID, toID)
 }
 
+// --- Admin operations ---
+
+// RemovePlayer fully removes a player: releases planets, removes ships from systems, compacts the players slice.
+func (gs *GameServer) RemovePlayer(name string) bool {
+	idx := -1
+	for i, pl := range gs.State.Players {
+		if pl != nil && pl.Name == name {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return false
+	}
+	pl := gs.State.Players[idx]
+
+	// Release all owned planets
+	for _, planet := range pl.OwnedPlanets {
+		if planet != nil {
+			planet.Owner = ""
+			planet.Population = 0
+		}
+	}
+
+	// Remove ships from system entities
+	for _, ship := range pl.OwnedShips {
+		if ship == nil {
+			continue
+		}
+		for _, sys := range gs.State.Systems {
+			sys.RemoveEntity(ship.GetID())
+		}
+	}
+
+	// Remove standing orders for this player
+	remaining := make([]*game.StandingOrder, 0)
+	for _, o := range gs.State.StandingOrders {
+		if o != nil && o.Player != name {
+			remaining = append(remaining, o)
+		}
+	}
+	gs.State.StandingOrders = remaining
+
+	// Compact nil out of players slice
+	gs.State.Players = append(gs.State.Players[:idx], gs.State.Players[idx+1:]...)
+
+	fmt.Printf("[Admin] Removed player %q: planets released, ships deleted, orders purged\n", name)
+	return true
+}
+
 // --- serverSystemContext implements tickable.SystemContext ---
 
 type serverSystemContext struct {
