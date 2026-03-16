@@ -542,6 +542,18 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetGame(getProvider())})
 	})
 
+	mux.HandleFunc("/api/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		if !isAdmin(r) {
+			writeErr(w, http.StatusForbidden, "admin only")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: handleGetDiagnostics(getProvider())})
+	})
+
 	mux.HandleFunc("/api/build", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeErr(w, http.StatusMethodNotAllowed, "POST only")

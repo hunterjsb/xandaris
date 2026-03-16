@@ -1375,3 +1375,45 @@ func handleGetConstructionQueue(p GameStateProvider) interface{} {
 	}
 	return result
 }
+
+// handleGetDiagnostics returns diagnostic info about tickable systems
+func handleGetDiagnostics(p GameStateProvider) interface{} {
+	type diag struct {
+		ShipsInSystems    int      `json:"ships_in_systems"`
+		ShipsInPlayers    int      `json:"ships_in_players"`
+		MovingShips       int      `json:"moving_ships"`
+		OrphanedShips     int      `json:"orphaned_ships"`
+		OrphanedNames     []string `json:"orphaned_names"`
+		SystemCount       int      `json:"system_count"`
+	}
+	d := diag{}
+	
+	// Count ships in system entities
+	systemShipIDs := make(map[int]bool)
+	for _, sys := range p.GetSystems() {
+		for _, e := range sys.Entities {
+			if ship, ok := e.(*entities.Ship); ok {
+				systemShipIDs[ship.GetID()] = true
+				d.ShipsInSystems++
+			}
+		}
+	}
+	d.SystemCount = len(p.GetSystems())
+
+	// Count ships in player ownership
+	for _, player := range p.GetPlayers() {
+		if player == nil { continue }
+		for _, ship := range player.OwnedShips {
+			if ship == nil { continue }
+			d.ShipsInPlayers++
+			if ship.Status == entities.ShipStatusMoving {
+				d.MovingShips++
+			}
+			if !systemShipIDs[ship.GetID()] {
+				d.OrphanedShips++
+				d.OrphanedNames = append(d.OrphanedNames, ship.Name)
+			}
+		}
+	}
+	return d
+}
