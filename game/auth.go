@@ -148,6 +148,26 @@ func (pr *PlayerRegistry) Authenticate(key string) (playerName string, isAdmin b
 	return "", false, false
 }
 
+// RemoveAccount deletes an account by name and persists.
+func (pr *PlayerRegistry) RemoveAccount(name string) {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	key := strings.ToLower(name)
+	acc, exists := pr.accounts[key]
+	if !exists {
+		return
+	}
+	delete(pr.accounts, key)
+	if acc.APIKey != "" {
+		delete(pr.keys, acc.APIKey)
+	}
+	if acc.DiscordID != "" {
+		delete(pr.discordIDs, acc.DiscordID)
+	}
+	pr.saveLocked()
+}
+
 // GetAccount returns an account by name.
 func (pr *PlayerRegistry) GetAccount(name string) *PlayerAccount {
 	pr.mu.RLock()

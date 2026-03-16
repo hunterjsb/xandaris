@@ -1440,16 +1440,20 @@ func StartServer(provider GameStateProvider) {
 			return
 		}
 		p := getProvider()
+
+		// Remove from game state — release planets, nil the entry
 		players := p.GetPlayers()
 		found := false
 		for i, pl := range players {
 			if pl != nil && pl.Name == req.Name {
-				// Release owned planets
 				for _, planet := range pl.OwnedPlanets {
 					if planet != nil {
 						planet.Owner = ""
 					}
 				}
+				pl.OwnedPlanets = nil
+				pl.OwnedShips = nil
+				pl.OwnedFleets = nil
 				players[i] = nil
 				found = true
 				break
@@ -1458,6 +1462,11 @@ func StartServer(provider GameStateProvider) {
 		if !found {
 			writeErr(w, http.StatusNotFound, "player not found: "+req.Name)
 			return
+		}
+		// Also remove from auth registry
+		registry := p.GetRegistry()
+		if registry != nil {
+			registry.RemoveAccount(req.Name)
 		}
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"removed": req.Name}})
 	})
