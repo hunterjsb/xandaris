@@ -73,7 +73,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 			pwrColor = utils.SystemOrange
 		}
 		pwrStr := fmt.Sprintf("Power: %.0f%%", pd.PowerRatio*100)
-		views.DrawText(screen, pwrStr, rsu.x+rsu.width-len(pwrStr)*6-10, titleY, pwrColor)
+		views.DrawText(screen, pwrStr, rsu.x+rsu.width-len(pwrStr)*utils.CharWidth()-10, titleY, pwrColor)
 	}
 
 	// Happiness indicator
@@ -85,7 +85,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 			happyColor = utils.SystemOrange
 		}
 		happyStr := fmt.Sprintf("%.0f%% happy", pd.Happiness*100)
-		views.DrawText(screen, happyStr, rsu.x+rsu.width-len(happyStr)*6-10, titleY-12, happyColor)
+		views.DrawText(screen, happyStr, rsu.x+rsu.width-len(happyStr)*utils.CharWidth()-10, titleY-12, happyColor)
 	}
 
 	resourceY := titleY + 20
@@ -140,7 +140,7 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 	views.DrawText(screen, label, textX, y, amtColor)
 
 	// Net flow indicator
-	flowX := textX + len(label)*6 + 2
+	flowX := textX + len(label)*utils.CharWidth() + 2
 	if flow > 0.5 {
 		flowStr := fmt.Sprintf("+%.0f", flow)
 		views.DrawText(screen, flowStr, flowX, y, utils.SystemGreen)
@@ -151,7 +151,7 @@ func (rsu *ResourceStorageUI) drawResourceEntry(screen *ebiten.Image, resourceTy
 
 	// Amount / capacity on the right
 	amtStr := fmt.Sprintf("%d/%d", amount, capacity)
-	amtWidth := len(amtStr) * 6
+	amtWidth := len(amtStr) * utils.CharWidth()
 	views.DrawText(screen, amtStr, rsu.x+rsu.width-amtWidth-15, y, amtColor)
 
 	// Capacity bar

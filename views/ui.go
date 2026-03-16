@@ -87,9 +87,10 @@ func (p *UIPanel) Contains(x, y int) bool {
 	return x >= p.X && x < p.X+p.Width && y >= p.Y && y < p.Y+p.Height
 }
 
-// DrawText draws text in a specific color using text/v2
+// DrawText draws text in a specific color using text/v2, scaled by UIScale.
 func DrawText(screen *ebiten.Image, textStr string, x, y int, textColor color.RGBA) {
 	op := &text.DrawOptions{}
+	op.GeoM.Scale(utils.UIScale, utils.UIScale)
 	op.GeoM.Translate(float64(x), float64(y))
 	op.ColorScale.ScaleWithColor(textColor)
 	text.Draw(screen, textStr, DefaultFontFace, op)
@@ -97,8 +98,7 @@ func DrawText(screen *ebiten.Image, textStr string, x, y int, textColor color.RG
 
 // DrawCenteredText draws text centered at the given position
 func DrawCenteredText(screen *ebiten.Image, textStr string, x, y int) {
-	// Approximate text width (each character is about 6 pixels wide)
-	textWidth := len(textStr) * 6
+	textWidth := len(textStr) * utils.CharWidth()
 	DrawText(screen, textStr, x-textWidth/2, y, utils.TextPrimary)
 }
 

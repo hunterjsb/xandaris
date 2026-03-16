@@ -2,6 +2,15 @@ package utils
 
 import "image/color"
 
+// UIScale controls the global text and UI element scaling factor.
+// 1.0 = original size (designed for 1280x720). 1.5 = 50% larger (good for 1920x1080).
+var UIScale = 1.5
+
+// CharWidth returns the pixel width of a single character at current scale.
+func CharWidth() int {
+	return int(6.0 * UIScale)
+}
+
 // Theme defines the centralized UI color palette.
 // Change these values to restyle all panels, text, and controls in one place.
 var Theme = struct {

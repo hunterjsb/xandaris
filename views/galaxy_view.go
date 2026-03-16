@@ -422,7 +422,7 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 				infoColor = ownerColor
 				infoColor.A = 180
 			}
-			infoWidth := len(info) * 6
+			infoWidth := len(info) * utils.CharWidth()
 			DrawText(screen, info, centerX-infoWidth/2, labelY+12, infoColor)
 			break // only show first owned planet
 		}
@@ -749,14 +749,14 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 
 	DrawText(screen, humanPlayer.Name, textX, textY, humanPlayer.Color)
 	credStr := formatNumber(humanPlayer.Credits)
-	DrawText(screen, credStr+" cr", textX+len(humanPlayer.Name)*6+10, textY, utils.Theme.Accent)
+	DrawText(screen, credStr+" cr", textX+len(humanPlayer.Name)*utils.CharWidth()+10, textY, utils.Theme.Accent)
 
 	if gv.playerPanelCollapsed {
 		pop := formatPopulation(humanPlayer.GetTotalPopulation())
 		DrawText(screen, fmt.Sprintf("%d planets  %s pop", len(humanPlayer.OwnedPlanets), pop), textX, textY+18, utils.Theme.TextDim)
 		footerY := panelY + panelHeight - 16
 		DrawText(screen, "[+] expand  |  [P] directory", textX, footerY, utils.Theme.TextDim)
-		footerWidth := len("[+] expand  |  [P] directory") * 6
+		footerWidth := len("[+] expand  |  [P] directory") * utils.CharWidth()
 		gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
 		return
 	}
@@ -797,7 +797,7 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	// Footer
 	footerY := panelY + panelHeight - 16
 	DrawText(screen, "[P] Player Directory  |  [M] Market", textX, footerY, utils.Theme.TextDim)
-	footerWidth := len("[P] Player Directory  |  [M] Market") * 6
+	footerWidth := len("[P] Player Directory  |  [M] Market") * utils.CharWidth()
 	gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
 
 	if len(aiSummaries) > 0 {
@@ -963,7 +963,7 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 	// Find the widest hint for panel sizing
 	maxW := 0
 	for i := 0; i < maxHints; i++ {
-		w := len(hints[i]) * 6
+		w := len(hints[i]) * utils.CharWidth()
 		if w > maxW {
 			maxW = w
 		}
@@ -984,7 +984,7 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 	hintY := panelY + 6
 	for i := 0; i < maxHints; i++ {
 		text := hints[i]
-		textW := len(text) * 6
+		textW := len(text) * utils.CharWidth()
 		x := (screenW - textW) / 2
 		DrawText(screen, text, x, hintY, utils.SystemYellow)
 		hintY += 14

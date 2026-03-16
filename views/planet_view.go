@@ -393,10 +393,10 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	infoPanel.Draw(screen)
 
 	DrawText(screen, pv.planet.Name, 14, 14, utils.Theme.Accent)
-	afterName := 14 + len(pv.planet.Name)*6 + 8
+	afterName := 14 + len(pv.planet.Name)*utils.CharWidth() + 8
 	if pv.system != nil {
 		DrawText(screen, pv.system.Name, afterName, 14, utils.Theme.TextDim)
-		afterName += len(pv.system.Name)*6 + 8
+		afterName += len(pv.system.Name)*utils.CharWidth() + 8
 	}
 	if pv.planet.Owner != "" {
 		DrawText(screen, pv.planet.Owner, afterName, 14, utils.Theme.TextDim)
@@ -741,7 +741,7 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	if resource.Abundance < 20 {
 		detailColor = utils.SystemOrange
 	}
-	dWidth := len(detailStr) * 6
+	dWidth := len(detailStr) * utils.CharWidth()
 	DrawText(screen, detailStr, centerX-dWidth/2, labelY+12, detailColor)
 }
 
@@ -773,11 +773,11 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 
 	// Show operational status or upgrade cost
 	if !building.IsOperational {
-		offWidth := len("OFFLINE") * 6
+		offWidth := len("OFFLINE") * utils.CharWidth()
 		DrawText(screen, "OFFLINE", centerX-offWidth/2, labelY+12, utils.SystemRed)
 	} else if building.CanUpgrade() {
 		costStr := fmt.Sprintf("↑%dcr", building.GetUpgradeCost())
-		costWidth := len(costStr) * 6
+		costWidth := len(costStr) * utils.CharWidth()
 		DrawText(screen, costStr, centerX-costWidth/2, labelY+12, utils.SystemGreen)
 	}
 }

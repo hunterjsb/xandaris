@@ -224,7 +224,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 			}
 		}
 		stockInfo := fmt.Sprintf("Stock: %s  Pop: %s", formatNumber(totalStock), formatPopulation(mv.tradingPlanet.Population))
-		stockWidth := len(stockInfo) * 6
+		stockWidth := len(stockInfo) * utils.CharWidth()
 		DrawText(screen, stockInfo, mv.headerPanel.X+mv.headerPanel.Width-stockWidth-20, mv.headerPanel.Y+15, utils.Theme.TextDim)
 
 		// Trade mode indicator
@@ -244,7 +244,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 				}
 			}
 		}
-		tmWidth := len(tradeMode) * 6
+		tmWidth := len(tradeMode) * utils.CharWidth()
 		DrawText(screen, tradeMode, mv.headerPanel.X+mv.headerPanel.Width-tmWidth-20, mv.headerPanel.Y+35, tradeModeColor)
 	}
 
@@ -335,9 +335,9 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		DrawText(screen, buyStr, colBuy, y, buyColor)
 		// Trend arrow after buy price
 		if row.trend > 1.0 {
-			DrawText(screen, "^", colBuy+len(buyStr)*6+2, y, utils.SystemRed)
+			DrawText(screen, "^", colBuy+len(buyStr)*utils.CharWidth()+2, y, utils.SystemRed)
 		} else if row.trend < -1.0 {
-			DrawText(screen, "v", colBuy+len(buyStr)*6+2, y, utils.SystemGreen)
+			DrawText(screen, "v", colBuy+len(buyStr)*utils.CharWidth()+2, y, utils.SystemGreen)
 		}
 
 		// Sell price colored by ratio to base: green=profitable, orange=below base
@@ -365,7 +365,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 			if len(sysLabel) > 5 {
 				sysLabel = sysLabel[:5]
 			}
-			DrawText(screen, sysLabel, colBase+len(bestStr)*6+3, y, utils.TextSecondary)
+			DrawText(screen, sysLabel, colBase+len(bestStr)*utils.CharWidth()+3, y, utils.TextSecondary)
 		} else if row.bestBuyPrice > 0 {
 			DrawText(screen, fmt.Sprintf("%.0f", row.bestBuyPrice), colBase, y, utils.TextSecondary)
 		} else {
@@ -820,6 +820,6 @@ func pointInRect(x, y int, rect image.Rectangle) bool {
 }
 
 func makeLabelRect(x, y int, label string) image.Rectangle {
-	width := len(label) * 6
+	width := len(label) * utils.CharWidth()
 	return image.Rect(x-2, y-6, x+width+2, y+10)
 }

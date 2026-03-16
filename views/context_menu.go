@@ -127,11 +127,11 @@ func DrawColoredMenuItem(screen *ebiten.Image, textStr string, x, y int) {
 			// Draw everything before the type
 			DrawText(screen, beforeType+"(", x, y, utils.TextSecondary)
 			// Calculate offset for the type text
-			beforeWidth := len(beforeType+"(") * 6
+			beforeWidth := len(beforeType+"(") * utils.CharWidth()
 			// Draw the type in color
 			DrawText(screen, typeText, x+beforeWidth, y, typeColor)
 			// Draw closing paren and anything after
-			typeWidth := len(typeText) * 6
+			typeWidth := len(typeText) * utils.CharWidth()
 			DrawText(screen, afterType, x+beforeWidth+typeWidth, y, utils.TextSecondary)
 		} else {
 			// No parentheses, just draw normally

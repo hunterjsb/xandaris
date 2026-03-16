@@ -46,7 +46,7 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 	line1 := fmt.Sprintf("Speed: %s  %s", speedStr, timeStr)
 	if a.Server.TickManager.IsPaused() {
 		views.DrawText(screen, line1, textX, textY, utils.Theme.TextDim)
-		views.DrawText(screen, "PAUSED", textX+len(line1+"  ")*6, textY, utils.SystemYellow)
+		views.DrawText(screen, "PAUSED", textX+len(line1+"  ")*utils.CharWidth(), textY, utils.SystemYellow)
 	} else {
 		views.DrawText(screen, line1, textX, textY, utils.Theme.TextLight)
 	}
@@ -56,7 +56,7 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 		queueCount := len(a.getConstructionItems(human.Name))
 		if queueCount > 0 {
 			qLabel := fmt.Sprintf("Building %d", queueCount)
-			qX := x + 400 - len(qLabel)*6 - 10
+			qX := x + 400 - len(qLabel)*utils.CharWidth() - 10
 			views.DrawText(screen, qLabel, qX, textY, utils.SystemGreen)
 		}
 	}
@@ -89,16 +89,16 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 
 		// Color-coded net flow
 		net := income - upkeep
-		flowX := textX + len(credLabel)*6
+		flowX := textX + len(credLabel)*utils.CharWidth()
 		if net > 0 {
 			views.DrawText(screen, fmt.Sprintf("(+%d/s)", net), flowX, textY, utils.SystemGreen)
-			flowX += len(fmt.Sprintf("(+%d/s)", net))*6 + 6
+			flowX += len(fmt.Sprintf("(+%d/s)", net))*utils.CharWidth() + 6
 		} else if net < 0 {
 			views.DrawText(screen, fmt.Sprintf("(%d/s)", net), flowX, textY, utils.SystemRed)
-			flowX += len(fmt.Sprintf("(%d/s)", net))*6 + 6
+			flowX += len(fmt.Sprintf("(%d/s)", net))*utils.CharWidth() + 6
 		} else {
 			views.DrawText(screen, "(0/s)", flowX, textY, utils.Theme.TextDim)
-			flowX += len("(0/s)")*6 + 6
+			flowX += len("(0/s)")*utils.CharWidth() + 6
 		}
 
 		// Hints after credits
@@ -173,7 +173,7 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 
 	// Credits right-aligned
 	credStr := formatCredits(human.Credits)
-	credW := len(credStr) * 6
+	credW := len(credStr) * utils.CharWidth()
 	views.DrawText(screen, credStr, x+panelW-credW-10, textY, utils.Theme.TextLight)
 	textY += 14
 
