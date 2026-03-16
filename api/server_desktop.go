@@ -2053,7 +2053,7 @@ td{padding:3px 4px}
 <div class="panel"><h2>Faction Chat <span class="tag">live</span></h2><div id="ch" style="max-height:220px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Resource Balance <span class="tag">supply vs demand</span></h2><div id="rf"></div></div>
 <div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
-<div class="panel"><h2>Market Prices <span class="tag">trends</span></h2><div id="mk"></div></div>
+<div class="panel" style="padding:0;overflow:hidden;position:relative"><canvas id="priceChart" style="width:100%;height:220px;display:block;cursor:crosshair"></canvas><div id="priceLegend" style="position:absolute;top:6px;right:8px;display:flex;gap:8px;flex-wrap:wrap"></div><div id="priceTooltip" style="display:none;position:absolute;background:rgba(8,12,24,0.95);border:1px solid #2a3060;border-radius:4px;padding:6px 8px;font-size:10px;color:#c0c8d8;pointer-events:none;z-index:10"></div></div>
 <div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
 <div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:240px;display:block"></canvas></div>
 <div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
@@ -2132,14 +2132,8 @@ const pct=p.consumed_mw>0?Math.min(1,p.generated_mw/p.consumed_mw):1;
 const bg2=pct<0.3?'#4a1515':pct<0.5?'#4a2a15':pct<0.8?'#3a3a15':'#153a15';
 return'<span style="display:inline-block;width:16px;height:16px;border-radius:2px;background:'+bg2+'" title="'+p.planet_name+': '+(pct*100).toFixed(0)+'%"></span>'}).join('');
 return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span style="width:85px;color:#7fdbca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+owner+'</span><span style="display:flex;gap:2px">'+tiles+'</span><span style="flex:1;text-align:right">'+spark+'</span><span class="d" style="width:55px;text-align:right;font-size:9px">'+(avgPct*100).toFixed(0)+'%</span></div>'}).join('');
-// Market with bars
-// Market — compact with ratio bar + sparkline
-document.getElementById('mk').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
-const c=r.price_ratio>1.5?'r':r.price_ratio>0.8?'w':'g';
-const s=r.scarcity=='Scarce'||r.scarcity=='Critical'?'o':r.scarcity=='Depleted'?'r':'d';
-const bw=Math.min(100,r.price_ratio/5*100).toFixed(0);
-const bc=r.price_ratio>2?'#4a1515':r.price_ratio>1?'#3a3515':'#153a15';
-return'<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span style="width:70px">'+n+'</span><div style="width:60px;height:10px;background:#0c1020;border-radius:2px;overflow:hidden;position:relative"><div style="height:100%;width:'+bw+'%;background:'+bc+';border-radius:2px"></div><span style="position:absolute;left:3px;top:0;font-size:8px;line-height:10px;color:#aab">'+r.price_ratio.toFixed(1)+'x</span></div><span class="'+c+'" style="width:35px;text-align:right">'+r.buy_price.toFixed(0)+'</span><span class="'+s+'" style="width:50px;font-size:10px">'+r.scarcity+'</span>'+sp(r.price_history)+'</div>'}).join('');
+// Market — store data for interactive chart
+window._marketData=e.data.resources;
 // Trading hubs — top planets by total stock value
 const hubs=[];(p.data||[]).forEach(pl=>{pl.planets&&pl.planets.forEach&&0;/* players don't have planets inline */});
 // Build from players data — sort by stock
@@ -2166,6 +2160,115 @@ return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).ma
 document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
 }catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
+// === Interactive Price Chart ===
+(function(){
+const pc=document.getElementById('priceChart');if(!pc)return;
+const cx=pc.getContext('2d');
+const tt=document.getElementById('priceTooltip');
+const lg=document.getElementById('priceLegend');
+function resize(){pc.width=pc.offsetWidth*2;pc.height=pc.offsetHeight*2;cx.scale(2,2)}
+resize();addEventListener('resize',resize);
+const W=()=>pc.width/2,H=()=>pc.height/2;
+const RC={Iron:'#b4784f',Water:'#508cc8',Oil:'#808080','Rare Metals':'#c8b464','Helium-3':'#b4dcff',Fuel:'#50a050',Electronics:'#5090d0'};
+let hidden={},hoverX=-1;
+// Build legend
+function buildLegend(){
+const res=window._marketData;if(!res)return;
+lg.innerHTML=Object.keys(res).sort().map(n=>{
+const c=RC[n]||'#888';const on=!hidden[n];
+return'<span data-res="'+n+'" style="cursor:pointer;font-size:9px;color:'+(on?c:'#333')+';opacity:'+(on?1:0.4)+'">\u25CF '+n+'</span>'}).join('');
+lg.querySelectorAll('span').forEach(el=>{
+el.onclick=()=>{const r=el.dataset.res;hidden[r]=!hidden[r];buildLegend()}})}
+buildLegend();setInterval(buildLegend,5000);
+// Mouse tracking
+let mouseX=-1,mouseInChart=false;
+pc.addEventListener('mousemove',e=>{const r=pc.getBoundingClientRect();mouseX=e.clientX-r.left;mouseInChart=true});
+pc.addEventListener('mouseleave',()=>{mouseInChart=false;tt.style.display='none'});
+function drawChart(){
+const w=W(),h=H();
+cx.clearRect(0,0,w,h);
+const res=window._marketData;
+if(!res){cx.fillStyle='#334';cx.font='11px monospace';cx.textAlign='center';cx.fillText('Waiting for market data...',w/2,h/2);requestAnimationFrame(drawChart);return}
+const pad={t:20,b:20,l:40,r:10};
+const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+// Find global Y range across all visible resources
+let yMin=Infinity,yMax=-Infinity,maxLen=0;
+Object.entries(res).forEach(([n,r])=>{
+if(hidden[n]||!r.price_history||r.price_history.length<2)return;
+maxLen=Math.max(maxLen,r.price_history.length);
+r.price_history.forEach(v=>{if(v<yMin)yMin=v;if(v>yMax)yMax=v})});
+if(yMin>=yMax){yMin=0;yMax=100;maxLen=2}
+const yPad=(yMax-yMin)*0.1||10;yMin-=yPad;yMax+=yPad;
+if(yMin<0)yMin=0;
+// Grid lines
+cx.strokeStyle='#151a2a';cx.lineWidth=0.5;
+const ySteps=5;
+for(let i=0;i<=ySteps;i++){
+const y=pad.t+ch*(1-i/ySteps);
+cx.beginPath();cx.moveTo(pad.l,y);cx.lineTo(pad.l+cw,y);cx.stroke();
+const val=yMin+(yMax-yMin)*i/ySteps;
+cx.fillStyle='#334';cx.font='8px monospace';cx.textAlign='right';
+cx.fillText(val.toFixed(0),pad.l-4,y+3)}
+// Title
+cx.fillStyle='#334';cx.font='9px monospace';cx.textAlign='left';
+cx.fillText('MARKET PRICES',pad.l,12);
+// Draw each resource line
+Object.entries(res).sort().forEach(([n,r])=>{
+if(hidden[n]||!r.price_history||r.price_history.length<2)return;
+const hist=r.price_history;const c=RC[n]||'#888';
+// Base price — dotted line
+const baseY=pad.t+ch*(1-(r.base_price-yMin)/(yMax-yMin));
+cx.strokeStyle=c+'30';cx.lineWidth=0.5;cx.setLineDash([3,3]);
+cx.beginPath();cx.moveTo(pad.l,baseY);cx.lineTo(pad.l+cw,baseY);cx.stroke();
+cx.setLineDash([]);
+// Price line
+cx.strokeStyle=c;cx.lineWidth=1.5;cx.globalAlpha=0.8;
+cx.beginPath();
+for(let i=0;i<hist.length;i++){
+const x=pad.l+cw*(i/(maxLen-1));
+const y=pad.t+ch*(1-(hist[i]-yMin)/(yMax-yMin));
+if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y)}
+cx.stroke();
+// Area fill
+cx.globalAlpha=0.06;cx.fillStyle=c;
+cx.lineTo(pad.l+cw*((hist.length-1)/(maxLen-1)),pad.t+ch);
+cx.lineTo(pad.l,pad.t+ch);cx.fill();
+cx.globalAlpha=1;
+// Current price dot
+const lastX=pad.l+cw*((hist.length-1)/(maxLen-1));
+const lastY=pad.t+ch*(1-(hist[hist.length-1]-yMin)/(yMax-yMin));
+cx.fillStyle=c;cx.beginPath();cx.arc(lastX,lastY,3,0,Math.PI*2);cx.fill()});
+// Hover crosshair + tooltip
+if(mouseInChart&&mouseX>=0){
+const chartX=mouseX*2; // account for 2x DPI
+if(chartX>=pad.l&&chartX<=pad.l+cw){
+// Vertical line
+cx.strokeStyle='#ffffff15';cx.lineWidth=0.5;
+cx.beginPath();cx.moveTo(chartX,pad.t);cx.lineTo(chartX,pad.t+ch);cx.stroke();
+// Find index
+const frac=(chartX-pad.l)/cw;
+let tipHtml='';
+Object.entries(res).sort().forEach(([n,r])=>{
+if(hidden[n]||!r.price_history||r.price_history.length<2)return;
+const idx=Math.min(r.price_history.length-1,Math.round(frac*(maxLen-1)));
+const realIdx=Math.min(idx,r.price_history.length-1);
+const val=r.price_history[realIdx];
+const c=RC[n]||'#888';
+// Dot on line
+const dx=pad.l+cw*(realIdx/(maxLen-1));
+const dy=pad.t+ch*(1-(val-yMin)/(yMax-yMin));
+cx.fillStyle=c;cx.beginPath();cx.arc(dx,dy,3,0,Math.PI*2);cx.fill();
+const diff=val-r.base_price;const dc=diff>0?'#d9534f':'#5cb85c';
+tipHtml+='<div style="color:'+c+'"><span style="display:inline-block;width:65px">'+n+'</span> <b>'+val.toFixed(0)+'</b> <span style="color:'+dc+';font-size:9px">'+(diff>0?'+':'')+diff.toFixed(0)+'</span></div>'});
+if(tipHtml){
+tt.style.display='block';
+tt.innerHTML=tipHtml;
+const tr=pc.getBoundingClientRect();
+let tx=mouseX+12,ty=tr.top-tr.top+30;
+if(mouseX>tr.width*0.7)tx=mouseX-tt.offsetWidth-12;
+tt.style.left=tx+'px';tt.style.top=ty+'px'}}}
+requestAnimationFrame(drawChart)}
+drawChart()})();
 // === Flow Diagram Canvas ===
 (function(){
 const fc=document.getElementById('flowCanvas');if(!fc)return;

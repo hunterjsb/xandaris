@@ -123,8 +123,8 @@ func runHeadless(playerName string, loadPath string) {
 	}
 
 	if !loaded {
-		fmt.Printf("Starting new game for: %s\n", playerName)
-		if err := gs.NewGame(playerName); err != nil {
+		fmt.Println("Starting new multiplayer game (no default player)")
+		if err := gs.NewHeadlessGame(); err != nil {
 			log.Fatalf("Failed to start new game: %v", err)
 		}
 	}

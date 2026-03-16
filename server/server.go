@@ -52,6 +52,16 @@ func New(screenWidth, screenHeight int) *GameServer {
 
 // NewGame initializes a new game with the given player name.
 func (gs *GameServer) NewGame(playerName string) error {
+	return gs.newGame(playerName, false)
+}
+
+// NewHeadlessGame initializes a multiplayer game with no default human player.
+// Players join via Discord OAuth or admin registration.
+func (gs *GameServer) NewHeadlessGame() error {
+	return gs.newGame("", true)
+}
+
+func (gs *GameServer) newGame(playerName string, headless bool) error {
 	gs.State.Reset()
 	gs.State.Seed = time.Now().UnixNano()
 
@@ -63,21 +73,23 @@ func (gs *GameServer) NewGame(playerName string) error {
 	gs.State.Systems = galaxyGen.GenerateSystems(gs.State.Seed)
 	gs.State.Hyperlanes = galaxyGen.GenerateHyperlanes(gs.State.Systems)
 
-	// Create human player
-	playerColor := utils.PlayerGreen
-	gs.State.HumanPlayer = entities.NewPlayer(0, playerName, playerColor, entities.PlayerTypeHuman)
-	gs.State.Players = append(gs.State.Players, gs.State.HumanPlayer)
+	if !headless {
+		// Create human player (singleplayer / GUI mode)
+		playerColor := utils.PlayerGreen
+		gs.State.HumanPlayer = entities.NewPlayer(0, playerName, playerColor, entities.PlayerTypeHuman)
+		gs.State.Players = append(gs.State.Players, gs.State.HumanPlayer)
 
-	// Initialize player with starting planet
-	entities.InitializePlayer(gs.State.HumanPlayer, gs.State.Systems)
+		// Initialize player with starting planet
+		entities.InitializePlayer(gs.State.HumanPlayer, gs.State.Systems)
 
-	// Prepare human homeworld (Trading Post + seeded commodities, no auto-mines)
-	game.PrepareHomeworld(gs.State.HumanPlayer, false)
+		// Prepare human homeworld (Trading Post + seeded commodities, no auto-mines)
+		game.PrepareHomeworld(gs.State.HumanPlayer, false)
 
-	// Extra starting resources for human player — enough for early infrastructure
-	if gs.State.HumanPlayer.HomePlanet != nil {
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
+		// Extra starting resources for human player — enough for early infrastructure
+		if gs.State.HumanPlayer.HomePlanet != nil {
+			gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
+			gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
+		}
 	}
 
 	// Create economy
@@ -96,8 +108,12 @@ func (gs *GameServer) NewGame(playerName string) error {
 	// Reconcile: create Player objects for registered accounts that don't have one
 	gs.reconcileRegisteredPlayers()
 
+	label := playerName
+	if headless {
+		label = "headless"
+	}
 	fmt.Printf("[Server] New game started for %s (%d systems, %d players)\n",
-		playerName, len(gs.State.Systems), len(gs.State.Players))
+		label, len(gs.State.Systems), len(gs.State.Players))
 
 	return nil
 }

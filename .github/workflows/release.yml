@@ -175,10 +175,12 @@ jobs:
                 grep -q FRONTEND_URL /etc/systemd/system/xandaris.service || sudo sed -i '/^Environment=XANDARIS_API_KEY=/a Environment=FRONTEND_URL=https://hunterjsb.github.io/xandaris' /etc/systemd/system/xandaris.service && \
                 sudo systemctl daemon-reload"
 
-          # Swap server binary and restart
+          # Swap server binary and restart (full reset: clear saves + accounts)
           $SSH "chmod +x /home/ec2-user/xandaris-server-new && \
                 sudo systemctl stop xandaris && \
                 mv /home/ec2-user/xandaris-server-new /home/ec2-user/xandaris-server && \
+                rm -f /home/ec2-user/saves/autosave.xsave && \
+                rm -f /home/ec2-user/.xandaris/accounts.json && \
                 sudo systemctl start xandaris && \
                 sleep 5 && \
                 STATUS=\$(sudo systemctl is-active xandaris || true) && \
