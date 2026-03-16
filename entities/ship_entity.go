@@ -98,9 +98,9 @@ func NewShip(id int, name string, shipType ShipType, systemID int, owner string,
 		ship.Speed = 1.5
 
 	case ShipTypeColony:
-		ship.MaxFuel = 300
-		ship.FuelPerJump = 40
-		ship.FuelPerTick = 0.8
+		ship.MaxFuel = 500
+		ship.FuelPerJump = 30
+		ship.FuelPerTick = 0.5
 		ship.MaxHealth = 100
 		ship.AttackPower = 0
 		ship.DefenseRating = 5
@@ -109,9 +109,9 @@ func NewShip(id int, name string, shipType ShipType, systemID int, owner string,
 		ship.Speed = 0.8
 
 	case ShipTypeCargo:
-		ship.MaxFuel = 250
-		ship.FuelPerJump = 30
-		ship.FuelPerTick = 0.6
+		ship.MaxFuel = 400
+		ship.FuelPerJump = 25
+		ship.FuelPerTick = 0.4
 		ship.MaxHealth = 80
 		ship.AttackPower = 2
 		ship.DefenseRating = 3
