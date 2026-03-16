@@ -150,6 +150,10 @@ var tools = []openai.Tool{
 		Name: "refuel_ship", Description: "Refuel a ship from planet's Fuel stock. Ship must be at the planet.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"},"amount":{"type":"integer","description":"0 = fill up"}},"required":["ship_id","planet_id"]}`),
 	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "create_route", Description: "Create an automated shipping route. A Cargo ship will auto-cycle: load resource at source planet → fly to dest → unload → return. Assign a ship_id or 0 for auto-assign.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer"},"dest_planet_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
+	}},
 }
 
 func callAPI(method, endpoint string, body string, factionName string) (string, error) {
@@ -241,7 +245,7 @@ func executeTool(name string, args string, factionName string) string {
 		return result
 	case "build", "trade", "build_ship", "upgrade", "move_ship",
 		"load_cargo", "unload_cargo", "dock_ship", "sell_at_dock",
-		"colonize", "refuel_ship":
+		"colonize", "refuel_ship", "create_route":
 		endpoint := map[string]string{
 			"build":        "/api/build",
 			"trade":        "/api/market/trade",
@@ -254,6 +258,7 @@ func executeTool(name string, args string, factionName string) string {
 			"sell_at_dock":  "/api/ships/sell-at-dock",
 			"colonize":     "/api/colonize",
 			"refuel_ship":  "/api/ships/refuel",
+			"create_route": "/api/shipping/routes",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)
 		if err != nil {

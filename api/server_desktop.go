@@ -1790,14 +1790,36 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
-	// GET /api/shipping/routes — list shipping routes
+	// GET/POST /api/shipping/routes — list or create shipping routes
 	mux.HandleFunc("/api/shipping/routes", func(w http.ResponseWriter, r *http.Request) {
 		p := getProvider()
 		sm := p.GetShippingManager()
 		if sm == nil {
-			writeJSON(w, APIResponse{OK: true, Data: []ShippingRouteInfo{}})
+			writeErr(w, http.StatusInternalServerError, "shipping system not available")
 			return
 		}
+
+		if r.Method == http.MethodPost {
+			// Create a new shipping route
+			var req ShippingRouteRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			routeID := sm.CreateRoute(playerName, req.SourcePlanetID, req.DestPlanetID, req.Resource, req.Quantity, req.ShipID)
+			writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+				"route_id": routeID,
+				"owner":    playerName,
+			}})
+			return
+		}
+
+		// GET — list routes
 		playerName := getAuthPlayer(r)
 		routes := sm.GetRoutes(playerName)
 		result := make([]ShippingRouteInfo, 0, len(routes))
