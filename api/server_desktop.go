@@ -1878,7 +1878,8 @@ td{padding:3px 4px}
 <div class="panel"><h2>Faction Chat <span class="tag">live</span></h2><div id="ch" style="max-height:220px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Resource Balance <span class="tag">supply vs demand</span></h2><div id="rf"></div></div>
 <div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
-<div class="panel wide"><h2>Market Prices <span class="tag">sparkline trends</span></h2><div id="mk"></div></div>
+<div class="panel"><h2>Market Prices <span class="tag">trends</span></h2><div id="mk"></div></div>
+<div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
 <div class="panel wide" style="background:#0d1125;border-color:#152040"><h2 style="color:#556">Production Chains <span class="tag">simulation flow</span></h2><div class="chain" id="chains"></div></div>
 <div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Fleet <span class="tag">ships by faction</span></h2><div id="sh"></div></div>
@@ -1925,13 +1926,22 @@ const bg2=pct<0.3?'#4a1515':pct<0.5?'#4a2a15':pct<0.8?'#3a3a15':'#153a15';
 return'<span style="display:inline-block;width:16px;height:16px;border-radius:2px;background:'+bg2+'" title="'+p.planet_name+': '+(pct*100).toFixed(0)+'%"></span>'}).join('');
 return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span style="width:85px;color:#7fdbca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+owner+'</span><span style="display:flex;gap:2px">'+tiles+'</span><span style="flex:1;text-align:right">'+spark+'</span><span class="d" style="width:55px;text-align:right;font-size:9px">'+(avgPct*100).toFixed(0)+'%</span></div>'}).join('');
 // Market with bars
-const maxRatio=Math.max(...Object.values(e.data.resources).map(r=>r.price_ratio),1);
+// Market — compact with ratio bar + sparkline
 document.getElementById('mk').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
 const c=r.price_ratio>1.5?'r':r.price_ratio>0.8?'w':'g';
 const s=r.scarcity=='Scarce'||r.scarcity=='Critical'?'o':r.scarcity=='Depleted'?'r':'d';
 const bw=Math.min(100,r.price_ratio/5*100).toFixed(0);
-const bc=r.price_ratio>2?'#5a1a1a':r.price_ratio>1?'#3a3a1a':'#1a3a1a';
-return'<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid #0c1020"><span style="width:80px;font-size:11px">'+n+'</span><div style="flex:1;display:flex;align-items:center;gap:6px"><div style="width:120px;height:12px;background:#0c1020;border-radius:2px;overflow:hidden;position:relative"><div style="height:100%;width:'+bw+'%;background:'+bc+';border-radius:2px"></div><span style="position:absolute;left:4px;top:0;font-size:9px;line-height:12px;color:#aab">'+r.price_ratio.toFixed(1)+'x</span></div><span class="'+c+'" style="width:45px;font-size:11px;text-align:right">'+r.buy_price.toFixed(0)+'</span><span class="d" style="width:35px;font-size:10px">/'+r.base_price+'</span><span class="'+s+'" style="width:55px;font-size:10px">'+r.scarcity+'</span>'+sp(r.price_history)+'</div></div>'}).join('');
+const bc=r.price_ratio>2?'#4a1515':r.price_ratio>1?'#3a3515':'#153a15';
+return'<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span style="width:70px">'+n+'</span><div style="width:60px;height:10px;background:#0c1020;border-radius:2px;overflow:hidden;position:relative"><div style="height:100%;width:'+bw+'%;background:'+bc+';border-radius:2px"></div><span style="position:absolute;left:3px;top:0;font-size:8px;line-height:10px;color:#aab">'+r.price_ratio.toFixed(1)+'x</span></div><span class="'+c+'" style="width:35px;text-align:right">'+r.buy_price.toFixed(0)+'</span><span class="'+s+'" style="width:50px;font-size:10px">'+r.scarcity+'</span>'+sp(r.price_history)+'</div>'}).join('');
+// Trading hubs — top planets by total stock value
+const hubs=[];(p.data||[]).forEach(pl=>{pl.planets&&pl.planets.forEach&&0;/* players don't have planets inline */});
+// Build from players data — sort by stock
+const hubData=(p.data||[]).sort((a,b)=>b.stock-a.stock).slice(0,8);
+document.getElementById('hubs').innerHTML=hubData.map(x=>{
+const maxStock=Math.max(...hubData.map(h=>h.stock),1);
+const bw2=Math.round(x.stock/maxStock*100);
+const tc=x.type=='human'?'b':'w';
+return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span class="'+tc+'" style="width:85px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+x.name+'</span><div style="flex:1;height:8px;background:#0c1020;border-radius:2px;overflow:hidden"><div style="height:100%;width:'+bw2+'%;background:#1a3a5a;border-radius:2px"></div></div><span class="d" style="width:45px;text-align:right;font-size:10px">'+x.stock.toLocaleString()+'</span><span class="d" style="width:20px;text-align:right;font-size:9px">'+x.planets+'p</span></div>'}).join('');
 // Production chains
 const fmt=r=>{const v=(pr[r]||0)-(co[r]||0);return'<span class="'+(v>0?'g':v<-1?'r':'d')+'" style="font-weight:bold">'+(v>0?'+':'')+v.toFixed(0)+'</span>'};
 document.getElementById('chains').innerHTML=
