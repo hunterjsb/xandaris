@@ -31,6 +31,7 @@ type GameStateProvider interface {
 	GetStandingOrders(player string) []*game.StandingOrder
 	GetDeliveryManager() *economy.DeliveryManager
 	GetShippingManager() *game.ShippingManager
+	GetCreditLedger() *economy.CreditLedger
 }
 
 // findPlayer returns the player matching the given name, or falls back to the human player.

@@ -60,6 +60,21 @@ type GameProvider interface {
 	SellAtDock(ship *entities.Ship, resource string, qty int) (int, int, error)
 	// Credit limits
 	GetCreditLedger() *economy.CreditLedger
+	// Shipping routes
+	GetShippingRoutes() []ShippingRouteInfo
+	CompleteShippingTrip(routeID int)
+}
+
+// ShippingRouteInfo is a snapshot of a shipping route for the tick system.
+type ShippingRouteInfo struct {
+	ID           int
+	Owner        string
+	SourcePlanet int
+	DestPlanet   int
+	Resource     string
+	Quantity     int
+	ShipID       int
+	Active       bool
 }
 
 // SystemContext provides access to game state for tickable systems

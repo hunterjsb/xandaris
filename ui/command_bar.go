@@ -202,6 +202,20 @@ func (cb *CommandBar) Update() {
 		return
 	}
 
+	kb := cb.ctx.GetKeyBindings()
+
+	// Check close keys BEFORE processing input characters
+	if kb.IsActionJustPressed(views.ActionEscape) {
+		cb.Close()
+		return
+	}
+	// T closes the command bar when input is empty
+	if cb.input == "" && kb.IsActionJustPressed(views.ActionOpenCommandBar) {
+		cb.Close()
+		return
+	}
+
+	// Process typed characters
 	for _, r := range ebiten.AppendInputChars(nil) {
 		if r == '`' {
 			continue
@@ -211,26 +225,17 @@ func (cb *CommandBar) Update() {
 		}
 	}
 
-	kb := cb.ctx.GetKeyBindings()
+	// Backspace
 	if kb.IsActionJustPressed(views.ActionMenuDelete) && len(cb.input) > 0 {
 		cb.input = cb.input[:len(cb.input)-1]
 	}
 
+	// Enter — execute command
 	if kb.IsActionJustPressed(views.ActionMenuConfirm) && cb.input != "" {
 		cb.executeCommand(cb.input)
 		cb.history = append(cb.history, cb.input)
 		cb.historyIdx = len(cb.history)
 		cb.input = ""
-	}
-
-	if kb.IsActionJustPressed(views.ActionEscape) {
-		cb.Close()
-		return
-	}
-	// T closes the command bar when input is empty (so T doesn't conflict with typing)
-	if cb.input == "" && kb.IsActionJustPressed(views.ActionOpenCommandBar) {
-		cb.Close()
-		return
 	}
 
 	// Tab — cycle mode: Agent → Events+Chat → Chat Only → Agent

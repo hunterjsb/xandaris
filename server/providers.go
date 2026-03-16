@@ -172,6 +172,33 @@ func (gs *GameServer) GetCreditLedger() *economy.CreditLedger {
 	return gs.CreditLedger
 }
 
+func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
+	if gs.ShippingMgr == nil {
+		return nil
+	}
+	routes := gs.ShippingMgr.GetRoutes("")
+	result := make([]tickable.ShippingRouteInfo, 0, len(routes))
+	for _, r := range routes {
+		result = append(result, tickable.ShippingRouteInfo{
+			ID:           r.ID,
+			Owner:        r.Owner,
+			SourcePlanet: r.SourcePlanet,
+			DestPlanet:   r.DestPlanet,
+			Resource:     r.Resource,
+			Quantity:     r.Quantity,
+			ShipID:       r.ShipID,
+			Active:       r.Active,
+		})
+	}
+	return result
+}
+
+func (gs *GameServer) CompleteShippingTrip(routeID int) {
+	if gs.ShippingMgr != nil {
+		gs.ShippingMgr.CompleteTrip(routeID)
+	}
+}
+
 // --- api.GameStateProvider ---
 
 func (gs *GameServer) GetSystems() []*entities.System     { return gs.State.Systems }

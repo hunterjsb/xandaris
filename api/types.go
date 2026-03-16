@@ -326,6 +326,92 @@ type Catalog struct {
 	PopulationConsumption []PopConsumptionRate  `json:"population_consumption"`
 }
 
+// DeliveryInfo represents a pending delivery for the API.
+type DeliveryInfo struct {
+	ID               int    `json:"id"`
+	Buyer            string `json:"buyer"`
+	Seller           string `json:"seller"`
+	Resource         string `json:"resource"`
+	Quantity         int    `json:"quantity"`
+	Total            int    `json:"total"`
+	DestPlanetID     int    `json:"dest_planet_id"`
+	DestSystemID     int    `json:"dest_system_id"`
+	SourceSystemID   int    `json:"source_system_id"`
+	ShipID           int    `json:"ship_id"`
+	Status           string `json:"status"`
+	DeliveryType     string `json:"delivery_type"`
+	Direction        string `json:"direction"`
+	EstimatedArrival int64  `json:"estimated_arrival,omitempty"`
+	CreatedTick      int64  `json:"created_tick"`
+}
+
+// TradingPostDetail shows detailed Trading Post info for the API.
+type TradingPostDetail struct {
+	PlanetID    int     `json:"planet_id"`
+	PlanetName  string  `json:"planet_name"`
+	Level       int     `json:"level"`
+	MaxLevel    int     `json:"max_level"`
+	Throughput  int     `json:"throughput"`    // 0 = unlimited
+	FeePercent  float64 `json:"fee_percent"`
+	CreditLimit int     `json:"credit_limit"` // 0 = unlimited
+	Owner       string  `json:"owner"`
+	CanDock     bool    `json:"can_dock"`      // level 2+
+	CanRefuel   bool    `json:"can_refuel"`    // level 3+
+}
+
+// DockShipRequest is the body for POST /api/ships/dock.
+type DockShipRequest struct {
+	ShipID   int `json:"ship_id"`
+	PlanetID int `json:"planet_id"`
+}
+
+// UndockShipRequest is the body for POST /api/ships/undock.
+type UndockShipRequest struct {
+	ShipID int `json:"ship_id"`
+}
+
+// SellAtDockRequest is the body for POST /api/ships/sell-at-dock.
+type SellAtDockRequest struct {
+	ShipID   int    `json:"ship_id"`
+	Resource string `json:"resource"`
+	Quantity int    `json:"quantity"`
+}
+
+// ShippingRouteRequest is the body for POST /api/shipping/routes.
+type ShippingRouteRequest struct {
+	SourcePlanetID int    `json:"source_planet_id"`
+	DestPlanetID   int    `json:"dest_planet_id"`
+	Resource       string `json:"resource"`
+	Quantity       int    `json:"quantity"` // 0 = fill cargo
+	ShipID         int    `json:"ship_id"`  // 0 = auto-assign
+}
+
+// ShippingRouteInfo represents a shipping route for the API.
+type ShippingRouteInfo struct {
+	ID            int    `json:"id"`
+	Owner         string `json:"owner"`
+	SourcePlanet  int    `json:"source_planet"`
+	DestPlanet    int    `json:"dest_planet"`
+	Resource      string `json:"resource"`
+	Quantity      int    `json:"quantity"`
+	ShipID        int    `json:"ship_id"`
+	Active        bool   `json:"active"`
+	TripsComplete int    `json:"trips_complete"`
+}
+
+// CreditLimitRequest is the body for POST /api/trading-post/limits.
+type CreditLimitRequest struct {
+	TargetEmpire string `json:"target_empire"`
+	Limit        int    `json:"limit"` // -1 = unlimited, 0 = use TP default
+}
+
+// CreditLimitInfo shows credit limit info for the API.
+type CreditLimitInfo struct {
+	TargetEmpire string `json:"target_empire"`
+	Limit        int    `json:"limit"`
+	Outstanding  int    `json:"outstanding"`
+}
+
 // GalaxyFlows shows galaxy-wide aggregate production and consumption rates.
 type GalaxyFlows struct {
 	Production  map[string]float64 `json:"production"`  // total production per interval

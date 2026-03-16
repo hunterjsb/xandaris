@@ -110,6 +110,13 @@ func (ds *DeliverySystem) OnTick(tick int64) {
 				}
 			}
 
+			// Reduce outstanding credit exposure
+			if delivery.Direction == "buy" && delivery.BuyerName != "" {
+				if ledger := ds.getCreditLedger(); ledger != nil {
+					ledger.ReduceOutstanding(delivery.BuyerName, "market", delivery.Total)
+				}
+			}
+
 			dm.CompleteDelivery(delivery.ID)
 			ship.DeliveryID = 0
 			ship.RoutePath = nil
@@ -145,9 +152,28 @@ func (ds *DeliverySystem) completeLocalDelivery(delivery *economy.PendingDeliver
 		}
 	}
 
+	// Reduce outstanding credit exposure
+	if delivery.Direction == "buy" && delivery.BuyerName != "" {
+		if ledger := ds.getCreditLedger(); ledger != nil {
+			ledger.ReduceOutstanding(delivery.BuyerName, "market", delivery.Total)
+		}
+	}
+
 	dm.CompleteDelivery(delivery.ID)
 	fmt.Printf("[Delivery] Local delivery #%d completed: %d %s to %s\n",
 		delivery.ID, delivery.Quantity, delivery.Resource, delivery.BuyerName)
+}
+
+func (ds *DeliverySystem) getCreditLedger() *economy.CreditLedger {
+	context := ds.GetContext()
+	if context == nil {
+		return nil
+	}
+	game := context.GetGame()
+	if game == nil {
+		return nil
+	}
+	return game.GetCreditLedger()
 }
 
 func findShipByID(players []*entities.Player, shipID int) *entities.Ship {
