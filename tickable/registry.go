@@ -58,6 +58,8 @@ type GameProvider interface {
 	DockShip(ship *entities.Ship, planet *entities.Planet) error
 	UndockShip(ship *entities.Ship) error
 	SellAtDock(ship *entities.Ship, resource string, qty int) (int, int, error)
+	// Credit limits
+	GetCreditLedger() *economy.CreditLedger
 }
 
 // SystemContext provides access to game state for tickable systems

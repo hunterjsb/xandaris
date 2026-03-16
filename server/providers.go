@@ -168,6 +168,10 @@ func (gs *GameServer) SellAtDock(ship *entities.Ship, resource string, qty int) 
 	return sold, credits, nil
 }
 
+func (gs *GameServer) GetCreditLedger() *economy.CreditLedger {
+	return gs.CreditLedger
+}
+
 // --- api.GameStateProvider ---
 
 func (gs *GameServer) GetSystems() []*entities.System     { return gs.State.Systems }

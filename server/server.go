@@ -28,6 +28,7 @@ type GameServer struct {
 	Registry         *game.PlayerRegistry
 	DeliveryMgr      *economy.DeliveryManager
 	ShippingMgr      *game.ShippingManager
+	CreditLedger     *economy.CreditLedger
 	cmdRegistry      *CommandRegistry
 	// Remote is set when connected to a remote server (desktop only, not WASM)
 	remoteSync interface{}
@@ -177,11 +178,13 @@ func (gs *GameServer) initSimulation() {
 	// Wire delivery system for cargo-based trade
 	gs.DeliveryMgr = economy.NewDeliveryManager()
 	gs.ShippingMgr = game.NewShippingManager()
+	gs.CreditLedger = economy.NewCreditLedger()
 
 	if gs.State.TradeExec != nil {
 		gs.State.TradeExec.SetSystems(gs.State.Systems)
 		gs.State.TradeExec.Deliveries = gs.DeliveryMgr
 		gs.State.TradeExec.Dispatcher = gs
+		gs.State.TradeExec.Credits = gs.CreditLedger
 	}
 
 	// Initialize tickable systems

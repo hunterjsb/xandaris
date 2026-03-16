@@ -227,6 +227,11 @@ func (cb *CommandBar) Update() {
 		cb.Close()
 		return
 	}
+	// T closes the command bar when input is empty (so T doesn't conflict with typing)
+	if cb.input == "" && kb.IsActionJustPressed(views.ActionOpenCommandBar) {
+		cb.Close()
+		return
+	}
 
 	// Tab — cycle mode: Agent → Events+Chat → Chat Only → Agent
 	if ebiten.IsKeyPressed(ebiten.KeyTab) && !cb.tabHeld {

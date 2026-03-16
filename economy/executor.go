@@ -306,6 +306,12 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		}
 	}
 
+	// Track outstanding credit exposure
+	if te.Credits != nil {
+		// Track against "market" as a generic counterparty
+		te.Credits.AddOutstanding(player.Name, "market", total)
+	}
+
 	// Bump trade volume on market
 	te.market.AddTradeVolume(resource, quantity, true)
 
