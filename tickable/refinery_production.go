@@ -57,8 +57,19 @@ func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, re
 
 	// Each level adds 30% throughput
 	levelMultiplier := 1.0 + float64(refinery.Level-1)*0.3
-	oilNeeded := int(float64(baseOilConsumption) * levelMultiplier)
-	fuelProduced := int(float64(baseFuelProduction) * levelMultiplier)
+
+	// Power scaling: refineries need power to run efficiently.
+	// At 0% power: 25% throughput. At 100% power: full throughput.
+	powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
+
+	oilNeeded := int(float64(baseOilConsumption) * levelMultiplier * powerFactor)
+	fuelProduced := int(float64(baseFuelProduction) * levelMultiplier * powerFactor)
+	if oilNeeded < 1 {
+		oilNeeded = 1
+	}
+	if fuelProduced < 1 {
+		fuelProduced = 1
+	}
 
 	// Ensure Fuel storage exists
 	if _, hasFuel := planet.StoredResources[entities.ResFuel]; !hasFuel {

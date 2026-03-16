@@ -193,15 +193,23 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 			return
 		}
 
-		// PRIORITY 8: Build Colony ship for expansion
-		if len(player.OwnedPlanets) < 3 && planet.HasBuilding(entities.BuildingShipyard) && player.Credits >= 3000 {
-			hasColony := false
+		// PRIORITY 8: Build Colony ship for expansion (max 2 colony ships)
+		if len(player.OwnedPlanets) < 5 && planet.HasBuilding(entities.BuildingShipyard) && player.Credits >= 3000 {
+			colonyCount := 0
 			for _, ship := range player.OwnedShips {
 				if ship != nil && ship.ShipType == entities.ShipTypeColony {
-					hasColony = true
-					break
+					colonyCount++
 				}
 			}
+			// Also count colony ships under construction
+			if cs := GetConstructionSystem(); cs != nil {
+				for _, item := range cs.GetConstructionsByOwner(player.Name) {
+					if item.Name == string(entities.ShipTypeColony) || item.Name == "Colony" {
+						colonyCount++
+					}
+				}
+			}
+			hasColony := colonyCount >= 2
 			if !hasColony && planet.GetStoredAmount(entities.ResIron) >= 100 &&
 				planet.GetStoredAmount(entities.ResFuel) >= 50 &&
 				planet.GetStoredAmount(entities.ResRareMetals) >= 20 {

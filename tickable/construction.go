@@ -3,7 +3,10 @@ package tickable
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"sync"
+
+	"github.com/hunterjsb/xandaris/entities"
 )
 
 func init() {
@@ -143,17 +146,46 @@ func (cs *ConstructionSystem) OnTick(tick int64) {
 		return
 	}
 
-	// Process all queues concurrently
-	ProcessConcurrent(allQueues, 4, func(queue *ConstructionQueue) {
-		cs.processQueue(queue, tick)
-	})
+	// Build planet lookup for tech/workforce bonuses
+	planetByLocation := cs.buildPlanetLookup()
+
+	// Process all queues
+	for _, queue := range allQueues {
+		cs.processQueue(queue, tick, planetByLocation)
+	}
 
 	// Handle completions
 	cs.processCompletions()
 }
 
-// processQueue processes a single construction queue
-func (cs *ConstructionSystem) processQueue(queue *ConstructionQueue, tick int64) {
+// buildPlanetLookup creates a map from location string to planet for construction speed bonuses.
+func (cs *ConstructionSystem) buildPlanetLookup() map[string]*entities.Planet {
+	result := make(map[string]*entities.Planet)
+	ctx := cs.GetContext()
+	if ctx == nil {
+		return result
+	}
+	game := ctx.GetGame()
+	if game == nil {
+		return result
+	}
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			if planet, ok := e.(*entities.Planet); ok {
+				// Construction locations use planet ID as string, or "planet_<id>" for ships
+				idStr := fmt.Sprintf("%d", planet.GetID())
+				result[idStr] = planet
+				result["planet_"+idStr] = planet
+			}
+		}
+	}
+	return result
+}
+
+// processQueue processes a single construction queue.
+// Construction speed scales with the planet's tech level (+5% per level)
+// and workforce productivity bonus (0.5x–1.5x from happiness).
+func (cs *ConstructionSystem) processQueue(queue *ConstructionQueue, tick int64, planetByLocation map[string]*entities.Planet) {
 	queue.mutex.Lock()
 	defer queue.mutex.Unlock()
 
@@ -166,8 +198,25 @@ func (cs *ConstructionSystem) processQueue(queue *ConstructionQueue, tick int64)
 	item.Mutex.Lock()
 	defer item.Mutex.Unlock()
 
-	// Decrement remaining ticks
-	item.RemainingTicks--
+	// Calculate construction speed from planet bonuses
+	speed := 1 // base: 1 tick of progress per game tick
+	if planet, ok := planetByLocation[item.Location]; ok {
+		// Tech bonus: +5% per tech level (e.g. tech 3.0 → 1.15x speed)
+		techMult := 1.0 + planet.TechLevel*0.05
+		// Productivity bonus from happiness (0.5x–1.5x)
+		prodMult := planet.ProductivityBonus
+		if prodMult <= 0 {
+			prodMult = 1.0
+		}
+		combined := techMult * prodMult
+		speed = int(combined) // floor to integer ticks
+		if speed < 1 {
+			speed = 1
+		}
+	}
+
+	// Decrement remaining ticks by speed
+	item.RemainingTicks -= speed
 	if item.RemainingTicks < 0 {
 		item.RemainingTicks = 0
 	}
