@@ -1918,8 +1918,14 @@ const totalGen=planets.reduce((s,p)=>s+p.generated_mw,0);
 const totalCons=planets.reduce((s,p)=>s+p.consumed_mw,0);
 const avgPct=totalCons>0?Math.min(1,totalGen/totalCons):1;
 let hist=[];planets.forEach(p=>{if(p.history&&p.history.length>hist.length)hist=p.history});
-// Power sparkline: use 0-1 absolute scale (not relative min/max)
-const spark=hist.length>3?'<span class="spark" style="color:'+(avgPct<0.5?'#f66':avgPct<0.8?'#cc8':'#6c6')+'">'+hist.slice(-20).map(v=>BL[Math.min(7,Math.max(0,Math.round(v*7)))]).join('')+'</span>':'';
+// Power sparkline: inline SVG polyline
+let spark='';
+if(hist.length>3){
+const pts=hist.slice(-20);const w=80,h=16;
+const sc=avgPct<0.5?'#f66':avgPct<0.8?'#cc8':'#6c6';
+const coords=pts.map((v,i)=>(i/(pts.length-1)*w).toFixed(1)+','+(h-v*h).toFixed(1)).join(' ');
+spark='<svg width="'+w+'" height="'+h+'" style="vertical-align:middle"><polyline points="'+coords+'" fill="none" stroke="'+sc+'" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+}
 const tiles=planets.map(p=>{
 const pct=p.consumed_mw>0?Math.min(1,p.generated_mw/p.consumed_mw):1;
 const bg2=pct<0.3?'#4a1515':pct<0.5?'#4a2a15':pct<0.8?'#3a3a15':'#153a15';

@@ -37,15 +37,17 @@ type GalaxyView struct {
 	confirmQuit             bool
 }
 
-// galaxyToScreen maps a system's raw coordinates to the current screen size.
-// System positions are generated for a reference resolution; this scales them
-// to fill the current screen with consistent margins.
-func galaxyToScreen(rawX, rawY float64, systems []*entities.System) (int, int) {
-	if len(systems) == 0 {
-		return int(rawX), int(rawY)
-	}
+// galaxyBounds caches the bounding box of system positions for consistent scaling.
+type galaxyBounds struct {
+	minX, minY, rangeX, rangeY float64
+	valid                      bool
+}
 
-	// Find bounding box of all systems
+// computeGalaxyBounds calculates the bounding box of all system raw positions.
+func computeGalaxyBounds(systems []*entities.System) galaxyBounds {
+	if len(systems) == 0 {
+		return galaxyBounds{}
+	}
 	minX, minY := systems[0].X, systems[0].Y
 	maxX, maxY := systems[0].X, systems[0].Y
 	for _, s := range systems[1:] {
@@ -54,20 +56,23 @@ func galaxyToScreen(rawX, rawY float64, systems []*entities.System) (int, int) {
 		if s.X > maxX { maxX = s.X }
 		if s.Y > maxY { maxY = s.Y }
 	}
-
 	rangeX := maxX - minX
 	rangeY := maxY - minY
 	if rangeX < 1 { rangeX = 1 }
 	if rangeY < 1 { rangeY = 1 }
+	return galaxyBounds{minX, minY, rangeX, rangeY, true}
+}
 
-	// Map to screen with margins
+// toScreen maps raw coordinates to screen space using precomputed bounds.
+func (gb galaxyBounds) toScreen(rawX, rawY float64) (int, int) {
+	if !gb.valid {
+		return int(rawX), int(rawY)
+	}
 	margin := 60.0
 	screenW := float64(ScreenWidth) - margin*2
 	screenH := float64(ScreenHeight) - margin*2
-
-	x := margin + (rawX-minX)/rangeX*screenW
-	y := margin + (rawY-minY)/rangeY*screenH
-
+	x := margin + (rawX-gb.minX)/gb.rangeX*screenW
+	y := margin + (rawY-gb.minY)/gb.rangeY*screenH
 	return int(x), int(y)
 }
 
@@ -205,19 +210,19 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	screen.Fill(utils.Background)
 
 	// Scale system positions to fill the current screen.
-	// We compute scaled positions and store them as absolute positions.
-	// The raw X/Y are preserved for the scaling math (they come from generation).
+	// Compute bounds once for consistent mapping across all elements.
 	systems := gv.ctx.GetSystems()
+	bounds := computeGalaxyBounds(systems)
 	for _, sys := range systems {
-		sx, sy := galaxyToScreen(sys.X, sys.Y, systems)
+		sx, sy := bounds.toScreen(sys.X, sys.Y)
 		sys.SetAbsolutePosition(float64(sx), float64(sy))
 	}
 
 	// Draw hyperlanes first (so they appear behind systems)
-	gv.drawHyperlanes(screen)
+	gv.drawHyperlanes(screen, systems)
 
 	// Draw all systems
-	for _, system := range gv.ctx.GetSystems() {
+	for _, system := range systems {
 		gv.drawSystem(screen, system)
 	}
 
@@ -309,11 +314,10 @@ func (gv *GalaxyView) GetType() ViewType {
 }
 
 // drawHyperlanes draws connections between systems
-func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
+func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image, systems []*entities.System) {
 	hyperlaneColor := utils.HyperlaneNormal
 
 	// Build ID -> system lookup (hyperlane From/To are system IDs, not array indices)
-	systems := gv.ctx.GetSystems()
 	byID := make(map[int]*entities.System, len(systems))
 	for _, sys := range systems {
 		byID[sys.ID] = sys
