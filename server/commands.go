@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
@@ -738,17 +739,59 @@ func (gs *GameServer) handleSellAtDockCommand(cmd game.GameCommand) {
 		return
 	}
 
-	// Credit the ship owner
+	// Find the TP owner and apply docking fee (goes to planet owner as revenue)
+	dockingFee := 0
+	if ship.DockedAtPlanet != 0 {
+		planet := gs.CargoCommander.FindPlanetByID(ship.DockedAtPlanet)
+		if planet != nil && planet.Owner != "" && planet.Owner != human.Name {
+			// Fee: 5% base, reduced by TP level (L1=5%, L2=4%, L3=3%, L4=2%, L5=1%)
+			feeRate := 0.05
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost {
+					feeRate = 0.06 - float64(b.Level)*0.01
+					if feeRate < 0.01 {
+						feeRate = 0.01
+					}
+					break
+				}
+			}
+			dockingFee = int(float64(credits) * feeRate)
+			// Pay the fee to the planet owner
+			for _, p := range gs.State.Players {
+				if p != nil && p.Name == planet.Owner {
+					p.Credits += dockingFee
+					break
+				}
+			}
+			credits -= dockingFee
+		}
+	}
+
+	// Credit the ship owner (after fee deduction)
 	human.Credits += credits
 
-	// Bump trade volume
-	gs.State.Market.AddTradeVolume(sd.Resource, sold, false)
+	// Log to trade history
+	if gs.State.TradeExec != nil {
+		gs.State.Market.AddTradeVolume(sd.Resource, sold, false)
+		if gs.State.TradeExec.OnTrade != nil {
+			gs.State.TradeExec.OnTrade(economy.TradeRecord{
+				Tick:      gs.TickManager.GetCurrentTick(),
+				Player:    human.Name,
+				Resource:  sd.Resource,
+				Quantity:  sold,
+				Action:    "sell_at_dock",
+				UnitPrice: buyPrice,
+				Total:     credits,
+			})
+		}
+	}
 
 	sendSuccess(cmd, map[string]interface{}{
-		"ship_id":  sd.ShipID,
-		"resource": sd.Resource,
-		"sold":     sold,
-		"credits":  credits,
+		"ship_id":     sd.ShipID,
+		"resource":    sd.Resource,
+		"sold":        sold,
+		"credits":     credits,
+		"docking_fee": dockingFee,
 	})
 }
 
