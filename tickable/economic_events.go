@@ -92,14 +92,25 @@ func (ees *EconomicEventSystem) OnTick(tick int64) {
 	}
 }
 
+// generateEvent creates events that respond to actual planet conditions.
+// Happy planets attract immigrants; stressed planets have accidents;
+// trading hubs attract caravans; explored systems find deposits.
 func (ees *EconomicEventSystem) generateEvent(planet *entities.Planet, player *entities.Player) *economicEvent {
 	resources := []string{entities.ResIron, entities.ResWater, entities.ResOil, entities.ResRareMetals, entities.ResHelium3, entities.ResFuel, entities.ResElectronics}
 	res := resources[rand.Intn(len(resources))]
 
+	// Weight events based on planet conditions
+	happiness := planet.Happiness
+	powerRatio := planet.GetPowerRatio()
+	hasTradingPost := planet.HasOperationalBuilding(entities.BuildingTradingPost)
+
 	roll := rand.Intn(100)
 	switch {
-	case roll < 25:
-		// Boom: resource deposit found — bonus resources
+	case roll < 20:
+		// Resource discovery — more likely on planets with low resource diversity
+		if len(planet.Resources) >= 5 {
+			return nil // already resource-rich
+		}
 		amount := 50 + rand.Intn(150)
 		return &economicEvent{
 			Type:     EventBoom,
@@ -108,13 +119,24 @@ func (ees *EconomicEventSystem) generateEvent(planet *entities.Planet, player *e
 			Amount:   amount,
 			Message:  fmt.Sprintf("Survey teams on %s discovered a %s vein! +%d %s", planet.Name, res, amount, res),
 		}
-	case roll < 45:
-		// Shortage: industrial accident destroys some stock
+
+	case roll < 40:
+		// Industrial accident — more likely with low power or low happiness
+		accidentChance := 80 // base 80% chance to actually trigger
+		if powerRatio > 0.8 {
+			accidentChance -= 40 // well-powered planets are safer
+		}
+		if happiness > 0.7 {
+			accidentChance -= 30 // happy workers make fewer mistakes
+		}
+		if rand.Intn(100) >= accidentChance {
+			return nil // good conditions prevented the accident
+		}
 		stored := planet.GetStoredAmount(res)
 		if stored < 20 {
-			return nil // Nothing to lose
+			return nil
 		}
-		amount := stored / 4 // Lose 25% of stock
+		amount := stored / 4
 		if amount < 10 {
 			amount = 10
 		}
@@ -125,38 +147,51 @@ func (ees *EconomicEventSystem) generateEvent(planet *entities.Planet, player *e
 			Amount:   amount,
 			Message:  fmt.Sprintf("Storage malfunction on %s! Lost %d %s", planet.Name, amount, res),
 		}
-	case roll < 65:
-		// Windfall: trade caravan pays bonus credits
-		amount := 200 + rand.Intn(800)
+
+	case roll < 60:
+		// Trade caravan — only at planets with Trading Posts
+		if !hasTradingPost {
+			return nil
+		}
+		// Windfall scales with planet population (bigger market = bigger payoff)
+		base := 200 + int(planet.Population/50)
+		amount := base + rand.Intn(base)
 		return &economicEvent{
 			Type:     EventWindfall,
 			Name:     "Trade Windfall",
 			Amount:   amount,
 			Message:  fmt.Sprintf("Passing trade caravan paid %s a %d credit bonus at %s", player.Name, amount, planet.Name),
 		}
+
 	case roll < 80:
-		// Demand spike: population growth burst
-		if planet.Population < 500 {
-			return nil
+		// Immigration wave — only on happy, prosperous planets
+		if planet.Population < 500 || happiness < 0.5 {
+			return nil // unhappy planets don't attract settlers
 		}
-		amount := int(planet.Population / 20) // 5% population growth
+		// Immigration scales with happiness: more happy = more immigrants
+		growthMult := happiness * 2.0 // 0.5 → 1.0x, 1.0 → 2.0x
+		amount := int(float64(planet.Population/20) * growthMult)
+		if amount < 10 {
+			amount = 10
+		}
 		return &economicEvent{
 			Type:     EventDemand,
 			Name:     "Immigration Wave",
 			Amount:   amount,
-			Message:  fmt.Sprintf("Immigration wave at %s! +%d settlers for %s", planet.Name, amount, player.Name),
+			Message:  fmt.Sprintf("Immigration wave at %s! +%d settlers for %s (happiness %.0f%%)", planet.Name, amount, player.Name, happiness*100),
 		}
+
 	default:
-		// Deposit enrichment: boost a resource deposit's abundance
+		// Deposit enrichment — more likely on planets with depleted deposits
 		for _, resEntity := range planet.Resources {
-			if res, ok := resEntity.(*entities.Resource); ok && res.Abundance < 60 {
+			if r, ok := resEntity.(*entities.Resource); ok && r.Abundance < 40 {
 				amount := 5 + rand.Intn(15)
 				return &economicEvent{
 					Type:     EventBoom,
 					Name:     "Deposit Enrichment",
-					Resource: res.ResourceType,
+					Resource: r.ResourceType,
 					Amount:   amount,
-					Message:  fmt.Sprintf("Geological survey at %s found deeper %s deposits! Abundance +%d", planet.Name, res.ResourceType, amount),
+					Message:  fmt.Sprintf("Geological survey at %s found deeper %s deposits! Abundance +%d", planet.Name, r.ResourceType, amount),
 				}
 			}
 		}
