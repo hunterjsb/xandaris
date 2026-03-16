@@ -1422,6 +1422,46 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// Admin-only player removal
+	mux.HandleFunc("/api/admin/remove-player", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		if !isAdmin(r) {
+			writeErr(w, http.StatusForbidden, "admin only")
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+			writeErr(w, http.StatusBadRequest, "name required")
+			return
+		}
+		p := getProvider()
+		players := p.GetPlayers()
+		found := false
+		for i, pl := range players {
+			if pl != nil && pl.Name == req.Name {
+				// Release owned planets
+				for _, planet := range pl.OwnedPlanets {
+					if planet != nil {
+						planet.Owner = ""
+					}
+				}
+				players[i] = nil
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeErr(w, http.StatusNotFound, "player not found: "+req.Name)
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: map[string]string{"removed": req.Name}})
+	})
+
 	// Serve pages
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
