@@ -26,9 +26,11 @@ type ActionMenu struct {
 
 // NewActionMenu creates a new action menu
 func NewActionMenu(title string, items []ActionMenuItem) *ActionMenu {
-	padding := 10
-	width := 250
-	height := padding*2 + 20 + len(items)*20 + 10
+	lh := int(15.0 * utils.UIScale)
+	cw := utils.CharWidth()
+	padding := cw
+	width := 28 * cw
+	height := padding*2 + lh + len(items)*lh + lh
 
 	return &ActionMenu{
 		Panel:        NewUIPanel(0, 0, width, height),
@@ -80,10 +82,11 @@ func (am *ActionMenu) Update() bool {
 		}
 
 		// Check clicks on menu items
-		itemY := am.Panel.Y + am.Padding + 40 // Title + separator
+		lh := int(15.0 * utils.UIScale)
+		itemY := am.Panel.Y + am.Padding + lh*2 // Title + separator
 		for _, item := range am.Items {
 			if mx >= am.Panel.X+am.Padding && mx <= am.Panel.X+am.Panel.Width-am.Padding &&
-				my >= itemY && my < itemY+20 {
+				my >= itemY && my < itemY+lh {
 				if item.Enabled && item.Action != nil {
 					item.Action()
 					am.visible = false
@@ -91,21 +94,22 @@ func (am *ActionMenu) Update() bool {
 				}
 				break
 			}
-			itemY += 20
+			itemY += lh
 		}
 	}
 
 	// Update hover state
+	lh := int(15.0 * utils.UIScale)
 	mx, my := ebiten.CursorPosition()
-	itemY := am.Panel.Y + am.Padding + 40
+	itemY := am.Panel.Y + am.Padding + lh*2
 	am.selectedItem = -1
 	for i := range am.Items {
 		if mx >= am.Panel.X+am.Padding && mx <= am.Panel.X+am.Panel.Width-am.Padding &&
-			my >= itemY && my < itemY+20 {
+			my >= itemY && my < itemY+lh {
 			am.selectedItem = i
 			break
 		}
-		itemY += 20
+		itemY += lh
 	}
 
 	return false
@@ -120,16 +124,19 @@ func (am *ActionMenu) Draw(screen *ebiten.Image) {
 	// Draw panel background
 	am.Panel.Draw(screen)
 
+	lh := int(15.0 * utils.UIScale)
+
 	// Draw title
 	textY := am.Panel.Y + am.Padding
 	DrawText(screen, am.Title, am.Panel.X+am.Padding, textY, utils.TextPrimary)
 
 	// Draw separator
-	textY += 20
-	DrawText(screen, "──────────────────────", am.Panel.X+am.Padding, textY, utils.TextSecondary)
+	textY += lh
+	sepY := textY + lh/4
+	DrawLine(screen, am.Panel.X+am.Padding, sepY, am.Panel.X+am.Panel.Width-am.Padding, sepY, utils.Theme.PanelBorder)
+	textY += lh/2 + lh/4
 
 	// Draw items
-	textY += 20
 	for i, item := range am.Items {
 		itemColor := utils.TextPrimary
 		if !item.Enabled {
@@ -140,7 +147,7 @@ func (am *ActionMenu) Draw(screen *ebiten.Image) {
 				X:           am.Panel.X + am.Padding,
 				Y:           textY - 2,
 				Width:       am.Panel.Width - am.Padding*2,
-				Height:      18,
+				Height:      lh,
 				BgColor:     utils.ButtonActive,
 				BorderColor: utils.PanelBorder,
 			}
@@ -157,7 +164,7 @@ func (am *ActionMenu) Draw(screen *ebiten.Image) {
 			DrawText(screen, item.Shortcut, shortcutX, textY, utils.TextSecondary)
 		}
 
-		textY += 20
+		textY += lh
 	}
 }
 

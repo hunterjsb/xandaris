@@ -15,9 +15,11 @@ type ContextMenu struct {
 
 // NewContextMenu creates a new context menu
 func NewContextMenu(title string, items []string) *ContextMenu {
-	padding := 10
-	width := 200
-	height := padding*2 + 20 + len(items)*15 + 20 // title + separator + items + extra bottom padding
+	lh := int(15.0 * utils.UIScale)
+	cw := utils.CharWidth()
+	padding := cw
+	width := 22 * cw
+	height := padding*2 + lh + len(items)*lh + lh // title + separator + items + extra
 
 	return &ContextMenu{
 		Panel:   NewUIPanel(0, 0, width, height),
@@ -60,19 +62,22 @@ func (c *ContextMenu) Draw(screen *ebiten.Image) {
 	// Draw panel background
 	c.Panel.Draw(screen)
 
+	lh := int(15.0 * utils.UIScale)
+
 	// Draw title
 	textY := c.Panel.Y + c.Padding
 	DrawText(screen, c.Title, c.Panel.X+c.Padding, textY, utils.TextPrimary)
 
 	// Draw separator
-	textY += 20
-	DrawText(screen, "─────────────────", c.Panel.X+c.Padding, textY, utils.TextSecondary)
+	textY += lh
+	sepY := textY + lh/4
+	DrawLine(screen, c.Panel.X+c.Padding, sepY, c.Panel.X+c.Panel.Width-c.Padding, sepY, utils.Theme.PanelBorder)
+	textY += lh/2
 
 	// Draw items
-	textY += 20
 	for _, item := range c.Items {
 		DrawColoredMenuItem(screen, item, c.Panel.X+c.Padding, textY)
-		textY += 15
+		textY += lh
 	}
 }
 

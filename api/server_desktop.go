@@ -1436,6 +1436,143 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: messages})
 	})
 
+	// --- Logistics Endpoints ---
+
+	// GET /api/deliveries — list active deliveries
+	mux.HandleFunc("/api/deliveries", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		dm := p.GetDeliveryManager()
+		if dm == nil {
+			writeJSON(w, APIResponse{OK: true, Data: []DeliveryInfo{}})
+			return
+		}
+		deliveries := dm.GetActiveDeliveries()
+		result := make([]DeliveryInfo, 0, len(deliveries))
+		for _, d := range deliveries {
+			result = append(result, DeliveryInfo{
+				ID: d.ID, Buyer: d.BuyerName, Seller: d.SellerName,
+				Resource: d.Resource, Quantity: d.Quantity, Total: d.Total,
+				DestPlanetID: d.DestPlanetID, DestSystemID: d.DestSystemID,
+				SourceSystemID: d.SourceSystemID, ShipID: d.ShipID,
+				Status: d.Status, DeliveryType: d.DeliveryType,
+				Direction: d.Direction, EstimatedArrival: d.EstimatedArrival,
+				CreatedTick: d.Tick,
+			})
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
+	})
+
+	// POST /api/ships/dock — dock a ship at a planet
+	mux.HandleFunc("/api/ships/dock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req DockShipRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cmd := newCommand(r, game.CmdDockShip, game.DockShipCommandData{
+			ShipID: req.ShipID, PlanetID: req.PlanetID,
+		})
+		p := getProvider()
+		p.GetCommandChannel() <- cmd
+		select {
+		case res := <-cmd.Result:
+			if err, ok := res.(error); ok {
+				writeErr(w, http.StatusBadRequest, err.Error())
+			} else {
+				writeJSON(w, APIResponse{OK: true, Data: res})
+			}
+		case <-r.Context().Done():
+			writeErr(w, http.StatusGatewayTimeout, "timeout")
+		}
+	})
+
+	// POST /api/ships/undock — undock a ship
+	mux.HandleFunc("/api/ships/undock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req UndockShipRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cmd := newCommand(r, game.CmdUndockShip, game.UndockShipCommandData{
+			ShipID: req.ShipID,
+		})
+		p := getProvider()
+		p.GetCommandChannel() <- cmd
+		select {
+		case res := <-cmd.Result:
+			if err, ok := res.(error); ok {
+				writeErr(w, http.StatusBadRequest, err.Error())
+			} else {
+				writeJSON(w, APIResponse{OK: true, Data: res})
+			}
+		case <-r.Context().Done():
+			writeErr(w, http.StatusGatewayTimeout, "timeout")
+		}
+	})
+
+	// POST /api/ships/sell-at-dock — sell cargo from a docked ship
+	mux.HandleFunc("/api/ships/sell-at-dock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req SellAtDockRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cmd := newCommand(r, game.CmdSellAtDock, game.SellAtDockCommandData{
+			ShipID: req.ShipID, Resource: req.Resource, Quantity: req.Quantity,
+		})
+		p := getProvider()
+		p.GetCommandChannel() <- cmd
+		select {
+		case res := <-cmd.Result:
+			if err, ok := res.(error); ok {
+				writeErr(w, http.StatusBadRequest, err.Error())
+			} else {
+				writeJSON(w, APIResponse{OK: true, Data: res})
+			}
+		case <-r.Context().Done():
+			writeErr(w, http.StatusGatewayTimeout, "timeout")
+		}
+	})
+
+	// GET /api/shipping/routes — list shipping routes
+	mux.HandleFunc("/api/shipping/routes", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		sm := p.GetShippingManager()
+		if sm == nil {
+			writeJSON(w, APIResponse{OK: true, Data: []ShippingRouteInfo{}})
+			return
+		}
+		playerName := getAuthPlayer(r)
+		routes := sm.GetRoutes(playerName)
+		result := make([]ShippingRouteInfo, 0, len(routes))
+		for _, rt := range routes {
+			result = append(result, ShippingRouteInfo{
+				ID: rt.ID, Owner: rt.Owner,
+				SourcePlanet: rt.SourcePlanet, DestPlanet: rt.DestPlanet,
+				Resource: rt.Resource, Quantity: rt.Quantity,
+				ShipID: rt.ShipID, Active: rt.Active,
+				TripsComplete: rt.TripsComplete,
+			})
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
+	})
+
 	// Rate limiter: 30 reads/sec, 10 writes/sec per key, burst of 60/20
 	rateLimiter := NewRateLimiter(30, 10, 60, 20)
 
@@ -1870,9 +2007,21 @@ td{padding:3px 4px}
 .lb-bar{flex:1;height:10px;background:#0c1020;border-radius:2px;overflow:hidden}
 .lb-fill{height:100%;background:#1a5a3a;border-radius:2px;transition:width 0.5s}
 @media(max-width:800px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
+.ticker-wrap{overflow:hidden;background:#080c18;border:1px solid #1a2040;border-radius:4px;margin:8px 0;height:28px;position:relative}
+.ticker-wrap::before,.ticker-wrap::after{content:'';position:absolute;top:0;bottom:0;width:40px;z-index:1;pointer-events:none}
+.ticker-wrap::before{left:0;background:linear-gradient(to right,#080c18,transparent)}
+.ticker-wrap::after{right:0;background:linear-gradient(to left,#080c18,transparent)}
+.ticker{display:flex;white-space:nowrap;align-items:center;height:100%}
+.tick-item{display:inline-flex;align-items:center;gap:4px;padding:0 16px;font-size:11px;border-right:1px solid #151a30;height:100%;flex-shrink:0}
+.tick-item .res{color:#7fdbca;font-weight:bold}
+.tick-item .buy{color:#5cb85c}
+.tick-item .sell{color:#d9534f}
+.tick-item .who{color:#556}
+.tick-item .price{color:#c8a84e}
 </style></head><body>
 <h1>XANDARIS II</h1> <span class="sub">&mdash; Live Economy</span>
 <div class="stats-row" id="top"></div>
+<div class="ticker-wrap"><div class="ticker" id="ticker"><span class="tick-item" style="color:#334">Loading trades...</span></div></div>
 <div class="grid">
 <div class="panel"><h2>Leaderboard <span class="tag">empire score</span></h2><div id="lb"></div></div>
 <div class="panel"><h2>Faction Chat <span class="tag">live</span></h2><div id="ch" style="max-height:220px;overflow-y:auto"></div></div>
@@ -1888,6 +2037,38 @@ td{padding:3px 4px}
 <script>
 const B=location.origin,BL='\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588';
 function sp(h){if(!h||h.length<3)return'';const mn=Math.min(...h),mx=Math.max(...h),rng=mx-mn||1;return'<span class="spark">'+h.slice(-25).map(v=>BL[Math.min(7,Math.max(0,Math.round((v-mn)/rng*7)))]).join('')+'</span>'}
+// Trade ticker — smooth scrolling tape
+let tickerOffset=0,tickerItems=[],lastTradeId='';
+function updateTicker(){
+const el=document.getElementById('ticker');if(!el||!tickerItems.length)return;
+// Build items HTML (duplicate for seamless loop)
+const html=tickerItems.map(t=>{
+const cls=t.action==='buy'||t.action==='bought'?'buy':'sell';
+const verb=t.action==='buy'||t.action==='bought'?'\u25B2':'\u25BC';
+return'<span class="tick-item"><span class="'+cls+'">'+verb+'</span><span class="res">'+t.resource+'</span><span>'+t.qty+'\u00d7</span><span class="price">'+t.price+'cr</span><span class="who">'+t.player+'</span></span>'}).join('');
+el.innerHTML=html+html; // duplicate for seamless wrap
+el.style.width=(el.scrollWidth/2)+'px';
+}
+function animateTicker(){
+const el=document.getElementById('ticker');if(!el||el.children.length<2)return requestAnimationFrame(animateTicker);
+tickerOffset-=0.5;
+const halfW=el.scrollWidth/2;
+if(Math.abs(tickerOffset)>=halfW)tickerOffset=0;
+el.style.transform='translateX('+tickerOffset+'px)';
+requestAnimationFrame(animateTicker)}
+async function pollTrades(){try{
+const r=await fetch(B+'/api/events?limit=30').then(r=>r.json());
+const trades=(r.data||[]).filter(e=>e.type==='trade');
+if(trades.length>0&&trades[0].message!==lastTradeId){
+lastTradeId=trades[0].message;
+tickerItems=trades.map(t=>{
+const m=t.message;
+const parts=m.match(/(\S+)\s+(bought|sold)\s+(\d+)\s+(\S+(?:\s+\S+)?)\s+@\s+(\d+)/);
+if(!parts)return null;
+return{player:parts[1],action:parts[2],qty:parts[3],resource:parts[4],price:parts[5]};
+}).filter(Boolean);
+updateTicker()}}catch(e){}}
+pollTrades();setInterval(pollTrades,5000);requestAnimationFrame(animateTicker);
 async function R(){try{
 const[e,p,f,g,lb,pw,ev,sh,ch]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=20','/api/ships','/api/chat/messages'].map(u=>fetch(B+u).then(r=>r.json())));
 const d=g.data;

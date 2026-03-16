@@ -20,7 +20,8 @@ const (
 	saveExtension = ".xsave"
 	// SaveVersion — bump this when save format is incompatible.
 	// The autosave loader will discard saves with a different version.
-	SaveVersion = "2.4.0"
+	// 3.0.0: logistics-driven trade (deliveries, credit ledger, shipping routes, docking)
+	SaveVersion = "3.0.0"
 )
 
 func init() {
@@ -37,6 +38,8 @@ func init() {
 	gob.Register(&tickable.ConstructionItem{})
 	gob.Register(&economy.ResourceMarket{})
 	gob.Register(map[string]*economy.ResourceMarket{})
+	gob.Register(&economy.PendingDelivery{})
+	gob.Register(&game.ShippingRoute{})
 }
 
 // SaveGame saves the current game state.
@@ -73,6 +76,10 @@ func (gs *GameServer) SaveGame(playerName string) error {
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
 		StandingOrders     []*game.StandingOrder
+		Deliveries         []*economy.PendingDelivery
+		ShippingRoutes     []*game.ShippingRoute
+		CreditOutstanding  map[string]map[string]int
+		CreditLimits       map[string]map[string]int
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -87,6 +94,10 @@ func (gs *GameServer) SaveGame(playerName string) error {
 		ConstructionQueues: constructionQueues,
 		MarketSnapshot:     gs.getMarketSnapshot(),
 		StandingOrders:     gs.State.StandingOrders,
+		Deliveries:         gs.getDeliveries(),
+		ShippingRoutes:     gs.getShippingRoutes(),
+		CreditOutstanding:  gs.getCreditOutstanding(),
+		CreditLimits:       gs.getCreditLimits(),
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -134,6 +145,10 @@ func (gs *GameServer) AutoSave(path string) error {
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
 		StandingOrders     []*game.StandingOrder
+		Deliveries         []*economy.PendingDelivery
+		ShippingRoutes     []*game.ShippingRoute
+		CreditOutstanding  map[string]map[string]int
+		CreditLimits       map[string]map[string]int
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -148,6 +163,10 @@ func (gs *GameServer) AutoSave(path string) error {
 		ConstructionQueues: constructionQueues,
 		MarketSnapshot:     gs.getMarketSnapshot(),
 		StandingOrders:     gs.State.StandingOrders,
+		Deliveries:         gs.getDeliveries(),
+		ShippingRoutes:     gs.getShippingRoutes(),
+		CreditOutstanding:  gs.getCreditOutstanding(),
+		CreditLimits:       gs.getCreditLimits(),
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -174,6 +193,34 @@ func (gs *GameServer) getMarketSnapshot() *economy.MarketSnapshot {
 	return &snap
 }
 
+func (gs *GameServer) getDeliveries() []*economy.PendingDelivery {
+	if gs.DeliveryMgr == nil {
+		return nil
+	}
+	return gs.DeliveryMgr.GetAllDeliveries()
+}
+
+func (gs *GameServer) getShippingRoutes() []*game.ShippingRoute {
+	if gs.ShippingMgr == nil {
+		return nil
+	}
+	return gs.ShippingMgr.GetAllRoutes()
+}
+
+func (gs *GameServer) getCreditOutstanding() map[string]map[string]int {
+	if gs.CreditLedger == nil {
+		return nil
+	}
+	return gs.CreditLedger.GetAllOutstanding()
+}
+
+func (gs *GameServer) getCreditLimits() map[string]map[string]int {
+	if gs.CreditLedger == nil {
+		return nil
+	}
+	return gs.CreditLedger.GetAllLimits()
+}
+
 // LoadGame loads a game from the given path.
 func (gs *GameServer) LoadGame(path string) error {
 	fmt.Printf("[Server] Loading game from: %s\n", path)
@@ -198,6 +245,10 @@ func (gs *GameServer) LoadGame(path string) error {
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
 		StandingOrders     []*game.StandingOrder
+		Deliveries         []*economy.PendingDelivery
+		ShippingRoutes     []*game.ShippingRoute
+		CreditOutstanding  map[string]map[string]int
+		CreditLimits       map[string]map[string]int
 	}
 
 	if err := gob.NewDecoder(file).Decode(&saveData); err != nil {
@@ -264,6 +315,23 @@ func (gs *GameServer) LoadGame(path string) error {
 		if cs := tickable.GetConstructionSystem(); cs != nil {
 			cs.RestoreQueues(saveData.ConstructionQueues)
 		}
+	}
+
+	// Restore deliveries
+	if saveData.Deliveries != nil && gs.DeliveryMgr != nil {
+		gs.DeliveryMgr.RestoreDeliveries(saveData.Deliveries)
+	}
+
+	// Restore shipping routes
+	if saveData.ShippingRoutes != nil && gs.ShippingMgr != nil {
+		for _, route := range saveData.ShippingRoutes {
+			gs.ShippingMgr.CreateRoute(route.Owner, route.SourcePlanet, route.DestPlanet, route.Resource, route.Quantity, route.ShipID)
+		}
+	}
+
+	// Restore credit ledger
+	if gs.CreditLedger != nil {
+		gs.CreditLedger.RestoreLedger(saveData.CreditOutstanding, saveData.CreditLimits)
 	}
 
 	// Start API
