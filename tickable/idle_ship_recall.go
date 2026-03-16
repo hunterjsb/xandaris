@@ -60,24 +60,7 @@ func (isrs *IdleShipRecallSystem) OnTick(tick int64) {
 
 			atHome := ship.CurrentSystem == homeSystem
 
-			if atHome && ship.GetTotalCargo() > 0 {
-				// At home with cargo — unload at home planet
-				homePlanet := player.HomePlanet
-				if homePlanet == nil && len(player.OwnedPlanets) > 0 {
-					homePlanet = player.OwnedPlanets[0]
-				}
-				if homePlanet != nil {
-					for res, amt := range ship.CargoHold {
-						if amt <= 0 {
-							continue
-						}
-						unloaded, err := game.UnloadCargo(ship, homePlanet, res, amt)
-						if err == nil && unloaded > 0 {
-							fmt.Printf("[IdleRecall] %s unloaded %d %s at home\n", ship.Name, unloaded, res)
-						}
-					}
-				}
-			} else if !atHome && ship.GetTotalCargo() == 0 {
+			if !atHome && ship.GetTotalCargo() == 0 {
 				// Idle and empty at a foreign system — go home
 				fuelPerTrip := ship.FuelPerJump + int(ship.FuelPerTick*120)
 				if ship.CurrentFuel >= fuelPerTrip {
