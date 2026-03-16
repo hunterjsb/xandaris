@@ -221,7 +221,11 @@ func TestPowerSystem(t *testing.T) {
 	planet.Buildings = append(planet.Buildings, gen)
 
 	player := &entities.Player{Name: "TestPlayer", OwnedPlanets: []*entities.Planet{planet}}
-	game := &mockGameProvider{players: []*entities.Player{player}}
+	sys := &entities.System{ID: 1, Name: "TestSys", Entities: []entities.Entity{planet}}
+	game := &mockGameProvider{
+		players: []*entities.Player{player},
+		systems: []*entities.System{sys},
+	}
 	ctx := &mockSystemContext{game: game, players: []*entities.Player{player}, tick: 10}
 	ps.Initialize(ctx)
 

@@ -1,7 +1,6 @@
 package tickable
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/hunterjsb/xandaris/entities"
@@ -60,17 +59,11 @@ func GetShipMovementPlayers() int {
 func (sms *ShipMovementSystem) OnTick(tick int64) {
 	context := sms.GetContext()
 	if context == nil {
-		if tick%1000 == 0 {
-			fmt.Println("[ShipMovement] ERROR: context is nil")
-		}
 		return
 	}
 
 	game := context.GetGame()
 	if game == nil {
-		if tick%1000 == 0 {
-			fmt.Println("[ShipMovement] ERROR: game is nil")
-		}
 		return
 	}
 
@@ -96,28 +89,14 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		}
 	}
 
-	// Count player ships with Moving status for diagnostics
-	playerMoving := 0
-	for _, player := range game.GetPlayers() {
-		if player == nil { continue }
-		for _, s := range player.OwnedShips {
-			if s != nil && s.Status == entities.ShipStatusMoving {
-				playerMoving++
-			}
-		}
-	}
-	if tick%500 == 0 && playerMoving > 0 {
-		fmt.Printf("[ShipMovement] tick=%d sysShips=%d playerMoving=%d\n", tick, sms.ShipsFound, playerMoving)
-	}
-
-	// Process ALL player-owned Moving ships directly
-	// System entities may have stale copies with different status (Docked vs Moving)
+	// Process player-owned Moving ships that weren't in system entities
+	// (can happen if ship was created via API and not yet in a system's entity list)
 	for _, player := range game.GetPlayers() {
 		if player == nil {
 			continue
 		}
 		for _, pShip := range player.OwnedShips {
-			if pShip != nil && pShip.Status == entities.ShipStatusMoving {
+			if pShip != nil && pShip.Status == entities.ShipStatusMoving && !seen[pShip.GetID()] {
 				sms.MovingFound++
 				sms.processShipMovement(pShip, systemsMap)
 			}
@@ -163,11 +142,6 @@ func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, systems 
 
 	// Update travel progress
 	ship.TravelProgress += travelSpeed
-
-	if tick := sms.GetContext().GetTick(); tick%500 == 0 {
-		fmt.Printf("[ShipMovement] %s progress=%.2f%% speed=%.4f fuel=%d target=%d\n",
-			ship.Name, ship.TravelProgress*100, travelSpeed, ship.CurrentFuel, ship.TargetSystem)
-	}
 
 	// Check if ship has arrived
 	if ship.TravelProgress >= 1.0 {
