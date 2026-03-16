@@ -26,9 +26,9 @@ func NewResourceStorageUI(ctx UIContext, provider *PlanetDataProvider) *Resource
 		ctx:      ctx,
 		provider: provider,
 		x:        10,
-		y:        620,
-		width:    380,
-		height:   340,
+		y:        views.ScreenHeight - 450,
+		width:    25 * utils.CharWidth(),
+		height:   400,
 	}
 }
 
@@ -61,7 +61,8 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	panel.Draw(screen)
 
 	// Title
-	titleY := rsu.y + 15
+	lineH := int(15.0 * utils.UIScale)
+	titleY := rsu.y + lineH
 	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, utils.Theme.Accent)
 
 	// Power status (right of title)
@@ -114,7 +115,7 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 			flow = netFlow[entry.ResourceType]
 		}
 		rsu.drawResourceEntry(screen, entry.ResourceType, entry.Amount, entry.Capacity, flow, resourceY)
-		resourceY += 18
+		resourceY += lineH + 4
 		count++
 	}
 

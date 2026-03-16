@@ -29,10 +29,10 @@ func NewConstructionQueueUI(ctx UIContext, provider *PlanetDataProvider) *Constr
 	return &ConstructionQueueUI{
 		ctx:          ctx,
 		provider:     provider,
-		x:            views.ScreenWidth - 420,
+		x:            views.ScreenWidth - 28*utils.CharWidth(),
 		y:            50,
-		width:        400,
-		itemHeight:   80,
+		width:        26 * utils.CharWidth(),
+		itemHeight:   int(80.0 * utils.UIScale),
 		maxVisible:   5,
 		scrollOffset: 0,
 	}
