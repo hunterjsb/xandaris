@@ -1911,22 +1911,19 @@ const pv=pr[r]||0,cv=co[r]||0,nv=pv-cv;
 const pw2=Math.round(pv/maxFlow*100),cw=Math.round(cv/maxFlow*100);
 const nc=nv>1?'g':nv<-1?'r':'d';
 return'<div class="res-bar"><span class="lbl">'+r+'</span><div class="wrap"><div class="fill" style="width:'+pw2+'%;background:#1a4a2a"></div><div class="fill" style="width:'+cw+'%;background:#4a1a1a;position:absolute;top:0;left:0;opacity:0.6"></div><div class="txt '+nc+'">'+(nv>0?'+':'')+nv.toFixed(0)+'/s</div></div></div>'}).join('');
-// Power — grouped by empire with boxes + sparklines
+// Power — compact rows with inline tiles + sparkline
 const byOwner={};(pw.data||[]).forEach(x=>{if(!byOwner[x.owner])byOwner[x.owner]=[];byOwner[x.owner].push(x)});
 document.getElementById('pw').innerHTML=Object.entries(byOwner).sort().map(([owner,planets])=>{
-// Aggregate power for this empire
 const totalGen=planets.reduce((s,p)=>s+p.generated_mw,0);
 const totalCons=planets.reduce((s,p)=>s+p.consumed_mw,0);
 const avgPct=totalCons>0?Math.min(1,totalGen/totalCons):1;
-const bc=avgPct<0.5?'#2a1515':avgPct<0.8?'#2a2515':'#152a15';
-// Merge all planet histories for empire sparkline
 let hist=[];planets.forEach(p=>{if(p.history&&p.history.length>hist.length)hist=p.history});
-const spark=hist.length>3?'<span class="spark" style="color:'+(avgPct<0.5?'#f66':avgPct<0.8?'#cc8':'#6c6')+'">'+hist.slice(-20).map(v=>BL[Math.min(7,Math.max(0,Math.round(v*7)))]).join('')+'</span>':'';
-return'<div style="background:'+bc+';border:1px solid #1a2040;border-radius:4px;padding:5px 8px;margin-bottom:4px"><div style="display:flex;justify-content:space-between;align-items:center;font-size:11px"><span style="color:#7fdbca">'+owner+'</span><span class="d">'+totalGen.toFixed(0)+'/'+totalCons.toFixed(0)+'MW</span></div><div style="display:flex;align-items:center;gap:4px;margin-top:3px"><div class="pwr-grid">'+planets.map(p=>{
+const spark=hist.length>3?sp(hist):'';
+const tiles=planets.map(p=>{
 const pct=p.consumed_mw>0?Math.min(1,p.generated_mw/p.consumed_mw):1;
 const bg2=pct<0.3?'#4a1515':pct<0.5?'#4a2a15':pct<0.8?'#3a3a15':'#153a15';
-const tc=pct<0.5?'#f88':pct<0.8?'#dd8':'#8d8';
-return'<div class="pwr-cell" style="background:'+bg2+'" title="'+p.planet_name+': '+p.generated_mw.toFixed(0)+'/'+p.consumed_mw.toFixed(0)+'MW"><div class="pct" style="color:'+tc+'">'+(pct*100).toFixed(0)+'</div></div>'}).join('')+'</div>'+spark+'</div></div>'}).join('');
+return'<span style="display:inline-block;width:16px;height:16px;border-radius:2px;background:'+bg2+'" title="'+p.planet_name+': '+(pct*100).toFixed(0)+'%"></span>'}).join('');
+return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span style="width:85px;color:#7fdbca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+owner+'</span><span style="display:flex;gap:2px">'+tiles+'</span><span style="flex:1;text-align:right">'+spark+'</span><span class="d" style="width:55px;text-align:right;font-size:9px">'+(avgPct*100).toFixed(0)+'%</span></div>'}).join('');
 // Market with bars
 const maxRatio=Math.max(...Object.values(e.data.resources).map(r=>r.price_ratio),1);
 document.getElementById('mk').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
