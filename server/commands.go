@@ -260,12 +260,17 @@ func (gs *GameServer) handleMoveShipCommand(cmd game.GameCommand) {
 		return
 	}
 
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
 	ship := game.FindShipByID(gs.State.Players, md.ShipID)
 	if ship == nil {
 		sendResult(cmd, fmt.Errorf("ship not found"))
 		return
 	}
-	if ship.Owner != gs.resolvePlayer(cmd).Name {
+	if ship.Owner != human.Name {
 		sendResult(cmd, fmt.Errorf("not your ship"))
 		return
 	}
@@ -338,12 +343,17 @@ func (gs *GameServer) handleRefuelCommand(cmd game.GameCommand) {
 		return
 	}
 
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
 	ship := game.FindShipByID(gs.State.Players, rd.ShipID)
 	if ship == nil {
 		sendResult(cmd, fmt.Errorf("ship not found"))
 		return
 	}
-	if ship.Owner != gs.resolvePlayer(cmd).Name {
+	if ship.Owner != human.Name {
 		sendResult(cmd, fmt.Errorf("not your ship"))
 		return
 	}

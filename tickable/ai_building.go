@@ -187,7 +187,7 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 
 		// PRIORITY 7: Build Shipyard when affordable
 		if !planet.HasBuilding(entities.BuildingShipyard) && player.Credits >= 2500 {
-			player.Credits -= 2000
+			player.Credits -= 2500
 			game.AIBuildOnPlanet(planet, entities.BuildingShipyard, player.Name, systemID)
 			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Shipyard at %s", player.Name, planet.Name))
 			return
