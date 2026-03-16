@@ -127,6 +127,10 @@ func runHeadless(playerName string, loadPath string) {
 		if err := gs.NewHeadlessGame(); err != nil {
 			log.Fatalf("Failed to start new game: %v", err)
 		}
+		// Save immediately so deploys don't lose the fresh game
+		if err := gs.AutoSave(autosavePath); err != nil {
+			fmt.Printf("[Autosave] Initial save failed: %v\n", err)
+		}
 	}
 
 	// Periodic autosave every 2 minutes
