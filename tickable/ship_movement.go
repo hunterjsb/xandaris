@@ -30,6 +30,32 @@ func GetShipMovementDiag() (ticks int64, shipsFound, movingFound int) {
 	return -1, -1, -1
 }
 
+// GetShipMovementPlayers returns player ship moving count from the system's perspective
+func GetShipMovementPlayers() int {
+	sys := GetSystemByName("ShipMovement")
+	if sms, ok := sys.(*ShipMovementSystem); ok {
+		ctx := sms.GetContext()
+		if ctx == nil {
+			return -1
+		}
+		game := ctx.GetGame()
+		if game == nil {
+			return -2
+		}
+		count := 0
+		for _, p := range ctx.GetPlayers() {
+			if p == nil { continue }
+			for _, s := range p.OwnedShips {
+				if s != nil && s.Status == entities.ShipStatusMoving {
+					count++
+				}
+			}
+		}
+		return count
+	}
+	return -3
+}
+
 // OnTick processes ship movement each game tick
 func (sms *ShipMovementSystem) OnTick(tick int64) {
 	context := sms.GetContext()
@@ -68,6 +94,20 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 				sms.processShipMovement(ship, systemsMap)
 			}
 		}
+	}
+
+	// Count player ships with Moving status for diagnostics
+	playerMoving := 0
+	for _, player := range game.GetPlayers() {
+		if player == nil { continue }
+		for _, s := range player.OwnedShips {
+			if s != nil && s.Status == entities.ShipStatusMoving {
+				playerMoving++
+			}
+		}
+	}
+	if tick%500 == 0 && playerMoving > 0 {
+		fmt.Printf("[ShipMovement] tick=%d sysShips=%d playerMoving=%d\n", tick, sms.ShipsFound, playerMoving)
 	}
 
 	// Sync player-owned ship status to system entity copies

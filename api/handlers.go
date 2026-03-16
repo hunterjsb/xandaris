@@ -1440,6 +1440,7 @@ func handleGetDiagnostics(p GameStateProvider) interface{} {
 
 	// Tickable system diagnostics
 	smTicks, smShips, smMoving := tickable.GetShipMovementDiag()
+	smPlayerMoving := tickable.GetShipMovementPlayers()
 
 	type result struct {
 		diag
@@ -1447,6 +1448,7 @@ func handleGetDiagnostics(p GameStateProvider) interface{} {
 		SMTickCount     int64          `json:"sm_tick_count"`
 		SMShipsFound    int            `json:"sm_ships_found"`
 		SMMovingFound   int            `json:"sm_moving_found"`
+		SMPlayerMoving  int            `json:"sm_player_moving"`
 	}
-	return result{d, movingDetails, smTicks, smShips, smMoving}
+	return result{d, movingDetails, smTicks, smShips, smMoving, smPlayerMoving}
 }
