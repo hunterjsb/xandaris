@@ -158,6 +158,10 @@ var tools = []openai.Tool{
 		Name: "create_route", Description: "Create an automated shipping route. A Cargo ship will auto-cycle: load resource at source planet → fly to dest → unload → return. Assign a ship_id or 0 for auto-assign.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer"},"dest_planet_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
 	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "standing_order", Description: "Create a standing order for automatic local trade. Sell when stock exceeds threshold, or buy when stock drops below threshold. Executes automatically every 30 ticks.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer","description":"amount per execution"},"threshold":{"type":"integer","description":"sell when stock > threshold, buy when stock < threshold"}},"required":["planet_id","resource","action","quantity","threshold"]}`),
+	}},
 }
 
 func callAPI(method, endpoint string, body string, factionName string) (string, error) {
@@ -266,9 +270,10 @@ func executeTool(name string, args string, factionName string) string {
 			"unload_cargo": "/api/cargo/unload",
 			"dock_ship":    "/api/ships/dock",
 			"sell_at_dock":  "/api/ships/sell-at-dock",
-			"colonize":     "/api/colonize",
-			"refuel_ship":  "/api/ships/refuel",
-			"create_route": "/api/shipping/routes",
+			"colonize":       "/api/colonize",
+			"refuel_ship":    "/api/ships/refuel",
+			"create_route":   "/api/shipping/routes",
+			"standing_order": "/api/orders",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)
 		if err != nil {
