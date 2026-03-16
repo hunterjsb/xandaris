@@ -65,9 +65,9 @@ func (rs *RemoteSync) Stop() {
 func (rs *RemoteSync) syncAll() {
 	rs.syncGalaxyPositions()
 	rs.syncFactions()
+	rs.SyncOwnership() // before syncPlayer so local planets are linked first
 	rs.syncPlayer()
 	rs.syncEconomy()
-	rs.SyncOwnership()
 	rs.syncShips()
 }
 
@@ -211,8 +211,12 @@ func (rs *RemoteSync) syncPlayer() {
 	for _, rp := range resp.Data.Planets {
 		planet, found := existing[rp.ID]
 		if !found {
-			// New planet — create it
-			planet = entities.NewPlanet(rp.ID, rp.Name, rp.PlanetType, 0, 0, color.RGBA{150, 150, 180, 255})
+			// Try to find the planet in the local galaxy (same seed = same IDs)
+			planet = rs.findLocalPlanet(rp.ID)
+			if planet == nil {
+				// Not in local galaxy — create a detached planet object
+				planet = entities.NewPlanet(rp.ID, rp.Name, rp.PlanetType, 0, 0, color.RGBA{150, 150, 180, 255})
+			}
 			planet.Owner = rp.Owner
 			planet.Habitability = rp.Habitability
 			hp.OwnedPlanets = append(hp.OwnedPlanets, planet)
@@ -324,6 +328,19 @@ func (rs *RemoteSync) syncPlayer() {
 		}
 	}
 	_ = changed
+}
+
+// findLocalPlanet searches the locally-generated galaxy for a planet by ID.
+// Since both client and server use the same seed, planet IDs should match.
+func (rs *RemoteSync) findLocalPlanet(planetID int) *entities.Planet {
+	for _, sys := range rs.gs.State.Systems {
+		for _, e := range sys.Entities {
+			if p, ok := e.(*entities.Planet); ok && p.GetID() == planetID {
+				return p
+			}
+		}
+	}
+	return nil
 }
 
 // ForwardTrade sends a trade to the remote server instead of local.
