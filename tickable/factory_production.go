@@ -55,9 +55,13 @@ func (fps *FactoryProductionSystem) processFactory(planet *entities.Planet, fact
 
 	levelMultiplier := 1.0 + float64(factory.Level-1)*0.3
 	staffing := factory.GetStaffingRatio()
-	rareMetalsNeeded := int(float64(baseRareMetals) * levelMultiplier * staffing)
-	ironNeeded := int(float64(baseIron) * levelMultiplier * staffing)
-	electronicsProduced := int(float64(baseElectronics) * levelMultiplier * staffing)
+
+	// Power scaling: factories need power. 25% output at 0% power, 100% at full.
+	powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
+
+	rareMetalsNeeded := int(float64(baseRareMetals) * levelMultiplier * staffing * powerFactor)
+	ironNeeded := int(float64(baseIron) * levelMultiplier * staffing * powerFactor)
+	electronicsProduced := int(float64(baseElectronics) * levelMultiplier * staffing * powerFactor)
 
 	if rareMetalsNeeded < 1 || ironNeeded < 1 || electronicsProduced < 1 {
 		return
