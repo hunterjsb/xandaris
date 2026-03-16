@@ -415,28 +415,23 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	labelY := centerY + circleRadius + 15
 	DrawCenteredText(screen, system.Name, centerX, labelY)
 
-	// Show compact owner + stock info for inhabited systems
+	// Show compact owner info for inhabited systems
+	lh := int(15.0 * utils.UIScale)
 	for _, entity := range system.Entities {
 		if p, ok := entity.(*entities.Planet); ok && p.Owner != "" {
-			totalStock := 0
-			for _, s := range p.StoredResources {
-				if s != nil {
-					totalStock += s.Amount
-				}
-			}
 			shortOwner := p.Owner
-			if len(shortOwner) > 8 {
-				shortOwner = shortOwner[:8]
+			if len(shortOwner) > 10 {
+				shortOwner = shortOwner[:10]
 			}
-			info := fmt.Sprintf("%s %d", shortOwner, totalStock)
+			info := fmt.Sprintf("%s %d", shortOwner, p.Population)
 			infoColor := utils.TextSecondary
 			if ownerColor, ok := gv.getOwnerColor(p.Owner); ok {
 				infoColor = ownerColor
 				infoColor.A = 180
 			}
 			infoWidth := len(info) * utils.CharWidth()
-			DrawText(screen, info, centerX-infoWidth/2, labelY+12, infoColor)
-			break // only show first owned planet
+			DrawText(screen, info, centerX-infoWidth/2, labelY+lh, infoColor)
+			break
 		}
 	}
 }

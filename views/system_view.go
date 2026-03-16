@@ -556,8 +556,27 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 	screen.DrawImage(planetImg, opts)
 
 	// Draw planet name below
-	labelY := centerY + radius + 12
+	lh := int(15.0 * utils.UIScale)
+	labelY := centerY + radius + lh
 	DrawCenteredText(screen, planet.Name, centerX, labelY)
+
+	// Draw resource dots below name (compact visual indicator)
+	if len(planet.Resources) > 0 {
+		dotY := labelY + lh - 2
+		totalDots := len(planet.Resources)
+		dotSpacing := 8
+		startX := centerX - (totalDots*dotSpacing)/2
+		for i, resEntity := range planet.Resources {
+			if res, ok := resEntity.(*entities.Resource); ok {
+				dotX := startX + i*dotSpacing
+				resColor := entities.ResourceColor(res.ResourceType)
+				dotImg := systemCircleCache.GetOrCreate(2, resColor)
+				dotOpts := &ebiten.DrawImageOptions{}
+				dotOpts.GeoM.Translate(float64(dotX-2), float64(dotY-2))
+				screen.DrawImage(dotImg, dotOpts)
+			}
+		}
+	}
 
 	// Draw rings if planet has them
 	if planet.HasRings {
