@@ -441,7 +441,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 			maxChars = len(line)
 		}
 	}
-	panelWidth := (maxChars + 2) * cw // +2 for padding
+	panelWidth := (maxChars+4)*cw + pad*2 // content + padding on both sides
 	panelHeight := pad + len(allLines)*lineH + pad/2
 
 	infoPanel := &UIPanel{

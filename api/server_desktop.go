@@ -2229,36 +2229,33 @@ const a=nMap[e.from],b=nMap[e.to];
 let rate=3;
 if(b&&b.res){rate=Math.max(1,(pr[b.res]||0))}
 else if(a&&a.res){rate=Math.max(1,(pr[a.res]||0))}
-const count=Math.min(6,Math.max(1,Math.round(rate/4)));
+const count=Math.min(5,Math.max(1,Math.round(rate/5)));
 for(let i=0;i<count;i++){
-particles.push({e,t:Math.random(),speed:0.002+Math.random()*0.003})}})}
-spawnParticles();setInterval(()=>{particles=[];spawnParticles()},10000);
+particles.push({e,t:Math.random(),speed:0.001+Math.random()*0.0015})}})}
+spawnParticles();setInterval(()=>{particles=[];spawnParticles()},12000);
 function drawFlow(){
 const w=W(),h=H();
 fx.clearRect(0,0,w,h);
-// Title + legend
-fx.fillStyle='#445';fx.font='10px monospace';fx.textAlign='left';
+// Title
+fx.fillStyle='#334';fx.font='9px monospace';fx.textAlign='left';
 fx.fillText('PRODUCTION CHAINS',8,14);
-fx.fillStyle='#334';fx.font='8px monospace';
-fx.fillText('moving dots = live resource flow    green/red numbers = net production rate',8,26);
 // Edges (draw first, behind nodes)
 edges.forEach(e=>{
 const a=nMap[e.from],b=nMap[e.to];if(!a||!b)return;
 const x1=a.x*w,y1=a.y*h,x2=b.x*w,y2=b.y*h;
-fx.strokeStyle=e.c+'28';fx.lineWidth=2;
+fx.strokeStyle=e.c+'18';fx.lineWidth=1;
 fx.beginPath();fx.moveTo(x1,y1);fx.lineTo(x2,y2);fx.stroke();
-// Arrow
-const ang=Math.atan2(y2-y1,x2-x1),d=7;
-fx.fillStyle=e.c+'40';fx.beginPath();
-fx.moveTo(x2-d*1.5*Math.cos(ang),y2-d*1.5*Math.sin(ang));
-fx.lineTo(x2-d*1.5*Math.cos(ang)-d*Math.cos(ang-0.5),y2-d*1.5*Math.sin(ang)-d*Math.sin(ang-0.5));
-fx.lineTo(x2-d*1.5*Math.cos(ang)-d*Math.cos(ang+0.5),y2-d*1.5*Math.sin(ang)-d*Math.sin(ang+0.5));
-fx.fill();
+// Small arrow
+const ang=Math.atan2(y2-y1,x2-x1),d=5;
+const ax=x2-d*2*Math.cos(ang),ay=y2-d*2*Math.sin(ang);
+fx.fillStyle=e.c+'30';fx.beginPath();
+fx.moveTo(ax,ay);fx.lineTo(ax-d*Math.cos(ang-0.4),ay-d*Math.sin(ang-0.4));
+fx.lineTo(ax-d*Math.cos(ang+0.4),ay-d*Math.sin(ang+0.4));fx.fill();
 // Edge label
 if(e.lbl){
 const mx=(x1+x2)/2,my=(y1+y2)/2;
-fx.fillStyle='#556';fx.font='8px monospace';fx.textAlign='center';
-fx.fillText(e.lbl,mx,my-5)}});
+fx.fillStyle='#3a3a50';fx.font='7px monospace';fx.textAlign='center';
+fx.fillText(e.lbl,mx,my-4)}});
 // Particles
 particles.forEach(p=>{
 p.t+=p.speed;if(p.t>1)p.t-=1;
