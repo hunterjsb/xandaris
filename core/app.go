@@ -120,8 +120,11 @@ func (a *App) Update() error {
 		a.Server.TickManager.Update()
 	}
 
-	// Update current view (animations, orbit rotation, etc. keep running
-	// even when the command bar is open — input is already captured above)
+	// Skip view input when command bar is open (prevents hotkeys while typing)
+	// The simulation still runs, and Draw still renders animations
+	if a.commandBar != nil && a.commandBar.IsOpen() {
+		return nil
+	}
 	return a.viewManager.Update()
 }
 

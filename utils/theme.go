@@ -3,8 +3,8 @@ package utils
 import "image/color"
 
 // UIScale controls the global text and UI element scaling factor.
-// 1.0 = original size (designed for 1280x720). 1.5 = 50% larger (good for 1920x1080).
-var UIScale = 1.5
+// 1.0 = original size (designed for 1280x720). 1.25 = 25% larger (good for 1920x1080).
+var UIScale = 1.25
 
 // CharWidth returns the pixel width of a single character at current scale.
 func CharWidth() int {

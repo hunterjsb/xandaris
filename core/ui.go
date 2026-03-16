@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -108,88 +107,33 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		return
 	}
 
-	// Calculate panel height based on content (scaled for UIScale)
-	cw := utils.CharWidth()
-	lineH := int(float64(15) * utils.UIScale) // line height
-	panelW := 22 * cw  // ~22 characters wide
-	perPlanet := int(float64(50) * utils.UIScale)
-	hasPower := false
+	p := widgets.NewPanel(widgets.AnchorTopRight, 24)
+
+	// Header: name + credits
 	var totalPop int64
+	for _, planet := range human.OwnedPlanets {
+		if planet != nil {
+			totalPop += planet.Population
+		}
+	}
+	p.LinePair(human.Name, utils.Theme.Accent, formatCredits(human.Credits), utils.Theme.TextLight)
+	p.Line(fmt.Sprintf("Pop: %s  %d planets", utils.FormatInt64WithCommas(totalPop), len(human.OwnedPlanets)), utils.Theme.TextDim)
+	p.Sep()
+
+	// Per-planet info
 	for _, planet := range human.OwnedPlanets {
 		if planet == nil {
 			continue
 		}
-		totalPop += planet.Population
-		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
-			hasPower = true
-		}
-	}
-	if hasPower {
-		perPlanet = int(float64(68) * utils.UIScale)
-	}
-	// +extra for total pop line and construction queue
-	constructionItems := a.getConstructionItems(human.Name)
-	queueItems := len(constructionItems)
-	queueHeight := 0
-	if queueItems > 0 {
-		shown := queueItems
-		if shown > 3 {
-			shown = 3
-		}
-		queueHeight = lineH*2 + shown*lineH
-		if queueItems > 3 {
-			queueHeight += lineH
-		}
-	}
-	panelH := lineH*3 + len(human.OwnedPlanets)*perPlanet + queueHeight + 4
-	if panelH > 500 {
-		panelH = 500
-	}
-	x := a.screenWidth - panelW - 10
-	y := 10
 
-	panel := &views.UIPanel{
-		X: x, Y: y, Width: panelW, Height: panelH,
-		BgColor:     utils.Theme.PanelBg,
-		BorderColor: utils.Theme.PanelBorder,
-	}
-	panel.Draw(screen)
+		// Planet name
+		p.Line(planet.Name, utils.Theme.Accent)
 
-	textY := y + 10
-	views.DrawText(screen, human.Name, x+10, textY, utils.Theme.Accent)
-
-	// Credits right-aligned
-	credStr := formatCredits(human.Credits)
-	credW := len(credStr) * utils.CharWidth()
-	views.DrawText(screen, credStr, x+panelW-credW-10, textY, utils.Theme.TextLight)
-	textY += lineH
-
-	// Total population + planet count summary
-	popSummary := fmt.Sprintf("Pop: %s  %d planets", utils.FormatInt64WithCommas(totalPop), len(human.OwnedPlanets))
-	views.DrawText(screen, popSummary, x+10, textY, utils.Theme.TextDim)
-	textY += lineH + 4
-
-	a.empirePlanetHits = a.empirePlanetHits[:0] // reset hit regions
-
-	for _, planet := range human.OwnedPlanets {
-		if planet == nil || textY > y+panelH-10 {
-			continue
-		}
-
-		hitStart := textY
-
-		// Planet name (clickable)
-		views.DrawText(screen, planet.Name, x+10, textY, utils.Theme.Accent)
-		textY += lineH
-
-		// Population + happiness on same line
-		popCap := planet.GetTotalPopulationCapacity()
+		// Population + happiness
 		popStr := fmt.Sprintf("Pop: %d", planet.Population)
-		if popCap > 0 {
-			popStr = fmt.Sprintf("Pop: %d/%d", planet.Population, popCap)
+		if cap := planet.GetTotalPopulationCapacity(); cap > 0 {
+			popStr = fmt.Sprintf("Pop: %d/%d", planet.Population, cap)
 		}
-		views.DrawText(screen, popStr, x+14, textY, utils.Theme.TextDim)
-
 		happyStr := fmt.Sprintf("%.0f%%", planet.Happiness*100)
 		happyColor := utils.SystemGreen
 		if planet.Happiness < 0.4 {
@@ -197,95 +141,86 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		} else if planet.Happiness < 0.7 {
 			happyColor = utils.SystemOrange
 		}
-		happyW := len(happyStr) * cw
-		views.DrawText(screen, happyStr, x+panelW-happyW-10, textY, happyColor)
-		textY += lineH
+		p.LinePair(popStr, utils.Theme.TextDim, happyStr, happyColor)
 
-		// Power bar + label
+		// Power bar
 		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
 			powerRatio := planet.GetPowerRatio()
-			barX := x + 14
-			barW := panelW - 28
-			barH := 5
-
-			bg := &views.UIPanel{X: barX, Y: textY, Width: barW, Height: barH,
-				BgColor: utils.Theme.BarBg, BorderColor: color.RGBA{30, 35, 55, 255}}
-			bg.Draw(screen)
-
-			fillW := int(float64(barW) * powerRatio)
-			if fillW > 0 {
-				fillColor := utils.SystemGreen
-				if powerRatio < 0.5 {
-					fillColor = utils.SystemRed
-				} else if powerRatio < 0.8 {
-					fillColor = utils.SystemOrange
-				}
-				fill := &views.UIPanel{X: barX + 1, Y: textY + 1, Width: fillW - 2, Height: barH - 2,
-					BgColor: fillColor, BorderColor: fillColor}
-				fill.Draw(screen)
+			pwrColor := utils.SystemGreen
+			if powerRatio < 0.5 {
+				pwrColor = utils.SystemRed
+			} else if powerRatio < 0.8 {
+				pwrColor = utils.SystemOrange
 			}
-
-			pwrLabel := fmt.Sprintf("%.0f/%.0fMW", planet.PowerGenerated, planet.PowerConsumed)
-			views.DrawText(screen, pwrLabel, barX, textY+barH+3, utils.Theme.TextDim)
-			textY += barH + lineH
-		} else {
-			textY += lineH / 2
+			p.Bar(planet.PowerGenerated, planet.PowerConsumed,
+				pwrColor, fmt.Sprintf("%.0f/%.0fMW", planet.PowerGenerated, planet.PowerConsumed))
 		}
 
-		// Resource warnings (compact, one-line)
-		var warnings []string
-		waterStored := planet.GetStoredAmount("Water")
-		if planet.Population > 0 && waterStored < 10 {
-			warnings = append(warnings, "Water!")
+		// Resource warnings
+		var warns []string
+		if planet.Population > 0 && planet.GetStoredAmount("Water") < 10 {
+			warns = append(warns, "Water!")
 		}
-		fuelStored := planet.GetStoredAmount("Fuel")
-		if (planet.PowerGenerated > 0 || planet.PowerConsumed > 0) && fuelStored < 5 {
-			warnings = append(warnings, "Fuel!")
+		if (planet.PowerGenerated > 0 || planet.PowerConsumed > 0) && planet.GetStoredAmount("Fuel") < 5 {
+			warns = append(warns, "Fuel!")
 		}
-		if len(warnings) > 0 {
+		if len(warns) > 0 {
 			warnStr := ""
-			for i, w := range warnings {
+			for i, w := range warns {
 				if i > 0 {
 					warnStr += " "
 				}
 				warnStr += w
 			}
-			views.DrawText(screen, warnStr, x+14, textY, utils.SystemRed)
-			textY += lineH
+			p.Line(warnStr, utils.SystemRed)
 		}
-
-		// Record clickable hit region for this planet
-		a.empirePlanetHits = append(a.empirePlanetHits, empirePlanetHit{
-			PlanetID: planet.GetID(),
-			Y1: hitStart, Y2: textY,
-			X1: x, X2: x + panelW,
-		})
 	}
 
-	// Construction queue summary (below planets)
-	if len(constructionItems) > 0 && textY < y+panelH-30 {
-		// Separator
-		views.DrawLine(screen, x+10, textY+2, x+panelW-10, textY+2, utils.Theme.PanelBorder)
-		textY += lineH
-
-		views.DrawText(screen, fmt.Sprintf("Building (%d)", len(constructionItems)), x+10, textY, utils.Theme.Accent)
-		textY += lineH
-
-		// Show up to 3 items
+	// Construction queue
+	constructionItems := a.getConstructionItems(human.Name)
+	if len(constructionItems) > 0 {
+		p.Sep()
+		p.Line(fmt.Sprintf("Building (%d)", len(constructionItems)), utils.Theme.Accent)
 		shown := 0
 		for _, item := range constructionItems {
-			if shown >= 3 || textY > y+panelH-lineH {
+			if shown >= 3 {
 				break
 			}
-			label := fmt.Sprintf("%s %d%%", item.Name, item.Progress)
-			views.DrawText(screen, label, x+14, textY, utils.Theme.TextDim)
-			textY += lineH
+			p.Line(fmt.Sprintf("%s %d%%", item.Name, item.Progress), utils.Theme.TextDim)
 			shown++
 		}
 		if len(constructionItems) > shown {
-			views.DrawText(screen, fmt.Sprintf("+%d more", len(constructionItems)-shown), x+14, textY, utils.Theme.TextDim)
-			textY += lineH
+			p.Line(fmt.Sprintf("+%d more", len(constructionItems)-shown), utils.Theme.TextDim)
 		}
+	}
+
+	p.Draw(screen)
+
+	// Update click hit regions from panel bounds
+	px, py, pw, _ := p.GetBounds()
+	lh := widgets.LineH()
+	a.empirePlanetHits = a.empirePlanetHits[:0]
+	hitY := py + lh*3 // skip header + pop + separator
+	for _, planet := range human.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		hitStart := hitY
+		hitY += lh // name
+		hitY += lh // pop+happy
+		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
+			hitY += lh + 4 // power bar
+		}
+		if planet.Population > 0 && planet.GetStoredAmount("Water") < 10 {
+			hitY += lh // warning
+		} else if (planet.PowerGenerated > 0 || planet.PowerConsumed > 0) && planet.GetStoredAmount("Fuel") < 5 {
+			hitY += lh // warning
+		}
+		a.empirePlanetHits = append(a.empirePlanetHits, empirePlanetHit{
+			PlanetID: planet.GetID(),
+			Y1: hitStart, Y2: hitY,
+			X1: px, X2: px + pw,
+		})
 	}
 }
 
