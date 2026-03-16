@@ -1918,12 +1918,7 @@ const totalGen=planets.reduce((s,p)=>s+p.generated_mw,0);
 const totalCons=planets.reduce((s,p)=>s+p.consumed_mw,0);
 const avgPct=totalCons>0?Math.min(1,totalGen/totalCons):1;
 let hist=[];planets.forEach(p=>{if(p.history&&p.history.length>hist.length)hist=p.history});
-// Power sparkline: inline SVG polyline
-let spark='';
-if(hist.length>3){
-const pts=hist.slice(-20);const w=80,h=16;
-const sc=avgPct<0.5?'#f66':avgPct<0.8?'#cc8':'#6c6';
-const coords=pts.map((v,i)=>(i/(pts.length-1)*w).toFixed(1)+','+(h-v*h).toFixed(1)).join(' ');
+const spark=hist.length>3?sp(hist):'';
 spark='<svg width="'+w+'" height="'+h+'" style="vertical-align:middle"><polyline points="'+coords+'" fill="none" stroke="'+sc+'" stroke-width="1.5" stroke-linejoin="round"/></svg>';
 }
 const tiles=planets.map(p=>{

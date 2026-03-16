@@ -30,6 +30,7 @@ type GalaxyView struct {
 	lastClickTime           int64
 	systemFleets            map[int][]*entities.Fleet // Fleets per system ID
 	orbitOffset             float64
+	bounds                  galaxyBounds // cached scaling bounds for current frame
 	playerPanelRect         image.Rectangle
 	playerDirectoryHintRect image.Rectangle
 	playerPanelToggleRect   image.Rectangle
@@ -209,14 +210,9 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	// Fill background
 	screen.Fill(utils.Background)
 
-	// Scale system positions to fill the current screen.
-	// Compute bounds once for consistent mapping across all elements.
+	// Compute scaling bounds once for consistent mapping across all elements.
 	systems := gv.ctx.GetSystems()
-	bounds := computeGalaxyBounds(systems)
-	for _, sys := range systems {
-		sx, sy := bounds.toScreen(sys.X, sys.Y)
-		sys.SetAbsolutePosition(float64(sx), float64(sy))
-	}
+	gv.bounds = computeGalaxyBounds(systems)
 
 	// Draw hyperlanes first (so they appear behind systems)
 	gv.drawHyperlanes(screen, systems)
@@ -224,6 +220,12 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	// Draw all systems
 	for _, system := range systems {
 		gv.drawSystem(screen, system)
+	}
+
+	// Update screen positions for click detection (after drawing)
+	for _, sys := range systems {
+		sx, sy := gv.bounds.toScreen(sys.X, sys.Y)
+		sys.SetAbsolutePosition(float64(sx), float64(sy))
 	}
 
 	// Draw fleets at their system locations
@@ -330,20 +332,18 @@ func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image, systems []*entities.S
 			continue
 		}
 
-		fx, fy := fromSystem.GetAbsolutePosition()
-		tx, ty := toSystem.GetAbsolutePosition()
+		fx, fy := gv.bounds.toScreen(fromSystem.X, fromSystem.Y)
+		tx, ty := gv.bounds.toScreen(toSystem.X, toSystem.Y)
 		DrawLine(screen,
-			int(fx), int(fy),
-			int(tx), int(ty),
+			fx, fy,
+			tx, ty,
 			hyperlaneColor)
 	}
 }
 
 // drawSystem renders a single system
 func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) {
-	ax, ay := system.GetAbsolutePosition()
-	centerX := int(ax)
-	centerY := int(ay)
+	centerX, centerY := gv.bounds.toScreen(system.X, system.Y)
 
 	// Get the star and planets from the system
 	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
@@ -508,9 +508,7 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 		}
 
 		// Draw fleet indicator near the system
-		ax, ay := system.GetAbsolutePosition()
-		centerX := int(ax)
-		centerY := int(ay)
+		centerX, centerY := gv.bounds.toScreen(system.X, system.Y)
 
 		// Position fleet indicator above the system
 		fleetX := centerX
@@ -588,8 +586,10 @@ func (gv *GalaxyView) drawTradeRoutes(screen *ebiten.Image) {
 			}
 
 			// Draw dashed line from source to target
-			sx, sy := system.GetAbsolutePosition()
-			tx, ty := targetSys.GetAbsolutePosition()
+			sxi, syi := gv.bounds.toScreen(system.X, system.Y)
+			txi, tyi := gv.bounds.toScreen(targetSys.X, targetSys.Y)
+			sx, sy := float64(sxi), float64(syi)
+			tx, ty := float64(txi), float64(tyi)
 			segments := 12
 			for i := 0; i < segments; i += 2 {
 				t1 := float64(i) / float64(segments)
@@ -639,8 +639,10 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship,
 
 	// Calculate position along the hyperlane based on travel progress
 	progress := ship.TravelProgress
-	sx, sy := sourceSystem.GetAbsolutePosition()
-	tx, ty := targetSystem.GetAbsolutePosition()
+	sxi, syi := gv.bounds.toScreen(sourceSystem.X, sourceSystem.Y)
+	txi, tyi := gv.bounds.toScreen(targetSystem.X, targetSystem.Y)
+	sx, sy := float64(sxi), float64(syi)
+	tx, ty := float64(txi), float64(tyi)
 	x := sx + (tx-sx)*progress
 	y := sy + (ty-sy)*progress
 
