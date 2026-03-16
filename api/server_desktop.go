@@ -2256,36 +2256,40 @@ if(e.lbl){
 const mx=(x1+x2)/2,my=(y1+y2)/2;
 fx.fillStyle='#3a3a50';fx.font='7px monospace';fx.textAlign='center';
 fx.fillText(e.lbl,mx,my-4)}});
-// Particles
+// Particles — subtle glowing dots
 particles.forEach(p=>{
 p.t+=p.speed;if(p.t>1)p.t-=1;
 const a=nMap[p.e.from],b=nMap[p.e.to];if(!a||!b)return;
 const px=a.x*w+(b.x-a.x)*w*p.t,py=a.y*h+(b.y-a.y)*h*p.t;
-const alpha=p.t<0.1?p.t/0.1:p.t>0.9?(1-p.t)/0.1:1;
-fx.globalAlpha=alpha*0.9;fx.fillStyle=p.e.c;
-fx.beginPath();fx.arc(px,py,2.5,0,Math.PI*2);fx.fill();fx.globalAlpha=1});
+const alpha=p.t<0.08?p.t/0.08:p.t>0.92?(1-p.t)/0.08:1;
+// Soft glow
+fx.globalAlpha=alpha*0.15;fx.fillStyle=p.e.c;
+fx.beginPath();fx.arc(px,py,5,0,Math.PI*2);fx.fill();
+// Core dot
+fx.globalAlpha=alpha*0.6;
+fx.beginPath();fx.arc(px,py,1.5,0,Math.PI*2);fx.fill();
+fx.globalAlpha=1});
 // Nodes — rectangular boxes
 nodes.forEach(n=>{
 const nx=n.x*w,ny=n.y*h;
 const bw=n.kind?BW+8:BW,bh=BH;
-// Box background
-fx.fillStyle=n.c+'18';
-fx.strokeStyle=n.c+'50';fx.lineWidth=1;
-fx.beginPath();
-fx.roundRect(nx-bw/2,ny-bh/2,bw,bh,4);
-fx.fill();fx.stroke();
+// Box background — subtle rounded rect
+fx.fillStyle=n.c+'10';
+fx.beginPath();fx.roundRect(nx-bw/2,ny-bh/2,bw,bh,5);fx.fill();
+fx.strokeStyle=n.c+'25';fx.lineWidth=0.5;
+fx.beginPath();fx.roundRect(nx-bw/2,ny-bh/2,bw,bh,5);fx.stroke();
 // Label
-fx.fillStyle=n.kind?n.c+'cc':'#ccd';fx.font=n.kind?'bold 10px monospace':'11px monospace';
+fx.fillStyle=n.kind?n.c+'aa':'#99a';fx.font='10px monospace';
 fx.textAlign='center';fx.textBaseline='middle';
 fx.fillText(n.label,nx,ny);
 fx.textBaseline='alphabetic';
-// Flow rate for resource nodes
+// Flow rate for resource nodes — small, below box
 if(n.res){
 const pr=window._flowProd||{},co=window._flowCons||{};
 const v=(pr[n.res]||0)-(co[n.res]||0);
-const fc2=v>0?'#5cb85c':v<-1?'#d9534f':'#556';
-fx.fillStyle=fc2;fx.font='bold 9px monospace';fx.textAlign='center';
-fx.fillText((v>0?'+':'')+v.toFixed(0)+'/s',nx,ny-bh/2-3)}});
+const fc2=v>0?'#4a9a4a':v<-1?'#9a4a4a':'#3a3a4a';
+fx.fillStyle=fc2;fx.font='8px monospace';fx.textAlign='center';
+fx.fillText((v>0?'+':'')+v.toFixed(0)+'/s',nx,ny+bh/2+10)}});
 requestAnimationFrame(drawFlow)}
 drawFlow()})();
 </script></body></html>`
