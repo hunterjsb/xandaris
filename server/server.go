@@ -252,6 +252,11 @@ func (gs *GameServer) Stop() {
 	close(gs.stopCh)
 }
 
+// Mu returns the server mutex for external callers (e.g. GUI client tick loop).
+func (gs *GameServer) Mu() *sync.Mutex {
+	return &gs.mu
+}
+
 // DrainCommands processes all pending commands from the command channel.
 func (gs *GameServer) DrainCommands() {
 	if gs.State == nil || gs.State.Commands == nil {

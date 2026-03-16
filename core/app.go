@@ -118,10 +118,13 @@ func (a *App) Update() error {
 	}
 
 	// Drain commands and advance simulation (in-process server)
+	// Hold server mutex to prevent race with autosave goroutine
+	a.Server.Mu().Lock()
 	a.Server.DrainCommands()
 	if a.Server.TickManager != nil {
 		a.Server.TickManager.Update()
 	}
+	a.Server.Mu().Unlock()
 
 	// Skip view input when command bar is open (prevents hotkeys while typing)
 	// The simulation still runs, and Draw still renders animations

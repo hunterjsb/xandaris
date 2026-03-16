@@ -43,7 +43,10 @@ func init() {
 }
 
 // SaveGame saves the current game state.
+// Acquires gs.mu to prevent race with the tick loop.
 func (gs *GameServer) SaveGame(playerName string) error {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
 	if err := os.MkdirAll(saveDirectory, 0755); err != nil {
 		return fmt.Errorf("failed to create save directory: %w", err)
 	}
