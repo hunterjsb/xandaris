@@ -109,21 +109,24 @@ func ProcessConsumption(players []*entities.Player) ConsumptionResult {
 			}
 		}
 
-		// Wealth tax: 0.1% per interval on excess credits.
-		// Threshold scales with total population (10cr per citizen).
-		// A 5000-pop player can hold 50,000cr tax-free; 20,000-pop = 200,000cr.
+		// Wealth tax: 0.05% per interval on excess credits.
+		// Threshold scales with total population (100cr per citizen) + buildings.
+		// A 5000-pop player can hold 500,000cr tax-free.
+		// This prevents infinite hoarding while allowing healthy reserves.
 		totalPop := int64(0)
+		totalBuildings := 0
 		for _, planet := range player.OwnedPlanets {
 			if planet != nil {
 				totalPop += planet.Population
+				totalBuildings += len(planet.Buildings)
 			}
 		}
-		taxThreshold := int(totalPop) * 10
-		if taxThreshold < 10000 {
-			taxThreshold = 10000 // minimum threshold
+		taxThreshold := int(totalPop)*100 + totalBuildings*5000
+		if taxThreshold < 50000 {
+			taxThreshold = 50000 // minimum threshold
 		}
 		if player.Credits > taxThreshold {
-			tax := (player.Credits - taxThreshold) / 1000
+			tax := (player.Credits - taxThreshold) / 2000 // 0.05% rate
 			if tax > 0 {
 				playerCreditDrain += tax
 			}

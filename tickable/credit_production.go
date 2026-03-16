@@ -1,6 +1,7 @@
 package tickable
 
 import (
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -10,22 +11,33 @@ func init() {
 	})
 }
 
-// CreditProductionSystem handles credit production from planets
+// CreditProductionSystem handles credit production from planets.
+//
+// Credits come from three sources:
+//  1. Population labor: base income from having citizens
+//  2. Domestic economy: population consuming resources = economic activity
+//  3. Trading Post revenue: share of galaxy trade volume
+//
+// This ensures self-sustaining colonies can cover their upkeep without
+// needing external trade. Trade amplifies income, it doesn't gate it.
 type CreditProductionSystem struct {
 	*BaseSystem
 	tickCounter int64
 }
 
-// OnTick processes credit production each tick
+// Resource base prices for domestic economy valuation
+var domesticPrices = map[string]float64{
+	entities.ResWater:       5,  // basic necessity, low value
+	entities.ResIron:        3,  // abundant, low value
+	entities.ResOil:         8,  // industrial, moderate
+	entities.ResFuel:        10, // processed, higher value
+	entities.ResRareMetals:  15, // scarce, high value
+	entities.ResHelium3:     12, // energy, high value
+	entities.ResElectronics: 25, // manufactured, highest value
+}
+
 func (cps *CreditProductionSystem) OnTick(tick int64) {
-	cps.tickCounter++
-
-	interval := int64(cps.GetPriority())
-	if interval <= 0 {
-		interval = 1
-	}
-
-	if cps.tickCounter%interval != 0 {
+	if tick%10 != 0 {
 		return
 	}
 
@@ -36,7 +48,6 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 
 	players := context.GetPlayers()
 
-	// Get trade volume from market for Trading Post revenue
 	var totalTradeVolume float64
 	if me := context.GetGame().GetMarketEngine(); me != nil {
 		totalTradeVolume = me.GetTradeVolume()
@@ -44,33 +55,52 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {
-			// Base production: 1 credit per 100 population per interval
-			// Scaled by happiness (0.5x–1.5x) and tech level (+5% per level)
+			if planet == nil || planet.Population <= 0 {
+				continue
+			}
+
 			productivityMult := planet.ProductivityBonus
 			if productivityMult <= 0 {
 				productivityMult = 1.0
 			}
 			techMult := 1.0 + planet.TechLevel*0.05
-			production := int(float64(planet.Population/100) * productivityMult * techMult)
 
-			// Trading Post revenue: earns from galaxy trade volume
-			// Each TP level captures a share of total trade activity
+			// 1. Population labor: 1cr per 100 pop (base)
+			laborIncome := int(float64(planet.Population/100) * productivityMult * techMult)
+
+			// 2. Domestic economy: population consuming resources generates credits.
+			// This represents the internal economy — citizens buying goods, factories
+			// operating, services rendered. A colony that produces and consumes IS
+			// an economy, even without external trade.
+			domesticIncome := 0
+			for _, rate := range economy.PopulationConsumption {
+				consumed := float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
+				if consumed < 0.5 {
+					continue
+				}
+				// Only count consumption that was actually fulfilled (resource in stock)
+				stored := float64(planet.GetStoredAmount(rate.ResourceType))
+				fulfilled := consumed
+				if fulfilled > stored {
+					fulfilled = stored
+				}
+				if price, ok := domesticPrices[rate.ResourceType]; ok {
+					domesticIncome += int(fulfilled * price * productivityMult)
+				}
+			}
+
+			// 3. Trading Post revenue: share of galaxy trade volume
+			tpIncome := 0
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok {
 					if b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
-						// Base: 2cr per level + share of trade volume
 						tradeShare := int(totalTradeVolume * 0.01 * float64(b.Level))
-						production += 2*b.Level + tradeShare
+						tpIncome += 2*b.Level + tradeShare
 					}
 				}
 			}
 
-			player.Credits += production
+			player.Credits += laborIncome + domesticIncome + tpIncome
 		}
-
-		// No subsistence bailout — credits must come from population labor
-		// (1cr per 100 pop) or Trading Post trade revenue. If credits hit 0,
-		// buildings shut down (consumption.go) and drain stops, allowing
-		// natural recovery from population-based income.
 	}
 }
