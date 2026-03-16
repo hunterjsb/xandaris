@@ -127,17 +127,15 @@ func (cce *CargoCommandExecutor) UnloadCargo(ship *entities.Ship, planet *entiti
 	return removed, nil
 }
 
-// isShipAtPlanet checks if a ship is orbiting a given planet (same system, matching orbit distance).
+// isShipAtPlanet checks if a ship can interact with a planet.
+// Ships in the same system can interact with any planet there — orbit distance
+// is for visual rendering only, not a gameplay gate. API-driven logistics
+// (load/unload/dock) just needs the ship to be in the system.
 func (cce *CargoCommandExecutor) isShipAtPlanet(ship *entities.Ship, planet *entities.Planet) bool {
-	// Find which system the planet is in
 	for _, system := range cce.systems {
 		for _, entity := range system.Entities {
 			if p, ok := entity.(*entities.Planet); ok && p.GetID() == planet.GetID() {
-				// Planet found in this system — check ship is here too
-				if ship.CurrentSystem != system.ID {
-					return false
-				}
-				return math.Abs(ship.GetOrbitDistance()-planet.GetOrbitDistance()) < orbitTolerance
+				return ship.CurrentSystem == system.ID
 			}
 		}
 	}

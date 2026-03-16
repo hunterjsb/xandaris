@@ -160,16 +160,21 @@ func ProcessConsumption(players []*entities.Player) ConsumptionResult {
 			result.CreditDrain += playerCreditDrain
 		}
 
-		// Re-enable buildings once credits recover
-		if player.Credits > 500 {
+		// Re-enable buildings gradually once credits recover.
+		// Only re-enable ONE building per interval to prevent the oscillation trap:
+		// (accumulate 500 → re-enable ALL → massive drain → bankrupt → repeat)
+		if player.Credits > 200 {
+			reEnabled := false
 			for _, planet := range player.OwnedPlanets {
-				if planet == nil {
+				if planet == nil || reEnabled {
 					continue
 				}
 				for _, be := range planet.Buildings {
 					if b, ok := be.(*entities.Building); ok {
 						if !b.IsOperational && b.BuildingType != entities.BuildingBase {
 							b.IsOperational = true
+							reEnabled = true
+							break // one building per interval
 						}
 					}
 				}
