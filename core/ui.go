@@ -8,7 +8,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
-	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -41,14 +40,25 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 	textX := x + 10
 	textY := y + 12
 
-	// Line 1: Speed + game time
+	// Line 1: Speed + game time + construction indicator
 	speedStr := a.Server.TickManager.GetSpeedString()
 	timeStr := a.Server.TickManager.GetGameTimeFormatted()
+	line1 := fmt.Sprintf("Speed: %s  %s", speedStr, timeStr)
 	if a.Server.TickManager.IsPaused() {
-		views.DrawText(screen, fmt.Sprintf("Speed: %s  %s", speedStr, timeStr), textX, textY, utils.Theme.TextDim)
-		views.DrawText(screen, "PAUSED", textX+len(fmt.Sprintf("Speed: %s  %s  ", speedStr, timeStr))*6, textY, utils.SystemYellow)
+		views.DrawText(screen, line1, textX, textY, utils.Theme.TextDim)
+		views.DrawText(screen, "PAUSED", textX+len(line1+"  ")*6, textY, utils.SystemYellow)
 	} else {
-		views.DrawText(screen, fmt.Sprintf("Speed: %s  %s", speedStr, timeStr), textX, textY, utils.Theme.TextLight)
+		views.DrawText(screen, line1, textX, textY, utils.Theme.TextLight)
+	}
+
+	// Construction count indicator (right side of line 1)
+	if human := a.Server.State.HumanPlayer; human != nil {
+		queueCount := len(a.getConstructionItems(human.Name))
+		if queueCount > 0 {
+			qLabel := fmt.Sprintf("Building %d", queueCount)
+			qX := x + 400 - len(qLabel)*6 - 10
+			views.DrawText(screen, qLabel, qX, textY, utils.SystemGreen)
+		}
 	}
 
 	// Line 2: Credits with colored net flow + hints
@@ -131,10 +141,8 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		perPlanet = 68
 	}
 	// +18 for the total pop line, +extra for construction queue
-	queueItems := 0
-	if cs := tickable.GetConstructionSystem(); cs != nil {
-		queueItems = len(cs.GetConstructionsByOwner(human.Name))
-	}
+	constructionItems := a.getConstructionItems(human.Name)
+	queueItems := len(constructionItems)
 	queueHeight := 0
 	if queueItems > 0 {
 		shown := queueItems
@@ -267,37 +275,28 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	}
 
 	// Construction queue summary (below planets)
-	cs := tickable.GetConstructionSystem()
-	if cs != nil && textY < y+panelH-30 {
-		items := cs.GetConstructionsByOwner(human.Name)
-		if len(items) > 0 {
-			// Separator
-			views.DrawLine(screen, x+10, textY+2, x+panelW-10, textY+2, utils.Theme.PanelBorder)
-			textY += 10
+	if len(constructionItems) > 0 && textY < y+panelH-30 {
+		// Separator
+		views.DrawLine(screen, x+10, textY+2, x+panelW-10, textY+2, utils.Theme.PanelBorder)
+		textY += 10
 
-			views.DrawText(screen, fmt.Sprintf("Building (%d)", len(items)), x+10, textY, utils.Theme.Accent)
-			textY += 14
+		views.DrawText(screen, fmt.Sprintf("Building (%d)", len(constructionItems)), x+10, textY, utils.Theme.Accent)
+		textY += 14
 
-			// Show up to 3 items
-			shown := 0
-			for _, item := range items {
-				if shown >= 3 || textY > y+panelH-15 {
-					break
-				}
-				item.Mutex.RLock()
-				progress := item.Progress
-				name := item.Name
-				item.Mutex.RUnlock()
-
-				label := fmt.Sprintf("%s %d%%", name, progress)
-				views.DrawText(screen, label, x+14, textY, utils.Theme.TextDim)
-				textY += 13
-				shown++
+		// Show up to 3 items
+		shown := 0
+		for _, item := range constructionItems {
+			if shown >= 3 || textY > y+panelH-15 {
+				break
 			}
-			if len(items) > shown {
-				views.DrawText(screen, fmt.Sprintf("+%d more", len(items)-shown), x+14, textY, utils.Theme.TextDim)
-				textY += 13
-			}
+			label := fmt.Sprintf("%s %d%%", item.Name, item.Progress)
+			views.DrawText(screen, label, x+14, textY, utils.Theme.TextDim)
+			textY += 13
+			shown++
+		}
+		if len(constructionItems) > shown {
+			views.DrawText(screen, fmt.Sprintf("+%d more", len(constructionItems)-shown), x+14, textY, utils.Theme.TextDim)
+			textY += 13
 		}
 	}
 }

@@ -30,6 +30,7 @@ type GameStateProvider interface {
 	GetCommandChannel() chan game.GameCommand
 	GetStandingOrders(player string) []*game.StandingOrder
 	GetDeliveryManager() *economy.DeliveryManager
+	GetShippingManager() *game.ShippingManager
 }
 
 // findPlayer returns the player matching the given name, or falls back to the human player.
@@ -479,6 +480,7 @@ func handleGetPlayerMe(p GameStateProvider, authPlayer string) interface{} {
 			CargoMax:       ship.MaxCargo,
 			CargoHold:      cargo,
 			TravelProgress: ship.TravelProgress,
+			RoutePath:      ship.RoutePath,
 		})
 	}
 
@@ -706,6 +708,7 @@ func handleGetShips(p GameStateProvider) interface{} {
 				CargoMax:       ship.MaxCargo,
 				CargoHold:      cargo,
 				TravelProgress: ship.TravelProgress,
+				RoutePath:      ship.RoutePath,
 			})
 		}
 	}
@@ -747,6 +750,7 @@ func handleGetFleets(p GameStateProvider) interface{} {
 					CargoMax:       ship.MaxCargo,
 					CargoHold:      cargo,
 					TravelProgress: ship.TravelProgress,
+					RoutePath:      ship.RoutePath,
 				})
 			}
 			result = append(result, FleetInfo{

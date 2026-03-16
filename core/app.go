@@ -33,6 +33,9 @@ type App struct {
 
 	// Toast notifications for important events
 	notifications *notificationOverlay
+
+	// Construction cache for remote mode
+	constructionCacheMu *constructionCacheMu
 }
 
 type empirePlanetHit struct {

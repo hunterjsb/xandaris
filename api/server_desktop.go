@@ -436,6 +436,58 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/shipping", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		switch r.Method {
+		case http.MethodGet:
+			sm := p.GetShippingManager()
+			if sm == nil {
+				writeJSON(w, APIResponse{OK: true, Data: []interface{}{}})
+				return
+			}
+			writeJSON(w, APIResponse{OK: true, Data: sm.GetRoutes(getAuthPlayer(r))})
+		case http.MethodPost:
+			var req struct {
+				SourcePlanet int    `json:"source_planet"`
+				DestPlanet   int    `json:"dest_planet"`
+				Resource     string `json:"resource"`
+				Quantity     int    `json:"quantity"`
+				ShipID       int    `json:"ship_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, "invalid JSON")
+				return
+			}
+			sm := p.GetShippingManager()
+			if sm == nil {
+				writeErr(w, http.StatusInternalServerError, "shipping not available")
+				return
+			}
+			player := getAuthPlayer(r)
+			if player == "" {
+				player = "Server"
+			}
+			id := sm.CreateRoute(player, req.SourcePlanet, req.DestPlanet, req.Resource, req.Quantity, req.ShipID)
+			writeJSON(w, APIResponse{OK: true, Data: map[string]int{"route_id": id}})
+		case http.MethodDelete:
+			var req struct {
+				RouteID int `json:"route_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, "invalid JSON")
+				return
+			}
+			sm := p.GetShippingManager()
+			if sm != nil && sm.CancelRoute(req.RouteID) {
+				writeJSON(w, APIResponse{OK: true, Data: map[string]int{"cancelled": req.RouteID}})
+			} else {
+				writeErr(w, http.StatusNotFound, "route not found")
+			}
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET, POST, or DELETE")
+		}
+	})
+
 	mux.HandleFunc("/api/expansion", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
@@ -1638,13 +1690,22 @@ const shipPositions=[];
 ships.filter(s=>s.status==='Moving').forEach(s=>{
 const src=systems.find(x=>x.id===s.system_id),tgt=systems.find(x=>x.id===s.target_system);
 if(!src||!tgt)return;
-const[x1,y1]=sp(src),[x2,y2]=sp(tgt),c=pc(s.owner);
-// Route line (only for laden ships)
-if(s.cargo_used>0){
-X.strokeStyle=hexA(c,0.15);X.lineWidth=4;X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
+const c=pc(s.owner);
+// Build full route: current hop + remaining path
+const routeIDs=[s.system_id,s.target_system,...(s.route_path||[])];
+const routeSys=routeIDs.map(id=>systems.find(x=>x.id===id)).filter(Boolean);
+// Draw route line along hyperlanes (only for laden ships)
+if(s.cargo_used>0&&routeSys.length>=2){
+X.strokeStyle=hexA(c,0.15);X.lineWidth=4;X.beginPath();
+const[fx,fy]=sp(routeSys[0]);X.moveTo(fx,fy);
+for(let i=1;i<routeSys.length;i++){const[nx,ny]=sp(routeSys[i]);X.lineTo(nx,ny)}
+X.stroke();
 X.strokeStyle=hexA(c,0.4);X.lineWidth=1;X.setLineDash([8,8]);
-X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();X.setLineDash([])}
-// Ship position from actual travel progress
+X.beginPath();X.moveTo(fx,fy);
+for(let i=1;i<routeSys.length;i++){const[nx,ny]=sp(routeSys[i]);X.lineTo(nx,ny)}
+X.stroke();X.setLineDash([])}
+// Ship position: lerp along current hop (src→tgt)
+const[x1,y1]=sp(src),[x2,y2]=sp(tgt);
 const p=s.travel_progress||((t*0.3+s.id*0.1)%1);
 const sx=x1+(x2-x1)*p,sy=y1+(y2-y1)*p;
 shipPositions.push({ship:s,x:sx,y:sy});

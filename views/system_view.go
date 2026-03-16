@@ -225,7 +225,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	summaryX := 10 + len(sv.system.Name)*6 + 12
 	DrawText(screen, summaryParts, summaryX, 10, utils.Theme.TextDim)
 
-	DrawText(screen, "Double-click planet to enter  |  Esc to galaxy", 10, 28, utils.Theme.TextDim)
+	DrawText(screen, "Double-click planet to enter  |  [M] Market  |  Esc to galaxy", 10, 28, utils.Theme.TextDim)
 
 	if selected := sv.clickHandler.GetSelectedObject(); selected != nil {
 		if planet, ok := selected.(*entities.Planet); ok {

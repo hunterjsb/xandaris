@@ -50,6 +50,9 @@ func (a *App) GetStandingOrders(player string) []*game.StandingOrder {
 func (a *App) GetDeliveryManager() *economy.DeliveryManager {
 	return a.Server.GetDeliveryManager()
 }
+func (a *App) GetShippingManager() *game.ShippingManager {
+	return a.Server.GetShippingManager()
+}
 
 // GetSystemsMap returns systems indexed by ID (for UI components)
 func (a *App) GetSystemsMap() map[int]*entities.System {

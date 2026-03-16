@@ -415,9 +415,9 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	// Hints at bottom of panel
 	infoY += 4
 	if isOwned {
-		DrawText(screen, "[B] Build  [Shift+Click] Mine  [Esc] Back", 14, infoY, utils.Theme.TextDim)
+		DrawText(screen, "[B] Build  [W] Workforce  [M] Market  [Esc] Back", 14, infoY, utils.Theme.TextDim)
 	} else {
-		DrawText(screen, "[Esc] Back to system", 14, infoY, utils.Theme.TextDim)
+		DrawText(screen, "[M] Market  [Esc] Back", 14, infoY, utils.Theme.TextDim)
 	}
 
 	pv.drawWorkforceToggleButton(screen)

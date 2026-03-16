@@ -27,6 +27,7 @@ type GameServer struct {
 	Chat             *game.ChatLog
 	Registry         *game.PlayerRegistry
 	DeliveryMgr      *economy.DeliveryManager
+	ShippingMgr      *game.ShippingManager
 	cmdRegistry      *CommandRegistry
 	// Remote is set when connected to a remote server (desktop only, not WASM)
 	remoteSync interface{}
@@ -175,6 +176,7 @@ func (gs *GameServer) initSimulation() {
 
 	// Wire delivery system for cargo-based trade
 	gs.DeliveryMgr = economy.NewDeliveryManager()
+	gs.ShippingMgr = game.NewShippingManager()
 
 	if gs.State.TradeExec != nil {
 		gs.State.TradeExec.SetSystems(gs.State.Systems)

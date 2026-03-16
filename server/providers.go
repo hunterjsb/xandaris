@@ -125,6 +125,9 @@ func (gs *GameServer) ExecuteStandingOrderTrade(order tickable.StandingOrderInfo
 func (gs *GameServer) GetDeliveryManager() *economy.DeliveryManager {
 	return gs.DeliveryMgr
 }
+func (gs *GameServer) GetShippingManager() *game.ShippingManager {
+	return gs.ShippingMgr
+}
 
 // --- api.GameStateProvider ---
 

@@ -176,6 +176,7 @@ type ShipInfo struct {
 	CargoMax       int            `json:"cargo_max"`
 	CargoHold      map[string]int `json:"cargo_hold"`
 	TravelProgress float64        `json:"travel_progress"` // 0.0-1.0 for moving ships
+	RoutePath      []int          `json:"route_path,omitempty"` // remaining multi-hop path
 }
 
 // FleetInfo represents a fleet for the API.
