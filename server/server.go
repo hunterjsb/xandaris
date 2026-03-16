@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/hunterjsb/xandaris/api"
@@ -30,6 +31,7 @@ type GameServer struct {
 	ShippingMgr      *game.ShippingManager
 	CreditLedger     *economy.CreditLedger
 	cmdRegistry      *CommandRegistry
+	mu               sync.Mutex // protects State during save (held by tick loop + autosave)
 	// Remote is set when connected to a remote server (desktop only, not WASM)
 	remoteSync interface{}
 
@@ -237,8 +239,10 @@ func (gs *GameServer) Run() {
 			fmt.Println("[Server] Simulation loop stopped")
 			return
 		case <-ticker.C:
+			gs.mu.Lock()
 			gs.DrainCommands()
 			gs.TickManager.Update()
+			gs.mu.Unlock()
 		}
 	}
 }

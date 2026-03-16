@@ -109,7 +109,10 @@ func (gs *GameServer) SaveGame(playerName string) error {
 }
 
 // AutoSave saves to a fixed path, overwriting the previous autosave.
+// Acquires gs.mu to prevent race with the tick loop modifying state.
 func (gs *GameServer) AutoSave(path string) error {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("failed to create save directory: %w", err)
 	}

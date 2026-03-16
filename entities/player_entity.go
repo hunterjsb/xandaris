@@ -53,6 +53,11 @@ func NewPlayer(id int, name string, playerColor color.RGBA, playerType PlayerTyp
 
 // AddOwnedPlanet adds a planet to the player's ownership
 func (p *Player) AddOwnedPlanet(planet *Planet) {
+	for _, pl := range p.OwnedPlanets {
+		if pl == planet || (pl != nil && planet != nil && pl.GetID() == planet.GetID()) {
+			return // already owned
+		}
+	}
 	p.OwnedPlanets = append(p.OwnedPlanets, planet)
 }
 
@@ -61,8 +66,13 @@ func (p *Player) AddOwnedStation(station *Station) {
 	p.OwnedStations = append(p.OwnedStations, station)
 }
 
-// AddOwnedShip adds a ship to the player's ownership
+// AddOwnedShip adds a ship to the player's ownership (deduplicates).
 func (p *Player) AddOwnedShip(ship *Ship) {
+	for _, s := range p.OwnedShips {
+		if s == ship || (s != nil && ship != nil && s.GetID() == ship.GetID()) {
+			return // already owned
+		}
+	}
 	p.OwnedShips = append(p.OwnedShips, ship)
 }
 
