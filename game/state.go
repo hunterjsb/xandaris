@@ -97,6 +97,7 @@ const (
 	CmdDockShip           CommandType = "dock_ship"
 	CmdUndockShip         CommandType = "undock_ship"
 	CmdSellAtDock         CommandType = "sell_at_dock"
+	CmdDemolish           CommandType = "demolish"
 )
 
 // GameCommand represents a command to be executed on the main goroutine.
@@ -240,6 +241,12 @@ type SellAtDockCommandData struct {
 	ShipID   int
 	Resource string
 	Quantity int
+}
+
+// DemolishCommandData is the payload for demolishing a building.
+type DemolishCommandData struct {
+	PlanetID      int // planet the building is on
+	BuildingIndex int // index in planet.Buildings array
 }
 
 // NewState creates a new empty game state
