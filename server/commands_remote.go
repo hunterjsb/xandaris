@@ -27,6 +27,7 @@ var commandEndpoints = map[game.CommandType]string{
 	game.CmdWorkforceAssign:    "/api/workforce/assign",
 	game.CmdCancelConstruction: "/api/construction/cancel",
 	game.CmdDemolish:           "/api/demolish",
+	game.CmdTransferFuel:       "/api/ships/transfer-fuel",
 }
 
 // convertCommandToAPI converts a game command's data to API-compatible JSON.
@@ -96,6 +97,12 @@ func convertCommandToAPI(cmd game.GameCommand) ([]byte, error) {
 		return json.Marshal(map[string]interface{}{
 			"planet_id":      d.PlanetID,
 			"building_index": d.BuildingIndex,
+		})
+	case game.TransferFuelCommandData:
+		return json.Marshal(map[string]interface{}{
+			"from_ship_id": d.FromShipID,
+			"to_ship_id":   d.ToShipID,
+			"amount":       d.Amount,
 		})
 	case game.ShipRefuelCommandData:
 		return json.Marshal(map[string]interface{}{

@@ -20,6 +20,7 @@ var remoteForwardedCommands = map[game.CommandType]bool{
 	game.CmdWorkforceAssign: true, game.CmdCancelConstruction: true,
 	game.CmdDockShip: true, game.CmdUndockShip: true, game.CmdSellAtDock: true,
 	game.CmdDemolish: true,
+	game.CmdTransferFuel: true,
 }
 
 // executeCommand processes a single game command via the registry.
@@ -78,6 +79,7 @@ func (gs *GameServer) initCommandRegistry() {
 	cr.Register(game.CmdUndockShip, gs.handleUndockShipCommand)
 	cr.Register(game.CmdSellAtDock, gs.handleSellAtDockCommand)
 	cr.Register(game.CmdDemolish, gs.handleDemolishCommand)
+	cr.Register(game.CmdTransferFuel, gs.handleTransferFuelCommand)
 
 	gs.cmdRegistry = cr
 }
@@ -747,6 +749,66 @@ func (gs *GameServer) handleSellAtDockCommand(cmd game.GameCommand) {
 		"resource": sd.Resource,
 		"sold":     sold,
 		"credits":  credits,
+	})
+}
+
+func (gs *GameServer) handleTransferFuelCommand(cmd game.GameCommand) {
+	td, ok := cmd.Data.(game.TransferFuelCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid transfer data"))
+		return
+	}
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	fromShip := game.FindShipByID(gs.State.Players, td.FromShipID)
+	toShip := game.FindShipByID(gs.State.Players, td.ToShipID)
+	if fromShip == nil || toShip == nil {
+		sendResult(cmd, fmt.Errorf("ship not found"))
+		return
+	}
+	if fromShip.Owner != human.Name || toShip.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("not your ship"))
+		return
+	}
+
+	// Both ships must be in the same system and not moving
+	if fromShip.Status == entities.ShipStatusMoving || toShip.Status == entities.ShipStatusMoving {
+		sendResult(cmd, fmt.Errorf("cannot transfer fuel while a ship is moving"))
+		return
+	}
+	if fromShip.CurrentSystem != toShip.CurrentSystem {
+		sendResult(cmd, fmt.Errorf("ships must be in the same system"))
+		return
+	}
+
+	// Calculate transfer amount
+	available := fromShip.CurrentFuel
+	needed := toShip.MaxFuel - toShip.CurrentFuel
+	amount := td.Amount
+	if amount <= 0 || amount > needed {
+		amount = needed
+	}
+	if amount > available {
+		amount = available
+	}
+	if amount <= 0 {
+		sendResult(cmd, fmt.Errorf("no fuel to transfer"))
+		return
+	}
+
+	fromShip.CurrentFuel -= amount
+	toShip.CurrentFuel += amount
+
+	sendSuccess(cmd, map[string]interface{}{
+		"from_ship":     fromShip.Name,
+		"to_ship":       toShip.Name,
+		"transferred":   amount,
+		"from_fuel_now": fromShip.CurrentFuel,
+		"to_fuel_now":   toShip.CurrentFuel,
 	})
 }
 

@@ -822,6 +822,40 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	mux.HandleFunc("/api/ships/transfer-fuel", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req struct {
+			FromShipID int `json:"from_ship_id"`
+			ToShipID   int `json:"to_ship_id"`
+			Amount     int `json:"amount"` // 0 = fill up target
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		p := getProvider()
+		cmd := newCommand(r, game.CmdTransferFuel, game.TransferFuelCommandData{
+			FromShipID: req.FromShipID,
+			ToShipID:   req.ToShipID,
+			Amount:     req.Amount,
+		})
+		p.GetCommandChannel() <- cmd
+		select {
+		case result := <-cmd.Result:
+			switch v := result.(type) {
+			case error:
+				writeErr(w, http.StatusBadRequest, v.Error())
+			default:
+				writeJSON(w, APIResponse{OK: true, Data: v})
+			}
+		case <-time.After(5 * time.Second):
+			writeErr(w, http.StatusGatewayTimeout, "timed out")
+		}
+	})
+
 	mux.HandleFunc("/api/demolish", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			writeErr(w, http.StatusMethodNotAllowed, "POST only")

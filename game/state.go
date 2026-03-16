@@ -98,7 +98,15 @@ const (
 	CmdUndockShip         CommandType = "undock_ship"
 	CmdSellAtDock         CommandType = "sell_at_dock"
 	CmdDemolish           CommandType = "demolish"
+	CmdTransferFuel       CommandType = "transfer_fuel"
 )
+
+// TransferFuelCommandData is the payload for ship-to-ship fuel transfer.
+type TransferFuelCommandData struct {
+	FromShipID int // ship donating fuel
+	ToShipID   int // ship receiving fuel
+	Amount     int // fuel units to transfer (0 = fill up target)
+}
 
 // GameCommand represents a command to be executed on the main goroutine.
 type GameCommand struct {
