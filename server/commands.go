@@ -116,6 +116,13 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		return
 	}
 
+	// Tech level gate
+	techReq := entities.GetTechRequirement(bd.BuildingType)
+	if techReq > 0 && planet.TechLevel < techReq {
+		sendResult(cmd, fmt.Errorf("%s requires tech level %.1f (planet has %.1f)", bd.BuildingType, techReq, planet.TechLevel))
+		return
+	}
+
 	// Look up build cost from entity generator (single source of truth)
 	cost := game.GetBuildingCost(bd.BuildingType)
 	if cost == 0 {

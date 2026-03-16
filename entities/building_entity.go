@@ -18,6 +18,28 @@ const (
 	BuildingShipyard      = "Shipyard"
 )
 
+// BuildingTechRequirement returns the minimum tech level needed to construct a building.
+// Returns 0 for basic buildings available immediately.
+var BuildingTechRequirement = map[string]float64{
+	BuildingBase:          0,
+	BuildingMine:          0,
+	BuildingGenerator:     0,
+	BuildingTradingPost:   0,
+	BuildingHabitat:       0,
+	BuildingRefinery:      0.5,  // basic processing
+	BuildingFactory:       1.0,  // requires some tech investment
+	BuildingShipyard:      1.0,  // advanced construction
+	BuildingFusionReactor: 2.0,  // high-tech power
+}
+
+// GetTechRequirement returns the minimum tech level for a building type.
+func GetTechRequirement(buildingType string) float64 {
+	if req, ok := BuildingTechRequirement[buildingType]; ok {
+		return req
+	}
+	return 0
+}
+
 // BuildingColor returns the default color for a building type.
 func BuildingColor(buildingType string) color.RGBA {
 	switch buildingType {
