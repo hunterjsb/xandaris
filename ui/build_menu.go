@@ -87,11 +87,11 @@ func (bm *BuildMenu) Open(attachedTo entities.Entity, x, y int) {
 	if bm.y < 10 {
 		bm.y = 10
 	}
-	if bm.x+bm.width > 1280-10 {
-		bm.x = 1280 - bm.width - 10
+	if bm.x+bm.width > views.ScreenWidth-10 {
+		bm.x = views.ScreenWidth - bm.width - 10
 	}
-	if bm.y+bm.height > 720-10 {
-		bm.y = 720 - bm.height - 10
+	if bm.y+bm.height > views.ScreenHeight-10 {
+		bm.y = views.ScreenHeight - bm.height - 10
 	}
 
 	// Determine what we're building on

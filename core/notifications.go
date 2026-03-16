@@ -99,7 +99,7 @@ func (n *notificationOverlay) draw(screen *ebiten.Image, screenWidth int) {
 
 	// Draw toasts from bottom-right, stacking upward
 	x := screenWidth - 310
-	y := 720 - 90 // above status bar
+	y := views.ScreenHeight - 90 // above status bar
 
 	for i := len(snapshot) - 1; i >= 0; i-- {
 		t := snapshot[i]

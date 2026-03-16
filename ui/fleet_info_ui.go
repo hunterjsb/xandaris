@@ -42,7 +42,7 @@ type FleetInfoUI struct {
 func NewFleetInfoUI(ctx UIContext) *FleetInfoUI {
 	return &FleetInfoUI{
 		ctx:   ctx,
-		x:      1280 - 320,
+		x:      views.ScreenWidth - 320,
 		y:      80,
 		width:  310,
 		height: 400,

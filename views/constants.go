@@ -1,9 +1,8 @@
 package views
 
-// Screen dimensions — updated by Layout() to match actual window size.
-// Default to 1280x720 as fallback.
+// Screen dimensions (logical resolution).
 var (
-	ScreenWidth  = 1280
-	ScreenHeight = 720
+	ScreenWidth  = 1920
+	ScreenHeight = 1080
 )
 

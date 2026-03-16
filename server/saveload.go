@@ -224,10 +224,28 @@ func (gs *GameServer) LoadGame(path string) error {
 		}
 	}
 
-	// Rebuild planet owner references
+	// Rebuild player references (HomePlanet, HomeSystem, planet owners)
 	for _, player := range gs.State.Players {
 		for _, planet := range player.OwnedPlanets {
 			planet.Owner = player.Name
+			// Restore HomePlanet to the first owned planet (best heuristic after load)
+			if player.HomePlanet == nil {
+				player.HomePlanet = planet
+			}
+		}
+		// Restore HomeSystem by finding the system containing HomePlanet
+		if player.HomePlanet != nil {
+			for _, sys := range gs.State.Systems {
+				for _, e := range sys.Entities {
+					if p, ok := e.(*entities.Planet); ok && p.GetID() == player.HomePlanet.GetID() {
+						player.HomeSystem = sys
+						break
+					}
+				}
+				if player.HomeSystem != nil {
+					break
+				}
+			}
 		}
 	}
 

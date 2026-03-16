@@ -34,8 +34,8 @@ type ShipyardUI struct {
 func NewShipyardUI(ctx UIContext) *ShipyardUI {
 	return &ShipyardUI{
 		ctx:   ctx,
-		x:      1280/2 - 250,
-		y:      720/2 - 250,
+		x:      views.ScreenWidth/2 - 250,
+		y:      views.ScreenHeight/2 - 250,
 		width:  500,
 		height: 500,
 		shipTypes: []entities.ShipType{
@@ -57,6 +57,9 @@ func (sui *ShipyardUI) Show(planet *entities.Planet, shipyard *entities.Building
 	sui.scrollOffset = 0
 	sui.selectedShip = ""
 	sui.errorMessage = ""
+	// Center on screen
+	sui.x = views.ScreenWidth/2 - sui.width/2
+	sui.y = views.ScreenHeight/2 - sui.height/2
 }
 
 // Hide closes the shipyard UI

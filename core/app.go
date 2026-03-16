@@ -141,15 +141,8 @@ func (a *App) Draw(screen *ebiten.Image) {
 	}
 }
 
-// Layout returns the game's screen size (implements ebiten.Game).
-// In fullscreen, outsideWidth/Height is the monitor resolution.
-// We render at native resolution to avoid upscale blur.
+// Layout returns the game's logical screen size (implements ebiten.Game).
+// We keep a fixed logical resolution and let Ebiten handle scaling to the window.
 func (a *App) Layout(outsideWidth, outsideHeight int) (int, int) {
-	if outsideWidth > 0 && outsideHeight > 0 {
-		a.screenWidth = outsideWidth
-		a.screenHeight = outsideHeight
-		views.ScreenWidth = outsideWidth
-		views.ScreenHeight = outsideHeight
-	}
 	return a.screenWidth, a.screenHeight
 }
