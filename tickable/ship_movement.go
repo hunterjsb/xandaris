@@ -1,6 +1,7 @@
 package tickable
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/hunterjsb/xandaris/entities"
@@ -21,11 +22,17 @@ type ShipMovementSystem struct {
 func (sms *ShipMovementSystem) OnTick(tick int64) {
 	context := sms.GetContext()
 	if context == nil {
+		if tick%1000 == 0 {
+			fmt.Println("[ShipMovement] ERROR: context is nil")
+		}
 		return
 	}
 
 	game := context.GetGame()
 	if game == nil {
+		if tick%1000 == 0 {
+			fmt.Println("[ShipMovement] ERROR: game is nil")
+		}
 		return
 	}
 
@@ -111,6 +118,11 @@ func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, systems 
 
 	// Update travel progress
 	ship.TravelProgress += travelSpeed
+
+	if tick := sms.GetContext().GetTick(); tick%500 == 0 {
+		fmt.Printf("[ShipMovement] %s progress=%.2f%% speed=%.4f fuel=%d target=%d\n",
+			ship.Name, ship.TravelProgress*100, travelSpeed, ship.CurrentFuel, ship.TargetSystem)
+	}
 
 	// Check if ship has arrived
 	if ship.TravelProgress >= 1.0 {
