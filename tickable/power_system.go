@@ -99,4 +99,10 @@ func computePower(planet *entities.Planet) {
 	planet.PowerGenerated = generated
 	planet.PowerConsumed = consumed
 	planet.PowerRatio = planet.GetPowerRatio()
+
+	// Track power history for sparklines (keep last 50)
+	planet.PowerHistory = append(planet.PowerHistory, planet.PowerRatio)
+	if len(planet.PowerHistory) > 50 {
+		planet.PowerHistory = planet.PowerHistory[len(planet.PowerHistory)-50:]
+	}
 }

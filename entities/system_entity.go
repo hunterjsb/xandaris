@@ -8,8 +8,10 @@ import (
 // System represents a star system
 type System struct {
 	ID          int
-	X           float64
+	X           float64 // Raw generated position (used for scaling)
 	Y           float64
+	ScreenX     float64 // Screen-space position (set by galaxy view)
+	ScreenY     float64
 	Name        string
 	Color       color.RGBA
 	Connections []int // IDs of connected systems
@@ -96,8 +98,26 @@ func (s *System) GetContextMenuItems() []string {
 	return items
 }
 
-// GetPosition implements Clickable interface
+// GetPosition implements Clickable interface.
+// Returns screen-scaled position if set, otherwise raw X/Y.
 func (s *System) GetPosition() (float64, float64) {
+	if s.ScreenX != 0 || s.ScreenY != 0 {
+		return s.ScreenX, s.ScreenY
+	}
+	return s.X, s.Y
+}
+
+// SetAbsolutePosition sets the screen-space position for rendering.
+func (s *System) SetAbsolutePosition(x, y float64) {
+	s.ScreenX = x
+	s.ScreenY = y
+}
+
+// GetAbsolutePosition returns the screen-space position.
+func (s *System) GetAbsolutePosition() (float64, float64) {
+	if s.ScreenX != 0 || s.ScreenY != 0 {
+		return s.ScreenX, s.ScreenY
+	}
 	return s.X, s.Y
 }
 

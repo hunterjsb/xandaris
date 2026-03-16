@@ -37,6 +37,40 @@ type GalaxyView struct {
 	confirmQuit             bool
 }
 
+// galaxyToScreen maps a system's raw coordinates to the current screen size.
+// System positions are generated for a reference resolution; this scales them
+// to fill the current screen with consistent margins.
+func galaxyToScreen(rawX, rawY float64, systems []*entities.System) (int, int) {
+	if len(systems) == 0 {
+		return int(rawX), int(rawY)
+	}
+
+	// Find bounding box of all systems
+	minX, minY := systems[0].X, systems[0].Y
+	maxX, maxY := systems[0].X, systems[0].Y
+	for _, s := range systems[1:] {
+		if s.X < minX { minX = s.X }
+		if s.Y < minY { minY = s.Y }
+		if s.X > maxX { maxX = s.X }
+		if s.Y > maxY { maxY = s.Y }
+	}
+
+	rangeX := maxX - minX
+	rangeY := maxY - minY
+	if rangeX < 1 { rangeX = 1 }
+	if rangeY < 1 { rangeY = 1 }
+
+	// Map to screen with margins
+	margin := 60.0
+	screenW := float64(ScreenWidth) - margin*2
+	screenH := float64(ScreenHeight) - margin*2
+
+	x := margin + (rawX-minX)/rangeX*screenW
+	y := margin + (rawY-minY)/rangeY*screenH
+
+	return int(x), int(y)
+}
+
 // NewGalaxyView creates a new galaxy view
 func NewGalaxyView(ctx GameContext) *GalaxyView {
 	gv := &GalaxyView{
@@ -170,6 +204,15 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	// Fill background
 	screen.Fill(utils.Background)
 
+	// Scale system positions to fill the current screen.
+	// We compute scaled positions and store them as absolute positions.
+	// The raw X/Y are preserved for the scaling math (they come from generation).
+	systems := gv.ctx.GetSystems()
+	for _, sys := range systems {
+		sx, sy := galaxyToScreen(sys.X, sys.Y, systems)
+		sys.SetAbsolutePosition(float64(sx), float64(sy))
+	}
+
 	// Draw hyperlanes first (so they appear behind systems)
 	gv.drawHyperlanes(screen)
 
@@ -274,18 +317,21 @@ func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
 		fromSystem := systems[hyperlane.From]
 		toSystem := systems[hyperlane.To]
 
-		// Draw line between systems
+		// Draw line between systems (use absolute positions set in Draw)
+		fx, fy := fromSystem.GetAbsolutePosition()
+		tx, ty := toSystem.GetAbsolutePosition()
 		DrawLine(screen,
-			int(fromSystem.X), int(fromSystem.Y),
-			int(toSystem.X), int(toSystem.Y),
+			int(fx), int(fy),
+			int(tx), int(ty),
 			hyperlaneColor)
 	}
 }
 
 // drawSystem renders a single system
 func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) {
-	centerX := int(system.X)
-	centerY := int(system.Y)
+	ax, ay := system.GetAbsolutePosition()
+	centerX := int(ax)
+	centerY := int(ay)
 
 	// Get the star and planets from the system
 	star := system.GetEntitiesByType(entities.EntityTypeStar)[0].(*entities.Star)
@@ -450,8 +496,9 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 		}
 
 		// Draw fleet indicator near the system
-		centerX := int(system.X)
-		centerY := int(system.Y)
+		ax, ay := system.GetAbsolutePosition()
+		centerX := int(ax)
+		centerY := int(ay)
 
 		// Position fleet indicator above the system
 		fleetX := centerX
@@ -529,8 +576,8 @@ func (gv *GalaxyView) drawTradeRoutes(screen *ebiten.Image) {
 			}
 
 			// Draw dashed line from source to target
-			sx, sy := system.X, system.Y
-			tx, ty := targetSys.X, targetSys.Y
+			sx, sy := system.GetAbsolutePosition()
+			tx, ty := targetSys.GetAbsolutePosition()
 			segments := 12
 			for i := 0; i < segments; i += 2 {
 				t1 := float64(i) / float64(segments)
@@ -580,8 +627,10 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship,
 
 	// Calculate position along the hyperlane based on travel progress
 	progress := ship.TravelProgress
-	x := sourceSystem.X + (targetSystem.X-sourceSystem.X)*progress
-	y := sourceSystem.Y + (targetSystem.Y-sourceSystem.Y)*progress
+	sx, sy := sourceSystem.GetAbsolutePosition()
+	tx, ty := targetSystem.GetAbsolutePosition()
+	x := sx + (tx-sx)*progress
+	y := sy + (ty-sy)*progress
 
 	// Determine color
 	shipColor := ship.Color

@@ -36,6 +36,7 @@ type Planet struct {
 	PowerGenerated    float64                     // MW generated this tick
 	PowerConsumed     float64                     // MW demanded this tick
 	PowerRatio        float64                     // 0.0-1.0 generated/consumed
+	PowerHistory      []float64                   // last 50 power ratios for sparkline
 }
 
 // NewPlanet creates a new planet entity
