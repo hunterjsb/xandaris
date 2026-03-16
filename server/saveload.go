@@ -305,9 +305,16 @@ func (gs *GameServer) LoadGame(path string) error {
 				continue
 			}
 			if livePlanet, ok := systemPlanets[planet.GetID()]; ok {
-				// Copy player-specific state to the system entity planet
+				// Copy ALL player-specific state from saved planet to system entity
 				livePlanet.Owner = player.Name
-				// Copy stored resources from saved player planet to system entity
+				livePlanet.Population = planet.Population
+				livePlanet.Happiness = planet.Happiness
+				livePlanet.ProductivityBonus = planet.ProductivityBonus
+				livePlanet.TechLevel = planet.TechLevel
+				livePlanet.PowerGenerated = planet.PowerGenerated
+				livePlanet.PowerConsumed = planet.PowerConsumed
+				livePlanet.Buildings = planet.Buildings
+				livePlanet.Resources = planet.Resources
 				for resType, storage := range planet.StoredResources {
 					if storage != nil {
 						livePlanet.StoredResources[resType] = storage
