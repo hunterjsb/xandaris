@@ -385,17 +385,34 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	details := formatPlanetDetails(pv.planet)
 	cw := utils.CharWidth()
 	lineH := int(15.0 * utils.UIScale)
-	pad := cw // 1 char unit of padding
+	pad := cw
 	margin := 10
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	isOwned := humanPlayer != nil && pv.planet.Owner == humanPlayer.Name
 
-	// Determine panel width: 25 chars
-	panelWidthCh := 25
+	// Determine panel width: 28 chars (wider to prevent overflow)
+	panelWidthCh := 28
 	panelWidth := panelWidthCh * cw
 
-	// Count visible lines: title + details + separator(half-line) + hints
-	numLines := 1 + len(details) + 1 // title + details + hints
+	// Build building summary
+	buildingCounts := make(map[string]int)
+	for _, be := range pv.planet.Buildings {
+		if b, ok := be.(*entities.Building); ok {
+			buildingCounts[b.BuildingType]++
+		}
+	}
+
+	// Count lines: title(2) + details + buildings header + building types + deposits + hints
+	numLines := 2 + len(details) // name line + system/owner line + details
+	if len(buildingCounts) > 0 {
+		numLines += 1 + len(buildingCounts) // "Buildings:" + each type
+	} else {
+		numLines += 1 // "No buildings"
+	}
+	if len(pv.planet.Resources) > 0 {
+		numLines++ // deposits count
+	}
+	numLines++ // hints
 	panelHeight := pad + numLines*lineH + pad/2
 
 	infoPanel := &UIPanel{
@@ -407,19 +424,27 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	textX := margin + pad
 	textY := margin + pad
 
-	// Title line: planet name + system + owner
+	// Line 1: planet name
 	DrawText(screen, pv.planet.Name, textX, textY, utils.Theme.Accent)
-	afterName := textX + len(pv.planet.Name)*cw + cw
+	textY += lineH
+
+	// Line 2: system + owner
+	subLine := ""
 	if pv.system != nil {
-		DrawText(screen, pv.system.Name, afterName, textY, utils.Theme.TextDim)
-		afterName += len(pv.system.Name)*cw + cw
+		subLine = pv.system.Name
 	}
 	if pv.planet.Owner != "" {
-		DrawText(screen, pv.planet.Owner, afterName, textY, utils.Theme.TextDim)
+		if subLine != "" {
+			subLine += "  "
+		}
+		subLine += pv.planet.Owner
+	}
+	if subLine != "" {
+		DrawText(screen, subLine, textX, textY, utils.Theme.TextDim)
 	}
 	textY += lineH
 
-	// Detail lines
+	// Detail lines (population, happiness, power, workforce)
 	for _, line := range details {
 		lineColor := utils.Theme.TextDim
 		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
@@ -429,9 +454,32 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		textY += lineH
 	}
 
+	// Building list
+	if len(buildingCounts) > 0 {
+		DrawText(screen, fmt.Sprintf("Buildings (%d):", len(pv.planet.Buildings)), textX, textY, utils.Theme.TextDim)
+		textY += lineH
+		for bType, count := range buildingCounts {
+			label := bType
+			if count > 1 {
+				label = fmt.Sprintf("%s x%d", bType, count)
+			}
+			DrawText(screen, "  "+label, textX, textY, utils.Theme.TextLight)
+			textY += lineH
+		}
+	} else {
+		DrawText(screen, "No buildings", textX, textY, utils.Theme.TextDim)
+		textY += lineH
+	}
+
+	// Deposits count
+	if len(pv.planet.Resources) > 0 {
+		DrawText(screen, fmt.Sprintf("%d deposits", len(pv.planet.Resources)), textX, textY, utils.Theme.TextDim)
+		textY += lineH
+	}
+
 	// Keyboard hints
 	if isOwned {
-		DrawText(screen, "[B] Build  [W] Workforce  [Esc] Back", textX, textY, utils.Theme.TextDim)
+		DrawText(screen, "[B] Build [W] Workforce [Esc] Back", textX, textY, utils.Theme.TextDim)
 	} else {
 		DrawText(screen, "[M] Market  [Esc] Back", textX, textY, utils.Theme.TextDim)
 	}
@@ -854,9 +902,6 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 			utils.FormatInt64WithCommas(planet.WorkforceUsed),
 			utils.FormatInt64WithCommas(planet.WorkforceTotal)))
 	}
-
-	// Buildings + deposits count
-	lines = append(lines, fmt.Sprintf("%d buildings  %d deposits", len(planet.Buildings), len(planet.Resources)))
 
 	return lines
 }

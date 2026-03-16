@@ -2055,7 +2055,7 @@ td{padding:3px 4px}
 <div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
 <div class="panel"><h2>Market Prices <span class="tag">trends</span></h2><div id="mk"></div></div>
 <div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
-<div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:180px;display:block"></canvas></div>
+<div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:240px;display:block"></canvas></div>
 <div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Fleet <span class="tag">ships by faction</span></h2><div id="sh"></div></div>
 </div>
@@ -2173,44 +2173,50 @@ const fx=fc.getContext('2d');
 function resizeFlow(){fc.width=fc.offsetWidth*2;fc.height=fc.offsetHeight*2;fx.scale(2,2)}
 resizeFlow();addEventListener('resize',resizeFlow);
 const W=()=>fc.width/2,H=()=>fc.height/2;
-// Node definitions: {id, label, x (fraction), y (fraction), color}
+// Layout: 3 rows
+// Row 1 (y=0.22): Iron → Factory → Electronics → Tech Level
+// Row 2 (y=0.50): Mines → Water/RM/He-3 → (middle) → Power → Happiness → Pop Growth
+// Row 3 (y=0.78): Oil → Refinery → Fuel → Generator
+const BW=52,BH=28; // box size
 const nodes=[
-{id:'mine',label:'Mines',x:0.04,y:0.3,c:'#8a7050'},
-{id:'iron',label:'Iron',x:0.14,y:0.15,c:'#b4784f'},
-{id:'water',label:'Water',x:0.14,y:0.45,c:'#508cc8'},
-{id:'oil',label:'Oil',x:0.14,y:0.75,c:'#606060'},
-{id:'rm',label:'Rare M.',x:0.24,y:0.15,c:'#c8b464'},
-{id:'he3',label:'He-3',x:0.24,y:0.45,c:'#b4dcff'},
-{id:'refinery',label:'Refinery',x:0.36,y:0.75,c:'#c88232'},
-{id:'fuel',label:'Fuel',x:0.50,y:0.75,c:'#50a050'},
-{id:'factory',label:'Factory',x:0.36,y:0.15,c:'#b482ff'},
-{id:'elec',label:'Elec.',x:0.50,y:0.15,c:'#5090d0'},
-{id:'gen',label:'Generator',x:0.64,y:0.75,c:'#ffa030'},
-{id:'fusion',label:'Fusion',x:0.64,y:0.45,c:'#64dcff'},
-{id:'power',label:'Power',x:0.78,y:0.6,c:'#ffcc00'},
-{id:'happy',label:'Happiness',x:0.90,y:0.4,c:'#50c878'},
-{id:'growth',label:'Growth',x:0.96,y:0.2,c:'#7fdbca'},
-{id:'tech',label:'Tech',x:0.64,y:0.15,c:'#a0a0ff'},
+// Col 1: extraction
+{id:'mine',label:'\u26CF Mines',x:0.06,y:0.50,c:'#8a7050',kind:'building'},
+// Col 2: raw resources
+{id:'iron',label:'Iron',x:0.19,y:0.22,c:'#b4784f',res:'Iron'},
+{id:'water',label:'Water',x:0.19,y:0.50,c:'#508cc8',res:'Water'},
+{id:'oil',label:'Oil',x:0.19,y:0.78,c:'#808080',res:'Oil'},
+{id:'rm',label:'Rare Metals',x:0.32,y:0.22,c:'#c8b464',res:'Rare Metals'},
+{id:'he3',label:'Helium-3',x:0.32,y:0.50,c:'#b4dcff',res:'Helium-3'},
+// Col 3: processing
+{id:'factory',label:'\u2699 Factory',x:0.45,y:0.22,c:'#b482ff',kind:'building'},
+{id:'refinery',label:'\u2699 Refinery',x:0.45,y:0.78,c:'#c88232',kind:'building'},
+// Col 4: products
+{id:'elec',label:'Electronics',x:0.58,y:0.22,c:'#5090d0',res:'Electronics'},
+{id:'fuel',label:'Fuel',x:0.58,y:0.78,c:'#50a050',res:'Fuel'},
+// Col 5: power
+{id:'gen',label:'\u26A1 Generator',x:0.72,y:0.78,c:'#ffa030',kind:'building'},
+{id:'fusion',label:'\u26A1 Fusion',x:0.72,y:0.50,c:'#64dcff',kind:'building'},
+{id:'tech',label:'Tech Level',x:0.72,y:0.22,c:'#a0a0ff',kind:'outcome'},
+// Col 6: outcomes
+{id:'power',label:'\u26A1 Power',x:0.85,y:0.64,c:'#ffcc00',kind:'outcome'},
+{id:'happy',label:'\u263A Happiness',x:0.85,y:0.36,c:'#50c878',kind:'outcome'},
+{id:'growth',label:'\u2191 Growth',x:0.95,y:0.50,c:'#7fdbca',kind:'outcome'},
 ];
-// Edges: {from, to, resource (for flow rate lookup), color}
 const edges=[
-{from:'mine',to:'iron',res:'Iron',c:'#b4784f'},
-{from:'mine',to:'water',res:'Water',c:'#508cc8'},
-{from:'mine',to:'oil',res:'Oil',c:'#606060'},
-{from:'mine',to:'rm',res:'Rare Metals',c:'#c8b464'},
-{from:'mine',to:'he3',res:'Helium-3',c:'#b4dcff'},
-{from:'oil',to:'refinery',res:'Oil',c:'#808080',lbl:'2\u00d7'},
-{from:'refinery',to:'fuel',res:'Fuel',c:'#50a050',lbl:'3\u00d7'},
-{from:'rm',to:'factory',res:'Rare Metals',c:'#c8b464',lbl:'2\u00d7'},
-{from:'iron',to:'factory',res:'Iron',c:'#b4784f',lbl:'1\u00d7'},
-{from:'factory',to:'elec',res:'Electronics',c:'#5090d0',lbl:'2\u00d7'},
-{from:'fuel',to:'gen',res:'Fuel',c:'#ffa030',lbl:'50MW'},
-{from:'he3',to:'fusion',res:'Helium-3',c:'#64dcff',lbl:'200MW'},
-{from:'gen',to:'power',c:'#ffcc00'},
-{from:'fusion',to:'power',c:'#ffcc00'},
+{from:'mine',to:'iron',c:'#b4784f'},{from:'mine',to:'water',c:'#508cc8'},{from:'mine',to:'oil',c:'#808080'},
+{from:'mine',to:'rm',c:'#c8b464'},{from:'mine',to:'he3',c:'#b4dcff'},
+{from:'oil',to:'refinery',c:'#808080',lbl:'2\u00d7 Oil'},
+{from:'iron',to:'factory',c:'#b4784f',lbl:'1\u00d7 Iron'},
+{from:'rm',to:'factory',c:'#c8b464',lbl:'2\u00d7 RM'},
+{from:'refinery',to:'fuel',c:'#50a050',lbl:'\u2192 3\u00d7 Fuel'},
+{from:'factory',to:'elec',c:'#5090d0',lbl:'\u2192 2\u00d7 Elec'},
+{from:'fuel',to:'gen',c:'#ffa030',lbl:'burns Fuel'},
+{from:'he3',to:'fusion',c:'#64dcff',lbl:'burns He-3'},
+{from:'gen',to:'power',c:'#ffcc00',lbl:'50 MW'},
+{from:'fusion',to:'power',c:'#ffcc00',lbl:'200 MW'},
 {from:'power',to:'happy',c:'#50c878'},
+{from:'elec',to:'tech',c:'#a0a0ff',lbl:'+3%/lvl'},
 {from:'happy',to:'growth',c:'#7fdbca'},
-{from:'elec',to:'tech',res:'Electronics',c:'#a0a0ff',lbl:'+3%/lvl'},
 ];
 const nMap={};nodes.forEach(n=>nMap[n.id]=n);
 // Particles
@@ -2218,69 +2224,71 @@ let particles=[];
 function spawnParticles(){
 edges.forEach(e=>{
 const pr=window._flowProd||{},co=window._flowCons||{};
-let rate=0;
-if(e.res){rate=Math.abs((pr[e.res]||0)-(co[e.res]||0))+Math.max(pr[e.res]||0,co[e.res]||0)}
-else rate=5; // default for non-resource edges
-const count=Math.min(8,Math.max(1,Math.round(rate/3)));
+const a=nMap[e.from],b=nMap[e.to];
+// Flow rate determines particle density
+let rate=3;
+if(b&&b.res){rate=Math.max(1,(pr[b.res]||0))}
+else if(a&&a.res){rate=Math.max(1,(pr[a.res]||0))}
+const count=Math.min(6,Math.max(1,Math.round(rate/4)));
 for(let i=0;i<count;i++){
-particles.push({e:e,t:Math.random(),speed:0.003+Math.random()*0.004})}})}
+particles.push({e,t:Math.random(),speed:0.002+Math.random()*0.003})}})}
 spawnParticles();setInterval(()=>{particles=[];spawnParticles()},10000);
-let ft=0;
 function drawFlow(){
-ft+=0.016;
 const w=W(),h=H();
 fx.clearRect(0,0,w,h);
-// Title
-fx.fillStyle='#556';fx.font='9px monospace';fx.textAlign='left';
-fx.fillText('PRODUCTION CHAINS',6,12);
+// Title + legend
+fx.fillStyle='#445';fx.font='10px monospace';fx.textAlign='left';
+fx.fillText('PRODUCTION CHAINS',8,14);
 fx.fillStyle='#334';fx.font='8px monospace';
-fx.fillText('particles = resource flow rate',6,22);
-// Draw edges
+fx.fillText('moving dots = live resource flow    green/red numbers = net production rate',8,26);
+// Edges (draw first, behind nodes)
 edges.forEach(e=>{
 const a=nMap[e.from],b=nMap[e.to];if(!a||!b)return;
 const x1=a.x*w,y1=a.y*h,x2=b.x*w,y2=b.y*h;
-fx.strokeStyle=e.c+'30';fx.lineWidth=2;
+fx.strokeStyle=e.c+'28';fx.lineWidth=2;
 fx.beginPath();fx.moveTo(x1,y1);fx.lineTo(x2,y2);fx.stroke();
-// Arrowhead
-const ang=Math.atan2(y2-y1,x2-x1);const d=6;
-fx.fillStyle=e.c+'50';fx.beginPath();
-fx.moveTo(x2,y2);fx.lineTo(x2-d*Math.cos(ang-0.4),y2-d*Math.sin(ang-0.4));
-fx.lineTo(x2-d*Math.cos(ang+0.4),y2-d*Math.sin(ang+0.4));fx.fill();
-// Edge label (conversion ratio)
+// Arrow
+const ang=Math.atan2(y2-y1,x2-x1),d=7;
+fx.fillStyle=e.c+'40';fx.beginPath();
+fx.moveTo(x2-d*1.5*Math.cos(ang),y2-d*1.5*Math.sin(ang));
+fx.lineTo(x2-d*1.5*Math.cos(ang)-d*Math.cos(ang-0.5),y2-d*1.5*Math.sin(ang)-d*Math.sin(ang-0.5));
+fx.lineTo(x2-d*1.5*Math.cos(ang)-d*Math.cos(ang+0.5),y2-d*1.5*Math.sin(ang)-d*Math.sin(ang+0.5));
+fx.fill();
+// Edge label
 if(e.lbl){
-const mx2=(x1+x2)/2,my2=(y1+y2)/2-6;
-fx.fillStyle=e.c+'90';fx.font='7px monospace';fx.textAlign='center';
-fx.fillText(e.lbl,mx2,my2)}});
-// Draw particles
+const mx=(x1+x2)/2,my=(y1+y2)/2;
+fx.fillStyle='#556';fx.font='8px monospace';fx.textAlign='center';
+fx.fillText(e.lbl,mx,my-5)}});
+// Particles
 particles.forEach(p=>{
 p.t+=p.speed;if(p.t>1)p.t-=1;
 const a=nMap[p.e.from],b=nMap[p.e.to];if(!a||!b)return;
 const px=a.x*w+(b.x-a.x)*w*p.t,py=a.y*h+(b.y-a.y)*h*p.t;
 const alpha=p.t<0.1?p.t/0.1:p.t>0.9?(1-p.t)/0.1:1;
-fx.fillStyle=p.e.c;fx.globalAlpha=alpha*0.8;
-fx.beginPath();fx.arc(px,py,2,0,Math.PI*2);fx.fill();fx.globalAlpha=1});
-// Category headers
-fx.fillStyle='#2a3050';fx.font='8px monospace';fx.textAlign='center';
-const cats=[{label:'EXTRACTION',x:0.09},{label:'RAW',x:0.19},{label:'PROCESSING',x:0.36},{label:'PRODUCTS',x:0.50},{label:'POWER',x:0.64},{label:'OUTCOME',x:0.88}];
-cats.forEach(c=>{fx.fillText(c.label,c.x*w,h-4)});
-// Draw nodes
+fx.globalAlpha=alpha*0.9;fx.fillStyle=p.e.c;
+fx.beginPath();fx.arc(px,py,2.5,0,Math.PI*2);fx.fill();fx.globalAlpha=1});
+// Nodes — rectangular boxes
 nodes.forEach(n=>{
 const nx=n.x*w,ny=n.y*h;
-// Glow
-fx.fillStyle=n.c+'15';fx.beginPath();fx.arc(nx,ny,18,0,Math.PI*2);fx.fill();
-// Dot
-fx.fillStyle=n.c;fx.beginPath();fx.arc(nx,ny,5,0,Math.PI*2);fx.fill();
+const bw=n.kind?BW+8:BW,bh=BH;
+// Box background
+fx.fillStyle=n.c+'18';
+fx.strokeStyle=n.c+'50';fx.lineWidth=1;
+fx.beginPath();
+fx.roundRect(nx-bw/2,ny-bh/2,bw,bh,4);
+fx.fill();fx.stroke();
 // Label
-fx.fillStyle='#aab';fx.font='9px monospace';fx.textAlign='center';
-fx.fillText(n.label,nx,ny+15);
-// Flow rate
-if(n.id!=='mine'&&n.id!=='refinery'&&n.id!=='factory'&&n.id!=='gen'&&n.id!=='fusion'&&n.id!=='power'&&n.id!=='happy'&&n.id!=='growth'&&n.id!=='tech'){
+fx.fillStyle=n.kind?n.c+'cc':'#ccd';fx.font=n.kind?'bold 10px monospace':'11px monospace';
+fx.textAlign='center';fx.textBaseline='middle';
+fx.fillText(n.label,nx,ny);
+fx.textBaseline='alphabetic';
+// Flow rate for resource nodes
+if(n.res){
 const pr=window._flowProd||{},co=window._flowCons||{};
-const resMap={iron:'Iron',water:'Water',oil:'Oil',rm:'Rare Metals',he3:'Helium-3',fuel:'Fuel',elec:'Electronics'};
-const rn=resMap[n.id];if(rn){
-const v=(pr[rn]||0)-(co[rn]||0);
-fx.fillStyle=v>0?'#5cb85c':v<-1?'#d9534f':'#556';fx.font='8px monospace';
-fx.fillText((v>0?'+':'')+v.toFixed(0)+'/s',nx,ny-10)}}});
+const v=(pr[n.res]||0)-(co[n.res]||0);
+const fc2=v>0?'#5cb85c':v<-1?'#d9534f':'#556';
+fx.fillStyle=fc2;fx.font='bold 9px monospace';fx.textAlign='center';
+fx.fillText((v>0?'+':'')+v.toFixed(0)+'/s',nx,ny-bh/2-3)}});
 requestAnimationFrame(drawFlow)}
 drawFlow()})();
 </script></body></html>`
