@@ -40,7 +40,8 @@ func (gs *GameServer) initCommandRegistry() {
 
 	cr.Register(game.CmdSave, func(cmd game.GameCommand) {
 		if playerName, ok := cmd.Data.(string); ok {
-			if err := gs.SaveGame(playerName); err != nil {
+			// Already under gs.mu from DrainCommands — use locked variant to avoid deadlock
+			if err := gs.saveGameLocked(playerName); err != nil {
 				fmt.Printf("[Server] Save failed: %v\n", err)
 			}
 		}
