@@ -38,10 +38,9 @@ func (rps *RefineryProductionSystem) OnTick(tick int64) {
 
 // processRefineries processes all refineries on a planet
 func (rps *RefineryProductionSystem) processRefineries(planet *entities.Planet) {
-	// Find all operational refineries on this planet
 	for _, buildingEntity := range planet.Buildings {
 		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == entities.BuildingRefinery && building.IsOperational {
+			if building.BuildingType == entities.BuildingRefinery && building.IsOperational && building.GetStaffingRatio() > 0 {
 				rps.processRefinery(planet, building)
 			}
 		}

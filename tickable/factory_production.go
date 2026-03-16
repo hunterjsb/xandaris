@@ -38,7 +38,7 @@ func (fps *FactoryProductionSystem) OnTick(tick int64) {
 func (fps *FactoryProductionSystem) processFactories(planet *entities.Planet) {
 	for _, buildingEntity := range planet.Buildings {
 		if building, ok := buildingEntity.(*entities.Building); ok {
-			if building.BuildingType == entities.BuildingFactory && building.IsOperational {
+			if building.BuildingType == entities.BuildingFactory && building.IsOperational && building.GetStaffingRatio() > 0 {
 				fps.processFactory(planet, building)
 			}
 		}

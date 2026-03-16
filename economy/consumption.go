@@ -85,10 +85,10 @@ func ProcessConsumption(players []*entities.Player) ConsumptionResult {
 				planet.RemoveStoredResource(rate.ResourceType, int(needed))
 			}
 
-			// Building upkeep (resources)
+			// Building upkeep (resources + credits) — only for staffed buildings
 			for _, buildingEntity := range planet.Buildings {
 				building, ok := buildingEntity.(*entities.Building)
-				if !ok || !building.IsOperational {
+				if !ok || !building.IsOperational || building.GetStaffingRatio() <= 0 {
 					continue
 				}
 				if upkeeps, found := BuildingResourceUpkeep[building.BuildingType]; found {
