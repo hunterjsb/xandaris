@@ -2029,7 +2029,7 @@ td{padding:3px 4px}
 <div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
 <div class="panel"><h2>Market Prices <span class="tag">trends</span></h2><div id="mk"></div></div>
 <div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
-<div class="panel wide" style="background:#0d1125;border-color:#152040"><h2 style="color:#556">Production Chains <span class="tag">simulation flow</span></h2><div class="chain" id="chains"></div></div>
+<div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:180px;display:block"></canvas></div>
 <div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Fleet <span class="tag">ships by faction</span></h2><div id="sh"></div></div>
 </div>
@@ -2123,15 +2123,8 @@ const maxStock=Math.max(...hubData.map(h=>h.stock),1);
 const bw2=Math.round(x.stock/maxStock*100);
 const tc=x.type=='human'?'b':'w';
 return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px"><span class="'+tc+'" style="width:85px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+x.name+'</span><div style="flex:1;height:8px;background:#0c1020;border-radius:2px;overflow:hidden"><div style="height:100%;width:'+bw2+'%;background:#1a3a5a;border-radius:2px"></div></div><span class="d" style="width:45px;text-align:right;font-size:10px">'+x.stock.toLocaleString()+'</span><span class="d" style="width:20px;text-align:right;font-size:9px">'+x.planets+'p</span></div>'}).join('');
-// Production chains
-const fmt=r=>{const v=(pr[r]||0)-(co[r]||0);return'<span class="'+(v>0?'g':v<-1?'r':'d')+'" style="font-weight:bold">'+(v>0?'+':'')+v.toFixed(0)+'</span>'};
-document.getElementById('chains').innerHTML=
-'<b>Mining</b> <span class="arr">\u2192</span> Iron '+fmt('Iron')+' \u2502 Water '+fmt('Water')+' \u2502 Oil '+fmt('Oil')+' \u2502 RM '+fmt('Rare Metals')+' \u2502 He-3 '+fmt('Helium-3')+
-'<br><b>Refinery</b>: 2\u00d7Oil <span class="arr">\u2192</span> 3\u00d7Fuel '+fmt('Fuel')+
-' &nbsp;\u2502&nbsp; <b>Factory</b>: 2\u00d7RM + Iron <span class="arr">\u2192</span> 2\u00d7Elec '+fmt('Electronics')+
-'<br><b>Generator</b>: Fuel <span class="arr">\u2192</span> 50MW &nbsp;\u2502&nbsp; <b>Fusion Reactor</b>: He-3 <span class="arr">\u2192</span> 200MW'+
-'<br><b>Power</b> <span class="arr">\u2192</span> Buildings <span class="arr">\u2192</span> <b>Happiness</b> <span class="arr">\u2192</span> Productivity (0.5\u20131.5x) <span class="arr">\u2192</span> Credits + Growth'+
-'<br><b>Electronics</b> <span class="arr">\u2192</span> Tech Level <span class="arr">\u2192</span> +3% mining per level';
+// Production chains — update flow data for canvas animation
+window._flowProd=pr;window._flowCons=co;
 // Chat
 document.getElementById('ch').innerHTML=(ch.data||[]).map(x=>{
 return'<div class="chat"><span class="d">['+x.time+']</span> <span class="name">'+x.player+'</span> '+x.message+'</div>'}).join('')||'<div class="d" style="padding:20px;text-align:center;font-size:12px">Waiting for factions to chat...</div>';
@@ -2147,6 +2140,109 @@ return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).ma
 document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
 }catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
+// === Flow Diagram Canvas ===
+(function(){
+const fc=document.getElementById('flowCanvas');if(!fc)return;
+const fx=fc.getContext('2d');
+function resizeFlow(){fc.width=fc.offsetWidth*2;fc.height=fc.offsetHeight*2;fx.scale(2,2)}
+resizeFlow();addEventListener('resize',resizeFlow);
+const W=()=>fc.width/2,H=()=>fc.height/2;
+// Node definitions: {id, label, x (fraction), y (fraction), color}
+const nodes=[
+{id:'mine',label:'Mines',x:0.04,y:0.3,c:'#8a7050'},
+{id:'iron',label:'Iron',x:0.14,y:0.15,c:'#b4784f'},
+{id:'water',label:'Water',x:0.14,y:0.45,c:'#508cc8'},
+{id:'oil',label:'Oil',x:0.14,y:0.75,c:'#606060'},
+{id:'rm',label:'Rare M.',x:0.24,y:0.15,c:'#c8b464'},
+{id:'he3',label:'He-3',x:0.24,y:0.45,c:'#b4dcff'},
+{id:'refinery',label:'Refinery',x:0.36,y:0.75,c:'#c88232'},
+{id:'fuel',label:'Fuel',x:0.50,y:0.75,c:'#50a050'},
+{id:'factory',label:'Factory',x:0.36,y:0.15,c:'#b482ff'},
+{id:'elec',label:'Elec.',x:0.50,y:0.15,c:'#5090d0'},
+{id:'gen',label:'Generator',x:0.64,y:0.75,c:'#ffa030'},
+{id:'fusion',label:'Fusion',x:0.64,y:0.45,c:'#64dcff'},
+{id:'power',label:'Power',x:0.78,y:0.6,c:'#ffcc00'},
+{id:'happy',label:'Happiness',x:0.90,y:0.4,c:'#50c878'},
+{id:'growth',label:'Growth',x:0.96,y:0.2,c:'#7fdbca'},
+{id:'tech',label:'Tech',x:0.64,y:0.15,c:'#a0a0ff'},
+];
+// Edges: {from, to, resource (for flow rate lookup), color}
+const edges=[
+{from:'mine',to:'iron',res:'Iron',c:'#b4784f'},
+{from:'mine',to:'water',res:'Water',c:'#508cc8'},
+{from:'mine',to:'oil',res:'Oil',c:'#606060'},
+{from:'mine',to:'rm',res:'Rare Metals',c:'#c8b464'},
+{from:'mine',to:'he3',res:'Helium-3',c:'#b4dcff'},
+{from:'oil',to:'refinery',res:'Oil',c:'#808080'},
+{from:'refinery',to:'fuel',res:'Fuel',c:'#50a050'},
+{from:'rm',to:'factory',res:'Rare Metals',c:'#c8b464'},
+{from:'iron',to:'factory',res:'Iron',c:'#b4784f'},
+{from:'factory',to:'elec',res:'Electronics',c:'#5090d0'},
+{from:'fuel',to:'gen',res:'Fuel',c:'#ffa030'},
+{from:'he3',to:'fusion',res:'Helium-3',c:'#64dcff'},
+{from:'gen',to:'power',c:'#ffcc00'},
+{from:'fusion',to:'power',c:'#ffcc00'},
+{from:'power',to:'happy',c:'#50c878'},
+{from:'happy',to:'growth',c:'#7fdbca'},
+{from:'elec',to:'tech',res:'Electronics',c:'#a0a0ff'},
+];
+const nMap={};nodes.forEach(n=>nMap[n.id]=n);
+// Particles
+let particles=[];
+function spawnParticles(){
+edges.forEach(e=>{
+const pr=window._flowProd||{},co=window._flowCons||{};
+let rate=0;
+if(e.res){rate=Math.abs((pr[e.res]||0)-(co[e.res]||0))+Math.max(pr[e.res]||0,co[e.res]||0)}
+else rate=5; // default for non-resource edges
+const count=Math.min(8,Math.max(1,Math.round(rate/3)));
+for(let i=0;i<count;i++){
+particles.push({e:e,t:Math.random(),speed:0.003+Math.random()*0.004})}})}
+spawnParticles();setInterval(()=>{particles=[];spawnParticles()},10000);
+let ft=0;
+function drawFlow(){
+ft+=0.016;
+const w=W(),h=H();
+fx.clearRect(0,0,w,h);
+// Draw edges
+edges.forEach(e=>{
+const a=nMap[e.from],b=nMap[e.to];if(!a||!b)return;
+const x1=a.x*w,y1=a.y*h,x2=b.x*w,y2=b.y*h;
+fx.strokeStyle=e.c+'30';fx.lineWidth=2;
+fx.beginPath();fx.moveTo(x1,y1);fx.lineTo(x2,y2);fx.stroke();
+// Arrowhead
+const ang=Math.atan2(y2-y1,x2-x1);const d=6;
+fx.fillStyle=e.c+'50';fx.beginPath();
+fx.moveTo(x2,y2);fx.lineTo(x2-d*Math.cos(ang-0.4),y2-d*Math.sin(ang-0.4));
+fx.lineTo(x2-d*Math.cos(ang+0.4),y2-d*Math.sin(ang+0.4));fx.fill()});
+// Draw particles
+particles.forEach(p=>{
+p.t+=p.speed;if(p.t>1)p.t-=1;
+const a=nMap[p.e.from],b=nMap[p.e.to];if(!a||!b)return;
+const px=a.x*w+(b.x-a.x)*w*p.t,py=a.y*h+(b.y-a.y)*h*p.t;
+const alpha=p.t<0.1?p.t/0.1:p.t>0.9?(1-p.t)/0.1:1;
+fx.fillStyle=p.e.c;fx.globalAlpha=alpha*0.8;
+fx.beginPath();fx.arc(px,py,2,0,Math.PI*2);fx.fill();fx.globalAlpha=1});
+// Draw nodes
+nodes.forEach(n=>{
+const nx=n.x*w,ny=n.y*h;
+// Glow
+fx.fillStyle=n.c+'15';fx.beginPath();fx.arc(nx,ny,18,0,Math.PI*2);fx.fill();
+// Dot
+fx.fillStyle=n.c;fx.beginPath();fx.arc(nx,ny,5,0,Math.PI*2);fx.fill();
+// Label
+fx.fillStyle='#aab';fx.font='9px monospace';fx.textAlign='center';
+fx.fillText(n.label,nx,ny+15);
+// Flow rate
+if(n.id!=='mine'&&n.id!=='refinery'&&n.id!=='factory'&&n.id!=='gen'&&n.id!=='fusion'&&n.id!=='power'&&n.id!=='happy'&&n.id!=='growth'&&n.id!=='tech'){
+const pr=window._flowProd||{},co=window._flowCons||{};
+const resMap={iron:'Iron',water:'Water',oil:'Oil',rm:'Rare Metals',he3:'Helium-3',fuel:'Fuel',elec:'Electronics'};
+const rn=resMap[n.id];if(rn){
+const v=(pr[rn]||0)-(co[rn]||0);
+fx.fillStyle=v>0?'#5cb85c':v<-1?'#d9534f':'#556';fx.font='8px monospace';
+fx.fillText((v>0?'+':'')+v.toFixed(0)+'/s',nx,ny-10)}}});
+requestAnimationFrame(drawFlow)}
+drawFlow()})();
 </script></body></html>`
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

@@ -255,8 +255,12 @@ func (gs *GameServer) LoadGame(path string) error {
 		return fmt.Errorf("failed to decode save data: %w", err)
 	}
 
-	// Version check — reject incompatible saves
-	if saveData.Version != SaveVersion {
+	// Version check — accept compatible save versions
+	compatibleVersions := map[string]bool{
+		SaveVersion: true,
+		"2.4.0":     true, // pre-logistics saves (missing delivery/shipping/credit fields — zeroed by gob)
+	}
+	if !compatibleVersions[saveData.Version] {
 		return fmt.Errorf("save version mismatch: got %q, need %q", saveData.Version, SaveVersion)
 	}
 
