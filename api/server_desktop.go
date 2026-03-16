@@ -1434,6 +1434,53 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// Admin diagnostic: show mine-to-resource attachment details
+	mux.HandleFunc("/api/admin/diagnose", func(w http.ResponseWriter, r *http.Request) {
+		if !isAdmin(r) {
+			writeErr(w, http.StatusForbidden, "admin only")
+			return
+		}
+		playerName := r.URL.Query().Get("player")
+		p := getProvider()
+		player := findPlayer(p, playerName)
+		if player == nil {
+			writeErr(w, http.StatusNotFound, "player not found")
+			return
+		}
+		var result []map[string]interface{}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			pInfo := map[string]interface{}{
+				"planet_id":   planet.GetID(),
+				"planet_name": planet.Name,
+				"owner":       planet.Owner,
+				"resources":   []map[string]interface{}{},
+				"mines":       []map[string]interface{}{},
+			}
+			for _, re := range planet.Resources {
+				if res, ok := re.(*entities.Resource); ok {
+					pInfo["resources"] = append(pInfo["resources"].([]map[string]interface{}), map[string]interface{}{
+						"id": res.GetID(), "type": res.ResourceType, "owner": res.Owner,
+						"abundance": res.Abundance, "rate": res.ExtractionRate,
+					})
+				}
+			}
+			for i, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" {
+					pInfo["mines"] = append(pInfo["mines"].([]map[string]interface{}), map[string]interface{}{
+						"index": i, "level": b.Level, "attached_to": b.AttachedTo,
+						"attachment_type": b.AttachmentType, "staffing": b.GetStaffingRatio(),
+						"operational": b.IsOperational, "owner": b.Owner,
+					})
+				}
+			}
+			result = append(result, pInfo)
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
+	})
+
 	// Admin-only player removal
 	mux.HandleFunc("/api/admin/remove-player", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
