@@ -32,9 +32,12 @@ func ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entiti
 	TransferPlanetOwnership(planet, nil, player)
 	planet.Population = int64(ship.Colonists)
 
-	// Ensure key deposits exist for production chains
-	EnsureResourceDeposit(planet, entities.ResRareMetals, player.Name)
-	EnsureResourceDeposit(planet, entities.ResHelium3, player.Name)
+	// Ensure essential deposits exist for self-sustaining colony
+	EnsureResourceDeposit(planet, entities.ResWater, player.Name)     // survival
+	EnsureResourceDeposit(planet, entities.ResIron, player.Name)      // construction
+	EnsureResourceDeposit(planet, entities.ResOil, player.Name)       // Refinery → Fuel → Generator
+	EnsureResourceDeposit(planet, entities.ResRareMetals, player.Name) // Factory
+	EnsureResourceDeposit(planet, entities.ResHelium3, player.Name)   // Fusion Reactor
 
 	// Build infrastructure
 	AddBuildingToPlanet(planet, entities.BuildingTradingPost, player.Name, systemID)
@@ -43,9 +46,10 @@ func ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entiti
 	BuildMinesOnResources(planet, player.Name, systemID)
 	SeedInitialCommodities(planet, player.Name)
 
-	// Starting resources
+	// Starting resources — enough to bootstrap before mining kicks in
 	planet.AddStoredResource(entities.ResFuel, 100)
 	planet.AddStoredResource(entities.ResWater, 100)
+	planet.AddStoredResource(entities.ResOil, 80)
 
 	// Consume the colony ship
 	ship.Colonists = 0
