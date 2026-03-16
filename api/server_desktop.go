@@ -527,6 +527,22 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: handleGetLeaderboard(getProvider())})
 	})
 
+	mux.HandleFunc("/api/defense", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: handleGetDefense(getProvider())})
+	})
+
+	mux.HandleFunc("/api/stations", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		writeJSON(w, APIResponse{OK: true, Data: handleGetStations(getProvider())})
+	})
+
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeErr(w, http.StatusMethodNotAllowed, "GET only")
@@ -1580,6 +1596,112 @@ func StartServer(provider GameStateProvider) {
 			messages[i], messages[j] = messages[j], messages[i]
 		}
 		writeJSON(w, APIResponse{OK: true, Data: messages})
+	})
+
+	// Local market: what's available to trade in a specific system
+	mux.HandleFunc("/api/local-market/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		// Parse system ID from /api/local-market/{system_id}
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/local-market/"), "/")
+		sysID, err := strconv.Atoi(parts[0])
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid system_id")
+			return
+		}
+
+		p := getProvider()
+		playerName := getAuthPlayer(r)
+		_ = playerName
+		systems := p.GetSystems()
+
+		// Find all planets in this system with their stock
+		type PlanetStock struct {
+			PlanetID   int            `json:"planet_id"`
+			PlanetName string         `json:"planet_name"`
+			Owner      string         `json:"owner"`
+			HasTP      bool           `json:"has_trading_post"`
+			Stock      map[string]int `json:"stock"`
+		}
+
+		var result struct {
+			SystemID     int           `json:"system_id"`
+			Planets      []PlanetStock `json:"planets"`
+			YourPlanets  []int         `json:"your_planets"`
+			BuyableStock map[string]int `json:"buyable_stock"` // total stock on OTHER players' planets
+		}
+		result.SystemID = sysID
+		result.BuyableStock = make(map[string]int)
+
+		for _, sys := range systems {
+			if sys.ID != sysID {
+				continue
+			}
+			for _, e := range sys.Entities {
+				planet, ok := e.(*entities.Planet)
+				if !ok || planet.Owner == "" {
+					continue
+				}
+
+				stock := make(map[string]int)
+				for resType, s := range planet.StoredResources {
+					if s != nil && s.Amount > 0 {
+						stock[resType] = s.Amount
+					}
+				}
+
+				hasTP := false
+				for _, be := range planet.Buildings {
+					if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
+						hasTP = true
+						break
+					}
+				}
+
+				ps := PlanetStock{
+					PlanetID: planet.GetID(), PlanetName: planet.Name,
+					Owner: planet.Owner, HasTP: hasTP, Stock: stock,
+				}
+				result.Planets = append(result.Planets, ps)
+
+				if planet.Owner == playerName {
+					result.YourPlanets = append(result.YourPlanets, planet.GetID())
+				} else {
+					// Stock on other players' planets = what you can buy
+					for resType, amt := range stock {
+						result.BuyableStock[resType] += amt
+					}
+				}
+			}
+			break
+		}
+
+		// Add market prices for context
+		market := p.GetMarket()
+		type PricedStock struct {
+			Resource  string  `json:"resource"`
+			Available int     `json:"available"`
+			BuyPrice  float64 `json:"buy_price"`
+			SellPrice float64 `json:"sell_price"`
+		}
+		var priced []PricedStock
+		if market != nil {
+			for res, amt := range result.BuyableStock {
+				priced = append(priced, PricedStock{
+					Resource: res, Available: amt,
+					BuyPrice: market.GetBuyPrice(res), SellPrice: market.GetSellPrice(res),
+				})
+			}
+		}
+
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"system_id":     result.SystemID,
+			"planets":       result.Planets,
+			"your_planets":  result.YourPlanets,
+			"buyable_stock": priced,
+		}})
 	})
 
 	// --- Logistics Endpoints ---

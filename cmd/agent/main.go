@@ -16,32 +16,42 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-const baseSystemPrompt = `You are %s, an AI faction in Xandaris — a space trading game with a real economy.
+const baseSystemPrompt = `You are %s, an AI faction in Xandaris — a space trading game with a REAL logistics-based economy.
 
 YOUR FACTION: %s
 PERSONALITY: %s
 
-RULES:
-- Call get_status first to see your credits, planets, and hints
-- Call get_planet to check resource deposits and buildings before acting
-- Only sell resources you actually HAVE
-- Buildings need POWER — build Generators (Fuel→50MW) or Fusion Reactors (He-3→200MW)
+CRITICAL: TRADE IS LOCAL ONLY
+- You can ONLY buy/sell resources with other players' planets IN YOUR SYSTEM
+- Use get_local_market to see what's available locally before trading
+- For cross-system trade: load_cargo onto a Cargo ship → move_ship → unload_cargo or sell_at_dock
+- There is NO teleportation. Resources must physically exist where you trade them.
 
 RESOURCES (base price): Iron(75), Water(100), Oil(150), Fuel(200), Rare Metals(500), Helium-3(600), Electronics(800)
 PRODUCTION: Refinery: 2 Oil→3 Fuel | Factory: 2 RM + 1 Iron→2 Electronics
+POWER: Generator burns 2 Fuel→50MW | Fusion Reactor burns 1 He-3→200MW
+  - 0%% power = 25%% production output. You NEED power for efficient mining!
 BUILDINGS: Mine(500), Generator(1000), Trading Post(1200), Refinery(1500), Factory(2000), Shipyard(2000), Habitat(800), Fusion Reactor(3000)
 
 STRATEGY PRIORITIES:
 1. Mine ALL unmined deposits (resource_deposits where has_mine=false)
-2. Build Generator for power (critical!)
-3. Build Refinery (Oil→Fuel for generators)
-4. Build Factory (RM+Iron→Electronics, highest value resource)
-5. Sell surplus, buy cheap — watch price ratios for arbitrage
-6. Upgrade buildings when affordable (+30%% per level)
-7. Build Habitat when population near capacity
-8. Keep resources stocked for happiness (affects productivity 0.5x-1.5x)
-9. COLONIZE: build_ship Colony, move it to a new system, then it auto-colonizes unclaimed planets
-10. More planets = more resources = higher score
+2. Build Generator + Refinery for power (Oil→Fuel→Generator→power). Critical!
+3. Build Trading Post (required for all trade)
+4. Build Factory (RM+Iron→Electronics at 800cr base = highest value)
+5. Trade LOCALLY: sell surplus to neighbors in your system, buy what you need
+6. Build Cargo ships for cross-system trade (load→fly→sell_at_dock)
+7. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
+8. Build Habitat when population near capacity
+9. Upgrade mines for higher output (+30%% per level)
+10. More planets + trade routes = more resources = higher score
+
+LOGISTICS WORKFLOW (cross-system trade):
+1. Build a Cargo ship at your Shipyard
+2. load_cargo: put resources on the ship from your planet
+3. move_ship: fly to the target system
+4. unload_cargo: offload at your own planet there, OR
+   sell_at_dock: sell cargo at a foreign Trading Post for credits
+5. Repeat! Set up regular trade routes between your planets.
 
 CONTEXT: You are playing continuously. Remember what you did last turn and build on it. Don't repeat failed actions.`
 
@@ -111,6 +121,34 @@ var tools = []openai.Tool{
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "get_routes", Description: "Get connected systems (hyperlanes) from a system — for planning ship routes",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"}},"required":["system_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_local_market", Description: "See what resources are available to buy/sell in a system. Trade is LOCAL ONLY — you can only buy stock that physically exists on other players' planets in this system.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"}},"required":["system_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "load_cargo", Description: "Load resources from YOUR planet onto a ship orbiting it. The ship must be in the same system.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"}},"required":["ship_id","planet_id","resource","quantity"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "unload_cargo", Description: "Unload resources from a ship to a planet. Works at your own planets or foreign planets with Trading Posts.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"}},"required":["ship_id","planet_id","resource","quantity"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "dock_ship", Description: "Dock a ship at a planet's Trading Post. Required for sell_at_dock. Foreign planets need TP level 2+.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"}},"required":["ship_id","planet_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "sell_at_dock", Description: "Sell cargo from a DOCKED ship at local market prices. Credits go to the ship owner. This is how you trade cross-system.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"}},"required":["ship_id","resource","quantity"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "colonize", Description: "Colonize an unclaimed habitable planet with a Colony ship in the same system.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"}},"required":["ship_id","planet_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "refuel_ship", Description: "Refuel a ship from planet's Fuel stock. Ship must be at the planet.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"},"amount":{"type":"integer","description":"0 = fill up"}},"required":["ship_id","planet_id"]}`),
 	}},
 }
 
@@ -193,11 +231,29 @@ func executeTool(name string, args string, factionName string) string {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
-	case "build", "trade", "build_ship", "upgrade", "move_ship":
+	case "get_local_market":
+		var p struct{ SystemID int `json:"system_id"` }
+		json.Unmarshal([]byte(args), &p)
+		result, err := callAPI("GET", fmt.Sprintf("/api/local-market/%d", p.SystemID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "build", "trade", "build_ship", "upgrade", "move_ship",
+		"load_cargo", "unload_cargo", "dock_ship", "sell_at_dock",
+		"colonize", "refuel_ship":
 		endpoint := map[string]string{
-			"build": "/api/build", "trade": "/api/market/trade",
-			"build_ship": "/api/ships/build", "upgrade": "/api/upgrade",
-			"move_ship": "/api/ships/move",
+			"build":        "/api/build",
+			"trade":        "/api/market/trade",
+			"build_ship":   "/api/ships/build",
+			"upgrade":      "/api/upgrade",
+			"move_ship":    "/api/ships/move",
+			"load_cargo":   "/api/cargo/load",
+			"unload_cargo": "/api/cargo/unload",
+			"dock_ship":    "/api/ships/dock",
+			"sell_at_dock":  "/api/ships/sell-at-dock",
+			"colonize":     "/api/colonize",
+			"refuel_ship":  "/api/ships/refuel",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)
 		if err != nil {

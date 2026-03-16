@@ -1452,3 +1452,99 @@ func handleGetDiagnostics(p GameStateProvider) interface{} {
 	}
 	return result{d, movingDetails, smTicks, smShips, smMoving, smPlayerMoving}
 }
+
+// handleGetDefense returns per-system military defense ratings.
+func handleGetDefense(p GameStateProvider) interface{} {
+	type systemDefense struct {
+		SystemID    int    `json:"system_id"`
+		SystemName  string `json:"system_name"`
+		Power       int    `json:"defense_power"`  // total military AttackPower
+		Ships       int    `json:"military_ships"` // count of military ships present
+		Safe        bool   `json:"safe"`           // power >= 10 (piracy immune)
+		Owner       string `json:"owner,omitempty"`
+	}
+
+	defensePower := make(map[int]int)
+	defenseShips := make(map[int]int)
+	for _, player := range p.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, ship := range player.OwnedShips {
+			if ship == nil {
+				continue
+			}
+			if ship.ShipType == entities.ShipTypeFrigate ||
+				ship.ShipType == entities.ShipTypeDestroyer ||
+				ship.ShipType == entities.ShipTypeCruiser {
+				if ship.Status != entities.ShipStatusMoving {
+					defensePower[ship.CurrentSystem] += ship.AttackPower
+					defenseShips[ship.CurrentSystem]++
+				}
+			}
+		}
+	}
+
+	result := make([]systemDefense, 0)
+	for _, sys := range p.GetSystems() {
+		power := defensePower[sys.ID]
+		ships := defenseShips[sys.ID]
+		owner := ""
+		for _, e := range sys.Entities {
+			if pl, ok := e.(*entities.Planet); ok && pl.Owner != "" {
+				owner = pl.Owner
+				break
+			}
+		}
+		if power > 0 || owner != "" {
+			result = append(result, systemDefense{
+				SystemID:   sys.ID,
+				SystemName: sys.Name,
+				Power:      power,
+				Ships:      ships,
+				Safe:       power >= 10,
+				Owner:      owner,
+			})
+		}
+	}
+	return result
+}
+
+// handleGetStations returns all stations across the galaxy.
+func handleGetStations(p GameStateProvider) interface{} {
+	type stationInfo struct {
+		ID          int      `json:"id"`
+		Name        string   `json:"name"`
+		Type        string   `json:"type"`
+		SystemID    int      `json:"system_id"`
+		SystemName  string   `json:"system_name"`
+		Owner       string   `json:"owner"`
+		Population  int      `json:"population"`
+		Capacity    int      `json:"capacity"`
+		DockingFee  int      `json:"docking_fee"`
+		Services    []string `json:"services"`
+		DefenseLevel int     `json:"defense_level"`
+	}
+
+	result := make([]stationInfo, 0)
+	for _, sys := range p.GetSystems() {
+		for _, e := range sys.Entities {
+			if station, ok := e.(*entities.Station); ok {
+				result = append(result, stationInfo{
+					ID:          station.GetID(),
+					Name:        station.Name,
+					Type:        station.StationType,
+					SystemID:    sys.ID,
+					SystemName:  sys.Name,
+					Owner:       station.Owner,
+					Population:  station.CurrentPop,
+					Capacity:    station.Capacity,
+					DockingFee:  station.GetDockingFee(),
+					Services:    station.Services,
+					DefenseLevel: station.DefenseLevel,
+				})
+			}
+		}
+	}
+	return result
+}
