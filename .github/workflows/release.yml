@@ -181,7 +181,7 @@ jobs:
                 mv /home/ec2-user/xandaris-server-new /home/ec2-user/xandaris-server && \
                 sudo systemctl start xandaris && \
                 sleep 5 && \
-                STATUS=\$(sudo systemctl is-active xandaris) && \
+                STATUS=\$(sudo systemctl is-active xandaris || true) && \
                 echo \"Server status: \$STATUS\" && \
                 if [ \"\$STATUS\" = \"failed\" ] || [ \"\$STATUS\" = \"inactive\" ]; then \
                   echo '--- journalctl ---'; \
@@ -196,7 +196,7 @@ jobs:
                 mv /home/ec2-user/xandaris-agent-new /home/ec2-user/xandaris-agent && \
                 sudo systemctl start xandaris-agent && \
                 sleep 5 && \
-                STATUS=\$(sudo systemctl is-active xandaris-agent) && \
+                STATUS=\$(sudo systemctl is-active xandaris-agent || true) && \
                 echo \"Agent status: \$STATUS\" && \
                 if [ \"\$STATUS\" = \"failed\" ] || [ \"\$STATUS\" = \"inactive\" ]; then \
                   echo '--- journalctl ---'; \
