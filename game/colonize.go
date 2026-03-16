@@ -6,15 +6,31 @@ import (
 	"github.com/hunterjsb/xandaris/entities"
 )
 
+// TransferPlanetOwnership moves a planet from its current owner to a new owner.
+// Handles cleanup of the old owner's OwnedPlanets list. Safe to call with nil oldOwner.
+func TransferPlanetOwnership(planet *entities.Planet, oldOwner, newOwner *entities.Player) {
+	if oldOwner != nil {
+		oldOwner.RemoveOwnedPlanet(planet)
+	}
+	planet.Owner = newOwner.Name
+	planet.SetBaseOwner(newOwner.Name)
+	newOwner.AddOwnedPlanet(planet)
+
+	// Transfer resource ownership
+	for _, resEntity := range planet.Resources {
+		if res, ok := resEntity.(*entities.Resource); ok {
+			res.Owner = newOwner.Name
+		}
+	}
+}
+
 // ColonizePlanet transfers ownership of an unclaimed planet to a player,
 // sets up colony infrastructure, and consumes the colony ship's colonists.
 // This is the single source of truth for colonization — used by both player
 // commands and AI logistics.
 func ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entities.Player, systemID int) {
-	planet.Owner = player.Name
+	TransferPlanetOwnership(planet, nil, player)
 	planet.Population = int64(ship.Colonists)
-	planet.SetBaseOwner(player.Name)
-	player.AddOwnedPlanet(planet)
 
 	// Mark all resources on the planet as owned
 	for _, resEntity := range planet.Resources {

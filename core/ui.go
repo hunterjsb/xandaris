@@ -27,18 +27,22 @@ func (a *App) drawTickInfo(screen *ebiten.Image) {
 
 // drawStatusBar renders speed/credits/controls in the bottom-left.
 func (a *App) drawStatusBar(screen *ebiten.Image) {
+	cw := utils.CharWidth()
+	lineH := int(15.0 * utils.UIScale)
+	barW := 36 * cw // ~36 characters wide
+	barH := lineH*2 + 20
 	x := 10
-	y := a.screenHeight - 55
+	y := a.screenHeight - barH - 10
 
 	panel := &views.UIPanel{
-		X: x, Y: y, Width: 520, Height: 50,
+		X: x, Y: y, Width: barW, Height: barH,
 		BgColor:     utils.Theme.PanelBg,
 		BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 
 	textX := x + 10
-	textY := y + 12
+	textY := y + 10
 
 	// Line 1: Speed + game time + construction indicator
 	speedStr := a.Server.TickManager.GetSpeedString()
@@ -56,13 +60,13 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 		queueCount := len(a.getConstructionItems(human.Name))
 		if queueCount > 0 {
 			qLabel := fmt.Sprintf("Building %d", queueCount)
-			qX := x + 520 - len(qLabel)*utils.CharWidth() - 10
+			qX := x + barW - len(qLabel)*cw - 10
 			views.DrawText(screen, qLabel, qX, textY, utils.SystemGreen)
 		}
 	}
 
 	// Line 2: Credits with colored net flow + hints
-	textY += 15
+	textY += lineH
 	if human := a.Server.State.HumanPlayer; human != nil {
 		income := 0
 		upkeep := 0
@@ -123,9 +127,11 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		return
 	}
 
-	// Calculate panel height based on content
-	panelW := 300
-	perPlanet := 50
+	// Calculate panel height based on content (scaled for UIScale)
+	cw := utils.CharWidth()
+	lineH := int(float64(15) * utils.UIScale) // line height
+	panelW := 22 * cw  // ~22 characters wide
+	perPlanet := int(float64(50) * utils.UIScale)
 	hasPower := false
 	var totalPop int64
 	for _, planet := range human.OwnedPlanets {
@@ -138,9 +144,9 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		}
 	}
 	if hasPower {
-		perPlanet = 68
+		perPlanet = int(float64(68) * utils.UIScale)
 	}
-	// +18 for the total pop line, +extra for construction queue
+	// +extra for total pop line and construction queue
 	constructionItems := a.getConstructionItems(human.Name)
 	queueItems := len(constructionItems)
 	queueHeight := 0
@@ -149,12 +155,12 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		if shown > 3 {
 			shown = 3
 		}
-		queueHeight = 24 + shown*13
+		queueHeight = lineH*2 + shown*lineH
 		if queueItems > 3 {
-			queueHeight += 13
+			queueHeight += lineH
 		}
 	}
-	panelH := 42 + len(human.OwnedPlanets)*perPlanet + queueHeight + 4
+	panelH := lineH*3 + len(human.OwnedPlanets)*perPlanet + queueHeight + 4
 	if panelH > 500 {
 		panelH = 500
 	}
@@ -175,12 +181,12 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	credStr := formatCredits(human.Credits)
 	credW := len(credStr) * utils.CharWidth()
 	views.DrawText(screen, credStr, x+panelW-credW-10, textY, utils.Theme.TextLight)
-	textY += 14
+	textY += lineH
 
 	// Total population + planet count summary
 	popSummary := fmt.Sprintf("Pop: %s  %d planets", utils.FormatInt64WithCommas(totalPop), len(human.OwnedPlanets))
 	views.DrawText(screen, popSummary, x+10, textY, utils.Theme.TextDim)
-	textY += 16
+	textY += lineH + 4
 
 	a.empirePlanetHits = a.empirePlanetHits[:0] // reset hit regions
 
@@ -193,7 +199,7 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 
 		// Planet name (clickable)
 		views.DrawText(screen, planet.Name, x+10, textY, utils.Theme.Accent)
-		textY += 15
+		textY += lineH
 
 		// Population + happiness on same line
 		popCap := planet.GetTotalPopulationCapacity()
@@ -210,8 +216,9 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		} else if planet.Happiness < 0.7 {
 			happyColor = utils.SystemOrange
 		}
-		views.DrawText(screen, happyStr, x+panelW-36, textY, happyColor)
-		textY += 15
+		happyW := len(happyStr) * cw
+		views.DrawText(screen, happyStr, x+panelW-happyW-10, textY, happyColor)
+		textY += lineH
 
 		// Power bar + label
 		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
@@ -239,9 +246,9 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 
 			pwrLabel := fmt.Sprintf("%.0f/%.0fMW", planet.PowerGenerated, planet.PowerConsumed)
 			views.DrawText(screen, pwrLabel, barX, textY+barH+3, utils.Theme.TextDim)
-			textY += barH + 16
+			textY += barH + lineH
 		} else {
-			textY += 8
+			textY += lineH / 2
 		}
 
 		// Resource warnings (compact, one-line)
@@ -263,7 +270,7 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 				warnStr += w
 			}
 			views.DrawText(screen, warnStr, x+14, textY, utils.SystemRed)
-			textY += 12
+			textY += lineH
 		}
 
 		// Record clickable hit region for this planet
@@ -278,25 +285,25 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	if len(constructionItems) > 0 && textY < y+panelH-30 {
 		// Separator
 		views.DrawLine(screen, x+10, textY+2, x+panelW-10, textY+2, utils.Theme.PanelBorder)
-		textY += 10
+		textY += lineH
 
 		views.DrawText(screen, fmt.Sprintf("Building (%d)", len(constructionItems)), x+10, textY, utils.Theme.Accent)
-		textY += 14
+		textY += lineH
 
 		// Show up to 3 items
 		shown := 0
 		for _, item := range constructionItems {
-			if shown >= 3 || textY > y+panelH-15 {
+			if shown >= 3 || textY > y+panelH-lineH {
 				break
 			}
 			label := fmt.Sprintf("%s %d%%", item.Name, item.Progress)
 			views.DrawText(screen, label, x+14, textY, utils.Theme.TextDim)
-			textY += 13
+			textY += lineH
 			shown++
 		}
 		if len(constructionItems) > shown {
 			views.DrawText(screen, fmt.Sprintf("+%d more", len(constructionItems)-shown), x+14, textY, utils.Theme.TextDim)
-			textY += 13
+			textY += lineH
 		}
 	}
 }
