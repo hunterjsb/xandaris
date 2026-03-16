@@ -1845,10 +1845,17 @@ td{padding:3px 4px}
 .event{font-size:10px;padding:3px 0;border-bottom:1px solid #0c1020}
 .rank{color:#7fdbca;font-weight:bold;margin-right:4px}
 .st{position:fixed;bottom:6px;right:10px;font-size:9px;color:#3a5}
-.stats-row{display:flex;gap:24px;margin:10px 0;flex-wrap:wrap}
-.stat{text-align:center}
-.stat .val{font-size:24px;color:#7fdbca;font-weight:bold}
+.stats-row{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap;align-items:flex-end}
+.stat{text-align:center;padding:2px 8px}
+.stat .val{font-size:22px;color:#7fdbca;font-weight:bold}
 .stat .lbl{font-size:8px;color:#334;text-transform:uppercase;letter-spacing:0.5px}
+.stat-sep{width:1px;height:30px;background:#1a2040;align-self:center}
+.sg{display:flex;gap:6px;background:#0c1020;border-radius:4px;padding:3px 8px}
+.sg .stat .val{font-size:18px}
+.pwr-grid{display:flex;flex-wrap:wrap;gap:3px}
+.pwr-cell{width:30px;height:30px;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:7px;color:#fff;cursor:default;transition:transform 0.15s}
+.pwr-cell:hover{transform:scale(1.2)}
+.pwr-cell .pct{font-size:10px;font-weight:bold}
 .row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #0c1020;font-size:11px}
 .chain{font-size:11px;color:#667;line-height:1.8;padding:2px 0}
 .chain b{color:#7fdbca}.chain .arr{color:#2a3a5a;margin:0 2px}
@@ -1883,11 +1890,13 @@ function sp(h){if(!h||h.length<3)return'';const mn=Math.min(...h),mx=Math.max(..
 async function R(){try{
 const[e,p,f,g,lb,pw,ev,sh,ch]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=20','/api/ships','/api/chat/messages'].map(u=>fetch(B+u).then(r=>r.json())));
 const d=g.data;
-document.getElementById('top').innerHTML=[
-['Tick',d.tick],['Time',d.game_time],['Speed',d.speed+(d.paused?' \u23F8':'')],
-['Population',e.data.total_population.toLocaleString()],['Credits',e.data.total_credits.toLocaleString()],
-['GDP',(e.data.gdp||0).toLocaleString(undefined,{maximumFractionDigits:0})],['Trade',e.data.trade_volume.toFixed(0)],['Planets',e.data.total_planets||0],['Routes',e.data.active_routes||0],['Freight',e.data.active_deliveries||0],['Systems',d.systems]
-].map(([l,v])=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>').join('');
+const st=(l,v)=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>';
+const sep='<div class="stat-sep"></div>';
+document.getElementById('top').innerHTML=
+st('Time',d.game_time)+st('Speed',d.speed+(d.paused?' \u23F8':''))+sep+
+'<div class="sg">'+st('Pop',e.data.total_population.toLocaleString())+st('Planets',e.data.total_planets||0)+st('Systems',d.systems)+'</div>'+sep+
+'<div class="sg">'+st('GDP',(e.data.gdp||0).toLocaleString(undefined,{maximumFractionDigits:0}))+st('Credits',e.data.total_credits.toLocaleString())+st('Trade',e.data.trade_volume.toFixed(0))+'</div>'+sep+
+'<div class="sg">'+st('Routes',e.data.active_routes||0)+st('Freight',e.data.active_deliveries||0)+'</div>';
 // Leaderboard with bars
 const maxScore=Math.max(...(lb.data||[]).map(x=>x.score),1);
 document.getElementById('lb').innerHTML=(lb.data||[]).map(x=>{
@@ -1902,11 +1911,13 @@ const pv=pr[r]||0,cv=co[r]||0,nv=pv-cv;
 const pw2=Math.round(pv/maxFlow*100),cw=Math.round(cv/maxFlow*100);
 const nc=nv>1?'g':nv<-1?'r':'d';
 return'<div class="res-bar"><span class="lbl">'+r+'</span><div class="wrap"><div class="fill" style="width:'+pw2+'%;background:#1a4a2a"></div><div class="fill" style="width:'+cw+'%;background:#4a1a1a;position:absolute;top:0;left:0;opacity:0.6"></div><div class="txt '+nc+'">'+(nv>0?'+':'')+nv.toFixed(0)+'/s</div></div></div>'}).join('');
-// Power
-document.getElementById('pw').innerHTML=(pw.data||[]).map(x=>{
+// Power — colored squares grid
+document.getElementById('pw').innerHTML='<div class="pwr-grid">'+(pw.data||[]).map(x=>{
 const pct=x.consumed_mw>0?Math.min(1,x.generated_mw/x.consumed_mw):1;
-const c=pct<0.5?'#d9534f':pct<0.8?'#c8a84e':'#5cb85c';
-return'<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px"><span>'+x.owner+'</span><span class="d">'+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+'MW</span></div><div class="bar-bg"><div class="bar-fill" style="width:'+(pct*100).toFixed(0)+'%;background:'+c+'"></div></div></div>'}).join('');
+const bg=pct<0.3?'#4a1515':pct<0.5?'#4a2a15':pct<0.8?'#3a3a15':'#153a15';
+const tc=pct<0.5?'#f88':pct<0.8?'#dd8':'#8d8';
+const short=x.owner.split(' ')[0].slice(0,4);
+return'<div class="pwr-cell" style="background:'+bg+'" title="'+x.owner+': '+x.generated_mw.toFixed(0)+'/'+x.consumed_mw.toFixed(0)+'MW"><div class="pct" style="color:'+tc+'">'+(pct*100).toFixed(0)+'</div><div>'+short+'</div></div>'}).join('')+'</div>';
 // Market with bars
 const maxRatio=Math.max(...Object.values(e.data.resources).map(r=>r.price_ratio),1);
 document.getElementById('mk').innerHTML=Object.entries(e.data.resources).sort().map(([n,r])=>{
