@@ -31,7 +31,7 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 	y := a.screenHeight - 55
 
 	panel := &views.UIPanel{
-		X: x, Y: y, Width: 400, Height: 45,
+		X: x, Y: y, Width: 520, Height: 50,
 		BgColor:     utils.Theme.PanelBg,
 		BorderColor: utils.Theme.PanelBorder,
 	}
@@ -56,7 +56,7 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 		queueCount := len(a.getConstructionItems(human.Name))
 		if queueCount > 0 {
 			qLabel := fmt.Sprintf("Building %d", queueCount)
-			qX := x + 400 - len(qLabel)*utils.CharWidth() - 10
+			qX := x + 520 - len(qLabel)*utils.CharWidth() - 10
 			views.DrawText(screen, qLabel, qX, textY, utils.SystemGreen)
 		}
 	}
@@ -124,7 +124,7 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	}
 
 	// Calculate panel height based on content
-	panelW := 230
+	panelW := 300
 	perPlanet := 50
 	hasPower := false
 	var totalPop int64

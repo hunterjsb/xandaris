@@ -383,11 +383,12 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 
 	// Draw UI info
 	details := formatPlanetDetails(pv.planet)
-	panelHeight := 22 + len(details)*15 + 20
+	lineH := int(15.0 * utils.UIScale)
+	panelHeight := 22 + len(details)*lineH + 20
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	isOwned := humanPlayer != nil && pv.planet.Owner == humanPlayer.Name
 
-	infoPanel := NewUIPanel(6, 6, 260, panelHeight)
+	infoPanel := NewUIPanel(6, 6, 380, panelHeight)
 	infoPanel.BgColor = utils.Theme.PanelBg
 	infoPanel.BorderColor = utils.Theme.PanelBorder
 	infoPanel.Draw(screen)
@@ -409,7 +410,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 			lineColor = utils.Theme.TextLight
 		}
 		DrawText(screen, line, 14, infoY, lineColor)
-		infoY += 15
+		infoY += lineH
 	}
 
 	// Hints at bottom of panel

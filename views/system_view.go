@@ -246,7 +246,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 				panelHeight += 20 + len(planet.Resources)*14
 			}
 
-			infoPanel := NewUIPanel(6, 42, 240, panelHeight)
+			infoPanel := NewUIPanel(6, 42, 340, panelHeight)
 			infoPanel.BgColor = utils.Theme.PanelBg
 			infoPanel.BorderColor = utils.Theme.PanelBorder
 			infoPanel.Draw(screen)
@@ -343,7 +343,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 			}
 		} else if provider, ok := selected.(ContextMenuProvider); ok {
 			items := provider.GetContextMenuItems()
-			infoPanel := NewUIPanel(6, 42, 240, 20+len(items)*15)
+			infoPanel := NewUIPanel(6, 42, 340, 20+len(items)*15)
 			infoPanel.BgColor = utils.Theme.PanelBg
 			infoPanel.BorderColor = utils.Theme.PanelBorder
 			infoPanel.Draw(screen)

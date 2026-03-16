@@ -26,9 +26,9 @@ func NewResourceStorageUI(ctx UIContext, provider *PlanetDataProvider) *Resource
 		ctx:      ctx,
 		provider: provider,
 		x:        10,
-		y:        450,
-		width:    300,
-		height:   260,
+		y:        620,
+		width:    380,
+		height:   340,
 	}
 }
 
