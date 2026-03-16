@@ -1001,7 +1001,7 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 		textW := len(text) * utils.CharWidth()
 		x := (screenW - textW) / 2
 		DrawText(screen, text, x, hintY, utils.SystemYellow)
-		hintY += 14
+		hintY += int(14.0 * utils.UIScale)
 	}
 }
 
