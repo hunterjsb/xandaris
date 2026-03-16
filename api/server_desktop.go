@@ -2191,24 +2191,25 @@ const res=window._marketData;
 if(!res){cx.fillStyle='#334';cx.font='11px monospace';cx.textAlign='center';cx.fillText('Waiting for market data...',w/2,h/2);requestAnimationFrame(drawChart);return}
 const pad={t:20,b:20,l:40,r:10};
 const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
-// Find global Y range across all visible resources
+// Find global Y range (log scale so Electronics doesn't dwarf Iron)
 let yMin=Infinity,yMax=-Infinity,maxLen=0;
 Object.entries(res).forEach(([n,r])=>{
 if(hidden[n]||!r.price_history||r.price_history.length<2)return;
 maxLen=Math.max(maxLen,r.price_history.length);
-r.price_history.forEach(v=>{if(v<yMin)yMin=v;if(v>yMax)yMax=v})});
-if(yMin>=yMax){yMin=0;yMax=100;maxLen=2}
-const yPad=(yMax-yMin)*0.1||10;yMin-=yPad;yMax+=yPad;
-if(yMin<0)yMin=0;
-// Grid lines
+r.price_history.forEach(v=>{const lv=Math.log10(Math.max(1,v));if(lv<yMin)yMin=lv;if(lv>yMax)yMax=lv})});
+if(yMin>=yMax){yMin=1;yMax=3;maxLen=2}
+const yPad=(yMax-yMin)*0.08||0.2;yMin-=yPad;yMax+=yPad;
+// Map value to Y pixel (log scale)
+const toY=v=>pad.t+ch*(1-(Math.log10(Math.max(1,v))-yMin)/(yMax-yMin));
+// Grid lines at nice log values
 cx.strokeStyle='#151a2a';cx.lineWidth=0.5;
-const ySteps=5;
-for(let i=0;i<=ySteps;i++){
-const y=pad.t+ch*(1-i/ySteps);
+const gridVals=[25,50,75,100,150,200,300,500,800,1200];
+gridVals.forEach(gv=>{
+const lv=Math.log10(gv);if(lv<yMin||lv>yMax)return;
+const y=pad.t+ch*(1-(lv-yMin)/(yMax-yMin));
 cx.beginPath();cx.moveTo(pad.l,y);cx.lineTo(pad.l+cw,y);cx.stroke();
-const val=yMin+(yMax-yMin)*i/ySteps;
 cx.fillStyle='#334';cx.font='8px monospace';cx.textAlign='right';
-cx.fillText(val.toFixed(0),pad.l-4,y+3)}
+cx.fillText(gv.toString(),pad.l-4,y+3)})
 // Title
 cx.fillStyle='#334';cx.font='9px monospace';cx.textAlign='left';
 cx.fillText('MARKET PRICES',pad.l,12);
@@ -2217,7 +2218,7 @@ Object.entries(res).sort().forEach(([n,r])=>{
 if(hidden[n]||!r.price_history||r.price_history.length<2)return;
 const hist=r.price_history;const c=RC[n]||'#888';
 // Base price — dotted line
-const baseY=pad.t+ch*(1-(r.base_price-yMin)/(yMax-yMin));
+const baseY=toY(r.base_price);
 cx.strokeStyle=c+'30';cx.lineWidth=0.5;cx.setLineDash([3,3]);
 cx.beginPath();cx.moveTo(pad.l,baseY);cx.lineTo(pad.l+cw,baseY);cx.stroke();
 cx.setLineDash([]);
@@ -2226,7 +2227,7 @@ cx.strokeStyle=c;cx.lineWidth=1.5;cx.globalAlpha=0.8;
 cx.beginPath();
 for(let i=0;i<hist.length;i++){
 const x=pad.l+cw*(i/(maxLen-1));
-const y=pad.t+ch*(1-(hist[i]-yMin)/(yMax-yMin));
+const y=toY(hist[i]);
 if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y)}
 cx.stroke();
 // Area fill
@@ -2236,7 +2237,7 @@ cx.lineTo(pad.l,pad.t+ch);cx.fill();
 cx.globalAlpha=1;
 // Current price dot
 const lastX=pad.l+cw*((hist.length-1)/(maxLen-1));
-const lastY=pad.t+ch*(1-(hist[hist.length-1]-yMin)/(yMax-yMin));
+const lastY=toY(hist[hist.length-1]);
 cx.fillStyle=c;cx.beginPath();cx.arc(lastX,lastY,3,0,Math.PI*2);cx.fill()});
 // Hover crosshair + tooltip
 if(mouseInChart&&mouseX>=0){
@@ -2256,7 +2257,7 @@ const val=r.price_history[realIdx];
 const c=RC[n]||'#888';
 // Dot on line
 const dx=pad.l+cw*(realIdx/(maxLen-1));
-const dy=pad.t+ch*(1-(val-yMin)/(yMax-yMin));
+const dy=toY(val);
 cx.fillStyle=c;cx.beginPath();cx.arc(dx,dy,3,0,Math.PI*2);cx.fill();
 const diff=val-r.base_price;const dc=diff>0?'#d9534f':'#5cb85c';
 tipHtml+='<div style="color:'+c+'"><span style="display:inline-block;width:65px">'+n+'</span> <b>'+val.toFixed(0)+'</b> <span style="color:'+dc+';font-size:9px">'+(diff>0?'+':'')+diff.toFixed(0)+'</span></div>'});
@@ -2332,10 +2333,10 @@ const a=nMap[e.from],b=nMap[e.to];
 let rate=3;
 if(b&&b.res){rate=Math.max(1,(pr[b.res]||0))}
 else if(a&&a.res){rate=Math.max(1,(pr[a.res]||0))}
-const count=Math.min(5,Math.max(1,Math.round(rate/5)));
+const count=Math.min(4,Math.max(1,Math.round(rate/6)));
 for(let i=0;i<count;i++){
-particles.push({e,t:Math.random(),speed:0.001+Math.random()*0.0015})}})}
-spawnParticles();setInterval(()=>{particles=[];spawnParticles()},12000);
+particles.push({e,t:Math.random(),speed:0.0006+Math.random()*0.001})}})}
+spawnParticles();setInterval(()=>{particles=[];spawnParticles()},15000);
 function drawFlow(){
 const w=W(),h=H();
 fx.clearRect(0,0,w,h);
@@ -2366,11 +2367,11 @@ const a=nMap[p.e.from],b=nMap[p.e.to];if(!a||!b)return;
 const px=a.x*w+(b.x-a.x)*w*p.t,py=a.y*h+(b.y-a.y)*h*p.t;
 const alpha=p.t<0.08?p.t/0.08:p.t>0.92?(1-p.t)/0.08:1;
 // Soft glow
-fx.globalAlpha=alpha*0.15;fx.fillStyle=p.e.c;
-fx.beginPath();fx.arc(px,py,5,0,Math.PI*2);fx.fill();
+fx.globalAlpha=alpha*0.08;fx.fillStyle=p.e.c;
+fx.beginPath();fx.arc(px,py,4,0,Math.PI*2);fx.fill();
 // Core dot
-fx.globalAlpha=alpha*0.6;
-fx.beginPath();fx.arc(px,py,1.5,0,Math.PI*2);fx.fill();
+fx.globalAlpha=alpha*0.35;
+fx.beginPath();fx.arc(px,py,1.2,0,Math.PI*2);fx.fill();
 fx.globalAlpha=1});
 // Nodes — rectangular boxes
 nodes.forEach(n=>{
