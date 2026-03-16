@@ -267,16 +267,17 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 
 func handleGetPowerGrid(p GameStateProvider) interface{} {
 	type planetPower struct {
-		PlanetID       int     `json:"planet_id"`
-		PlanetName     string  `json:"planet_name"`
-		Owner          string  `json:"owner"`
-		Generated      float64 `json:"generated_mw"`
-		Consumed       float64 `json:"consumed_mw"`
-		Ratio          float64 `json:"ratio"`
-		Generators     int     `json:"generators"`
-		FusionReactors int     `json:"fusion_reactors"`
-		FuelStored     int     `json:"fuel_stored"`
-		He3Stored      int     `json:"he3_stored"`
+		PlanetID       int       `json:"planet_id"`
+		PlanetName     string    `json:"planet_name"`
+		Owner          string    `json:"owner"`
+		Generated      float64   `json:"generated_mw"`
+		Consumed       float64   `json:"consumed_mw"`
+		Ratio          float64   `json:"ratio"`
+		Generators     int       `json:"generators"`
+		FusionReactors int       `json:"fusion_reactors"`
+		FuelStored     int       `json:"fuel_stored"`
+		He3Stored      int       `json:"he3_stored"`
+		History        []float64 `json:"history,omitempty"`
 	}
 	var result []planetPower
 	for _, player := range p.GetPlayers() {
@@ -308,6 +309,7 @@ func handleGetPowerGrid(p GameStateProvider) interface{} {
 				FusionReactors: reactors,
 				FuelStored:     planet.GetStoredAmount("Fuel"),
 				He3Stored:      planet.GetStoredAmount("Helium-3"),
+				History:        planet.PowerHistory,
 			})
 		}
 	}
