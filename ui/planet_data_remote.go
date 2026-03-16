@@ -51,13 +51,14 @@ func (p *PlanetDataProvider) updateRemote() {
 		return
 	}
 
-	if stalePlanet || staleRates || staleQueue || p.refreshRequired {
+	forceAll := p.refreshRequired
+	if stalePlanet || staleRates || staleQueue || forceAll {
 		rc.mu.Lock()
 		rc.fetching = true
 		rc.mu.Unlock()
 		p.refreshRequired = false
 
-		go p.fetchRemoteData(stalePlanet || p.refreshRequired, staleRates || p.refreshRequired, staleQueue || p.refreshRequired)
+		go p.fetchRemoteData(stalePlanet || forceAll, staleRates || forceAll, staleQueue || forceAll)
 	}
 
 	// Return cached data in the meantime

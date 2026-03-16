@@ -247,17 +247,11 @@ func (gs *GameServer) NewGameWithSeed(playerName string, seed int64) error {
 	gs.State.Systems = galaxyGen.GenerateSystems(gs.State.Seed)
 	gs.State.Hyperlanes = galaxyGen.GenerateHyperlanes(gs.State.Systems)
 
+	// Create local player — home planet will be set by remote sync
+	// (don't call InitializePlayer which picks a random planet)
 	playerColor := utils.PlayerGreen
 	gs.State.HumanPlayer = entities.NewPlayer(0, playerName, playerColor, entities.PlayerTypeHuman)
 	gs.State.Players = append(gs.State.Players, gs.State.HumanPlayer)
-
-	entities.InitializePlayer(gs.State.HumanPlayer, gs.State.Systems)
-	game.PrepareHomeworld(gs.State.HumanPlayer, false)
-
-	if gs.State.HumanPlayer.HomePlanet != nil {
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResFuel, 200)
-		gs.State.HumanPlayer.HomePlanet.AddStoredResource(entities.ResOil, 150)
-	}
 
 	gs.State.Market = economy.NewMarket()
 	gs.State.TradeExec = economy.NewTradeExecutor(gs.State.Market)

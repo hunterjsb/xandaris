@@ -118,9 +118,18 @@ func (p *PlanetDataProvider) IsRemote() bool {
 
 // HasMineQueued checks if a mine is already queued for a resource node.
 func (p *PlanetDataProvider) HasMineQueued(resourceLocation string) bool {
-	cs := tickable.GetConstructionSystem()
-	if cs != nil {
-		return cs.HasMineInQueue(resourceLocation)
+	if !p.remote {
+		cs := tickable.GetConstructionSystem()
+		if cs != nil {
+			return cs.HasMineInQueue(resourceLocation)
+		}
+		return false
+	}
+	// In remote mode, check cached construction items
+	for _, item := range p.cachedItems {
+		if item.Location == resourceLocation {
+			return true
+		}
 	}
 	return false
 }
