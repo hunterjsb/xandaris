@@ -32,13 +32,6 @@ func ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entiti
 	TransferPlanetOwnership(planet, nil, player)
 	planet.Population = int64(ship.Colonists)
 
-	// Mark all resources on the planet as owned
-	for _, resEntity := range planet.Resources {
-		if res, ok := resEntity.(*entities.Resource); ok {
-			res.Owner = player.Name
-		}
-	}
-
 	// Ensure key deposits exist for production chains
 	EnsureResourceDeposit(planet, entities.ResRareMetals, player.Name)
 	EnsureResourceDeposit(planet, entities.ResHelium3, player.Name)

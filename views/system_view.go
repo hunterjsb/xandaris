@@ -222,15 +222,17 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 		}
 		summaryParts += "  |  " + resList
 	}
-	summaryX := 10 + len(sv.system.Name)*6 + 12
+	summaryX := 10 + len(sv.system.Name)*utils.CharWidth() + 12
 	DrawText(screen, summaryParts, summaryX, 10, utils.Theme.TextDim)
 
 	DrawText(screen, "Double-click planet to enter  |  [M] Market  |  Esc to galaxy", 10, 28, utils.Theme.TextDim)
 
 	if selected := sv.clickHandler.GetSelectedObject(); selected != nil {
 		if planet, ok := selected.(*entities.Planet); ok {
+			lineH := int(15.0 * utils.UIScale)
+			cw := utils.CharWidth()
 			details := formatPlanetDetails(planet)
-			panelHeight := 30 + len(details)*15
+			panelHeight := 30 + len(details)*lineH
 
 			// Add storage height
 			storageCount := 0
@@ -240,10 +242,10 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 				}
 			}
 			if storageCount > 0 {
-				panelHeight += 20 + storageCount*14
+				panelHeight += 20 + storageCount*lineH
 			} else if len(planet.Resources) > 0 {
 				// Deposits section for unowned planets
-				panelHeight += 20 + len(planet.Resources)*14
+				panelHeight += 20 + len(planet.Resources)*lineH
 			}
 
 			infoPanel := NewUIPanel(6, 42, 340, panelHeight)
@@ -254,10 +256,10 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 			infoY := 52
 			DrawText(screen, planet.Name, 14, infoY, utils.Theme.Accent)
 			if planet.Owner != "" {
-				ownerWidth := len(planet.Name)*6 + 10
+				ownerWidth := len(planet.Name)*cw + 10
 				DrawText(screen, planet.Owner, 14+ownerWidth, infoY, utils.Theme.TextDim)
 			}
-			infoY += 18
+			infoY += lineH + 4
 
 			for _, line := range details {
 				lineColor := utils.Theme.TextDim
@@ -265,14 +267,14 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 					lineColor = utils.Theme.TextLight
 				}
 				DrawText(screen, line, 14, infoY, lineColor)
-				infoY += 15
+				infoY += lineH
 			}
 
 			// Storage with fill indicators (sorted for stable display)
 			if storageCount > 0 {
 				infoY += 6
 				DrawText(screen, "Storage", 14, infoY, utils.Theme.TextDim)
-				infoY += 15
+				infoY += lineH
 
 				// Sort resource types for stable ordering
 				sortedTypes := make([]string, 0, len(planet.StoredResources))
@@ -320,7 +322,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 						screen.DrawImage(barFillImg, fillOpts)
 					}
 
-					infoY += 14
+					infoY += lineH
 				}
 			}
 
@@ -328,7 +330,7 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 			if len(planet.Resources) > 0 && storageCount == 0 {
 				infoY += 6
 				DrawText(screen, "Deposits", 14, infoY, utils.Theme.TextDim)
-				infoY += 15
+				infoY += lineH
 				for _, resEntity := range planet.Resources {
 					if res, ok := resEntity.(*entities.Resource); ok {
 						depColor := utils.Theme.TextLight
@@ -337,26 +339,27 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 						}
 						label := fmt.Sprintf("  %s  %d abundance", res.ResourceType, res.Abundance)
 						DrawText(screen, label, 14, infoY, depColor)
-						infoY += 14
+						infoY += lineH
 					}
 				}
 			}
 		} else if provider, ok := selected.(ContextMenuProvider); ok {
+			lineH := int(15.0 * utils.UIScale)
 			items := provider.GetContextMenuItems()
-			infoPanel := NewUIPanel(6, 42, 340, 20+len(items)*15)
+			infoPanel := NewUIPanel(6, 42, 340, 20+len(items)*lineH)
 			infoPanel.BgColor = utils.Theme.PanelBg
 			infoPanel.BorderColor = utils.Theme.PanelBorder
 			infoPanel.Draw(screen)
 
 			infoY := 52
 			DrawText(screen, provider.GetContextMenuTitle(), 14, infoY, utils.Theme.Accent)
-			infoY += 18
+			infoY += lineH + 4
 			for _, line := range items {
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
 				DrawText(screen, line, 14, infoY, utils.Theme.TextDim)
-				infoY += 15
+				infoY += lineH
 			}
 		}
 	}

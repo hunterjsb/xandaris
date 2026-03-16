@@ -270,11 +270,13 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	barHeight := 170
+	lineHeight := int(14.0 * utils.UIScale)
+	inputBarH := int(18.0 * utils.UIScale)
+	barHeight := lineHeight*10 + inputBarH + 20
 	barY := cb.screenHeight - barHeight
 	barX := 0
 	barWidth := cb.screenWidth
-	lineHeight := 14
+	cw := utils.CharWidth()
 
 	// Background
 	bgPanel := &views.UIPanel{
@@ -285,9 +287,9 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	bgPanel.Draw(screen)
 
 	// Input bar at bottom
-	inputY := barY + barHeight - 20
+	inputY := barY + barHeight - inputBarH - 6
 	inputBg := &views.UIPanel{
-		X: barX + 4, Y: inputY - 3, Width: barWidth - 8, Height: 18,
+		X: barX + 4, Y: inputY - 3, Width: barWidth - 8, Height: inputBarH,
 		BgColor:     color.RGBA{16, 18, 35, 255},
 		BorderColor: color.RGBA{35, 45, 70, 255},
 	}
@@ -303,10 +305,10 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	dimColor := color.RGBA{50, 60, 80, 255}
 	modeLabel := []string{"Agent", "Events+Chat", "Chat"}[cb.mode]
 	hints := fmt.Sprintf("[`]close [Tab]%s [Ctrl+C]copy [/help]", modeLabel)
-	views.DrawText(screen, hints, barX+barWidth-len(hints)*6-10, inputY, dimColor)
+	views.DrawText(screen, hints, barX+barWidth-len(hints)*cw-10, inputY, dimColor)
 
 	if cb.copyFlash > 0 {
-		views.DrawText(screen, "Copied!", barX+barWidth-50, barY+4, utils.SystemGreen)
+		views.DrawText(screen, "Copied!", barX+barWidth-8*cw, barY+4, utils.SystemGreen)
 	}
 
 	// Feed: bottom-up rendering from the feed slice
@@ -316,7 +318,7 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	scrollOff := cb.scrollOffset
 	cb.mu.Unlock()
 
-	feedBottom := inputY - 22 // enough gap so text doesn't overlap input bar
+	feedBottom := inputY - lineHeight // gap above input bar
 	feedTop := barY + 6
 	maxVisible := (feedBottom - feedTop) / lineHeight
 

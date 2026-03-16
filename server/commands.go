@@ -95,27 +95,19 @@ func (gs *GameServer) handleBuildCommand(cmd game.GameCommand) {
 		return
 	}
 
-	// Find the planet and its owner
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
 	planet := gs.CargoCommander.FindPlanetByID(bd.PlanetID)
 	if planet == nil {
 		sendResult(cmd, fmt.Errorf("planet not found"))
 		return
 	}
-	if planet.Owner == "" {
-		sendResult(cmd, fmt.Errorf("planet is unclaimed"))
-		return
-	}
-
-	// Find the player who owns this planet
-	var human *entities.Player
-	for _, p := range gs.State.Players {
-		if p != nil && p.Name == planet.Owner {
-			human = p
-			break
-		}
-	}
-	if human == nil {
-		sendResult(cmd, fmt.Errorf("planet owner not found"))
+	if planet.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("not your planet"))
 		return
 	}
 

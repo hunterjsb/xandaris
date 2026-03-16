@@ -10,6 +10,7 @@ import (
 	"github.com/hunterjsb/xandaris/api"
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
 )
@@ -19,7 +20,7 @@ const (
 	saveExtension = ".xsave"
 	// SaveVersion — bump this when save format is incompatible.
 	// The autosave loader will discard saves with a different version.
-	SaveVersion = "2.3.0"
+	SaveVersion = "2.4.0"
 )
 
 func init() {
@@ -71,6 +72,7 @@ func (gs *GameServer) SaveGame(playerName string) error {
 		Players            []*entities.Player
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
+		StandingOrders     []*game.StandingOrder
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -84,6 +86,7 @@ func (gs *GameServer) SaveGame(playerName string) error {
 		Players:            gs.State.Players,
 		ConstructionQueues: constructionQueues,
 		MarketSnapshot:     gs.getMarketSnapshot(),
+		StandingOrders:     gs.State.StandingOrders,
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -130,6 +133,7 @@ func (gs *GameServer) AutoSave(path string) error {
 		Players            []*entities.Player
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
+		StandingOrders     []*game.StandingOrder
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -143,6 +147,7 @@ func (gs *GameServer) AutoSave(path string) error {
 		Players:            gs.State.Players,
 		ConstructionQueues: constructionQueues,
 		MarketSnapshot:     gs.getMarketSnapshot(),
+		StandingOrders:     gs.State.StandingOrders,
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -192,6 +197,7 @@ func (gs *GameServer) LoadGame(path string) error {
 		Players            []*entities.Player
 		ConstructionQueues map[string][]*tickable.ConstructionItem
 		MarketSnapshot     *economy.MarketSnapshot
+		StandingOrders     []*game.StandingOrder
 	}
 
 	if err := gob.NewDecoder(file).Decode(&saveData); err != nil {
@@ -211,6 +217,7 @@ func (gs *GameServer) LoadGame(path string) error {
 
 	gs.State.Market = economy.RestoreMarket(saveData.MarketSnapshot)
 	gs.State.TradeExec = economy.NewTradeExecutor(gs.State.Market)
+	gs.State.StandingOrders = saveData.StandingOrders
 
 	gs.TickManager.SetSpeed(saveData.TickSpeed)
 	gs.TickManager.SetCurrentTick(saveData.Tick)

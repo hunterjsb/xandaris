@@ -98,8 +98,27 @@ func (gs *GameServer) handleStandingOrderCommand(cmd game.GameCommand) {
 		return
 	}
 
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	// Verify the authenticated player owns this planet
+	ownsIt := false
+	for _, planet := range human.OwnedPlanets {
+		if planet != nil && planet.GetID() == data.PlanetID {
+			ownsIt = true
+			break
+		}
+	}
+	if !ownsIt {
+		sendResult(cmd, fmt.Errorf("not your planet"))
+		return
+	}
+
 	order := &game.StandingOrder{
-		Player:    "", // resolved below from planet ownership
+		Player:    human.Name,
 		PlanetID:  data.PlanetID,
 		Resource:  data.Resource,
 		Action:    data.Action,
@@ -107,18 +126,6 @@ func (gs *GameServer) handleStandingOrderCommand(cmd game.GameCommand) {
 		Threshold: data.Threshold,
 		MaxPrice:  data.MaxPrice,
 		MinPrice:  data.MinPrice,
-	}
-
-	// Resolve player from planet ownership
-	if order.Player == "" {
-		for _, p := range gs.State.Players {
-			for _, planet := range p.OwnedPlanets {
-				if planet != nil && planet.GetID() == data.PlanetID {
-					order.Player = p.Name
-					break
-				}
-			}
-		}
 	}
 
 	id := gs.State.AddStandingOrder(order)
@@ -139,6 +146,21 @@ func (gs *GameServer) handleCancelOrderCommand(cmd game.GameCommand) {
 		sendResult(cmd, fmt.Errorf("invalid cancel order data"))
 		return
 	}
+
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	// Verify the order belongs to the authenticated player
+	for _, order := range gs.State.StandingOrders {
+		if order.ID == data.OrderID && order.Player != human.Name {
+			sendResult(cmd, fmt.Errorf("not your order"))
+			return
+		}
+	}
+
 	if gs.State.RemoveStandingOrder(data.OrderID) {
 		sendSuccess(cmd, map[string]interface{}{"cancelled": data.OrderID})
 	} else {
