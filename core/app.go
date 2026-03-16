@@ -117,10 +117,8 @@ func (a *App) Update() error {
 		a.Server.TickManager.Update()
 	}
 
-	// Update current view (skip input processing when command bar is open)
-	if a.commandBar != nil && a.commandBar.IsOpen() {
-		return nil
-	}
+	// Update current view (animations, orbit rotation, etc. keep running
+	// even when the command bar is open — input is already captured above)
 	return a.viewManager.Update()
 }
 

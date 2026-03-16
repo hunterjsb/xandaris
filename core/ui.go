@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/tickable"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -129,10 +130,25 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	if hasPower {
 		perPlanet = 68
 	}
-	// +18 for the total pop line
-	panelH := 42 + len(human.OwnedPlanets)*perPlanet + 4
-	if panelH > 380 {
-		panelH = 380
+	// +18 for the total pop line, +extra for construction queue
+	queueItems := 0
+	if cs := tickable.GetConstructionSystem(); cs != nil {
+		queueItems = len(cs.GetConstructionsByOwner(human.Name))
+	}
+	queueHeight := 0
+	if queueItems > 0 {
+		shown := queueItems
+		if shown > 3 {
+			shown = 3
+		}
+		queueHeight = 24 + shown*13
+		if queueItems > 3 {
+			queueHeight += 13
+		}
+	}
+	panelH := 42 + len(human.OwnedPlanets)*perPlanet + queueHeight + 4
+	if panelH > 500 {
+		panelH = 500
 	}
 	x := a.screenWidth - panelW - 10
 	y := 10
@@ -248,6 +264,41 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 			Y1: hitStart, Y2: textY,
 			X1: x, X2: x + panelW,
 		})
+	}
+
+	// Construction queue summary (below planets)
+	cs := tickable.GetConstructionSystem()
+	if cs != nil && textY < y+panelH-30 {
+		items := cs.GetConstructionsByOwner(human.Name)
+		if len(items) > 0 {
+			// Separator
+			views.DrawLine(screen, x+10, textY+2, x+panelW-10, textY+2, utils.Theme.PanelBorder)
+			textY += 10
+
+			views.DrawText(screen, fmt.Sprintf("Building (%d)", len(items)), x+10, textY, utils.Theme.Accent)
+			textY += 14
+
+			// Show up to 3 items
+			shown := 0
+			for _, item := range items {
+				if shown >= 3 || textY > y+panelH-15 {
+					break
+				}
+				item.Mutex.RLock()
+				progress := item.Progress
+				name := item.Name
+				item.Mutex.RUnlock()
+
+				label := fmt.Sprintf("%s %d%%", name, progress)
+				views.DrawText(screen, label, x+14, textY, utils.Theme.TextDim)
+				textY += 13
+				shown++
+			}
+			if len(items) > shown {
+				views.DrawText(screen, fmt.Sprintf("+%d more", len(items)-shown), x+14, textY, utils.Theme.TextDim)
+				textY += 13
+			}
+		}
 	}
 }
 
