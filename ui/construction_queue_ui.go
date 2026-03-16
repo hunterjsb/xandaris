@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/game"
+	"github.com/hunterjsb/xandaris/ui/widgets"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -67,42 +68,66 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Dark theme colors from centralized theme
+	// Build outer container using widgets.Panel for the title/header area
+	p := widgets.NewPanel(widgets.AnchorManual, 26)
+	p.X = cq.x
+	p.Y = cq.y
 
-	// Calculate panel height based on number of items
-	visibleCount := len(items)
-	if visibleCount > cq.maxVisible {
-		visibleCount = cq.maxVisible
-	}
-	panelHeight := 50 + (visibleCount * (cq.itemHeight + 5))
+	// Title
+	p.Line("Construction Queue", utils.Theme.Accent)
 
-	// Draw background panel
-	panel := &views.UIPanel{
-		X: cq.x, Y: cq.y, Width: cq.width, Height: panelHeight,
-		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
-	}
-	panel.Draw(screen)
-
-	// Draw title
-	titleY := cq.y + 15
-	views.DrawText(screen, "Construction Queue", cq.x+10, titleY, utils.Theme.Accent)
-
-	// Draw total count
-	countY := titleY + 15
+	// Count
 	countText := fmt.Sprintf("%d building", len(items))
 	if len(items) > 1 {
 		countText = fmt.Sprintf("%d buildings", len(items))
 	}
-	views.DrawText(screen, countText, cq.x+10, countY, utils.TextSecondary)
+	p.Line(countText, utils.TextSecondary)
 
-	// Draw separator
-	separatorY := countY + 10
-	views.DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, utils.Theme.PanelBorder)
+	p.Sep()
 
-	// Draw construction items
-	itemY := separatorY + 10
+	// Add placeholder lines for each visible item so the panel sizes correctly
+	visibleCount := len(items)
+	if visibleCount > cq.maxVisible {
+		visibleCount = cq.maxVisible
+	}
+	// Each item takes itemHeight pixels; convert to line count
+	lh := widgets.LineH()
+	linesPerItem := (cq.itemHeight + 5) / lh
+	if linesPerItem < 1 {
+		linesPerItem = 1
+	}
+	for i := 0; i < visibleCount*linesPerItem; i++ {
+		p.Line("", utils.Theme.TextDim) // placeholder
+	}
+
+	// Scroll indicator placeholder
+	if len(items) > cq.maxVisible {
+		remaining := len(items) - cq.scrollOffset - cq.maxVisible
+		if remaining > 0 {
+			p.Line(fmt.Sprintf("(%d more...)", remaining), utils.TextSecondary)
+		}
+	}
+
+	p.Draw(screen)
+
+	// Now draw construction items manually inside the panel bounds
+	px, py, pw, _ := p.GetBounds()
+	cw := utils.CharWidth()
+	pad := cw
+
+	// Items start after title + count + separator
+	itemY := py + pad
+	itemY += lh     // title line
+	itemY += lh     // count line
+	itemY += lh / 2 // separator
+
+	// Temporarily adjust cq.x and cq.width to match panel bounds for item rendering
+	origX := cq.x
+	origW := cq.width
+	cq.x = px
+	cq.width = pw
+
 	displayed := 0
-
 	for i := cq.scrollOffset; i < len(items) && displayed < cq.maxVisible; i++ {
 		item := items[i]
 		cq.drawConstructionItem(screen, item, itemY)
@@ -110,15 +135,8 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 		displayed++
 	}
 
-	// Draw scroll indicator if needed
-	if len(items) > cq.maxVisible {
-		remaining := len(items) - cq.scrollOffset - cq.maxVisible
-		if remaining > 0 {
-			scrollText := fmt.Sprintf("(%d more...)", remaining)
-			scrollY := cq.y + panelHeight - 15
-			views.DrawText(screen, scrollText, cq.x+10, scrollY, utils.TextSecondary)
-		}
-	}
+	cq.x = origX
+	cq.width = origW
 }
 
 // drawConstructionItem draws a single construction item
@@ -221,7 +239,17 @@ func (cq *ConstructionQueueUI) isMouseOver(mx, my int) bool {
 	if visibleCount > cq.maxVisible {
 		visibleCount = cq.maxVisible
 	}
-	panelHeight := 50 + (visibleCount * (cq.itemHeight + 5))
+
+	// Match the widget panel sizing: header (title + count + sep) + item lines
+	lh := widgets.LineH()
+	cw := utils.CharWidth()
+	pad := cw
+	headerH := pad + lh + lh + lh/2 // pad + title + count + separator
+	linesPerItem := (cq.itemHeight + 5) / lh
+	if linesPerItem < 1 {
+		linesPerItem = 1
+	}
+	panelHeight := headerH + visibleCount*linesPerItem*lh + pad/2
 
 	return mx >= cq.x && mx < cq.x+cq.width &&
 		my >= cq.y && my < cq.y+panelHeight
@@ -234,7 +262,11 @@ func (cq *ConstructionQueueUI) handleRightClick(mx, my int) {
 	}
 
 	items := cq.provider.GetConstructionItems()
-	itemY := cq.y + 50 + 10
+	// Match the Draw layout: items start after pad + title + count + separator
+	lh := widgets.LineH()
+	cw := utils.CharWidth()
+	pad := cw
+	itemY := cq.y + pad + lh + lh + lh/2
 
 	for i := cq.scrollOffset; i < len(items) && i < cq.scrollOffset+cq.maxVisible; i++ {
 		itemX := cq.x + 10

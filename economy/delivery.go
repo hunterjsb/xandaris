@@ -5,21 +5,37 @@ import (
 	"sync"
 )
 
+// Delivery type constants.
+const (
+	DeliveryTypeLocal     = "local"      // same-system, no ship needed
+	DeliveryTypeCargoShip = "cargo_ship" // cross-system, requires physical ship
+)
+
+// Delivery direction constants.
+const (
+	DeliveryDirectionBuy  = "buy"
+	DeliveryDirectionSell = "sell"
+)
+
 // PendingDelivery represents an in-flight trade that requires physical cargo transport.
 type PendingDelivery struct {
-	ID             int
-	Tick           int64
-	BuyerName      string
-	SellerName     string
-	Resource       string
-	Quantity       int
-	UnitPrice      float64
-	Total          int // credits already deducted from buyer
-	DestPlanetID   int // buyer's planet (dropoff)
-	DestSystemID   int // buyer's system
-	SourceSystemID int // seller's system (pickup)
-	ShipID         int // cargo ship assigned
-	Status         string // "in_transit", "delivered", "failed"
+	ID               int
+	Tick             int64
+	BuyerName        string
+	SellerName       string
+	Resource         string
+	Quantity         int
+	UnitPrice        float64
+	Total            int    // credits already deducted from buyer (buy) or value owed to seller (sell)
+	DestPlanetID     int    // buyer's planet (dropoff)
+	DestSystemID     int    // buyer's system
+	SourceSystemID   int    // seller's system (pickup)
+	SourcePlanetID   int    // seller's planet (for sell deliveries)
+	ShipID           int    // cargo ship assigned (0 for local deliveries)
+	Status           string // "in_transit", "delivered", "failed"
+	DeliveryType     string // "local" or "cargo_ship"
+	Direction        string // "buy" or "sell"
+	EstimatedArrival int64  // tick when delivery should complete (for local deliveries)
 }
 
 // DeliveryManager tracks pending trade deliveries.
@@ -37,7 +53,7 @@ func NewDeliveryManager() *DeliveryManager {
 	}
 }
 
-// CreateDelivery registers a new pending delivery.
+// CreateDelivery registers a new pending delivery (cargo ship type).
 func (dm *DeliveryManager) CreateDelivery(tick int64, buyer, seller, resource string, qty int, unitPrice float64, total int, destPlanetID, destSystemID, sourceSystemID, shipID int) *PendingDelivery {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
@@ -48,7 +64,7 @@ func (dm *DeliveryManager) CreateDelivery(tick int64, buyer, seller, resource st
 		BuyerName:      buyer,
 		SellerName:     seller,
 		Resource:       resource,
-		Quantity:        qty,
+		Quantity:       qty,
 		UnitPrice:      unitPrice,
 		Total:          total,
 		DestPlanetID:   destPlanetID,
@@ -56,11 +72,43 @@ func (dm *DeliveryManager) CreateDelivery(tick int64, buyer, seller, resource st
 		SourceSystemID: sourceSystemID,
 		ShipID:         shipID,
 		Status:         "in_transit",
+		DeliveryType:   DeliveryTypeCargoShip,
+		Direction:      DeliveryDirectionBuy,
 	}
 	dm.nextID++
 	dm.deliveries = append(dm.deliveries, d)
 
 	fmt.Printf("[Delivery] #%d: %s -> %s, %d %s via ship %d\n", d.ID, seller, buyer, qty, resource, shipID)
+	return d
+}
+
+// CreateLocalDelivery registers a same-system delivery that completes after a delay (no ship needed).
+func (dm *DeliveryManager) CreateLocalDelivery(tick int64, buyer, seller, resource string, qty int, unitPrice float64, total int, destPlanetID, systemID int, direction string, delayTicks int64) *PendingDelivery {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+
+	d := &PendingDelivery{
+		ID:               dm.nextID,
+		Tick:             tick,
+		BuyerName:        buyer,
+		SellerName:       seller,
+		Resource:         resource,
+		Quantity:         qty,
+		UnitPrice:        unitPrice,
+		Total:            total,
+		DestPlanetID:     destPlanetID,
+		DestSystemID:     systemID,
+		SourceSystemID:   systemID,
+		Status:           "in_transit",
+		DeliveryType:     DeliveryTypeLocal,
+		Direction:        direction,
+		EstimatedArrival: tick + delayTicks,
+	}
+	dm.nextID++
+	dm.deliveries = append(dm.deliveries, d)
+
+	fmt.Printf("[Delivery] #%d (local): %s -> %s, %d %s, arrives tick %d\n",
+		d.ID, seller, buyer, qty, resource, d.EstimatedArrival)
 	return d
 }
 

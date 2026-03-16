@@ -5,6 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/ui/widgets"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -53,28 +54,28 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Dark theme panel
-	panel := &views.UIPanel{
-		X: rsu.x, Y: rsu.y, Width: rsu.width, Height: rsu.height,
-		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
-	}
-	panel.Draw(screen)
+	// Build outer panel using widgets.Panel for the container frame + title
+	p := widgets.NewPanel(widgets.AnchorManual, 25)
+	p.X = rsu.x
+	p.Y = rsu.y
 
-	// Title
-	lineH := int(15.0 * utils.UIScale)
-	titleY := rsu.y + lineH
-	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, utils.Theme.Accent)
-
-	// Power status (right of title)
+	// Title line with power status on the right
+	titleLeft := "Resource Storage"
+	titleRight := ""
+	titleRightColor := utils.Theme.Accent
 	if pd.PowerConsumed > 0 || pd.PowerRatio < 1.0 {
-		pwrColor := utils.SystemGreen
+		titleRightColor = utils.SystemGreen
 		if pd.PowerRatio < 0.5 {
-			pwrColor = utils.SystemRed
+			titleRightColor = utils.SystemRed
 		} else if pd.PowerRatio < 0.8 {
-			pwrColor = utils.SystemOrange
+			titleRightColor = utils.SystemOrange
 		}
-		pwrStr := fmt.Sprintf("Power: %.0f%%", pd.PowerRatio*100)
-		views.DrawText(screen, pwrStr, rsu.x+rsu.width-len(pwrStr)*utils.CharWidth()-10, titleY, pwrColor)
+		titleRight = fmt.Sprintf("Power: %.0f%%", pd.PowerRatio*100)
+	}
+	if titleRight != "" {
+		p.LinePair(titleLeft, utils.Theme.Accent, titleRight, titleRightColor)
+	} else {
+		p.Line(titleLeft, utils.Theme.Accent)
 	}
 
 	// Happiness indicator
@@ -86,43 +87,77 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 			happyColor = utils.SystemOrange
 		}
 		happyStr := fmt.Sprintf("%.0f%% happy", pd.Happiness*100)
-		views.DrawText(screen, happyStr, rsu.x+rsu.width-len(happyStr)*utils.CharWidth()-10, titleY-12, happyColor)
+		p.LineRight(happyStr, happyColor)
 	}
 
-	resourceY := titleY + 20
+	p.Sep()
 
-	if len(pd.StoredResources) == 0 {
-		views.DrawText(screen, "No resources stored", rsu.x+10, resourceY, utils.TextSecondary)
-		return
-	}
-
-	// Get net flows
-	rates := rsu.provider.GetRatesData()
-	var netFlow map[string]float64
-	if rates != nil {
-		netFlow = rates.NetFlow
-	}
-
+	// Count lines for resources (to size the panel correctly)
 	maxVisible := 12
-	count := 0
-	for _, entry := range pd.StoredResources {
-		if count >= maxVisible {
-			break
-		}
-
-		flow := 0.0
-		if netFlow != nil {
-			flow = netFlow[entry.ResourceType]
-		}
-		rsu.drawResourceEntry(screen, entry.ResourceType, entry.Amount, entry.Capacity, flow, resourceY)
-		resourceY += lineH + 4
-		count++
+	resourceCount := len(pd.StoredResources)
+	visibleCount := resourceCount
+	if visibleCount > maxVisible {
+		visibleCount = maxVisible
 	}
 
-	if len(pd.StoredResources) > maxVisible {
-		moreY := resourceY + 3
-		moreText := fmt.Sprintf("...and %d more", len(pd.StoredResources)-maxVisible)
-		views.DrawText(screen, moreText, rsu.x+10, moreY, utils.TextSecondary)
+	// Add placeholder lines for resources so the panel sizes correctly
+	for i := 0; i < visibleCount; i++ {
+		p.Line("", utils.Theme.TextDim) // placeholder for manual resource drawing
+	}
+	if resourceCount > maxVisible {
+		p.Line(fmt.Sprintf("...and %d more", resourceCount-maxVisible), utils.TextSecondary)
+	}
+	if resourceCount == 0 {
+		p.Line("No resources stored", utils.TextSecondary)
+	}
+
+	p.Draw(screen)
+
+	// Now draw the resource entries manually inside the panel bounds
+	if resourceCount > 0 {
+		px, py, _, _ := p.GetBounds()
+		lineH := widgets.LineH()
+		cw := utils.CharWidth()
+		pad := cw // 1 char padding
+
+		// Calculate starting Y: skip title line + happiness (if shown) + separator
+		resourceY := py + pad
+		resourceY += lineH // title
+		if pd.Population > 0 {
+			resourceY += lineH // happiness line
+		}
+		resourceY += lineH / 2 // separator
+
+		// Get net flows
+		rates := rsu.provider.GetRatesData()
+		var netFlow map[string]float64
+		if rates != nil {
+			netFlow = rates.NetFlow
+		}
+
+		// Override rsu.x and rsu.width for resource entries to match panel bounds
+		origX := rsu.x
+		origW := rsu.width
+		rsu.x = px
+		rsu.width = 25 * cw
+
+		count := 0
+		for _, entry := range pd.StoredResources {
+			if count >= maxVisible {
+				break
+			}
+
+			flow := 0.0
+			if netFlow != nil {
+				flow = netFlow[entry.ResourceType]
+			}
+			rsu.drawResourceEntry(screen, entry.ResourceType, entry.Amount, entry.Capacity, flow, resourceY)
+			resourceY += lineH
+			count++
+		}
+
+		rsu.x = origX
+		rsu.width = origW
 	}
 }
 

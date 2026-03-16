@@ -7,6 +7,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/game"
+	"github.com/hunterjsb/xandaris/ui/widgets"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -98,7 +99,13 @@ func (n *notificationOverlay) draw(screen *ebiten.Image, screenWidth int) {
 	}
 
 	// Draw toasts from bottom-right, stacking upward
-	x := screenWidth - 310
+	cw := utils.CharWidth()
+	// Toast width in characters (auto-fit but clamped)
+	maxChars := 300 / cw
+	if maxChars < 200/cw {
+		maxChars = 200 / cw
+	}
+
 	y := views.ScreenHeight - 90 // above status bar
 
 	for i := len(snapshot) - 1; i >= 0; i-- {
@@ -120,21 +127,24 @@ func (n *notificationOverlay) draw(screen *ebiten.Image, screenWidth int) {
 		borderColor := color.RGBA{t.color.R / 2, t.color.G / 2, t.color.B / 2, alpha}
 		textColor := color.RGBA{t.color.R, t.color.G, t.color.B, alpha}
 
-		w := len(t.message)*6 + 20
-		if w < 200 {
-			w = 200
+		// Calculate width in chars based on message length, clamped
+		toastChars := len(t.message) + 3 // padding
+		if toastChars < 200/cw {
+			toastChars = 200 / cw
 		}
-		if w > 300 {
-			w = 300
+		if toastChars > maxChars {
+			toastChars = maxChars
 		}
 
-		panel := &views.UIPanel{
-			X: x, Y: y, Width: w, Height: 20,
-			BgColor: bgColor, BorderColor: borderColor,
-		}
-		panel.Draw(screen)
-		views.DrawText(screen, t.message, x+8, y+5, textColor)
+		p := widgets.NewPanel(widgets.AnchorManual, toastChars)
+		p.X = screenWidth - toastChars*cw - 10
+		p.Y = y
+		p.BgColor = bgColor
+		p.Border = borderColor
+		p.PaddingCh = 0
+		p.Line(t.message, textColor)
+		p.Draw(screen)
 
-		y -= 24
+		y -= widgets.LineH() + 4
 	}
 }

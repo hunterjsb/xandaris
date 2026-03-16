@@ -252,10 +252,21 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 			}
 		}
 	} else {
-		// Same-system trade — instant, no fee
+		// Same-system trade — local delivery with short delay
 		te.removeFromOthersInSystem(players, player, resource, quantity, systemID)
-		destPlanet.AddStoredResource(resource, quantity)
 		player.Credits -= total
+
+		if te.Deliveries != nil {
+			// Create local delivery — resources arrive after 5 ticks
+			te.Deliveries.CreateLocalDelivery(
+				te.tick, player.Name, "", resource, quantity,
+				price, total, destPlanet.GetID(), systemID,
+				DeliveryDirectionBuy, 5,
+			)
+		} else {
+			// No delivery manager — instant fallback
+			destPlanet.AddStoredResource(resource, quantity)
+		}
 	}
 
 	// Bump trade volume on market

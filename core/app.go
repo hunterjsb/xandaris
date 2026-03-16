@@ -109,7 +109,7 @@ func (a *App) Update() error {
 		a.handleEmpirePanelClick()
 	}
 
-	// Toggle command bar with backtick
+	// Toggle command bar with T
 	if a.commandBar != nil && a.keyBindings.IsActionJustPressed(views.ActionOpenCommandBar) {
 		a.commandBar.Toggle()
 	}

@@ -381,44 +381,59 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		pv.clickHandler.GetActiveMenu().Draw(screen)
 	}
 
-	// Draw UI info
+	// Draw UI info panel (scaled with utils.UIScale)
 	details := formatPlanetDetails(pv.planet)
+	cw := utils.CharWidth()
 	lineH := int(15.0 * utils.UIScale)
-	panelHeight := 22 + len(details)*lineH + 20
+	pad := cw // 1 char unit of padding
+	margin := 10
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	isOwned := humanPlayer != nil && pv.planet.Owner == humanPlayer.Name
 
-	infoPanel := NewUIPanel(6, 6, 380, panelHeight)
-	infoPanel.BgColor = utils.Theme.PanelBg
-	infoPanel.BorderColor = utils.Theme.PanelBorder
+	// Determine panel width: 25 chars
+	panelWidthCh := 25
+	panelWidth := panelWidthCh * cw
+
+	// Count visible lines: title + details + separator(half-line) + hints
+	numLines := 1 + len(details) + 1 // title + details + hints
+	panelHeight := pad + numLines*lineH + pad/2
+
+	infoPanel := &UIPanel{
+		X: margin, Y: margin, Width: panelWidth, Height: panelHeight,
+		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
+	}
 	infoPanel.Draw(screen)
 
-	DrawText(screen, pv.planet.Name, 14, 14, utils.Theme.Accent)
-	afterName := 14 + len(pv.planet.Name)*utils.CharWidth() + 8
+	textX := margin + pad
+	textY := margin + pad
+
+	// Title line: planet name + system + owner
+	DrawText(screen, pv.planet.Name, textX, textY, utils.Theme.Accent)
+	afterName := textX + len(pv.planet.Name)*cw + cw
 	if pv.system != nil {
-		DrawText(screen, pv.system.Name, afterName, 14, utils.Theme.TextDim)
-		afterName += len(pv.system.Name)*utils.CharWidth() + 8
+		DrawText(screen, pv.system.Name, afterName, textY, utils.Theme.TextDim)
+		afterName += len(pv.system.Name)*cw + cw
 	}
 	if pv.planet.Owner != "" {
-		DrawText(screen, pv.planet.Owner, afterName, 14, utils.Theme.TextDim)
+		DrawText(screen, pv.planet.Owner, afterName, textY, utils.Theme.TextDim)
 	}
+	textY += lineH
 
-	infoY := 32
+	// Detail lines
 	for _, line := range details {
 		lineColor := utils.Theme.TextDim
 		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
 			lineColor = utils.Theme.TextLight
 		}
-		DrawText(screen, line, 14, infoY, lineColor)
-		infoY += lineH
+		DrawText(screen, line, textX, textY, lineColor)
+		textY += lineH
 	}
 
-	// Hints at bottom of panel
-	infoY += 4
+	// Keyboard hints
 	if isOwned {
-		DrawText(screen, "[B] Build  [W] Workforce  [M] Market  [Esc] Back", 14, infoY, utils.Theme.TextDim)
+		DrawText(screen, "[B] Build  [W] Workforce  [Esc] Back", textX, textY, utils.Theme.TextDim)
 	} else {
-		DrawText(screen, "[M] Market  [Esc] Back", 14, infoY, utils.Theme.TextDim)
+		DrawText(screen, "[M] Market  [Esc] Back", textX, textY, utils.Theme.TextDim)
 	}
 
 	pv.drawWorkforceToggleButton(screen)

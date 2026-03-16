@@ -3,6 +3,7 @@ package tickable
 import (
 	"fmt"
 
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -42,6 +43,15 @@ func (ds *DeliverySystem) OnTick(tick int64) {
 	systemsMap := game.GetSystemsMap()
 
 	for _, delivery := range dm.GetActiveDeliveries() {
+		// Local deliveries — no ship, just a timer
+		if delivery.DeliveryType == "local" {
+			if tick >= delivery.EstimatedArrival {
+				ds.completeLocalDelivery(delivery, dm, players, systemsMap)
+			}
+			continue
+		}
+
+		// Cargo ship deliveries
 		ship := findShipByID(players, delivery.ShipID)
 		if ship == nil {
 			// Ship lost — refund buyer
@@ -88,6 +98,18 @@ func (ds *DeliverySystem) OnTick(tick int64) {
 				}
 			}
 
+			// For sell deliveries, credit the seller on completion
+			if delivery.Direction == "sell" {
+				for _, p := range players {
+					if p != nil && p.Name == delivery.SellerName {
+						p.Credits += delivery.Total
+						fmt.Printf("[Delivery] Credited %d to %s for sell delivery #%d\n",
+							delivery.Total, delivery.SellerName, delivery.ID)
+						break
+					}
+				}
+			}
+
 			dm.CompleteDelivery(delivery.ID)
 			ship.DeliveryID = 0
 			ship.RoutePath = nil
@@ -96,6 +118,36 @@ func (ds *DeliverySystem) OnTick(tick int64) {
 				ship.Name, delivery.Quantity, delivery.Resource, delivery.BuyerName)
 		}
 	}
+}
+
+// completeLocalDelivery handles completion of a local (same-system) delivery.
+func (ds *DeliverySystem) completeLocalDelivery(delivery *economy.PendingDelivery, dm *economy.DeliveryManager, players []*entities.Player, systemsMap map[int]*entities.System) {
+	if delivery.Direction == "buy" || delivery.Direction == "" {
+		// Buy delivery: add resources to buyer's planet
+		destPlanet := findPlanetByID(systemsMap, delivery.DestPlanetID)
+		if destPlanet != nil {
+			destPlanet.AddStoredResource(delivery.Resource, delivery.Quantity)
+		}
+	} else if delivery.Direction == "sell" {
+		// Sell delivery: resources already removed; credit the seller
+		for _, p := range players {
+			if p != nil && p.Name == delivery.SellerName {
+				p.Credits += delivery.Total
+				fmt.Printf("[Delivery] Credited %d to %s for local sell #%d\n",
+					delivery.Total, delivery.SellerName, delivery.ID)
+				break
+			}
+		}
+		// Add resources to buyer's planet
+		destPlanet := findPlanetByID(systemsMap, delivery.DestPlanetID)
+		if destPlanet != nil {
+			destPlanet.AddStoredResource(delivery.Resource, delivery.Quantity)
+		}
+	}
+
+	dm.CompleteDelivery(delivery.ID)
+	fmt.Printf("[Delivery] Local delivery #%d completed: %d %s to %s\n",
+		delivery.ID, delivery.Quantity, delivery.Resource, delivery.BuyerName)
 }
 
 func findShipByID(players []*entities.Player, shipID int) *entities.Ship {
