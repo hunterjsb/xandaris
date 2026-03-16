@@ -31,11 +31,43 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 
 	systemsMap := game.GetSystemsMap()
 
-	// Process all ships across all systems
+	// Process all ships — check both system entities and player-owned ships
+	// to catch ships that aren't in a system's entity list (e.g. after API creation)
+	seen := make(map[int]bool)
+
 	for _, system := range systemsMap {
 		for _, entity := range system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
+				seen[ship.GetID()] = true
 				sms.processShipMovement(ship, systemsMap)
+			}
+		}
+	}
+
+	// Also check player-owned ships not found in system entities
+	for _, player := range game.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, ship := range player.OwnedShips {
+			if ship != nil && !seen[ship.GetID()] {
+				seen[ship.GetID()] = true
+				sms.processShipMovement(ship, systemsMap)
+				// If ship is moving, ensure it's in its current system's entity list
+				if ship.Status == entities.ShipStatusMoving {
+					if sys := systemsMap[ship.CurrentSystem]; sys != nil {
+						found := false
+						for _, e := range sys.Entities {
+							if e.GetID() == ship.GetID() {
+								found = true
+								break
+							}
+						}
+						if !found {
+							sys.AddEntity(ship)
+						}
+					}
+				}
 			}
 		}
 	}
