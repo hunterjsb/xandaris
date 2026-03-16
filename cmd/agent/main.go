@@ -91,6 +91,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"}},"required":["planet_id"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_galaxy", Description: "Get all star systems with owners, population, resources, and hyperlane connections. Use for planning expansion and trade routes.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "get_flows", Description: "Get galaxy-wide production vs consumption rates for all resources",
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
@@ -223,6 +227,12 @@ func executeTool(name string, args string, factionName string) string {
 		var p struct{ PlanetID int `json:"planet_id"` }
 		json.Unmarshal([]byte(args), &p)
 		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "get_galaxy":
+		result, err := callAPI("GET", "/api/galaxy", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
