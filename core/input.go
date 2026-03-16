@@ -14,6 +14,19 @@ func (a *App) handleGlobalInput() {
 		return
 	}
 
+	// Help overlay toggle
+	if a.keyBindings.IsActionJustPressed(views.ActionShowHelp) {
+		a.help.Toggle()
+		return
+	}
+	// If help is visible, block other hotkeys (H or Esc to close)
+	if a.help.IsVisible() {
+		if a.keyBindings.IsActionJustPressed(views.ActionEscape) {
+			a.help.Toggle()
+		}
+		return
+	}
+
 	// Pause/speed/save only in singleplayer (not when connected to remote server)
 	if !a.IsRemote() {
 		if a.keyBindings.IsActionJustPressed(views.ActionPauseToggle) {

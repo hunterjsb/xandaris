@@ -34,6 +34,9 @@ type App struct {
 	// Toast notifications for important events
 	notifications *notificationOverlay
 
+	// Help overlay
+	help helpOverlay
+
 	// Construction cache for remote mode
 	constructionCacheMu *constructionCacheMu
 }
@@ -137,6 +140,9 @@ func (a *App) Draw(screen *ebiten.Image) {
 	if a.notifications != nil {
 		a.notifications.draw(screen, a.screenWidth)
 	}
+
+	// Help overlay (above everything except command bar)
+	a.help.Draw(screen, a.keyBindings, a.IsRemote())
 
 	// Command bar draws on top of everything
 	if a.commandBar != nil {

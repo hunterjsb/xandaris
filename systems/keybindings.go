@@ -43,6 +43,7 @@ func (kb *KeyBindings) LoadDefaults() {
 	kb.bindings[views.ActionFocusHome] = ebiten.KeyTab
 	kb.bindings[views.ActionToggleWorkforceView] = ebiten.KeyW
 	kb.bindings[views.ActionOpenCommandBar] = ebiten.KeyT
+	kb.bindings[views.ActionShowHelp] = ebiten.KeyH
 
 	// Menu navigation
 	kb.bindings[views.ActionMenuUp] = ebiten.KeyUp

@@ -53,6 +53,16 @@ func (m *mockGameProvider) ExecuteStandingOrderTrade(order StandingOrderInfo, pl
 	return nil
 }
 func (m *mockGameProvider) GetDeliveryManager() *economy.DeliveryManager { return m.deliveryMgr }
+func (m *mockGameProvider) DockShip(ship *entities.Ship, planet *entities.Planet) error {
+	return nil
+}
+func (m *mockGameProvider) UndockShip(ship *entities.Ship) error { return nil }
+func (m *mockGameProvider) SellAtDock(ship *entities.Ship, resource string, qty int) (int, int, error) {
+	return 0, 0, nil
+}
+func (m *mockGameProvider) GetCreditLedger() *economy.CreditLedger { return nil }
+func (m *mockGameProvider) GetShippingRoutes() []ShippingRouteInfo  { return nil }
+func (m *mockGameProvider) CompleteShippingTrip(routeID int)        {}
 
 // mockSystemContext implements SystemContext for testing.
 type mockSystemContext struct {

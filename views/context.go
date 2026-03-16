@@ -110,6 +110,9 @@ const (
 	// Command bar
 	ActionOpenCommandBar KeyAction = "open_command_bar"
 
+	// Help
+	ActionShowHelp KeyAction = "show_help"
+
 	// Menu navigation
 	ActionMenuUp      KeyAction = "menu_up"
 	ActionMenuDown    KeyAction = "menu_down"
