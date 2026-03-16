@@ -81,9 +81,10 @@ func (rs *RemoteSync) syncGalaxyPositions() {
 	var resp struct {
 		OK   bool `json:"ok"`
 		Data []struct {
-			ID int     `json:"id"`
-			X  float64 `json:"x"`
-			Y  float64 `json:"y"`
+			ID    int     `json:"id"`
+			X     float64 `json:"x"`
+			Y     float64 `json:"y"`
+			Links []int   `json:"links"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil || !resp.OK {
@@ -97,7 +98,27 @@ func (rs *RemoteSync) syncGalaxyPositions() {
 			local.Y = remote.Y
 		}
 	}
-	fmt.Printf("[Sync] Updated %d system positions from server\n", len(resp.Data))
+
+	// Rebuild hyperlanes from server's Links data (authoritative connections)
+	seen := make(map[[2]int]bool)
+	var hyperlanes []entities.Hyperlane
+	for _, remote := range resp.Data {
+		for _, linkID := range remote.Links {
+			// Deduplicate: only add each connection once
+			a, b := remote.ID, linkID
+			if a > b {
+				a, b = b, a
+			}
+			key := [2]int{a, b}
+			if !seen[key] {
+				seen[key] = true
+				hyperlanes = append(hyperlanes, entities.Hyperlane{From: remote.ID, To: linkID})
+			}
+		}
+	}
+	rs.gs.State.Hyperlanes = hyperlanes
+
+	fmt.Printf("[Sync] Updated %d system positions, %d hyperlanes from server\n", len(resp.Data), len(hyperlanes))
 }
 
 // syncEconomy updates market prices from the remote server.
