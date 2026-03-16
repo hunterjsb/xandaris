@@ -18,6 +18,7 @@ var remoteForwardedCommands = map[game.CommandType]bool{
 	game.CmdFleetMove: true, game.CmdFleetCreate: true, game.CmdFleetDisband: true,
 	game.CmdFleetAddShip: true, game.CmdFleetRemoveShip: true,
 	game.CmdWorkforceAssign: true, game.CmdCancelConstruction: true,
+	game.CmdDockShip: true, game.CmdUndockShip: true, game.CmdSellAtDock: true,
 }
 
 // executeCommand processes a single game command via the registry.
@@ -71,6 +72,9 @@ func (gs *GameServer) initCommandRegistry() {
 	cr.Register(game.CmdFleetDisband, gs.handleFleetDisbandCommand)
 	cr.Register(game.CmdFleetAddShip, gs.handleFleetAddShipCommand)
 	cr.Register(game.CmdFleetRemoveShip, gs.handleFleetRemoveShipCommand)
+	cr.Register(game.CmdDockShip, gs.handleDockShipCommand)
+	cr.Register(game.CmdUndockShip, gs.handleUndockShipCommand)
+	cr.Register(game.CmdSellAtDock, gs.handleSellAtDockCommand)
 
 	gs.cmdRegistry = cr
 }
@@ -588,6 +592,102 @@ func (gs *GameServer) handleCancelConstructionCommand(cmd game.GameCommand) {
 		"cancelled": cd.ConstructionID,
 		"refund":    refund,
 		"progress":  progress,
+	})
+}
+
+func (gs *GameServer) handleDockShipCommand(cmd game.GameCommand) {
+	dd, ok := cmd.Data.(game.DockShipCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid dock data"))
+		return
+	}
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, dd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+	planet := gs.CargoCommander.FindPlanetByID(dd.PlanetID)
+	if planet == nil {
+		sendResult(cmd, fmt.Errorf("planet not found"))
+		return
+	}
+	if err := gs.CargoCommander.DockShip(ship, planet); err != nil {
+		sendResult(cmd, err)
+		return
+	}
+	sendSuccess(cmd, map[string]interface{}{
+		"ship_id":   dd.ShipID,
+		"planet_id": dd.PlanetID,
+		"status":    "docked",
+	})
+}
+
+func (gs *GameServer) handleUndockShipCommand(cmd game.GameCommand) {
+	ud, ok := cmd.Data.(game.UndockShipCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid undock data"))
+		return
+	}
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, ud.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+	if err := gs.CargoCommander.UndockShip(ship); err != nil {
+		sendResult(cmd, err)
+		return
+	}
+	sendSuccess(cmd, map[string]interface{}{
+		"ship_id": ud.ShipID,
+		"status":  "undocked",
+	})
+}
+
+func (gs *GameServer) handleSellAtDockCommand(cmd game.GameCommand) {
+	sd, ok := cmd.Data.(game.SellAtDockCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid sell-at-dock data"))
+		return
+	}
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, sd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+
+	buyPrice := gs.State.Market.GetBuyPrice(sd.Resource)
+	sold, credits, err := gs.CargoCommander.SellAtDock(ship, sd.Resource, sd.Quantity, buyPrice, human)
+	if err != nil {
+		sendResult(cmd, err)
+		return
+	}
+
+	// Credit the ship owner
+	human.Credits += credits
+
+	// Bump trade volume
+	gs.State.Market.AddTradeVolume(sd.Resource, sold, false)
+
+	sendSuccess(cmd, map[string]interface{}{
+		"ship_id":  sd.ShipID,
+		"resource": sd.Resource,
+		"sold":     sold,
+		"credits":  credits,
 	})
 }
 

@@ -99,7 +99,12 @@ func (a *App) SaveKeyBindings() error {
 
 // Update updates the app state (implements ebiten.Game).
 func (a *App) Update() error {
-	// Command bar toggle (before other input so it can capture keys)
+	// Command bar toggle (backtick works to open and close)
+	if a.commandBar != nil && a.keyBindings.IsActionJustPressed(views.ActionOpenCommandBar) {
+		a.commandBar.Toggle()
+	}
+
+	// Command bar captures all input when open — no hotkeys while typing
 	if a.commandBar != nil && a.commandBar.IsOpen() {
 		a.commandBar.Update()
 	} else {
@@ -107,11 +112,6 @@ func (a *App) Update() error {
 		a.handleGlobalInput()
 		// Empire panel planet clicks
 		a.handleEmpirePanelClick()
-	}
-
-	// Toggle command bar with T
-	if a.commandBar != nil && a.keyBindings.IsActionJustPressed(views.ActionOpenCommandBar) {
-		a.commandBar.Toggle()
 	}
 
 	// Drain commands and advance simulation (in-process server)

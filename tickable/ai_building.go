@@ -97,7 +97,15 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 			}
 		}
 
-		// PRIORITY 2: Build Generators for power (critical for productivity)
+		// PRIORITY 2: Build Trading Post ASAP (required for all trade)
+		if !planet.HasBuilding(entities.BuildingTradingPost) && player.Credits >= 1200 {
+			player.Credits -= 1200
+			game.AIBuildOnPlanet(planet, entities.BuildingTradingPost, player.Name, systemID)
+			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Trading Post at %s", player.Name, planet.Name))
+			return
+		}
+
+		// PRIORITY 3: Build Generators for power (critical for productivity)
 		// Need enough generators to cover demand — build more if power ratio < 80%
 		powerRatio := planet.GetPowerRatio()
 		genCount := planet.CountBuildings(entities.BuildingGenerator)
@@ -148,14 +156,6 @@ func (abs *AIBuildingSystem) evaluateInvestment(player *entities.Player, game Ga
 			game.AIBuildOnPlanet(planet, entities.BuildingHabitat, player.Name, systemID)
 			fmt.Printf("[AIBuild] %s built habitat at %s (pop %d/%d)\n",
 				player.Name, planet.Name, planet.Population, capacity)
-			return
-		}
-
-		// PRIORITY 5: Build Trading Post if missing
-		if !planet.HasBuilding(entities.BuildingTradingPost) && player.Credits >= 1200 {
-			player.Credits -= 1200
-			game.AIBuildOnPlanet(planet, entities.BuildingTradingPost, player.Name, systemID)
-			logBuildEvent(game, player.Name, fmt.Sprintf("%s built Trading Post at %s", player.Name, planet.Name))
 			return
 		}
 

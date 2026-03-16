@@ -61,6 +61,9 @@ type Ship struct {
 	// Delivery mission
 	DeliveryID int   // Active delivery mission ID (0 = none)
 	RoutePath  []int // Multi-hop path for delivery (system IDs)
+
+	// Docking
+	DockedAtPlanet int // Planet ID where ship is docked (0 = not docked)
 }
 
 // NewShip creates a new ship entity

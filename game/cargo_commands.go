@@ -197,3 +197,113 @@ func (cce *CargoCommandExecutor) GetSystemForPlanet(planet *entities.Planet) int
 	}
 	return -1
 }
+
+// DockShip docks a ship at a planet's Trading Post.
+// Requires Trading Post level 2+ for foreign ships, level 1+ for own ships.
+func (cce *CargoCommandExecutor) DockShip(ship *entities.Ship, planet *entities.Planet) error {
+	if ship == nil || planet == nil {
+		return fmt.Errorf("no ship or planet specified")
+	}
+	if ship.Status == entities.ShipStatusMoving {
+		return fmt.Errorf("ship %s is still in transit", ship.Name)
+	}
+	if ship.DockedAtPlanet != 0 {
+		return fmt.Errorf("ship %s is already docked", ship.Name)
+	}
+	if !cce.isShipAtPlanet(ship, planet) {
+		return fmt.Errorf("ship %s is not near %s", ship.Name, planet.Name)
+	}
+
+	// Find Trading Post
+	var tp *entities.Building
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
+			tp = b
+			break
+		}
+	}
+
+	if tp == nil {
+		return fmt.Errorf("no Trading Post on %s", planet.Name)
+	}
+
+	// Foreign ships need level 2+
+	if planet.Owner != ship.Owner && tp.Level < 2 {
+		return fmt.Errorf("Trading Post needs level 2 for foreign ship docking (currently level %d)", tp.Level)
+	}
+
+	ship.DockedAtPlanet = planet.GetID()
+	ship.Status = entities.ShipStatusDocked
+	fmt.Printf("[Dock] %s docked at %s\n", ship.Name, planet.Name)
+	return nil
+}
+
+// UndockShip undocks a ship from its current planet.
+func (cce *CargoCommandExecutor) UndockShip(ship *entities.Ship) error {
+	if ship == nil {
+		return fmt.Errorf("no ship specified")
+	}
+	if ship.DockedAtPlanet == 0 {
+		return fmt.Errorf("ship %s is not docked", ship.Name)
+	}
+	ship.DockedAtPlanet = 0
+	ship.Status = entities.ShipStatusOrbiting
+	fmt.Printf("[Dock] %s undocked\n", ship.Name)
+	return nil
+}
+
+// SellAtDock sells cargo from a docked ship at local market prices.
+// Returns the quantity sold, credits earned, and any error.
+func (cce *CargoCommandExecutor) SellAtDock(ship *entities.Ship, resource string, qty int, buyPrice float64, buyer *entities.Player) (int, int, error) {
+	if ship == nil {
+		return 0, 0, fmt.Errorf("no ship specified")
+	}
+	if ship.DockedAtPlanet == 0 {
+		return 0, 0, fmt.Errorf("ship %s is not docked", ship.Name)
+	}
+	if ship.CargoHold == nil || ship.CargoHold[resource] <= 0 {
+		return 0, 0, fmt.Errorf("no %s in cargo", resource)
+	}
+
+	planet := cce.FindPlanetByID(ship.DockedAtPlanet)
+	if planet == nil {
+		return 0, 0, fmt.Errorf("docked planet not found")
+	}
+
+	// Verify Trading Post exists
+	var tp *entities.Building
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
+			tp = b
+			break
+		}
+	}
+	if tp == nil {
+		return 0, 0, fmt.Errorf("no Trading Post on %s", planet.Name)
+	}
+
+	// Clamp to available cargo
+	actual := qty
+	if actual > ship.CargoHold[resource] {
+		actual = ship.CargoHold[resource]
+	}
+
+	// Calculate sale value
+	total := int(math.Round(buyPrice * float64(actual)))
+	if total <= 0 {
+		total = actual
+	}
+
+	// Remove from ship cargo
+	removed := ship.RemoveCargo(resource, actual)
+	if removed <= 0 {
+		return 0, 0, fmt.Errorf("failed to remove cargo")
+	}
+
+	// Add resources to planet
+	planet.AddStoredResource(resource, removed)
+
+	fmt.Printf("[DockSale] %s sold %d %s at %s for %d credits\n",
+		ship.Name, removed, resource, planet.Name, total)
+	return removed, total, nil
+}

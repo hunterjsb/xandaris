@@ -158,6 +158,23 @@ func (b *Building) GetContextMenuItems() []string {
 	if b.BuildingType == BuildingTradingPost {
 		items = append(items, "") // Empty line
 		items = append(items, "Market Access: Enabled")
+		// Show level-based stats
+		switch b.Level {
+		case 1:
+			items = append(items, "Throughput: 100 units | Fee: 3% | Credit Limit: 5,000")
+		case 2:
+			items = append(items, "Throughput: 250 units | Fee: 2% | Credit Limit: 15,000")
+			items = append(items, "Foreign Ship Docking: Enabled")
+		case 3:
+			items = append(items, "Throughput: 500 units | Fee: 1% | Credit Limit: 50,000")
+			items = append(items, "Ship Refueling: Enabled")
+		case 4:
+			items = append(items, "Throughput: 1,000 units | Fee: 0.5% | Credit Limit: 200,000")
+			items = append(items, "Standing Order Auto-Dispatch: Enabled")
+		case 5:
+			items = append(items, "Throughput: Unlimited | Fee: 0% | Credit Limit: Unlimited")
+			items = append(items, "Trade Hub: Routes prefer this system")
+		}
 		items = append(items, "Open market view with [M]")
 	}
 

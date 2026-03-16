@@ -54,6 +54,10 @@ type GameProvider interface {
 	// Deliveries
 	GetDeliveryManager() *economy.DeliveryManager
 	GetPlayers() []*entities.Player
+	// Docking
+	DockShip(ship *entities.Ship, planet *entities.Planet) error
+	UndockShip(ship *entities.Ship) error
+	SellAtDock(ship *entities.Ship, resource string, qty int) (int, int, error)
 }
 
 // SystemContext provides access to game state for tickable systems

@@ -40,6 +40,7 @@ type TradeExecutor struct {
 	OnTrade    TradeCallback // optional callback for event logging
 	Deliveries *DeliveryManager
 	Dispatcher ShipDispatcher // for cross-system cargo ship dispatch
+	Credits    *CreditLedger  // credit limit tracking between empires
 
 	// Systems reference for system-scoped trading.
 	// When set, human trades are scoped to the trading planet's system.
@@ -163,6 +164,20 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		total += fee
 		if player.Credits < total {
 			return TradeRecord{}, fmt.Errorf("insufficient credits with %.1f%% TP fee (need %d, have %d)", tpFee*100, total, player.Credits)
+		}
+	}
+
+	// Check credit limits (if ledger is wired)
+	if te.Credits != nil {
+		tpCreditLimit := TradingPostCreditLimit(tp.Level)
+		// Check against all potential sellers
+		for _, seller := range players {
+			if seller == nil || seller == player {
+				continue
+			}
+			if err := te.Credits.CheckLimit(player.Name, seller.Name, total, tpCreditLimit); err != nil {
+				return TradeRecord{}, err
+			}
 		}
 	}
 
@@ -340,35 +355,53 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 	var srcPlanet *entities.Planet
 	if len(tradingPlanet) > 0 && tradingPlanet[0] != nil {
 		srcPlanet = tradingPlanet[0]
-	}
-
-	if srcPlanet != nil {
-		// Planet-scoped sell: stock comes from this planet only
-		stored := srcPlanet.StoredResources[resource]
-		planetStock := 0
-		if stored != nil {
-			planetStock = stored.Amount
-		}
-		if planetStock < quantity {
-			return TradeRecord{}, fmt.Errorf("insufficient stock on %s (need %d, have %d)", srcPlanet.Name, quantity, planetStock)
-		}
-		srcPlanet.RemoveStoredResource(resource, quantity)
 	} else {
-		// Legacy: aggregate across all player planets
-		playerStock := aggregatePlayerStock(player, resource)
-		if playerStock < quantity {
-			return TradeRecord{}, fmt.Errorf("insufficient stock (need %d, have %d)", quantity, playerStock)
-		}
-		removeFromPlayer(player, resource, quantity)
+		srcPlanet = firstPlanetWithTradingPost(player)
+	}
+	if srcPlanet == nil {
+		return TradeRecord{}, fmt.Errorf("build a Trading Post to sell on the market")
 	}
 
-	// All sells transfer resources to another player's planet (real economy).
-	// Human sells prefer same system; AI sells go galaxy-wide.
+	// Validate Trading Post
+	tp := getTradingPost(srcPlanet)
+	if tp == nil {
+		return TradeRecord{}, fmt.Errorf("build a Trading Post on %s to trade", srcPlanet.Name)
+	}
+
+	// Check throughput capacity
+	throughput := TradingPostThroughput(tp.Level)
+	if throughput > 0 && quantity > throughput {
+		return TradeRecord{}, fmt.Errorf("Trading Post throughput exceeded (max %d units, level %d)", throughput, tp.Level)
+	}
+
+	// Apply Trading Post processing fee (deducted from sale proceeds)
+	tpFee := TradingPostFee(tp.Level)
+	if tpFee > 0 {
+		fee := int(math.Round(float64(total) * tpFee))
+		total -= fee
+		if total < 1 {
+			total = 1
+		}
+	}
+
+	// Check stock on source planet
+	stored := srcPlanet.StoredResources[resource]
+	planetStock := 0
+	if stored != nil {
+		planetStock = stored.Amount
+	}
+	if planetStock < quantity {
+		return TradeRecord{}, fmt.Errorf("insufficient stock on %s (need %d, have %d)", srcPlanet.Name, quantity, planetStock)
+	}
+
+	// Remove resources from source planet (into escrow)
+	srcPlanet.RemoveStoredResource(resource, quantity)
+
+	// Find buyer system and determine local vs cross-system
 	sellSystemID := -1
 	localSell := false
-	if player.IsHuman() && srcPlanet != nil {
+	if player.IsHuman() {
 		sellSystemID = te.getSystemForPlanet(srcPlanet)
-		// Check if there's actually an NPC in this system to sell to
 		if sellSystemID >= 0 {
 			for _, p := range players {
 				if p == nil || p == player {
@@ -385,7 +418,7 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 				}
 			}
 		}
-		// Dynamic export fee
+		// Dynamic export fee for cross-system sells
 		if !localSell {
 			feeRate := 0.10
 			if rm := te.market.getResourceMarket(resource); rm != nil {
@@ -398,10 +431,27 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 			}
 		}
 	}
-	te.addToOtherPlanet(players, player, resource, quantity, sellSystemID)
 
-	// Credit seller
-	player.Credits += total
+	// Find destination planet for the goods
+	destPlanetID := 0
+	if sellSystemID >= 0 {
+		destPlanetID = te.findBuyerPlanetID(players, player, sellSystemID)
+	}
+
+	recordTotal := total // save for trade record before any zeroing
+
+	if localSell && te.Deliveries != nil {
+		// Same-system sell: local delivery, credits on completion
+		te.Deliveries.CreateLocalDelivery(
+			te.tick, "", player.Name, resource, quantity,
+			price, total, destPlanetID, sellSystemID,
+			DeliveryDirectionSell, 5,
+		)
+	} else {
+		// Cross-system or no delivery manager: instant transfer
+		te.addToOtherPlanet(players, player, resource, quantity, sellSystemID)
+		player.Credits += total
+	}
 
 	// Bump trade volume on market
 	te.market.AddTradeVolume(resource, quantity, false)
@@ -413,7 +463,7 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 		Quantity:  quantity,
 		Action:    "sell",
 		UnitPrice: price,
-		Total:     total,
+		Total:     recordTotal,
 	}
 	te.appendRecord(record)
 	if te.OnTrade != nil {
@@ -705,6 +755,22 @@ func TradingPostCreditLimit(level int) int {
 	default:
 		return 0 // level 5 = unlimited (0 means no limit)
 	}
+}
+
+// findBuyerPlanetID finds a planet in the given system owned by another player (for sell deliveries).
+func (te *TradeExecutor) findBuyerPlanetID(players []*entities.Player, exclude *entities.Player, systemID int) int {
+	planetIDs := te.getCachedSystemPlanets(systemID)
+	for _, p := range players {
+		if p == nil || p == exclude {
+			continue
+		}
+		for _, planet := range p.OwnedPlanets {
+			if planet != nil && planetIDs[planet.GetID()] {
+				return planet.GetID()
+			}
+		}
+	}
+	return 0
 }
 
 // findSourceSystem finds a system with sufficient NPC stock of a resource.

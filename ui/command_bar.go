@@ -225,6 +225,7 @@ func (cb *CommandBar) Update() {
 
 	if kb.IsActionJustPressed(views.ActionEscape) {
 		cb.Close()
+		return
 	}
 
 	// Tab — cycle mode: Agent → Events+Chat → Chat Only → Agent
@@ -271,8 +272,8 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	}
 
 	lineHeight := int(14.0 * utils.UIScale)
-	inputBarH := int(18.0 * utils.UIScale)
-	barHeight := lineHeight*10 + inputBarH + 20
+	inputBarH := int(20.0 * utils.UIScale)
+	barHeight := lineHeight*14 + inputBarH + 30
 	barY := cb.screenHeight - barHeight
 	barX := 0
 	barWidth := cb.screenWidth
@@ -318,8 +319,8 @@ func (cb *CommandBar) Draw(screen *ebiten.Image) {
 	scrollOff := cb.scrollOffset
 	cb.mu.Unlock()
 
-	feedBottom := inputY - lineHeight // gap above input bar
-	feedTop := barY + 6
+	feedBottom := inputY - lineHeight*2 // gap above input bar
+	feedTop := barY + lineHeight
 	maxVisible := (feedBottom - feedTop) / lineHeight
 
 	total := len(feedSnapshot)

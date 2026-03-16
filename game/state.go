@@ -94,6 +94,9 @@ const (
 	CmdFleetDisband       CommandType = "fleet_disband"
 	CmdFleetAddShip       CommandType = "fleet_add_ship"
 	CmdFleetRemoveShip    CommandType = "fleet_remove_ship"
+	CmdDockShip           CommandType = "dock_ship"
+	CmdUndockShip         CommandType = "undock_ship"
+	CmdSellAtDock         CommandType = "sell_at_dock"
 )
 
 // GameCommand represents a command to be executed on the main goroutine.
@@ -219,6 +222,24 @@ type FleetAddShipCommandData struct {
 type FleetRemoveShipCommandData struct {
 	ShipID  int // ship to remove
 	FleetID int // fleet to remove from
+}
+
+// DockShipCommandData is the payload for docking a ship at a planet.
+type DockShipCommandData struct {
+	ShipID   int
+	PlanetID int
+}
+
+// UndockShipCommandData is the payload for undocking a ship.
+type UndockShipCommandData struct {
+	ShipID int
+}
+
+// SellAtDockCommandData is the payload for selling cargo from a docked ship.
+type SellAtDockCommandData struct {
+	ShipID   int
+	Resource string
+	Quantity int
 }
 
 // NewState creates a new empty game state

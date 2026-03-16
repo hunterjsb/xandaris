@@ -130,24 +130,54 @@ func (als *AILogisticsSystem) processCargoShips(player *entities.Player, game Ga
 				}
 			}
 		} else {
-			// At a foreign system — try to sell cargo at a Trading Post, then head home
+			// At a foreign system — try to dock and sell at a Trading Post, then head home
 			if ship.GetTotalCargo() > 0 {
-				// Find a planet with a Trading Post in this system to unload at
 				for _, sys := range systems {
 					if sys.ID != ship.CurrentSystem {
 						continue
 					}
 					for _, e := range sys.Entities {
 						if p, ok := e.(*entities.Planet); ok && p.Owner != "" {
-							// Try unloading at any planet (Trading Post check is in UnloadCargo)
-							als.unloadAllCargo(ship, p, game)
+							// Try docking and selling
+							if ship.DockedAtPlanet == 0 {
+								if err := game.DockShip(ship, p); err == nil {
+									fmt.Printf("[AILogistics] %s docked at %s\n", ship.Name, p.Name)
+								}
+							}
+							if ship.DockedAtPlanet == p.GetID() {
+								als.sellAllCargoAtDock(ship, game)
+							}
 							if ship.GetTotalCargo() == 0 {
+								if ship.DockedAtPlanet != 0 {
+									game.UndockShip(ship)
+								}
 								break
 							}
 						}
 					}
 					break
 				}
+				// Fallback: raw unload if dock sale didn't work
+				if ship.GetTotalCargo() > 0 {
+					for _, sys := range systems {
+						if sys.ID != ship.CurrentSystem {
+							continue
+						}
+						for _, e := range sys.Entities {
+							if p, ok := e.(*entities.Planet); ok && p.Owner != "" {
+								als.unloadAllCargo(ship, p, game)
+								if ship.GetTotalCargo() == 0 {
+									break
+								}
+							}
+						}
+						break
+					}
+				}
+			}
+			// Undock before heading home
+			if ship.DockedAtPlanet != 0 {
+				game.UndockShip(ship)
 			}
 			// Head home if enough fuel
 			fuelForReturn := ship.FuelPerJump + int(ship.FuelPerTick*120)
@@ -280,6 +310,19 @@ func (als *AILogisticsSystem) pickBestTradeTarget(connected []int, ship *entitie
 		}
 	}
 	return bestSys
+}
+
+func (als *AILogisticsSystem) sellAllCargoAtDock(ship *entities.Ship, game GameProvider) {
+	for resType, amount := range ship.CargoHold {
+		if amount <= 0 {
+			continue
+		}
+		sold, credits, err := game.SellAtDock(ship, resType, amount)
+		if err == nil && sold > 0 {
+			fmt.Printf("[AILogistics] %s dock-sold %d %s for %d credits\n",
+				ship.Name, sold, resType, credits)
+		}
+	}
 }
 
 // findUnclaimedHabitable finds any unclaimed habitable planet in a system.

@@ -129,6 +129,45 @@ func (gs *GameServer) GetShippingManager() *game.ShippingManager {
 	return gs.ShippingMgr
 }
 
+func (gs *GameServer) DockShip(ship *entities.Ship, planet *entities.Planet) error {
+	if gs.CargoCommander == nil {
+		return fmt.Errorf("cargo system not initialized")
+	}
+	return gs.CargoCommander.DockShip(ship, planet)
+}
+
+func (gs *GameServer) UndockShip(ship *entities.Ship) error {
+	if gs.CargoCommander == nil {
+		return fmt.Errorf("cargo system not initialized")
+	}
+	return gs.CargoCommander.UndockShip(ship)
+}
+
+func (gs *GameServer) SellAtDock(ship *entities.Ship, resource string, qty int) (int, int, error) {
+	if gs.CargoCommander == nil {
+		return 0, 0, fmt.Errorf("cargo system not initialized")
+	}
+	buyPrice := 0.0
+	if gs.State.Market != nil {
+		buyPrice = gs.State.Market.GetBuyPrice(resource)
+	}
+	sold, credits, err := gs.CargoCommander.SellAtDock(ship, resource, qty, buyPrice, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	// For AI: credit the ship owner
+	for _, p := range gs.State.Players {
+		if p != nil && p.Name == ship.Owner {
+			p.Credits += credits
+			break
+		}
+	}
+	if gs.State.Market != nil {
+		gs.State.Market.AddTradeVolume(resource, sold, false)
+	}
+	return sold, credits, nil
+}
+
 // --- api.GameStateProvider ---
 
 func (gs *GameServer) GetSystems() []*entities.System     { return gs.State.Systems }

@@ -17,8 +17,8 @@ var (
 	buildMenuRectCache = utils.NewRectImageCache()
 )
 
-const (
-	buildMenuItemHeight  = 80
+var (
+	buildMenuItemHeight  = int(80.0 * utils.UIScale)
 	buildMenuItemPadding = 5
 	scrollStepPixels     = 40
 )
@@ -240,7 +240,7 @@ func (bm *BuildMenu) Update() {
 		if wheelY != 0 {
 			_, _, maxScroll := bm.computeScrollMetrics()
 			if maxScroll > 0 {
-				bm.scrollOffset -= int(wheelY * scrollStepPixels)
+				bm.scrollOffset -= int(wheelY * float64(scrollStepPixels))
 				if bm.scrollOffset < 0 {
 					bm.scrollOffset = 0
 				}
@@ -537,13 +537,14 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		screen.DrawImage(colorBox, opts)
 
 		// Draw building name
+		lh := int(15.0 * utils.UIScale)
 		nameX := colorBoxX + colorBoxSize + 10
-		nameY := itemY + 12
+		nameY := itemY + lh - 4
 		views.DrawText(screen, item.Name, nameX, nameY, utils.TextPrimary)
 
 		// Draw cost
 		costText := fmt.Sprintf("Cost: %d credits", item.Cost)
-		costY := nameY + 15
+		costY := nameY + lh
 		costColor := utils.TextSecondary
 		if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
 			costColor = color.RGBA{200, 100, 100, 255} // Red if can't afford
@@ -551,12 +552,12 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		views.DrawText(screen, costText, nameX, costY, costColor)
 
 		// Draw description
-		descY := costY + 15
+		descY := costY + lh
 		views.DrawText(screen, item.Description, nameX, descY, utils.TextSecondary)
 
 		// Draw build time
 		buildTimeText := "Build time: 60s"
-		buildTimeY := descY + 15
+		buildTimeY := descY + lh
 		views.DrawText(screen, buildTimeText, nameX, buildTimeY, utils.TextSecondary)
 
 		itemY += buildMenuItemHeight + buildMenuItemPadding

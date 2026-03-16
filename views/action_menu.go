@@ -153,7 +153,7 @@ func (am *ActionMenu) Draw(screen *ebiten.Image) {
 
 		// Draw shortcut hint if available
 		if item.Shortcut != "" {
-			shortcutX := am.Panel.X + am.Panel.Width - am.Padding - len(item.Shortcut)*6 - 5
+			shortcutX := am.Panel.X + am.Panel.Width - am.Padding - len(item.Shortcut)*utils.CharWidth() - 5
 			DrawText(screen, item.Shortcut, shortcutX, textY, utils.TextSecondary)
 		}
 
