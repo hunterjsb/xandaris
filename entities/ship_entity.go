@@ -385,9 +385,8 @@ func GetShipResourceRequirements(shipType ShipType) map[string]int {
 		requirements[ResFuel] = 20
 
 	case ShipTypeColony:
-		requirements[ResIron] = 15
-		requirements[ResFuel] = 10
-		requirements[ResRareMetals] = 5
+		// Colony ships are transports — credits only, no scarce resources
+		// This ensures colonization isn't blocked by Iron deficits
 
 	case ShipTypeCargo:
 		requirements[ResIron] = 60
