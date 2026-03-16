@@ -50,6 +50,10 @@ func NewEventLog(maxEvents int) *EventLog {
 func (el *EventLog) Subscribe(fn func(GameEvent)) {
 	el.mu.Lock()
 	defer el.mu.Unlock()
+	// Cap listeners to prevent memory leak from repeated UI subscriptions
+	if len(el.listeners) >= 50 {
+		el.listeners = el.listeners[len(el.listeners)-25:] // keep newest 25
+	}
 	el.listeners = append(el.listeners, fn)
 }
 

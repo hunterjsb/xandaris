@@ -94,16 +94,30 @@ func (als *AILogisticsSystem) processCargoShips(player *entities.Player, game Ga
 			continue
 		}
 
-		// Skip ships without enough fuel for a round trip
-		// Each jump costs FuelPerJump + ~100 ticks of FuelPerTick
+		// Fuel budget: one-way trip cost
 		fuelPerTrip := ship.FuelPerJump + int(ship.FuelPerTick*120)
-		if ship.CurrentFuel < fuelPerTrip*2 {
-			continue
-		}
 
 		// Find the planet this ship is orbiting
 		planet := findPlanetAtShipOrbit(ship, systems)
 		isHome := planet != nil && planet.Owner == ship.Owner
+
+		// If not at home and fuel is low, try to return even with partial fuel
+		if !isHome && ship.CurrentFuel < fuelPerTrip*2 && ship.CurrentFuel >= fuelPerTrip {
+			// Emergency return — dump cargo and head home
+			if ship.GetTotalCargo() > 0 && planet != nil {
+				als.unloadAllCargo(ship, planet, game)
+			}
+			homeSys := als.findHomeSystem(player, systems)
+			if homeSys >= 0 && homeSys != ship.CurrentSystem {
+				game.StartShipJourney(ship, homeSys)
+			}
+			continue
+		}
+
+		// Skip ships without enough fuel for a round trip (only blocks dispatch, not return)
+		if ship.CurrentFuel < fuelPerTrip*2 {
+			continue
+		}
 
 		if isHome {
 			if ship.GetTotalCargo() > 0 {

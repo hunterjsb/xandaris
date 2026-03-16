@@ -10,7 +10,7 @@ func init() {
 	RegisterSystem(&ConstructionSystem{
 		BaseSystem:  NewBaseSystem("Construction", 20),
 		queues:      NewSafeMap[string, *ConstructionQueue](),
-		completions: make(chan ConstructionCompletion, 100),
+		completions: make(chan ConstructionCompletion, 1000),
 	})
 }
 
