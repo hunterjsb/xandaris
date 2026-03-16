@@ -141,7 +141,10 @@ func ProcessConsumption(players []*entities.Player) ConsumptionResult {
 					}
 					for _, be := range planet.Buildings {
 						if b, ok := be.(*entities.Building); ok {
-							if b.BuildingType != entities.BuildingBase && b.IsOperational {
+							if b.BuildingType != entities.BuildingBase &&
+							b.BuildingType != entities.BuildingTradingPost &&
+							b.BuildingType != entities.BuildingMine &&
+							b.IsOperational {
 								b.IsOperational = false
 							}
 						}
