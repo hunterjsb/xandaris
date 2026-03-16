@@ -180,16 +180,30 @@ jobs:
                 sudo systemctl stop xandaris && \
                 mv /home/ec2-user/xandaris-server-new /home/ec2-user/xandaris-server && \
                 sudo systemctl start xandaris && \
-                for i in 1 2 3 4 5 6; do sleep 2; STATUS=\$(sudo systemctl is-active xandaris); echo \"Check \$i: \$STATUS\"; [ \"\$STATUS\" = \"active\" ] && break; done && \
-                sudo systemctl is-active xandaris"
+                sleep 5 && \
+                STATUS=\$(sudo systemctl is-active xandaris) && \
+                echo \"Server status: \$STATUS\" && \
+                if [ \"\$STATUS\" = \"failed\" ] || [ \"\$STATUS\" = \"inactive\" ]; then \
+                  echo '--- journalctl ---'; \
+                  sudo journalctl -u xandaris --no-pager -n 30; \
+                  exit 1; \
+                fi && \
+                echo 'Server is running'"
 
           # Swap agent binary and restart
           $SSH "chmod +x /home/ec2-user/xandaris-agent-new && \
                 sudo systemctl stop xandaris-agent 2>/dev/null || true && \
                 mv /home/ec2-user/xandaris-agent-new /home/ec2-user/xandaris-agent && \
                 sudo systemctl start xandaris-agent && \
-                for i in 1 2 3 4 5 6; do sleep 2; STATUS=\$(sudo systemctl is-active xandaris-agent); echo \"Check \$i: \$STATUS\"; [ \"\$STATUS\" = \"active\" ] && break; done && \
-                sudo systemctl is-active xandaris-agent"
+                sleep 5 && \
+                STATUS=\$(sudo systemctl is-active xandaris-agent) && \
+                echo \"Agent status: \$STATUS\" && \
+                if [ \"\$STATUS\" = \"failed\" ] || [ \"\$STATUS\" = \"inactive\" ]; then \
+                  echo '--- journalctl ---'; \
+                  sudo journalctl -u xandaris-agent --no-pager -n 30; \
+                  exit 1; \
+                fi && \
+                echo 'Agent is running'"
 
   publish_release:
     runs-on: ubuntu-latest
