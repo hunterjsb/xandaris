@@ -153,7 +153,7 @@ jobs:
           Type=simple
           User=ec2-user
           WorkingDirectory=/home/ec2-user
-          ExecStart=/home/ec2-user/xandaris-agent --server http://localhost:8080 --game-key e4287f2503866497ce414a00c55f4581 --turns 999999 --interval 30s --model z-ai/glm-4.7-flash
+          ExecStart=/home/ec2-user/xandaris-agent --server http://localhost:8080 --game-key e4287f2503866497ce414a00c55f4581 --turns 999999 --interval 2m --model z-ai/glm-4.7-flash
           Environment=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
           Restart=always
           RestartSec=10
