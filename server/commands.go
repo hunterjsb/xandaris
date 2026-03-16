@@ -19,6 +19,7 @@ var remoteForwardedCommands = map[game.CommandType]bool{
 	game.CmdFleetAddShip: true, game.CmdFleetRemoveShip: true,
 	game.CmdWorkforceAssign: true, game.CmdCancelConstruction: true,
 	game.CmdDockShip: true, game.CmdUndockShip: true, game.CmdSellAtDock: true,
+	game.CmdDemolish: true,
 }
 
 // executeCommand processes a single game command via the registry.
@@ -76,6 +77,7 @@ func (gs *GameServer) initCommandRegistry() {
 	cr.Register(game.CmdDockShip, gs.handleDockShipCommand)
 	cr.Register(game.CmdUndockShip, gs.handleUndockShipCommand)
 	cr.Register(game.CmdSellAtDock, gs.handleSellAtDockCommand)
+	cr.Register(game.CmdDemolish, gs.handleDemolishCommand)
 
 	gs.cmdRegistry = cr
 }
@@ -337,6 +339,55 @@ func (gs *GameServer) handleUpgradeCommand(cmd game.GameCommand) {
 		"building":  building.BuildingType,
 		"new_level": building.Level,
 		"cost":      cost,
+	})
+}
+
+func (gs *GameServer) handleDemolishCommand(cmd game.GameCommand) {
+	dd, ok := cmd.Data.(game.DemolishCommandData)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid demolish data"))
+		return
+	}
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+
+	planet := gs.CargoCommander.FindPlanetByID(dd.PlanetID)
+	if planet == nil || planet.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("planet not found or not owned"))
+		return
+	}
+
+	if dd.BuildingIndex < 0 || dd.BuildingIndex >= len(planet.Buildings) {
+		sendResult(cmd, fmt.Errorf("invalid building index"))
+		return
+	}
+
+	building, ok := planet.Buildings[dd.BuildingIndex].(*entities.Building)
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid building"))
+		return
+	}
+
+	// Can't demolish the Base
+	if building.BuildingType == entities.BuildingBase {
+		sendResult(cmd, fmt.Errorf("cannot demolish the Base"))
+		return
+	}
+
+	// Refund 25% of build cost
+	refund := game.GetBuildingCost(building.BuildingType) / 4
+
+	// Remove from planet
+	planet.Buildings = append(planet.Buildings[:dd.BuildingIndex], planet.Buildings[dd.BuildingIndex+1:]...)
+	human.Credits += refund
+
+	sendSuccess(cmd, map[string]interface{}{
+		"demolished": building.BuildingType,
+		"level":      building.Level,
+		"refund":     refund,
 	})
 }
 

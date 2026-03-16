@@ -76,6 +76,9 @@ func computePower(planet *entities.Planet) {
 		}
 
 		staffing := b.GetStaffingRatio()
+		if staffing <= 0 {
+			continue // unstaffed buildings don't generate power or consume fuel
+		}
 		levelMult := 1.0 + float64(b.Level-1)*0.3
 
 		// Power generation
