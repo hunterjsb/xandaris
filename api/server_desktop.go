@@ -1708,6 +1708,90 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// Player economic summary — income, expenses, net flow
+	mux.HandleFunc("/api/economy/summary", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		playerName := getAuthPlayer(r)
+		player := findPlayer(p, playerName)
+		if player == nil {
+			writeErr(w, http.StatusNotFound, "player not found")
+			return
+		}
+
+		// Calculate income sources
+		laborIncome := 0
+		domesticIncome := 0
+		tpIncome := 0
+		totalUpkeep := 0
+		popAdmin := 0
+		totalPop := int64(0)
+
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			pop := planet.Population
+			totalPop += pop
+
+			// Labor (matches credit_production.go)
+			labor := int(float64(pop/50) * planet.ProductivityBonus)
+			if labor < 10 && pop > 0 {
+				labor = 10
+			}
+			laborIncome += labor
+
+			// Domestic (rough estimate)
+			domestic := int(float64(pop) / 1000 * 8) // simplified
+			domesticIncome += domestic
+
+			// TP revenue
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok {
+					if b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
+						tpIncome += 2 * b.Level
+					}
+					// Upkeep
+					upkeep := map[string]int{
+						"Fusion Reactor": 2, "Refinery": 3, "Factory": 5, "Shipyard": 6,
+					}
+					if cost, ok := upkeep[b.BuildingType]; ok && b.IsOperational {
+						totalUpkeep += cost + (b.Level - 1)
+					}
+				}
+			}
+
+			popAdmin += int(pop / 1000)
+		}
+
+		totalIncome := laborIncome + domesticIncome + tpIncome
+		totalExpenses := totalUpkeep + popAdmin
+		netFlow := totalIncome - totalExpenses
+
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"player":          player.Name,
+			"credits":         player.Credits,
+			"population":      totalPop,
+			"planets":         len(player.OwnedPlanets),
+			"income_per_tick": map[string]int{
+				"labor":    laborIncome,
+				"domestic": domesticIncome,
+				"trading":  tpIncome,
+				"total":    totalIncome,
+			},
+			"expenses_per_tick": map[string]int{
+				"building_upkeep": totalUpkeep,
+				"administration":  popAdmin,
+				"total":           totalExpenses,
+			},
+			"net_flow_per_tick": netFlow,
+			"profitable":       netFlow > 0,
+		}})
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

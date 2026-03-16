@@ -91,6 +91,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"}},"required":["planet_id"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_finances", Description: "Get your income vs expenses breakdown: labor income, domestic economy, trading post revenue vs building upkeep. Shows if your empire is profitable or bleeding credits.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "get_galaxy", Description: "Get all star systems with owners, population, resources, and hyperlane connections. Use for planning expansion and trade routes.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
@@ -227,6 +231,12 @@ func executeTool(name string, args string, factionName string) string {
 		var p struct{ PlanetID int `json:"planet_id"` }
 		json.Unmarshal([]byte(args), &p)
 		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "get_finances":
+		result, err := callAPI("GET", "/api/economy/summary", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
