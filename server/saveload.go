@@ -316,7 +316,14 @@ func (gs *GameServer) LoadGame(path string) error {
 				continue
 			}
 			if livePlanet, ok := systemPlanets[planet.GetID()]; ok {
-				// Copy ALL player-specific state from saved planet to system entity
+				// Copy ALL player-specific state from saved planet to system entity.
+				// The saved planet has the authoritative state (buildings, resources, etc.)
+				// because gob serializes each planet in the player's OwnedPlanets list
+				// independently from the system entities copy.
+				savedBuildings := len(planet.Buildings)
+				savedResources := len(planet.Resources)
+				liveBuildings := len(livePlanet.Buildings)
+
 				livePlanet.Owner = player.Name
 				livePlanet.Population = planet.Population
 				livePlanet.Happiness = planet.Happiness
@@ -324,13 +331,26 @@ func (gs *GameServer) LoadGame(path string) error {
 				livePlanet.TechLevel = planet.TechLevel
 				livePlanet.PowerGenerated = planet.PowerGenerated
 				livePlanet.PowerConsumed = planet.PowerConsumed
-				livePlanet.Buildings = planet.Buildings
-				livePlanet.Resources = planet.Resources
+
+				// Always prefer saved buildings/resources if they exist
+				if savedBuildings > 0 {
+					livePlanet.Buildings = planet.Buildings
+				}
+				if savedResources > 0 {
+					livePlanet.Resources = planet.Resources
+				}
+
 				for resType, storage := range planet.StoredResources {
 					if storage != nil {
 						livePlanet.StoredResources[resType] = storage
 					}
 				}
+
+				if savedBuildings != liveBuildings {
+					fmt.Printf("[Load] %s's %s: merged %d saved buildings (was %d on system entity)\n",
+						player.Name, planet.Name, savedBuildings, liveBuildings)
+				}
+
 				// Replace with shared pointer
 				player.OwnedPlanets[i] = livePlanet
 			} else {
@@ -417,5 +437,15 @@ func (gs *GameServer) LoadGame(path string) error {
 	gs.cleanupBotPlayers()
 
 	fmt.Printf("[Server] Game loaded: %s, tick %d\n", saveData.PlayerName, saveData.Tick)
+
+	// Force an immediate autosave with the corrected state.
+	// This ensures the next restart loads good data (buildings, resources, etc.)
+	// instead of the stale save that may have been created with old code.
+	if err := gs.AutoSave(path); err != nil {
+		fmt.Printf("[Server] Post-load autosave failed: %v\n", err)
+	} else {
+		fmt.Printf("[Server] Post-load autosave written to %s\n", path)
+	}
+
 	return nil
 }
