@@ -16,6 +16,18 @@ func init() {
 // ShipMovementSystem handles ship travel between systems
 type ShipMovementSystem struct {
 	*BaseSystem
+	TickCount     int64 // diagnostic: how many ticks processed
+	ShipsFound    int   // diagnostic: ships found in last tick
+	MovingFound   int   // diagnostic: moving ships processed in last tick
+}
+
+// GetShipMovementDiag returns diagnostic counters
+func GetShipMovementDiag() (ticks int64, shipsFound, movingFound int) {
+	sys := GetSystemByName("ShipMovement")
+	if sms, ok := sys.(*ShipMovementSystem); ok {
+		return sms.TickCount, sms.ShipsFound, sms.MovingFound
+	}
+	return -1, -1, -1
 }
 
 // OnTick processes ship movement each game tick
@@ -37,6 +49,9 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 	}
 
 	systemsMap := game.GetSystemsMap()
+	sms.TickCount++
+	sms.ShipsFound = 0
+	sms.MovingFound = 0
 
 	// Process all ships — check both system entities and player-owned ships
 	// to catch ships that aren't in a system's entity list (e.g. after API creation)
@@ -46,6 +61,10 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		for _, entity := range system.Entities {
 			if ship, ok := entity.(*entities.Ship); ok {
 				seen[ship.GetID()] = true
+				sms.ShipsFound++
+				if ship.Status == entities.ShipStatusMoving {
+					sms.MovingFound++
+				}
 				sms.processShipMovement(ship, systemsMap)
 			}
 		}
