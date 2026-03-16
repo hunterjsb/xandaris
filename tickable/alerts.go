@@ -105,6 +105,20 @@ func (as *AlertSystem) checkAlerts(player *entities.Player, tick int64, logger G
 			as.alert(player.Name, "bankruptcy", tick, logger,
 				fmt.Sprintf("%s low on credits (%d) — buildings may shut down!", player.Name, player.Credits))
 		}
+
+		// Alert: Power crisis (< 50% power with buildings needing it)
+		if planet.PowerConsumed > 0 && planet.GetPowerRatio() < 0.5 && planet.Population > 500 {
+			as.alert(player.Name, "power_crisis_"+fmt.Sprintf("%d", planet.GetID()), tick, logger,
+				fmt.Sprintf("Power crisis on %s! %.0f%% capacity — production severely impacted",
+					planet.Name, planet.GetPowerRatio()*100))
+		}
+
+		// Alert: Tech stagnation (decaying tech with no Electronics)
+		if planet.TechLevel > 0.5 && planet.GetStoredAmount(entities.ResElectronics) == 0 && planet.Population > 2000 {
+			as.alert(player.Name, "tech_decay_"+fmt.Sprintf("%d", planet.GetID()), tick, logger,
+				fmt.Sprintf("Tech declining on %s (%.1f) — no Electronics supply!",
+					planet.Name, planet.TechLevel))
+		}
 	}
 }
 
