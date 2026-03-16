@@ -247,7 +247,7 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 
 	// Draw UI info
 	DrawText(screen, "XANDARIS II", 10, 10, utils.Theme.Accent)
-	DrawText(screen, "Double-click system to enter  |  Esc to menu", 10, 28, utils.Theme.TextDim)
+	DrawText(screen, "Double-click system to enter  |  [H] Help  |  Esc to menu", 10, 28, utils.Theme.TextDim)
 
 	// Draw hints below header
 	gv.drawHints(screen)
@@ -525,23 +525,17 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 			}
 		}
 
-		// Draw ship icon (small triangle)
-		size := 4
-		for py := 0; py < size*2; py++ {
-			for px := 0; px < size*2; px++ {
-				dx := float64(px - size)
-				dy := float64(py - size)
-				if dy > 0 && dx >= -dy/2 && dx <= dy/2 {
-					screen.Set(fleetX+px-size, fleetY+py-size, ownerColor)
-				}
-			}
-		}
+		// Draw ship icon (downward-pointing triangle)
+		sz := int(4.0 * utils.UIScale)
+		DrawLine(screen, fleetX-sz, fleetY-sz/2, fleetX+sz, fleetY-sz/2, ownerColor)
+		DrawLine(screen, fleetX-sz, fleetY-sz/2, fleetX, fleetY+sz/2, ownerColor)
+		DrawLine(screen, fleetX+sz, fleetY-sz/2, fleetX, fleetY+sz/2, ownerColor)
 
 		// Draw ship count
-		if totalShips > 1 {
-			countText := fmt.Sprintf("%d", totalShips)
-			DrawText(screen, countText, fleetX+6, fleetY-4, ownerColor)
-		}
+		countText := fmt.Sprintf("%d", totalShips)
+		cw := utils.CharWidth()
+		DrawText(screen, countText, fleetX+sz+2, fleetY-sz/2, ownerColor)
+		_ = cw
 	}
 
 	// Draw trade route lines for cargo ships carrying goods
@@ -670,20 +664,39 @@ func (gv *GalaxyView) drawTransitShip(screen *ebiten.Image, ship *entities.Ship,
 		shipColor = humanPlayer.Color
 	}
 
-	// Draw ship as a small triangle
-	size := 4
+	// Draw ship as a triangle (scaled)
+	size := int(4.0 * utils.UIScale)
 	shipX := int(x)
 	shipY := int(y)
 
-	for py := 0; py < size*2; py++ {
-		for px := 0; px < size*2; px++ {
-			dx := float64(px - size)
-			dy := float64(py - size)
-			if dy > 0 && dx >= -dy/2 && dx <= dy/2 {
-				screen.Set(shipX+px-size, shipY+py-size, shipColor)
-			}
-		}
+	// Calculate direction for oriented triangle
+	dx := tx - sx
+	dy := ty - sy
+	length := math.Sqrt(dx*dx + dy*dy)
+	if length > 0 {
+		dx /= length
+		dy /= length
 	}
+
+	// Triangle points: nose in direction of travel
+	noseX := shipX + int(float64(size)*dx)
+	noseY := shipY + int(float64(size)*dy)
+	leftX := shipX + int(float64(size)*(-dx*0.5-dy*0.7))
+	leftY := shipY + int(float64(size)*(-dy*0.5+dx*0.7))
+	rightX := shipX + int(float64(size)*(-dx*0.5+dy*0.7))
+	rightY := shipY + int(float64(size)*(-dy*0.5-dx*0.7))
+
+	DrawLine(screen, noseX, noseY, leftX, leftY, shipColor)
+	DrawLine(screen, noseX, noseY, rightX, rightY, shipColor)
+	DrawLine(screen, leftX, leftY, rightX, rightY, shipColor)
+
+	// Ship label below
+	label := ship.Name
+	if ship.GetTotalCargo() > 0 {
+		label += fmt.Sprintf(" [%d]", ship.GetTotalCargo())
+	}
+	labelW := len(label) * utils.CharWidth()
+	DrawText(screen, label, shipX-labelW/2, shipY+size+3, shipColor)
 
 	// Draw a subtle travel indicator (pulsing dot)
 	pulseSize := 2
