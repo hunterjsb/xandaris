@@ -27,9 +27,9 @@ func init() {
 	planetBuildingRenderer = rendering.NewBuildingRenderer(planetSpriteRenderer)
 }
 
-const (
-	workforceButtonWidth  = 170
-	workforceButtonHeight = 32
+var (
+	workforceButtonWidth  = int(170.0 * utils.UIScale)
+	workforceButtonHeight = int(32.0 * utils.UIScale)
 )
 
 // BuildMenuInterface defines the interface for build menu operations
@@ -748,7 +748,8 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 	}
 
 	// Draw resource type label below
-	labelY := centerY + radius + 12
+	lh := int(15.0 * utils.UIScale)
+	labelY := centerY + radius + lh
 	DrawCenteredText(screen, resource.ResourceType, centerX, labelY)
 
 	// Show abundance and extraction rate below label
@@ -758,7 +759,7 @@ func (pv *PlanetView) drawResource(screen *ebiten.Image, resource *entities.Reso
 		detailColor = utils.SystemOrange
 	}
 	dWidth := len(detailStr) * utils.CharWidth()
-	DrawText(screen, detailStr, centerX-dWidth/2, labelY+12, detailColor)
+	DrawText(screen, detailStr, centerX-dWidth/2, labelY+lh, detailColor)
 }
 
 // drawBuildings draws all building entities
@@ -780,7 +781,8 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	pv.buildingRenderer.RenderBuildingWithAttachments(screen, building, centerX, centerY)
 
 	// Draw building label with level
-	labelY := centerY + building.Size + 12
+	lh := int(15.0 * utils.UIScale)
+	labelY := centerY + building.Size + lh
 	label := building.BuildingType
 	if building.Level > 1 {
 		label = fmt.Sprintf("%s L%d", building.BuildingType, building.Level)
@@ -790,11 +792,11 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	// Show operational status or upgrade cost
 	if !building.IsOperational {
 		offWidth := len("OFFLINE") * utils.CharWidth()
-		DrawText(screen, "OFFLINE", centerX-offWidth/2, labelY+12, utils.SystemRed)
+		DrawText(screen, "OFFLINE", centerX-offWidth/2, labelY+lh, utils.SystemRed)
 	} else if building.CanUpgrade() {
 		costStr := fmt.Sprintf("↑%dcr", building.GetUpgradeCost())
 		costWidth := len(costStr) * utils.CharWidth()
-		DrawText(screen, costStr, centerX-costWidth/2, labelY+12, utils.SystemGreen)
+		DrawText(screen, costStr, centerX-costWidth/2, labelY+lh, utils.SystemGreen)
 	}
 }
 
