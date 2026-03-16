@@ -2053,7 +2053,7 @@ td{padding:3px 4px}
 <div class="panel"><h2>Faction Chat <span class="tag">live</span></h2><div id="ch" style="max-height:220px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Resource Balance <span class="tag">supply vs demand</span></h2><div id="rf"></div></div>
 <div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
-<div class="panel" style="padding:0;overflow:hidden;position:relative"><canvas id="priceChart" style="width:100%;height:220px;display:block;cursor:crosshair"></canvas><div id="priceLegend" style="position:absolute;top:6px;right:8px;display:flex;gap:8px;flex-wrap:wrap"></div><div id="priceTooltip" style="display:none;position:absolute;background:rgba(8,12,24,0.95);border:1px solid #2a3060;border-radius:4px;padding:6px 8px;font-size:10px;color:#c0c8d8;pointer-events:none;z-index:10"></div></div>
+<div class="panel" style="padding:6px 8px 0;overflow:hidden;position:relative"><div id="priceTickers" style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap"></div><canvas id="priceChart" style="width:100%;height:200px;display:block;cursor:crosshair"></canvas><div id="priceTooltip" style="display:none;position:absolute;background:rgba(8,12,24,0.95);border:1px solid #2a3060;border-radius:4px;padding:6px 8px;font-size:10px;color:#c0c8d8;pointer-events:none;z-index:10;white-space:nowrap"></div></div>
 <div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
 <div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:240px;display:block"></canvas></div>
 <div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
@@ -2160,114 +2160,132 @@ return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).ma
 document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
 }catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
-// === Interactive Price Chart ===
+// === Candlestick Price Chart ===
 (function(){
 const pc=document.getElementById('priceChart');if(!pc)return;
 const cx=pc.getContext('2d');
 const tt=document.getElementById('priceTooltip');
-const lg=document.getElementById('priceLegend');
+const tickers=document.getElementById('priceTickers');
 function resize(){pc.width=pc.offsetWidth*2;pc.height=pc.offsetHeight*2;cx.scale(2,2)}
 resize();addEventListener('resize',resize);
 const W=()=>pc.width/2,H=()=>pc.height/2;
 const RC={Iron:'#b4784f',Water:'#508cc8',Oil:'#808080','Rare Metals':'#c8b464','Helium-3':'#b4dcff',Fuel:'#50a050',Electronics:'#5090d0'};
-let hidden={},hoverX=-1;
-// Build legend
-function buildLegend(){
+const UP='#26a69a',DN='#ef5350'; // green/red candle colors
+let selected='Iron';
+// Build ticker buttons
+function buildTickers(){
 const res=window._marketData;if(!res)return;
-lg.innerHTML=Object.keys(res).sort().map(n=>{
-const c=RC[n]||'#888';const on=!hidden[n];
-return'<span data-res="'+n+'" style="cursor:pointer;font-size:9px;color:'+(on?c:'#333')+';opacity:'+(on?1:0.4)+'">\u25CF '+n+'</span>'}).join('');
-lg.querySelectorAll('span').forEach(el=>{
-el.onclick=()=>{const r=el.dataset.res;hidden[r]=!hidden[r];buildLegend()}})}
-buildLegend();setInterval(buildLegend,5000);
-// Mouse tracking
-let mouseX=-1,mouseInChart=false;
-pc.addEventListener('mousemove',e=>{const r=pc.getBoundingClientRect();mouseX=e.clientX-r.left;mouseInChart=true});
-pc.addEventListener('mouseleave',()=>{mouseInChart=false;tt.style.display='none'});
+tickers.innerHTML=Object.keys(res).sort().map(n=>{
+const r=res[n],c=RC[n]||'#888';
+const cur=r.buy_price,base=r.base_price,diff=cur-base;
+const dc=diff>0?DN:UP;
+const sel=n===selected;
+return'<span data-res="'+n+'" style="cursor:pointer;padding:3px 8px;border-radius:3px;font-size:10px;'
++'background:'+(sel?'#151a30':'transparent')+';border:1px solid '+(sel?c+'60':'#1a2040')
++';display:inline-flex;align-items:center;gap:4px">'
++'<span style="color:'+c+'">\u25CF</span>'
++'<span style="color:'+(sel?'#ccd':'#556')+'">'+n+'</span>'
++'<b style="color:'+(sel?'#ccd':'#556')+'">'+cur.toFixed(0)+'</b>'
++'<span style="color:'+dc+';font-size:9px">'+(diff>0?'+':'')+diff.toFixed(0)+'</span>'
++'</span>'}).join('');
+tickers.querySelectorAll('span[data-res]').forEach(el=>{
+el.onclick=()=>{selected=el.dataset.res;buildTickers()}})}
+buildTickers();setInterval(buildTickers,3000);
+// Mouse
+let mouseX=-1,mouseIn=false;
+pc.addEventListener('mousemove',e=>{const r=pc.getBoundingClientRect();mouseX=e.clientX-r.left;mouseIn=true});
+pc.addEventListener('mouseleave',()=>{mouseIn=false;tt.style.display='none'});
+// Build OHLC candles from price history (group every 3 ticks)
+function buildCandles(hist){
+const candles=[],gs=3;
+for(let i=0;i<hist.length;i+=gs){
+const slice=hist.slice(i,i+gs);
+candles.push({o:slice[0],h:Math.max(...slice),l:Math.min(...slice),c:slice[slice.length-1]})}
+return candles}
 function drawChart(){
 const w=W(),h=H();
 cx.clearRect(0,0,w,h);
 const res=window._marketData;
-if(!res){cx.fillStyle='#334';cx.font='11px monospace';cx.textAlign='center';cx.fillText('Waiting for market data...',w/2,h/2);requestAnimationFrame(drawChart);return}
-const pad={t:20,b:20,l:40,r:10};
+if(!res||!res[selected]){cx.fillStyle='#334';cx.font='11px monospace';cx.textAlign='center';cx.fillText('Waiting for data...',w/2,h/2);requestAnimationFrame(drawChart);return}
+const r=res[selected],hist=r.price_history||[];
+if(hist.length<3){requestAnimationFrame(drawChart);return}
+const c=RC[selected]||'#888';
+const candles=buildCandles(hist);
+const pad={t:14,b:14,l:44,r:16};
 const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
-// Find global Y range (log scale so Electronics doesn't dwarf Iron)
-let yMin=Infinity,yMax=-Infinity,maxLen=0;
-Object.entries(res).forEach(([n,r])=>{
-if(hidden[n]||!r.price_history||r.price_history.length<2)return;
-maxLen=Math.max(maxLen,r.price_history.length);
-r.price_history.forEach(v=>{const lv=Math.log10(Math.max(1,v));if(lv<yMin)yMin=lv;if(lv>yMax)yMax=lv})});
-if(yMin>=yMax){yMin=1;yMax=3;maxLen=2}
-const yPad=(yMax-yMin)*0.08||0.2;yMin-=yPad;yMax+=yPad;
-// Map value to Y pixel (log scale)
-const toY=v=>pad.t+ch*(1-(Math.log10(Math.max(1,v))-yMin)/(yMax-yMin));
-// Grid lines at nice log values
-cx.strokeStyle='#151a2a';cx.lineWidth=0.5;
-const gridVals=[25,50,75,100,150,200,300,500,800,1200];
-gridVals.forEach(gv=>{
-const lv=Math.log10(gv);if(lv<yMin||lv>yMax)return;
-const y=pad.t+ch*(1-(lv-yMin)/(yMax-yMin));
+// Y range from candle data
+let yMin=Infinity,yMax=-Infinity;
+candles.forEach(cd=>{if(cd.l<yMin)yMin=cd.l;if(cd.h>yMax)yMax=cd.h});
+// Include base price in range
+if(r.base_price<yMin)yMin=r.base_price;if(r.base_price>yMax)yMax=r.base_price;
+const yPad=(yMax-yMin)*0.12||5;yMin-=yPad;yMax+=yPad;
+if(yMin<0)yMin=0;
+const toY=v=>pad.t+ch*(1-(v-yMin)/(yMax-yMin));
+// Grid
+cx.strokeStyle='#131828';cx.lineWidth=0.5;
+const range=yMax-yMin;
+let step=Math.pow(10,Math.floor(Math.log10(range)));
+if(range/step<3)step/=2;if(range/step>8)step*=2;
+for(let v=Math.ceil(yMin/step)*step;v<=yMax;v+=step){
+const y=toY(v);
 cx.beginPath();cx.moveTo(pad.l,y);cx.lineTo(pad.l+cw,y);cx.stroke();
-cx.fillStyle='#334';cx.font='8px monospace';cx.textAlign='right';
-cx.fillText(gv.toString(),pad.l-4,y+3)})
-// Title
-cx.fillStyle='#334';cx.font='9px monospace';cx.textAlign='left';
-cx.fillText('MARKET PRICES',pad.l,12);
-// Draw each resource line
-Object.entries(res).sort().forEach(([n,r])=>{
-if(hidden[n]||!r.price_history||r.price_history.length<2)return;
-const hist=r.price_history;const c=RC[n]||'#888';
-// Base price — dotted line
+cx.fillStyle='#2a2a3a';cx.font='8px monospace';cx.textAlign='right';
+cx.fillText(v.toFixed(0),pad.l-4,y+3)}
+// Base price line
 const baseY=toY(r.base_price);
-cx.strokeStyle=c+'30';cx.lineWidth=0.5;cx.setLineDash([3,3]);
+cx.strokeStyle=c+'25';cx.lineWidth=0.5;cx.setLineDash([4,4]);
 cx.beginPath();cx.moveTo(pad.l,baseY);cx.lineTo(pad.l+cw,baseY);cx.stroke();
 cx.setLineDash([]);
-// Price line
-cx.strokeStyle=c;cx.lineWidth=1.5;cx.globalAlpha=0.8;
-cx.beginPath();
-for(let i=0;i<hist.length;i++){
-const x=pad.l+cw*(i/(maxLen-1));
-const y=toY(hist[i]);
-if(i===0)cx.moveTo(x,y);else cx.lineTo(x,y)}
-cx.stroke();
-// Area fill
-cx.globalAlpha=0.06;cx.fillStyle=c;
-cx.lineTo(pad.l+cw*((hist.length-1)/(maxLen-1)),pad.t+ch);
-cx.lineTo(pad.l,pad.t+ch);cx.fill();
-cx.globalAlpha=1;
-// Current price dot
-const lastX=pad.l+cw*((hist.length-1)/(maxLen-1));
-const lastY=toY(hist[hist.length-1]);
-cx.fillStyle=c;cx.beginPath();cx.arc(lastX,lastY,3,0,Math.PI*2);cx.fill()});
-// Hover crosshair + tooltip
-if(mouseInChart&&mouseX>=0){
-const chartX=mouseX*2; // account for 2x DPI
-if(chartX>=pad.l&&chartX<=pad.l+cw){
-// Vertical line
-cx.strokeStyle='#ffffff15';cx.lineWidth=0.5;
-cx.beginPath();cx.moveTo(chartX,pad.t);cx.lineTo(chartX,pad.t+ch);cx.stroke();
-// Find index
-const frac=(chartX-pad.l)/cw;
-let tipHtml='';
-Object.entries(res).sort().forEach(([n,r])=>{
-if(hidden[n]||!r.price_history||r.price_history.length<2)return;
-const idx=Math.min(r.price_history.length-1,Math.round(frac*(maxLen-1)));
-const realIdx=Math.min(idx,r.price_history.length-1);
-const val=r.price_history[realIdx];
-const c=RC[n]||'#888';
-// Dot on line
-const dx=pad.l+cw*(realIdx/(maxLen-1));
-const dy=toY(val);
-cx.fillStyle=c;cx.beginPath();cx.arc(dx,dy,3,0,Math.PI*2);cx.fill();
-const diff=val-r.base_price;const dc=diff>0?'#d9534f':'#5cb85c';
-tipHtml+='<div style="color:'+c+'"><span style="display:inline-block;width:65px">'+n+'</span> <b>'+val.toFixed(0)+'</b> <span style="color:'+dc+';font-size:9px">'+(diff>0?'+':'')+diff.toFixed(0)+'</span></div>'});
-if(tipHtml){
+cx.fillStyle=c+'40';cx.font='7px monospace';cx.textAlign='left';
+cx.fillText('base '+r.base_price.toFixed(0),pad.l+2,baseY-3);
+// Candles
+const candleW=Math.max(3,Math.min(12,(cw/candles.length)*0.7));
+const gap=cw/candles.length;
+let hoverCandle=-1;
+candles.forEach((cd,i)=>{
+const x=pad.l+gap*i+gap/2;
+const bull=cd.c>=cd.o;
+const col=bull?UP:DN;
+// Wick (high-low line)
+cx.strokeStyle=col+'80';cx.lineWidth=1;
+cx.beginPath();cx.moveTo(x,toY(cd.h));cx.lineTo(x,toY(cd.l));cx.stroke();
+// Body (open-close rect)
+const bodyTop=toY(Math.max(cd.o,cd.c)),bodyBot=toY(Math.min(cd.o,cd.c));
+const bodyH=Math.max(1,bodyBot-bodyTop);
+if(bull){cx.fillStyle=col+'30';cx.strokeStyle=col;cx.lineWidth=1;
+cx.fillRect(x-candleW/2,bodyTop,candleW,bodyH);cx.strokeRect(x-candleW/2,bodyTop,candleW,bodyH)}
+else{cx.fillStyle=col;cx.fillRect(x-candleW/2,bodyTop,candleW,bodyH)}
+// Hover detect
+if(mouseIn){
+const mx2=mouseX*2;
+if(Math.abs(mx2-x)<gap/2)hoverCandle=i}});
+// Current price label on right edge
+const lastPrice=hist[hist.length-1];
+const lastY=toY(lastPrice);
+const lastDiff=lastPrice-r.base_price;
+cx.fillStyle=lastDiff>=0?DN:UP;
+cx.font='bold 10px monospace';cx.textAlign='left';
+cx.fillText(lastPrice.toFixed(0),pad.l+cw+4,lastY+4);
+// Hover tooltip
+if(hoverCandle>=0&&hoverCandle<candles.length){
+const cd=candles[hoverCandle];
+const x=pad.l+gap*hoverCandle+gap/2;
+// Highlight candle
+cx.strokeStyle='#ffffff30';cx.lineWidth=0.5;
+cx.beginPath();cx.moveTo(x,pad.t);cx.lineTo(x,pad.t+ch);cx.stroke();
+const bull=cd.c>=cd.o;
 tt.style.display='block';
-tt.innerHTML=tipHtml;
+tt.innerHTML='<div style="color:'+c+';font-weight:bold;margin-bottom:3px">'+selected+'</div>'
++'<div style="display:grid;grid-template-columns:auto auto;gap:1px 8px;font-size:10px">'
++'<span style="color:#556">O</span><span>'+cd.o.toFixed(1)+'</span>'
++'<span style="color:#556">H</span><span style="color:#5cb85c">'+cd.h.toFixed(1)+'</span>'
++'<span style="color:#556">L</span><span style="color:#d9534f">'+cd.l.toFixed(1)+'</span>'
++'<span style="color:#556">C</span><span style="color:'+(bull?UP:DN)+'">'+cd.c.toFixed(1)+'</span>'
++'</div>';
 const tr=pc.getBoundingClientRect();
-let tx=mouseX+12,ty=tr.top-tr.top+30;
+let tx=mouseX+12,ty=20;
 if(mouseX>tr.width*0.7)tx=mouseX-tt.offsetWidth-12;
-tt.style.left=tx+'px';tt.style.top=ty+'px'}}}
+tt.style.left=tx+'px';tt.style.top=ty+'px'}
 requestAnimationFrame(drawChart)}
 drawChart()})();
 // === Flow Diagram Canvas ===
