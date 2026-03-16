@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/ui/widgets"
 	"github.com/hunterjsb/xandaris/utils"
 	"github.com/hunterjsb/xandaris/views"
 )
@@ -27,46 +28,31 @@ func (a *App) drawTickInfo(screen *ebiten.Image) {
 
 // drawStatusBar renders speed/credits/controls in the bottom-left.
 func (a *App) drawStatusBar(screen *ebiten.Image) {
-	cw := utils.CharWidth()
-	lineH := int(15.0 * utils.UIScale)
-	barW := 36 * cw // ~36 characters wide
-	barH := lineH*2 + 20
-	x := 10
-	y := a.screenHeight - barH - 10
+	p := widgets.NewPanel(widgets.AnchorBottomLeft, 38)
 
-	panel := &views.UIPanel{
-		X: x, Y: y, Width: barW, Height: barH,
-		BgColor:     utils.Theme.PanelBg,
-		BorderColor: utils.Theme.PanelBorder,
-	}
-	panel.Draw(screen)
-
-	textX := x + 10
-	textY := y + 10
-
-	// Line 1: Speed + game time + construction indicator
+	// Line 1: Speed + game time
 	speedStr := a.Server.TickManager.GetSpeedString()
 	timeStr := a.Server.TickManager.GetGameTimeFormatted()
-	line1 := fmt.Sprintf("Speed: %s  %s", speedStr, timeStr)
+	speedLine := fmt.Sprintf("Speed: %s  %s", speedStr, timeStr)
+	speedColor := utils.Theme.TextLight
 	if a.Server.TickManager.IsPaused() {
-		views.DrawText(screen, line1, textX, textY, utils.Theme.TextDim)
-		views.DrawText(screen, "PAUSED", textX+len(line1+"  ")*utils.CharWidth(), textY, utils.SystemYellow)
-	} else {
-		views.DrawText(screen, line1, textX, textY, utils.Theme.TextLight)
+		speedLine += "  PAUSED"
+		speedColor = utils.SystemYellow
 	}
 
-	// Construction count indicator (right side of line 1)
+	// Add construction indicator to speed line
 	if human := a.Server.State.HumanPlayer; human != nil {
 		queueCount := len(a.getConstructionItems(human.Name))
 		if queueCount > 0 {
-			qLabel := fmt.Sprintf("Building %d", queueCount)
-			qX := x + barW - len(qLabel)*cw - 10
-			views.DrawText(screen, qLabel, qX, textY, utils.SystemGreen)
+			p.LinePair(speedLine, speedColor, fmt.Sprintf("Building %d", queueCount), utils.SystemGreen)
+		} else {
+			p.Line(speedLine, speedColor)
 		}
+	} else {
+		p.Line(speedLine, speedColor)
 	}
 
-	// Line 2: Credits with colored net flow + hints
-	textY += lineH
+	// Line 2: Credits with net flow + hints
 	if human := a.Server.State.HumanPlayer; human != nil {
 		income := 0
 		upkeep := 0
@@ -87,31 +73,26 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 				}
 			}
 		}
-
-		credLabel := fmt.Sprintf("Credits: %d ", human.Credits)
-		views.DrawText(screen, credLabel, textX, textY, utils.Theme.TextLight)
-
-		// Color-coded net flow
 		net := income - upkeep
-		flowX := textX + len(credLabel)*utils.CharWidth()
-		if net > 0 {
-			views.DrawText(screen, fmt.Sprintf("(+%d/s)", net), flowX, textY, utils.SystemGreen)
-			flowX += len(fmt.Sprintf("(+%d/s)", net))*utils.CharWidth() + 6
-		} else if net < 0 {
-			views.DrawText(screen, fmt.Sprintf("(%d/s)", net), flowX, textY, utils.SystemRed)
-			flowX += len(fmt.Sprintf("(%d/s)", net))*utils.CharWidth() + 6
-		} else {
-			views.DrawText(screen, "(0/s)", flowX, textY, utils.Theme.TextDim)
-			flowX += len("(0/s)")*utils.CharWidth() + 6
+		flowStr := fmt.Sprintf("(+%d/s)", net)
+		flowColor := utils.SystemGreen
+		if net < 0 {
+			flowStr = fmt.Sprintf("(%d/s)", net)
+			flowColor = utils.SystemRed
+		} else if net == 0 {
+			flowStr = "(0/s)"
+			flowColor = utils.Theme.TextDim
 		}
+		credLine := fmt.Sprintf("Credits: %d %s", human.Credits, flowStr)
 
-		// Hints after credits
 		hints := "[`] Chat"
 		if !a.IsRemote() {
 			hints += "  [Space] Pause"
 		}
-		views.DrawText(screen, hints, flowX, textY, utils.Theme.TextDim)
+		p.LinePair(credLine, flowColor, hints, utils.Theme.TextDim)
 	}
+
+	p.Draw(screen)
 }
 
 // drawEmpirePanel renders a persistent top-right panel with empire vitals.
