@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -61,8 +62,8 @@ func NewBuildMenu(ctx UIContext, provider *PlanetDataProvider) *BuildMenu {
 		ctx:           ctx,
 		provider:      provider,
 		isOpen:        false,
-		width:         400,
-		height:        500,
+		width:         int(400.0 * utils.UIScale),
+		height:        int(550.0 * utils.UIScale),
 		items:         make([]*BuildMenuItem, 0),
 		selectedIndex: -1,
 		scrollOffset:  0,
@@ -443,25 +444,27 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 	}
 	panel.Draw(screen)
 
+	lh := int(15.0 * utils.UIScale)
+
 	// Draw title
-	titleY := bm.y + 15
+	titleY := bm.y + lh
 	views.DrawText(screen, "Build Menu", bm.x+10, titleY, utils.Theme.Accent)
 
 	// Draw subtitle based on attachment type
-	subtitleY := titleY + 20
+	subtitleY := titleY + lh
 	subtitle := fmt.Sprintf("Building on: %s", bm.attachmentType)
-	views.DrawCenteredText(screen, subtitle, bm.x+bm.width/2, subtitleY)
+	views.DrawText(screen, subtitle, bm.x+10, subtitleY, utils.Theme.TextDim)
 
 	// Draw player credits
-	creditsY := subtitleY + 20
+	creditsY := subtitleY + lh
 	creditsText := fmt.Sprintf("Credits: %d", bm.ctx.GetState().HumanPlayer.Credits)
-	views.DrawCenteredText(screen, creditsText, bm.x+bm.width/2, creditsY)
+	views.DrawText(screen, creditsText, bm.x+10, creditsY, utils.Theme.TextLight)
 
 	// Draw separator line
-	lineY := creditsY + 15
+	lineY := creditsY + lh
 	views.DrawLine(screen, bm.x+10, lineY, bm.x+bm.width-10, lineY, utils.Theme.PanelBorder)
 
-	// Draw building items
+	// Draw building items (clipped to content area)
 	contentTop := bm.getContentTop()
 	contentBottom := bm.getContentBottom()
 	itemY := contentTop - bm.scrollOffset
@@ -471,6 +474,10 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		bm.scrollOffset = maxScroll
 	}
 
+	// Create clipping region — items outside this area won't be visible
+	clipRect := image.Rect(bm.x, contentTop, bm.x+bm.width, contentBottom)
+	clipImg := screen.SubImage(clipRect).(*ebiten.Image)
+
 	for i, item := range bm.items {
 		itemX := bm.x + 10
 		itemW := bm.width - 20
@@ -478,11 +485,8 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		item.Bounds.Width = 0
 		item.Bounds.Height = 0
 
-		if itemY+buildMenuItemHeight < contentTop {
-			itemY += buildMenuItemHeight + buildMenuItemPadding
-			continue
-		}
-		if itemY > contentBottom {
+		// Skip items fully outside the visible area
+		if itemY+buildMenuItemHeight < contentTop || itemY > contentBottom {
 			itemY += buildMenuItemHeight + buildMenuItemPadding
 			continue
 		}
@@ -525,7 +529,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 			X: itemX, Y: itemY, Width: itemW, Height: buildMenuItemHeight,
 			BgColor: itemBg, BorderColor: utils.Theme.PanelBorder,
 		}
-		itemPanel.Draw(screen)
+		itemPanel.Draw(clipImg)
 
 		// Draw building color indicator
 		colorBoxSize := 12
@@ -534,31 +538,34 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		colorBox := buildMenuRectCache.GetOrCreate(colorBoxSize, colorBoxSize, item.Color)
 		opts := &ebiten.DrawImageOptions{}
 		opts.GeoM.Translate(float64(colorBoxX), float64(colorBoxY))
-		screen.DrawImage(colorBox, opts)
+		clipImg.DrawImage(colorBox, opts)
 
 		// Draw building name
-		lh := int(15.0 * utils.UIScale)
 		nameX := colorBoxX + colorBoxSize + 10
 		nameY := itemY + lh - 4
-		views.DrawText(screen, item.Name, nameX, nameY, utils.TextPrimary)
+		views.DrawText(clipImg, item.Name, nameX, nameY, utils.TextPrimary)
 
 		// Draw cost
-		costText := fmt.Sprintf("Cost: %d credits", item.Cost)
+		costText := fmt.Sprintf("Cost: %d cr", item.Cost)
 		costY := nameY + lh
 		costColor := utils.TextSecondary
 		if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
-			costColor = color.RGBA{200, 100, 100, 255} // Red if can't afford
+			costColor = color.RGBA{200, 100, 100, 255}
 		}
-		views.DrawText(screen, costText, nameX, costY, costColor)
+		views.DrawText(clipImg, costText, nameX, costY, costColor)
 
-		// Draw description
+		// Draw description (truncate to fit)
+		desc := item.Description
+		maxDescChars := (itemW - 40) / utils.CharWidth()
+		if len(desc) > maxDescChars {
+			desc = desc[:maxDescChars-2] + ".."
+		}
 		descY := costY + lh
-		views.DrawText(screen, item.Description, nameX, descY, utils.TextSecondary)
+		views.DrawText(clipImg, desc, nameX, descY, utils.TextSecondary)
 
 		// Draw build time
-		buildTimeText := "Build time: 60s"
 		buildTimeY := descY + lh
-		views.DrawText(screen, buildTimeText, nameX, buildTimeY, utils.TextSecondary)
+		views.DrawText(clipImg, "Build: 60s", nameX, buildTimeY, utils.TextSecondary)
 
 		itemY += buildMenuItemHeight + buildMenuItemPadding
 	}
@@ -591,17 +598,17 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 
 	// Draw notification message
 	if bm.notificationTimer > 0 {
-		notificationY := bm.y + bm.height - 45
-		views.DrawCenteredText(screen, bm.notification, bm.x+bm.width/2, notificationY)
+		notificationY := bm.y + bm.height - lh*2 - 4
+		views.DrawText(screen, bm.notification, bm.x+10, notificationY, utils.SystemOrange)
 	}
 
 	// Draw instructions at bottom
-	instructionsY := bm.y + bm.height - 25
-	instructionText := "Click to build  |  ESC to cancel"
+	instructionsY := bm.y + bm.height - lh - 4
+	instructionText := "Click to build | Esc cancel"
 	if maxScroll > 0 {
-		instructionText = "Scroll to browse  |  Click to build  |  ESC to cancel"
+		instructionText = "Scroll | Click build | Esc"
 	}
-	views.DrawCenteredText(screen, instructionText, bm.x+bm.width/2, instructionsY)
+	views.DrawText(screen, instructionText, bm.x+10, instructionsY, utils.Theme.TextDim)
 }
 
 func (bm *BuildMenu) totalContentHeight() int {
@@ -628,9 +635,11 @@ func (bm *BuildMenu) computeScrollMetrics() (visibleHeight int, totalHeight int,
 }
 
 func (bm *BuildMenu) getContentTop() int {
-	return bm.y + 80
+	lh := int(15.0 * utils.UIScale)
+	return bm.y + lh*4 + 10 // title + subtitle + credits + separator + gap
 }
 
 func (bm *BuildMenu) getContentBottom() int {
-	return bm.y + bm.height - 60
+	lh := int(15.0 * utils.UIScale)
+	return bm.y + bm.height - lh*2 - 10 // room for notification + instructions
 }
