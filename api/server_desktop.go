@@ -1368,6 +1368,60 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Admin-only player registration (no Discord OAuth needed)
+	mux.HandleFunc("/api/admin/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		if !isAdmin(r) {
+			writeErr(w, http.StatusForbidden, "admin only")
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+			writeErr(w, http.StatusBadRequest, "name required")
+			return
+		}
+		p := getProvider()
+		registry := p.GetRegistry()
+		if registry == nil {
+			writeErr(w, http.StatusInternalServerError, "registry not available")
+			return
+		}
+		account, isNew, err := registry.FindOrCreateByName(req.Name)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if isNew {
+			resultCh := make(chan interface{}, 1)
+			cmd := game.GameCommand{
+				Type:       game.CmdRegisterPlayer,
+				Data:       game.RegisterPlayerCommandData{Name: account.Name, AccountKey: account.APIKey},
+				Result:     resultCh,
+				PlayerName: account.Name,
+			}
+			p.GetCommandChannel() <- cmd
+			select {
+			case result := <-resultCh:
+				if pid, ok := result.(int); ok {
+					account.PlayerID = pid
+					registry.Save()
+				}
+			case <-time.After(5 * time.Second):
+			}
+		}
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"name":      account.Name,
+			"api_key":   account.APIKey,
+			"player_id": account.PlayerID,
+			"new":       isNew,
+		}})
+	})
+
 	// Serve pages
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")

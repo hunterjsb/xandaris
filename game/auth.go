@@ -100,6 +100,32 @@ func (pr *PlayerRegistry) FindOrCreateByDiscord(discordID, discordUsername strin
 	return account, true, nil
 }
 
+// FindOrCreateByName looks up an account by name, or creates one (for admin registration).
+func (pr *PlayerRegistry) FindOrCreateByName(name string) (*PlayerAccount, bool, error) {
+	name = strings.TrimSpace(name)
+	if len(name) < 1 || len(name) > 24 {
+		return nil, false, fmt.Errorf("name must be 1-24 characters")
+	}
+
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	if acc, exists := pr.accounts[strings.ToLower(name)]; exists {
+		return acc, false, nil
+	}
+
+	apiKey := generateAPIKey()
+	account := &PlayerAccount{
+		Name:   name,
+		APIKey: apiKey,
+	}
+	pr.accounts[strings.ToLower(name)] = account
+	pr.keys[apiKey] = account
+	pr.saveLocked()
+
+	return account, true, nil
+}
+
 // Authenticate checks an API key and returns the player name.
 // Returns ("", true) for admin key, (playerName, false) for player key.
 func (pr *PlayerRegistry) Authenticate(key string) (playerName string, isAdmin bool, ok bool) {
