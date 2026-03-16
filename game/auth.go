@@ -185,8 +185,15 @@ func (pr *PlayerRegistry) saveLocked() {
 	if pr.filePath == "" {
 		return
 	}
+	// Save ALL accounts, not just Discord-linked ones
+	seen := make(map[string]bool)
 	var saved []savedAccount
-	for _, acc := range pr.discordIDs {
+	for _, acc := range pr.accounts {
+		key := strings.ToLower(acc.Name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
 		saved = append(saved, savedAccount{
 			Name:      acc.Name,
 			DiscordID: acc.DiscordID,
@@ -220,9 +227,6 @@ func (pr *PlayerRegistry) load() {
 		return
 	}
 	for _, s := range saved {
-		if s.DiscordID == "" {
-			continue // skip legacy password-based accounts
-		}
 		acc := &PlayerAccount{
 			Name:      s.Name,
 			DiscordID: s.DiscordID,
@@ -230,10 +234,14 @@ func (pr *PlayerRegistry) load() {
 			PlayerID:  s.PlayerID,
 		}
 		pr.accounts[strings.ToLower(s.Name)] = acc
-		pr.keys[s.APIKey] = acc
-		pr.discordIDs[s.DiscordID] = acc
+		if s.APIKey != "" {
+			pr.keys[s.APIKey] = acc
+		}
+		if s.DiscordID != "" {
+			pr.discordIDs[s.DiscordID] = acc
+		}
 	}
-	fmt.Printf("[Auth] Loaded %d accounts from %s\n", len(pr.discordIDs), pr.filePath)
+	fmt.Printf("[Auth] Loaded %d accounts from %s\n", len(pr.accounts), pr.filePath)
 }
 
 func generateAPIKey() string {
