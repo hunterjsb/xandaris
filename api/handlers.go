@@ -453,17 +453,22 @@ func handleGetPlayerMe(p GameStateProvider, authPlayer string) interface{} {
 		if planet == nil {
 			continue
 		}
-		// Find system ID
+		// Find the authoritative planet from system entities (OwnedPlanets may be stale)
 		sysID := 0
+		livePlanet := planet
 		for _, sys := range p.GetSystems() {
 			for _, e := range sys.Entities {
 				if pl, ok := e.(*entities.Planet); ok && pl.GetID() == planet.GetID() {
 					sysID = sys.ID
+					livePlanet = pl // use the system entity version (has current buildings)
 					break
 				}
 			}
+			if sysID != 0 {
+				break
+			}
 		}
-		planets = append(planets, buildPlanetDetail(planet, sysID))
+		planets = append(planets, buildPlanetDetail(livePlanet, sysID))
 	}
 
 	ships := make([]ShipInfo, 0)
@@ -519,27 +524,33 @@ func handleGetStatus(p GameStateProvider, authPlayer string) interface{} {
 			if planet == nil {
 				continue
 			}
+			// Find the authoritative planet from system entities
+			livePlanet := planet
+			sysID := 0
+			for _, sys := range p.GetSystems() {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok && pl.GetID() == planet.GetID() {
+						sysID = sys.ID
+						livePlanet = pl
+						break
+					}
+				}
+				if sysID != 0 {
+					break
+				}
+			}
 			storage := make(map[string]int)
-			for resType, s := range planet.StoredResources {
+			for resType, s := range livePlanet.StoredResources {
 				if s != nil {
 					storage[resType] = s.Amount
 				}
 			}
 			mines := 0
 			bldgCount := 0
-			sysID := 0
-			for _, be := range planet.Buildings {
+			for _, be := range livePlanet.Buildings {
 				bldgCount++
 				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" {
 					mines++
-				}
-			}
-			for _, sys := range p.GetSystems() {
-				for _, e := range sys.Entities {
-					if pl, ok := e.(*entities.Planet); ok && pl.GetID() == planet.GetID() {
-						sysID = sys.ID
-						break
-					}
 				}
 			}
 			playerStatus.Planets = append(playerStatus.Planets, PlanetBrief{
