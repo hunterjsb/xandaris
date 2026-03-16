@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/hunterjsb/xandaris/economy"
+	"github.com/hunterjsb/xandaris/entities"
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 )
