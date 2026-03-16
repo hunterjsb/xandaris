@@ -1438,34 +1438,6 @@ func StartServer(provider GameStateProvider) {
 
 	// --- Logistics Endpoints ---
 
-	// GET /api/deliveries — list active deliveries
-	mux.HandleFunc("/api/deliveries", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeErr(w, http.StatusMethodNotAllowed, "GET only")
-			return
-		}
-		p := getProvider()
-		dm := p.GetDeliveryManager()
-		if dm == nil {
-			writeJSON(w, APIResponse{OK: true, Data: []DeliveryInfo{}})
-			return
-		}
-		deliveries := dm.GetActiveDeliveries()
-		result := make([]DeliveryInfo, 0, len(deliveries))
-		for _, d := range deliveries {
-			result = append(result, DeliveryInfo{
-				ID: d.ID, Buyer: d.BuyerName, Seller: d.SellerName,
-				Resource: d.Resource, Quantity: d.Quantity, Total: d.Total,
-				DestPlanetID: d.DestPlanetID, DestSystemID: d.DestSystemID,
-				SourceSystemID: d.SourceSystemID, ShipID: d.ShipID,
-				Status: d.Status, DeliveryType: d.DeliveryType,
-				Direction: d.Direction, EstimatedArrival: d.EstimatedArrival,
-				CreatedTick: d.Tick,
-			})
-		}
-		writeJSON(w, APIResponse{OK: true, Data: result})
-	})
-
 	// POST /api/ships/dock — dock a ship at a planet
 	mux.HandleFunc("/api/ships/dock", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
