@@ -238,6 +238,62 @@ func (rs *RemoteSync) syncPlayer() {
 				}
 			}
 		}
+
+		// Sync buildings — rebuild if count changed
+		if len(rp.Buildings) != len(planet.Buildings) {
+			planet.Buildings = make([]entities.Entity, 0, len(rp.Buildings))
+			for i, rb := range rp.Buildings {
+				angle := float64(i) / float64(len(rp.Buildings)) * 6.28318
+				b := entities.NewBuilding(
+					-(planet.GetID()*100 + i + 1), // synthetic negative ID
+					rb.Type, rb.Type,
+					float64(planet.Size)*2.0, angle,
+					entities.BuildingColor(rb.Type),
+				)
+				b.Level = rb.Level
+				b.IsOperational = rb.IsOperational
+				b.Owner = rp.Owner
+				planet.Buildings = append(planet.Buildings, b)
+			}
+		} else {
+			// Update in place
+			for i, rb := range rp.Buildings {
+				if i < len(planet.Buildings) {
+					if b, ok := planet.Buildings[i].(*entities.Building); ok {
+						b.Level = rb.Level
+						b.IsOperational = rb.IsOperational
+					}
+				}
+			}
+		}
+
+		// Sync resource deposits — rebuild if count changed
+		if len(rp.ResourceDeposits) != len(planet.Resources) {
+			planet.Resources = make([]entities.Entity, 0, len(rp.ResourceDeposits))
+			for i, rd := range rp.ResourceDeposits {
+				angle := float64(i) / float64(len(rp.ResourceDeposits)) * 6.28318
+				res := entities.NewResource(
+					rd.ID, fmt.Sprintf("%s Deposit", rd.ResourceType),
+					rd.ResourceType,
+					float64(planet.Size)*1.5, angle,
+					entities.ResourceColor(rd.ResourceType),
+				)
+				res.Abundance = rd.Abundance
+				res.ExtractionRate = rd.ExtractionRate
+				res.Size = 8
+				res.NodePosition = angle
+				planet.Resources = append(planet.Resources, res)
+			}
+		} else {
+			for i, rd := range rp.ResourceDeposits {
+				if i < len(planet.Resources) {
+					if res, ok := planet.Resources[i].(*entities.Resource); ok {
+						res.Abundance = rd.Abundance
+						res.ExtractionRate = rd.ExtractionRate
+					}
+				}
+			}
+		}
 	}
 
 	// Remove planets we no longer own
