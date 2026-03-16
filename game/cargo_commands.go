@@ -225,10 +225,7 @@ func (cce *CargoCommandExecutor) DockShip(ship *entities.Ship, planet *entities.
 		return fmt.Errorf("no Trading Post on %s", planet.Name)
 	}
 
-	// Foreign ships need level 2+
-	if planet.Owner != ship.Owner && tp.Level < 2 {
-		return fmt.Errorf("Trading Post needs level 2 for foreign ship docking (currently level %d)", tp.Level)
-	}
+	// Foreign ships can dock at any TP level — higher levels reduce fees
 
 	ship.DockedAtPlanet = planet.GetID()
 	ship.Status = entities.ShipStatusDocked
