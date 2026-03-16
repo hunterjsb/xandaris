@@ -1400,7 +1400,19 @@ func handleGetDiagnostics(p GameStateProvider) interface{} {
 	}
 	d.SystemCount = len(p.GetSystems())
 
-	// Count ships in player ownership
+	// Count ships in player ownership + collect moving ship details
+	type movingDetail struct {
+		Name     string  `json:"name"`
+		Status   string  `json:"status"`
+		System   int     `json:"sys"`
+		Target   int     `json:"target"`
+		Progress float64 `json:"progress"`
+		Fuel     int     `json:"fuel"`
+		Speed    float64 `json:"speed"`
+		InSysEnt bool    `json:"in_sys_ent"`
+	}
+	var movingDetails []movingDetail
+
 	for _, player := range p.GetPlayers() {
 		if player == nil { continue }
 		for _, ship := range player.OwnedShips {
@@ -1408,6 +1420,16 @@ func handleGetDiagnostics(p GameStateProvider) interface{} {
 			d.ShipsInPlayers++
 			if ship.Status == entities.ShipStatusMoving {
 				d.MovingShips++
+				movingDetails = append(movingDetails, movingDetail{
+					Name:     ship.Name,
+					Status:   string(ship.Status),
+					System:   ship.CurrentSystem,
+					Target:   ship.TargetSystem,
+					Progress: ship.TravelProgress,
+					Fuel:     ship.CurrentFuel,
+					Speed:    ship.Speed,
+					InSysEnt: systemShipIDs[ship.GetID()],
+				})
 			}
 			if !systemShipIDs[ship.GetID()] {
 				d.OrphanedShips++
@@ -1415,5 +1437,10 @@ func handleGetDiagnostics(p GameStateProvider) interface{} {
 			}
 		}
 	}
-	return d
+
+	type result struct {
+		diag
+		MovingDetail []movingDetail `json:"moving_detail"`
+	}
+	return result{d, movingDetails}
 }
