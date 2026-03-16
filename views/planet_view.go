@@ -390,11 +390,7 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	isOwned := humanPlayer != nil && pv.planet.Owner == humanPlayer.Name
 
-	// Determine panel width: 28 chars (wider to prevent overflow)
-	panelWidthCh := 28
-	panelWidth := panelWidthCh * cw
-
-	// Build building summary
+	// Build building summary (needed for both width calc and drawing)
 	buildingCounts := make(map[string]int)
 	for _, be := range pv.planet.Buildings {
 		if b, ok := be.(*entities.Building); ok {
@@ -402,33 +398,9 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	// Count lines: title(2) + details + buildings header + building types + deposits + hints
-	numLines := 2 + len(details) // name line + system/owner line + details
-	if len(buildingCounts) > 0 {
-		numLines += 1 + len(buildingCounts) // "Buildings:" + each type
-	} else {
-		numLines += 1 // "No buildings"
-	}
-	if len(pv.planet.Resources) > 0 {
-		numLines++ // deposits count
-	}
-	numLines++ // hints
-	panelHeight := pad + numLines*lineH + pad/2
-
-	infoPanel := &UIPanel{
-		X: margin, Y: margin, Width: panelWidth, Height: panelHeight,
-		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
-	}
-	infoPanel.Draw(screen)
-
-	textX := margin + pad
-	textY := margin + pad
-
-	// Line 1: planet name
-	DrawText(screen, pv.planet.Name, textX, textY, utils.Theme.Accent)
-	textY += lineH
-
-	// Line 2: system + owner
+	// Collect all text lines to auto-size the panel
+	var allLines []string
+	allLines = append(allLines, pv.planet.Name)
 	subLine := ""
 	if pv.system != nil {
 		subLine = pv.system.Name
@@ -439,49 +411,60 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		}
 		subLine += pv.planet.Owner
 	}
-	if subLine != "" {
-		DrawText(screen, subLine, textX, textY, utils.Theme.TextDim)
-	}
-	textY += lineH
-
-	// Detail lines (population, happiness, power, workforce)
-	for _, line := range details {
-		lineColor := utils.Theme.TextDim
-		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
-			lineColor = utils.Theme.TextLight
-		}
-		DrawText(screen, line, textX, textY, lineColor)
-		textY += lineH
-	}
-
-	// Building list
+	allLines = append(allLines, subLine)
+	allLines = append(allLines, details...)
 	if len(buildingCounts) > 0 {
-		DrawText(screen, fmt.Sprintf("Buildings (%d):", len(pv.planet.Buildings)), textX, textY, utils.Theme.TextDim)
-		textY += lineH
+		allLines = append(allLines, fmt.Sprintf("Buildings (%d):", len(pv.planet.Buildings)))
 		for bType, count := range buildingCounts {
-			label := bType
+			label := "  " + bType
 			if count > 1 {
-				label = fmt.Sprintf("%s x%d", bType, count)
+				label = fmt.Sprintf("  %s x%d", bType, count)
 			}
-			DrawText(screen, "  "+label, textX, textY, utils.Theme.TextLight)
-			textY += lineH
+			allLines = append(allLines, label)
 		}
 	} else {
-		DrawText(screen, "No buildings", textX, textY, utils.Theme.TextDim)
-		textY += lineH
+		allLines = append(allLines, "No buildings")
 	}
-
-	// Deposits count
 	if len(pv.planet.Resources) > 0 {
-		DrawText(screen, fmt.Sprintf("%d deposits", len(pv.planet.Resources)), textX, textY, utils.Theme.TextDim)
-		textY += lineH
+		allLines = append(allLines, fmt.Sprintf("%d deposits", len(pv.planet.Resources)))
+	}
+	if isOwned {
+		allLines = append(allLines, "[B]Build [W]Work [H]Help")
+	} else {
+		allLines = append(allLines, "[M]Market [H]Help")
 	}
 
-	// Keyboard hints
-	if isOwned {
-		DrawText(screen, "[B] Build [W] Workforce [Esc] Back", textX, textY, utils.Theme.TextDim)
-	} else {
-		DrawText(screen, "[M] Market  [Esc] Back", textX, textY, utils.Theme.TextDim)
+	// Find widest line for panel width
+	maxChars := 20 // minimum width
+	for _, line := range allLines {
+		if len(line) > maxChars {
+			maxChars = len(line)
+		}
+	}
+	panelWidth := (maxChars + 2) * cw // +2 for padding
+	panelHeight := pad + len(allLines)*lineH + pad/2
+
+	infoPanel := &UIPanel{
+		X: margin, Y: margin, Width: panelWidth, Height: panelHeight,
+		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
+	}
+	infoPanel.Draw(screen)
+
+	textX := margin + pad
+	textY := margin + pad
+
+	// Draw all lines with appropriate colors
+	for i, line := range allLines {
+		c := utils.Theme.TextDim
+		if i == 0 {
+			c = utils.Theme.Accent // planet name
+		} else if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Workforce") {
+			c = utils.Theme.TextLight
+		} else if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "  [") {
+			c = utils.Theme.TextLight // building names (indented)
+		}
+		DrawText(screen, line, textX, textY, c)
+		textY += lineH
 	}
 
 	pv.drawWorkforceToggleButton(screen)
