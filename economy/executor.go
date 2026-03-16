@@ -141,7 +141,29 @@ func (te *TradeExecutor) Buy(player *entities.Player, players []*entities.Player
 		destPlanet = firstPlanetWithTradingPost(player)
 	}
 	if destPlanet == nil {
-		return TradeRecord{}, fmt.Errorf("no planet with trading post to receive goods")
+		return TradeRecord{}, fmt.Errorf("build a Trading Post to access the market")
+	}
+
+	// Validate Trading Post and apply processing fee
+	tp := getTradingPost(destPlanet)
+	if tp == nil {
+		return TradeRecord{}, fmt.Errorf("build a Trading Post on %s to trade", destPlanet.Name)
+	}
+
+	// Check throughput capacity (level 5 = unlimited)
+	throughput := TradingPostThroughput(tp.Level)
+	if throughput > 0 && quantity > throughput {
+		return TradeRecord{}, fmt.Errorf("Trading Post throughput exceeded (max %d units, level %d)", throughput, tp.Level)
+	}
+
+	// Apply Trading Post processing fee
+	tpFee := TradingPostFee(tp.Level)
+	if tpFee > 0 {
+		fee := int(math.Round(float64(total) * tpFee))
+		total += fee
+		if player.Credits < total {
+			return TradeRecord{}, fmt.Errorf("insufficient credits with %.1f%% TP fee (need %d, have %d)", tpFee*100, total, player.Credits)
+		}
 	}
 
 	// All trades are real: resources must come from other players' planets.
@@ -619,10 +641,70 @@ func firstPlanetWithTradingPost(player *entities.Player) *entities.Planet {
 			}
 		}
 	}
-	if len(player.OwnedPlanets) > 0 {
-		return player.OwnedPlanets[0]
+	return nil // No Trading Post = no trading
+}
+
+// getTradingPost returns the Trading Post building on a planet, or nil.
+func getTradingPost(planet *entities.Planet) *entities.Building {
+	if planet == nil {
+		return nil
+	}
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok {
+			if b.BuildingType == entities.BuildingTradingPost && b.IsOperational {
+				return b
+			}
+		}
 	}
 	return nil
+}
+
+// TradingPostThroughput returns the max units per trade interval for a TP level.
+func TradingPostThroughput(level int) int {
+	switch level {
+	case 1:
+		return 100
+	case 2:
+		return 250
+	case 3:
+		return 500
+	case 4:
+		return 1000
+	default:
+		return 0 // level 5 = unlimited
+	}
+}
+
+// TradingPostFee returns the transaction fee rate for a TP level.
+func TradingPostFee(level int) float64 {
+	switch level {
+	case 1:
+		return 0.03
+	case 2:
+		return 0.02
+	case 3:
+		return 0.01
+	case 4:
+		return 0.005
+	default:
+		return 0.0 // level 5 = free
+	}
+}
+
+// TradingPostCreditLimit returns the credit limit per empire for a TP level.
+func TradingPostCreditLimit(level int) int {
+	switch level {
+	case 1:
+		return 5000
+	case 2:
+		return 15000
+	case 3:
+		return 50000
+	case 4:
+		return 200000
+	default:
+		return 0 // level 5 = unlimited (0 means no limit)
+	}
 }
 
 // findSourceSystem finds a system with sufficient NPC stock of a resource.

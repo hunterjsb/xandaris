@@ -551,55 +551,81 @@ func (gv *GalaxyView) drawFleets(screen *ebiten.Image) {
 	gv.drawTransitShips(screen)
 }
 
-// drawTradeRoutes draws colored lines for cargo ships actively transporting goods.
-func (gv *GalaxyView) drawTradeRoutes(screen *ebiten.Image) {
+// collectMovingShips gathers all ships in transit from both system entities and player ownership.
+func (gv *GalaxyView) collectMovingShips() []*entities.Ship {
+	seen := make(map[int]bool)
+	var ships []*entities.Ship
+
+	// Check system entities
 	for _, system := range gv.ctx.GetSystems() {
 		for _, entity := range system.Entities {
-			ship, ok := entity.(*entities.Ship)
-			if !ok || ship.Status != entities.ShipStatusMoving || ship.TargetSystem < 0 {
-				continue
-			}
-			if ship.GetTotalCargo() == 0 {
-				continue // only show routes for laden cargo ships
-			}
-
-			// Find target system
-			var targetSys *entities.System
-			for _, sys := range gv.ctx.GetSystems() {
-				if sys.ID == ship.TargetSystem {
-					targetSys = sys
-					break
+			if ship, ok := entity.(*entities.Ship); ok {
+				if ship.Status == entities.ShipStatusMoving && ship.TargetSystem >= 0 && !seen[ship.GetID()] {
+					seen[ship.GetID()] = true
+					ships = append(ships, ship)
 				}
 			}
-			if targetSys == nil {
-				continue
-			}
+		}
+	}
 
-			// Draw a dashed trade route line in the owner's color (faded)
-			routeColor := color.RGBA{100, 180, 255, 80} // default blue
-			for _, p := range gv.ctx.GetPlayers() {
-				if p != nil && p.Name == ship.Owner {
-					routeColor = p.Color
-					routeColor.A = 60
-					break
-				}
+	// Check player-owned ships (needed for remote mode where ships aren't in system entities)
+	for _, player := range gv.ctx.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		for _, ship := range player.OwnedShips {
+			if ship != nil && ship.Status == entities.ShipStatusMoving && ship.TargetSystem >= 0 && !seen[ship.GetID()] {
+				seen[ship.GetID()] = true
+				ships = append(ships, ship)
 			}
+		}
+	}
 
-			// Draw dashed line from source to target
-			sxi, syi := gv.bounds.toScreen(system.X, system.Y)
-			txi, tyi := gv.bounds.toScreen(targetSys.X, targetSys.Y)
-			sx, sy := float64(sxi), float64(syi)
-			tx, ty := float64(txi), float64(tyi)
-			segments := 12
-			for i := 0; i < segments; i += 2 {
-				t1 := float64(i) / float64(segments)
-				t2 := float64(i+1) / float64(segments)
-				x1 := sx + (tx-sx)*t1
-				y1 := sy + (ty-sy)*t1
-				x2 := sx + (tx-sx)*t2
-				y2 := sy + (ty-sy)*t2
-				DrawLine(screen, int(x1), int(y1), int(x2), int(y2), routeColor)
+	return ships
+}
+
+// drawTradeRoutes draws colored lines for cargo ships actively transporting goods.
+func (gv *GalaxyView) drawTradeRoutes(screen *ebiten.Image) {
+	// Build system lookup
+	systemByID := make(map[int]*entities.System)
+	for _, sys := range gv.ctx.GetSystems() {
+		systemByID[sys.ID] = sys
+	}
+
+	for _, ship := range gv.collectMovingShips() {
+		if ship.GetTotalCargo() == 0 {
+			continue // only show routes for laden cargo ships
+		}
+
+		sourceSys := systemByID[ship.CurrentSystem]
+		targetSys := systemByID[ship.TargetSystem]
+		if sourceSys == nil || targetSys == nil {
+			continue
+		}
+
+		// Draw a dashed trade route line in the owner's color (faded)
+		routeColor := color.RGBA{100, 180, 255, 80}
+		for _, p := range gv.ctx.GetPlayers() {
+			if p != nil && p.Name == ship.Owner {
+				routeColor = p.Color
+				routeColor.A = 60
+				break
 			}
+		}
+
+		sxi, syi := gv.bounds.toScreen(sourceSys.X, sourceSys.Y)
+		txi, tyi := gv.bounds.toScreen(targetSys.X, targetSys.Y)
+		sx, sy := float64(sxi), float64(syi)
+		tx, ty := float64(txi), float64(tyi)
+		segments := 12
+		for i := 0; i < segments; i += 2 {
+			t1 := float64(i) / float64(segments)
+			t2 := float64(i+1) / float64(segments)
+			x1 := sx + (tx-sx)*t1
+			y1 := sy + (ty-sy)*t1
+			x2 := sx + (tx-sx)*t2
+			y2 := sy + (ty-sy)*t2
+			DrawLine(screen, int(x1), int(y1), int(x2), int(y2), routeColor)
 		}
 	}
 }
@@ -607,16 +633,8 @@ func (gv *GalaxyView) drawTradeRoutes(screen *ebiten.Image) {
 // drawTransitShips draws ships that are in transit between systems
 func (gv *GalaxyView) drawTransitShips(screen *ebiten.Image) {
 	humanPlayer := gv.ctx.GetHumanPlayer()
-
-	// Find all moving ships across all systems
-	for _, system := range gv.ctx.GetSystems() {
-		for _, entity := range system.Entities {
-			if ship, ok := entity.(*entities.Ship); ok {
-				if ship.Status == entities.ShipStatusMoving && ship.TargetSystem != -1 {
-					gv.drawTransitShip(screen, ship, humanPlayer)
-				}
-			}
-		}
+	for _, ship := range gv.collectMovingShips() {
+		gv.drawTransitShip(screen, ship, humanPlayer)
 	}
 }
 

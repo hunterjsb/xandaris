@@ -24,6 +24,7 @@ All keybindings are configurable via the in-game Settings menu.
 | Action | Key |
 | --- | --- |
 | Escape/Back | Escape |
+| Open Command Bar / Chat | T |
 | Open Build Menu | B |
 | Open Market | M |
 | Open Player Directory | P |
