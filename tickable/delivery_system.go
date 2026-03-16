@@ -54,9 +54,14 @@ func (ds *DeliverySystem) OnTick(tick int64) {
 		// Cargo ship deliveries
 		ship := findShipByID(players, delivery.ShipID)
 		if ship == nil {
-			// Ship lost — refund buyer
+			// Ship lost — refund buyer; if sell delivery, also compensate seller
 			buyerName, refund := dm.FailDelivery(delivery.ID)
 			refundPlayer(players, buyerName, refund)
+			if delivery.Direction == "sell" && delivery.SellerName != "" {
+				refundPlayer(players, delivery.SellerName, delivery.Total)
+				fmt.Printf("[Delivery] Compensated seller %s %d credits for lost shipment #%d\n",
+					delivery.SellerName, delivery.Total, delivery.ID)
+			}
 			continue
 		}
 

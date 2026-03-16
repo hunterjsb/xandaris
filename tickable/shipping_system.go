@@ -95,10 +95,13 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 			return
 		}
 
-		// Travel to destination
+		// Travel to destination — if fuel insufficient, unload cargo back
 		if gp.StartShipJourney(ship, destSystemID) {
 			fmt.Printf("[Shipping] Route #%d: %s heading to SYS-%d\n",
 				route.ID, ship.Name, destSystemID)
+		} else {
+			// Can't depart — return cargo to source planet
+			gp.UnloadCargo(ship, sourcePlanet, route.Resource, loaded)
 		}
 	} else if atDest && ship.GetTotalCargo() > 0 {
 		// At destination with cargo — unload
