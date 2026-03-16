@@ -1609,7 +1609,11 @@ return'<div class="row"><span>'+n+'</span><span class="'+c+'">'+r.buy_price.toFi
 const nf=flows.net_flow||{};
 document.getElementById('info').innerHTML=
 '<div class="row"><span>Population</span><span>'+(economy.total_population||0).toLocaleString()+'</span></div>'+
+'<div class="row"><span>GDP</span><span>'+(economy.gdp||0).toLocaleString(undefined,{maximumFractionDigits:0})+' cr/int</span></div>'+
 '<div class="row"><span>Trade Volume</span><span>'+(economy.trade_volume||0).toFixed(0)+'</span></div>'+
+'<div class="row"><span>Planets</span><span>'+(economy.total_planets||0)+'</span></div>'+
+'<div class="row"><span>Routes</span><span>'+(economy.active_routes||0)+'</span></div>'+
+'<div class="row"><span>Freight</span><span>'+(economy.active_deliveries||0)+' in transit</span></div>'+
 Object.entries(nf).sort().map(([n,v])=>'<div class="row"><span>'+n+'</span><span class="'+(v>0?'g':v<-1?'r':'d')+'">'+((v>0?'+':'')+v.toFixed(0))+'/int</span></div>').join('');
 // Power grid
 document.getElementById('power').innerHTML=power.map(x=>{
@@ -1882,7 +1886,7 @@ const d=g.data;
 document.getElementById('top').innerHTML=[
 ['Tick',d.tick],['Time',d.game_time],['Speed',d.speed+(d.paused?' \u23F8':'')],
 ['Population',e.data.total_population.toLocaleString()],['Credits',e.data.total_credits.toLocaleString()],
-['Trade Vol',e.data.trade_volume.toFixed(0)],['Factions',d.players],['Systems',d.systems]
+['GDP',(e.data.gdp||0).toLocaleString(undefined,{maximumFractionDigits:0})],['Trade',e.data.trade_volume.toFixed(0)],['Planets',e.data.total_planets||0],['Routes',e.data.active_routes||0],['Freight',e.data.active_deliveries||0],['Systems',d.systems]
 ].map(([l,v])=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>').join('');
 // Leaderboard with bars
 const maxScore=Math.max(...(lb.data||[]).map(x=>x.score),1);

@@ -416,10 +416,14 @@ type PlanetBrief struct {
 
 // EconomyOverview is a galaxy-wide economic summary.
 type EconomyOverview struct {
-	TotalPopulation int64                      `json:"total_population"`
-	TotalCredits    int                        `json:"total_credits"`
-	TradeVolume     float64                    `json:"trade_volume"` // recent trade activity
-	Resources       map[string]ResourceSummary `json:"resources"`
+	TotalPopulation  int64                      `json:"total_population"`
+	TotalCredits     int                        `json:"total_credits"`
+	TradeVolume      float64                    `json:"trade_volume"`
+	GDP              float64                    `json:"gdp"`               // total production value per interval
+	ActiveRoutes     int                        `json:"active_routes"`     // shipping routes
+	ActiveDeliveries int                        `json:"active_deliveries"` // in-flight cargo
+	TotalPlanets     int                        `json:"total_planets"`     // colonized planets
+	Resources        map[string]ResourceSummary `json:"resources"`
 }
 
 // ResourceSummary aggregates supply/demand data for one resource.

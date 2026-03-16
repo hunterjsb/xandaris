@@ -818,6 +818,38 @@ func handleGetEconomy(p GameStateProvider) interface{} {
 		}
 	}
 
+	// GDP: total production value per interval (production × base price)
+	gdp := 0.0
+	totalPlanets := 0
+	for _, player := range p.GetPlayers() {
+		if player == nil {
+			continue
+		}
+		totalPlanets += len(player.OwnedPlanets)
+	}
+	// Use flows data for GDP calculation
+	if market != nil {
+		snap := market.GetSnapshot()
+		for _, rm := range snap.Resources {
+			// GDP contribution = production rate × base price
+			// (we approximate from supply/demand signals)
+			if rm.TotalDemand > 0 {
+				gdp += rm.TotalDemand * rm.BasePrice
+			}
+		}
+		_ = snap
+	}
+	overview.GDP = math.Round(gdp * 10) / 10
+	overview.TotalPlanets = totalPlanets
+
+	// Logistics stats
+	if dm := p.GetDeliveryManager(); dm != nil {
+		overview.ActiveDeliveries = len(dm.GetActiveDeliveries())
+	}
+	if sm := p.GetShippingManager(); sm != nil {
+		overview.ActiveRoutes = len(sm.GetRoutes(""))
+	}
+
 	return overview
 }
 
