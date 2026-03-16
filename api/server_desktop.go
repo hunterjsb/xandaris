@@ -1919,8 +1919,6 @@ const totalCons=planets.reduce((s,p)=>s+p.consumed_mw,0);
 const avgPct=totalCons>0?Math.min(1,totalGen/totalCons):1;
 let hist=[];planets.forEach(p=>{if(p.history&&p.history.length>hist.length)hist=p.history});
 const spark=hist.length>3?sp(hist):'';
-spark='<svg width="'+w+'" height="'+h+'" style="vertical-align:middle"><polyline points="'+coords+'" fill="none" stroke="'+sc+'" stroke-width="1.5" stroke-linejoin="round"/></svg>';
-}
 const tiles=planets.map(p=>{
 const pct=p.consumed_mw>0?Math.min(1,p.generated_mw/p.consumed_mw):1;
 const bg2=pct<0.3?'#4a1515':pct<0.5?'#4a2a15':pct<0.8?'#3a3a15':'#153a15';
