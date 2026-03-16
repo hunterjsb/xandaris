@@ -196,10 +196,8 @@ func (gv *GalaxyView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	accentColor := color.RGBA{127, 219, 202, 255}
-	dimColor := color.RGBA{80, 95, 115, 255}
-	DrawText(screen, "XANDARIS II", 10, 10, accentColor)
-	DrawText(screen, "Double-click system to enter  |  Esc to menu", 10, 28, dimColor)
+	DrawText(screen, "XANDARIS II", 10, 10, utils.Theme.Accent)
+	DrawText(screen, "Double-click system to enter  |  Esc to menu", 10, 28, utils.Theme.TextDim)
 
 	// Draw hints below header
 	gv.drawHints(screen)
@@ -223,11 +221,11 @@ func (gv *GalaxyView) drawQuitConfirm(screen *ebiten.Image) {
 	panel := &UIPanel{
 		X: centerX - 220, Y: centerY - 80, Width: 440, Height: 160,
 		BgColor:     color.RGBA{15, 18, 35, 255},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 
-	DrawTextCentered(screen, "Return to Main Menu?", centerX, centerY-50, color.RGBA{127, 219, 202, 255}, 1.2)
+	DrawTextCentered(screen, "Return to Main Menu?", centerX, centerY-50, utils.Theme.Accent, 1.2)
 	DrawTextCentered(screen, "Unsaved progress will be lost.", centerX, centerY-15, color.RGBA{102, 119, 136, 255}, 1.0)
 
 	yesPanel := &UIPanel{
@@ -241,10 +239,10 @@ func (gv *GalaxyView) drawQuitConfirm(screen *ebiten.Image) {
 	noPanel := &UIPanel{
 		X: centerX + 60, Y: centerY + 20, Width: 120, Height: 40,
 		BgColor:     color.RGBA{18, 22, 42, 255},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 	noPanel.Draw(screen)
-	DrawTextCentered(screen, "No (Esc)", centerX+120, centerY+35, color.RGBA{192, 200, 216, 255}, 1.0)
+	DrawTextCentered(screen, "No (Esc)", centerX+120, centerY+35, utils.Theme.TextLight, 1.0)
 }
 
 // OnEnter implements View interface
@@ -685,15 +683,9 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	gv.playerPanelRect = image.Rect(panelX, panelY, panelX+panelWidth, panelY+panelHeight)
 
 	// Draw panel background
-	panelBg := color.RGBA{12, 16, 28, 235}
-	panelBorder := color.RGBA{30, 40, 68, 255}
-	accentPanel := color.RGBA{127, 219, 202, 255}
-	dimPanel := color.RGBA{80, 95, 115, 255}
-	textLight := color.RGBA{192, 200, 216, 255}
-
 	panel := NewUIPanel(panelX, panelY, panelWidth, panelHeight)
-	panel.BgColor = panelBg
-	panel.BorderColor = panelBorder
+	panel.BgColor = utils.Theme.PanelBgSolid
+	panel.BorderColor = utils.Theme.PanelBorder
 	panel.Draw(screen)
 
 	textX := panelX + 12
@@ -704,17 +696,17 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 		toggleLabel = "+"
 	}
 	gv.playerPanelToggleRect = image.Rect(panelX+panelWidth-28, panelY+10, panelX+panelWidth-8, panelY+30)
-	DrawText(screen, fmt.Sprintf("[%s]", toggleLabel), panelX+panelWidth-28, panelY+14, dimPanel)
+	DrawText(screen, fmt.Sprintf("[%s]", toggleLabel), panelX+panelWidth-28, panelY+14, utils.Theme.TextDim)
 
 	DrawText(screen, humanPlayer.Name, textX, textY, humanPlayer.Color)
 	credStr := formatNumber(humanPlayer.Credits)
-	DrawText(screen, credStr+" cr", textX+len(humanPlayer.Name)*6+10, textY, accentPanel)
+	DrawText(screen, credStr+" cr", textX+len(humanPlayer.Name)*6+10, textY, utils.Theme.Accent)
 
 	if gv.playerPanelCollapsed {
 		pop := formatPopulation(humanPlayer.GetTotalPopulation())
-		DrawText(screen, fmt.Sprintf("%d planets  %s pop", len(humanPlayer.OwnedPlanets), pop), textX, textY+18, dimPanel)
+		DrawText(screen, fmt.Sprintf("%d planets  %s pop", len(humanPlayer.OwnedPlanets), pop), textX, textY+18, utils.Theme.TextDim)
 		footerY := panelY + panelHeight - 16
-		DrawText(screen, "[+] expand  |  [P] directory", textX, footerY, dimPanel)
+		DrawText(screen, "[+] expand  |  [P] directory", textX, footerY, utils.Theme.TextDim)
 		footerWidth := len("[+] expand  |  [P] directory") * 6
 		gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
 		return
@@ -724,38 +716,38 @@ func (gv *GalaxyView) drawPlayerInfo(screen *ebiten.Image) {
 	pop := formatPopulation(humanPlayer.GetTotalPopulation())
 	shipCount := len(humanPlayer.OwnedShips) + len(humanPlayer.OwnedFleets)
 
-	DrawText(screen, "Planets", textX, textY+22, dimPanel)
-	DrawText(screen, fmt.Sprintf("%d", len(humanPlayer.OwnedPlanets)), textX+60, textY+22, textLight)
+	DrawText(screen, "Planets", textX, textY+22, utils.Theme.TextDim)
+	DrawText(screen, fmt.Sprintf("%d", len(humanPlayer.OwnedPlanets)), textX+60, textY+22, utils.Theme.TextLight)
 
-	DrawText(screen, "Pop", textX+110, textY+22, dimPanel)
-	DrawText(screen, pop, textX+145, textY+22, textLight)
+	DrawText(screen, "Pop", textX+110, textY+22, utils.Theme.TextDim)
+	DrawText(screen, pop, textX+145, textY+22, utils.Theme.TextLight)
 
-	DrawText(screen, "Ships", textX, textY+38, dimPanel)
-	DrawText(screen, fmt.Sprintf("%d", shipCount), textX+60, textY+38, textLight)
+	DrawText(screen, "Ships", textX, textY+38, utils.Theme.TextDim)
+	DrawText(screen, fmt.Sprintf("%d", shipCount), textX+60, textY+38, utils.Theme.TextLight)
 
 	// Construction queue
 	if cs := tickable.GetSystemByName("Construction"); cs != nil {
 		if csys, ok := cs.(*tickable.ConstructionSystem); ok {
 			queueItems := csys.GetConstructionsByOwner(humanPlayer.Name)
 			if len(queueItems) > 0 {
-				DrawText(screen, "Queue", textX+110, textY+38, dimPanel)
+				DrawText(screen, "Queue", textX+110, textY+38, utils.Theme.TextDim)
 				DrawText(screen, fmt.Sprintf("%d", len(queueItems)), textX+155, textY+38, utils.SystemOrange)
 			}
 		}
 	}
 
 	if humanPlayer.HomeSystem != nil {
-		DrawText(screen, "Home", textX, textY+54, dimPanel)
-		DrawText(screen, humanPlayer.HomeSystem.Name, textX+60, textY+54, dimPanel)
+		DrawText(screen, "Home", textX, textY+54, utils.Theme.TextDim)
+		DrawText(screen, humanPlayer.HomeSystem.Name, textX+60, textY+54, utils.Theme.TextDim)
 	}
 
 	// Separator
 	separatorY := textY + 70
-	DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, panelBorder)
+	DrawLine(screen, panelX+8, separatorY, panelX+panelWidth-8, separatorY, utils.Theme.PanelBorder)
 
 	// Footer
 	footerY := panelY + panelHeight - 16
-	DrawText(screen, "[P] Player Directory  |  [M] Market", textX, footerY, dimPanel)
+	DrawText(screen, "[P] Player Directory  |  [M] Market", textX, footerY, utils.Theme.TextDim)
 	footerWidth := len("[P] Player Directory  |  [M] Market") * 6
 	gv.playerDirectoryHintRect = image.Rect(textX-2, footerY-12, textX+footerWidth+2, footerY+4)
 
@@ -911,18 +903,40 @@ func (gv *GalaxyView) drawHints(screen *ebiten.Image) {
 		return
 	}
 
-	// Show up to 2 hints in the bottom-center
+	// Show up to 2 hints in the bottom-center with a subtle backdrop
+	screenW := screen.Bounds().Dx()
 	screenH := screen.Bounds().Dy()
-	hintY := screenH - 80
 	maxHints := 2
 	if len(hints) < maxHints {
 		maxHints = len(hints)
 	}
 
+	// Find the widest hint for panel sizing
+	maxW := 0
+	for i := 0; i < maxHints; i++ {
+		w := len(hints[i]) * 6
+		if w > maxW {
+			maxW = w
+		}
+	}
+
+	panelW := maxW + 24
+	panelH := maxHints*14 + 12
+	panelX := (screenW - panelW) / 2
+	panelY := screenH - 80 - 4
+
+	hintPanel := &UIPanel{
+		X: panelX, Y: panelY, Width: panelW, Height: panelH,
+		BgColor:     color.RGBA{12, 16, 28, 160},
+		BorderColor: color.RGBA{30, 40, 68, 100},
+	}
+	hintPanel.Draw(screen)
+
+	hintY := panelY + 6
 	for i := 0; i < maxHints; i++ {
 		text := hints[i]
 		textW := len(text) * 6
-		x := (screen.Bounds().Dx() - textW) / 2
+		x := (screenW - textW) / 2
 		DrawText(screen, text, x, hintY, utils.SystemYellow)
 		hintY += 14
 	}

@@ -11,6 +11,8 @@ import (
 	"github.com/hunterjsb/xandaris/utils"
 )
 
+var pdRectCache = utils.NewRectImageCache()
+
 type playerDirectoryEntry struct {
 	player       *entities.Player
 	isHuman      bool
@@ -47,8 +49,8 @@ func NewPlayerDirectoryView(ctx GameContext) *PlayerDirectoryView {
 		Y:           panelMargin,
 		Width:       ScreenWidth - panelMargin*2,
 		Height:      ScreenHeight - panelMargin*2,
-		BgColor:     color.RGBA{12, 16, 28, 245},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BgColor:     utils.Theme.PanelBgSolid,
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	header := &UIPanel{
@@ -57,7 +59,7 @@ func NewPlayerDirectoryView(ctx GameContext) *PlayerDirectoryView {
 		Width:       background.Width - 40,
 		Height:      60,
 		BgColor:     color.RGBA{18, 22, 42, 250},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	table := &UIPanel{
@@ -66,7 +68,7 @@ func NewPlayerDirectoryView(ctx GameContext) *PlayerDirectoryView {
 		Width:       header.Width,
 		Height:      background.Height - header.Height - 85,
 		BgColor:     color.RGBA{14, 18, 34, 240},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	instructions := &UIPanel{
@@ -75,7 +77,7 @@ func NewPlayerDirectoryView(ctx GameContext) *PlayerDirectoryView {
 		Width:       background.Width - 40,
 		Height:      35,
 		BgColor:     color.RGBA{18, 22, 42, 240},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	return &PlayerDirectoryView{
@@ -164,31 +166,28 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 	// Refresh data every draw
 	pd.refreshEntries()
 
-	accentColor := color.RGBA{127, 219, 202, 255}
-	dimColor := color.RGBA{80, 95, 115, 255}
-
 	// Header
 	titleY := pd.headerPanel.Y + 15
-	DrawTextCentered(screen, "PLAYER DIRECTORY", pd.headerPanel.X+pd.headerPanel.Width/2, titleY, accentColor, 1.6)
+	DrawTextCentered(screen, "PLAYER DIRECTORY", pd.headerPanel.X+pd.headerPanel.Width/2, titleY, utils.Theme.Accent, 1.6)
 	summary := fmt.Sprintf("%d factions", len(pd.entries))
-	DrawTextCentered(screen, summary, pd.headerPanel.X+pd.headerPanel.Width/2, titleY+25, dimColor, 1.0)
+	DrawTextCentered(screen, summary, pd.headerPanel.X+pd.headerPanel.Width/2, titleY+25, utils.Theme.TextDim, 1.0)
 
 	// Column headers
 	headerY := pd.tablePanel.Y + 16
 	cols := pd.columnOffsets()
 
-	DrawText(screen, "Faction", cols[0], headerY, dimColor)
-	DrawText(screen, "Credits", cols[1], headerY, dimColor)
-	DrawText(screen, "Pop", cols[2], headerY, dimColor)
-	DrawText(screen, "Planets", cols[3], headerY, dimColor)
-	DrawText(screen, "Mines", cols[4], headerY, dimColor)
-	DrawText(screen, "Ships", cols[5], headerY, dimColor)
-	DrawText(screen, "Stock", cols[6], headerY, dimColor)
+	DrawText(screen, "Faction", cols[0], headerY, utils.Theme.TextDim)
+	DrawText(screen, "Credits", cols[1], headerY, utils.Theme.TextDim)
+	DrawText(screen, "Pop", cols[2], headerY, utils.Theme.TextDim)
+	DrawText(screen, "Planets", cols[3], headerY, utils.Theme.TextDim)
+	DrawText(screen, "Mines", cols[4], headerY, utils.Theme.TextDim)
+	DrawText(screen, "Ships", cols[5], headerY, utils.Theme.TextDim)
+	DrawText(screen, "Stock", cols[6], headerY, utils.Theme.TextDim)
 
-	DrawLine(screen, pd.tablePanel.X+12, headerY+14, pd.tablePanel.X+pd.tablePanel.Width-12, headerY+14, color.RGBA{30, 40, 68, 255})
+	DrawLine(screen, pd.tablePanel.X+12, headerY+14, pd.tablePanel.X+pd.tablePanel.Width-12, headerY+14, utils.Theme.PanelBorder)
 
 	if len(pd.entries) == 0 {
-		DrawTextCentered(screen, "No factions discovered.", pd.tablePanel.X+pd.tablePanel.Width/2, headerY+60, dimColor, 1.0)
+		DrawTextCentered(screen, "No factions discovered.", pd.tablePanel.X+pd.tablePanel.Width/2, headerY+60, utils.Theme.TextDim, 1.0)
 	} else {
 		// Find max credits for wealth bar scaling
 		maxCredits := 1
@@ -209,8 +208,7 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 
 			// Row background on hover
 			if globalIdx == pd.hoveredRow {
-				rowBg := ebiten.NewImage(pd.tablePanel.Width-24, rowHeight)
-				rowBg.Fill(color.RGBA{25, 32, 55, 200})
+				rowBg := pdRectCache.GetOrCreate(pd.tablePanel.Width-24, rowHeight, utils.Theme.PanelHover)
 				opts := &ebiten.DrawImageOptions{}
 				opts.GeoM.Translate(float64(pd.tablePanel.X+12), float64(y-6))
 				screen.DrawImage(rowBg, opts)
@@ -236,11 +234,11 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 
 			// Credits with wealth bar
 			credStr := formatNumber(entry.player.Credits)
-			credColor := color.RGBA{192, 200, 216, 255}
+			credColor := utils.Theme.TextLight
 			if entry.player.Credits < 500 {
 				credColor = color.RGBA{255, 100, 100, 255}
 			} else if entry.player.Credits > 100000 {
-				credColor = color.RGBA{127, 219, 202, 255}
+				credColor = utils.Theme.Accent
 			}
 			DrawText(screen, credStr, cols[1], y, credColor)
 
@@ -256,32 +254,30 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 			if fillWidth < 1 {
 				fillWidth = 1
 			}
-			barBg := ebiten.NewImage(barWidth, barHeight)
-			barBg.Fill(color.RGBA{20, 25, 40, 255})
+			barBgImg := pdRectCache.GetOrCreate(barWidth, barHeight, utils.Theme.BarBg)
 			barBgOpts := &ebiten.DrawImageOptions{}
 			barBgOpts.GeoM.Translate(float64(cols[1]), float64(barY))
-			screen.DrawImage(barBg, barBgOpts)
-			barFill := ebiten.NewImage(fillWidth, barHeight)
-			barFill.Fill(entry.player.Color)
+			screen.DrawImage(barBgImg, barBgOpts)
+			barFillImg := pdRectCache.GetOrCreate(fillWidth, barHeight, entry.player.Color)
 			barFillOpts := &ebiten.DrawImageOptions{}
 			barFillOpts.GeoM.Translate(float64(cols[1]), float64(barY))
-			screen.DrawImage(barFill, barFillOpts)
+			screen.DrawImage(barFillImg, barFillOpts)
 
 			// Population
 			popStr := formatPopulation(entry.population)
-			DrawText(screen, popStr, cols[2], y, color.RGBA{192, 200, 216, 255})
+			DrawText(screen, popStr, cols[2], y, utils.Theme.TextLight)
 
 			// Planets
-			planetColor := dimColor
+			planetColor := utils.Theme.TextDim
 			if entry.planets > 0 {
-				planetColor = color.RGBA{192, 200, 216, 255}
+				planetColor = utils.Theme.TextLight
 			}
 			DrawText(screen, fmt.Sprintf("%d", entry.planets), cols[3], y, planetColor)
 
 			// Mines
-			mineColor := dimColor
+			mineColor := utils.Theme.TextDim
 			if entry.mines > 0 {
-				mineColor = color.RGBA{192, 200, 216, 255}
+				mineColor = utils.Theme.TextLight
 			}
 			DrawText(screen, fmt.Sprintf("%d", entry.mines), cols[4], y, mineColor)
 
@@ -291,12 +287,12 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 				// Remote player — we don't have local ship data
 				shipCount = 0 // Can't determine from synced data yet
 			}
-			DrawText(screen, fmt.Sprintf("%d", shipCount), cols[5], y, color.RGBA{192, 200, 216, 255})
+			DrawText(screen, fmt.Sprintf("%d", shipCount), cols[5], y, utils.Theme.TextLight)
 
 			// Stock
-			stockColor := dimColor
+			stockColor := utils.Theme.TextDim
 			if entry.totalStock > 0 {
-				stockColor = color.RGBA{192, 200, 216, 255}
+				stockColor = utils.Theme.TextLight
 			}
 			DrawText(screen, formatNumber(entry.totalStock), cols[6], y, stockColor)
 
@@ -306,14 +302,14 @@ func (pd *PlayerDirectoryView) Draw(screen *ebiten.Image) {
 		// Scroll indicator
 		if len(pd.entries) > pd.maxVisibleRows {
 			info := fmt.Sprintf("%d-%d of %d", startIndex+1, endIndex, len(pd.entries))
-			DrawText(screen, info, pd.tablePanel.X+pd.tablePanel.Width-120, pd.tablePanel.Y+pd.tablePanel.Height-20, dimColor)
+			DrawText(screen, info, pd.tablePanel.X+pd.tablePanel.Width-120, pd.tablePanel.Y+pd.tablePanel.Height-20, utils.Theme.TextDim)
 		}
 	}
 
 	// Instructions
 	instrY := pd.instructionsPanel.Y + 12
 	DrawTextCentered(screen, "Click faction to focus home system  |  Scroll to browse  |  Esc to close",
-		pd.instructionsPanel.X+pd.instructionsPanel.Width/2, instrY, dimColor, 0.9)
+		pd.instructionsPanel.X+pd.instructionsPanel.Width/2, instrY, utils.Theme.TextDim, 0.9)
 }
 
 func (pd *PlayerDirectoryView) columnOffsets() []int {

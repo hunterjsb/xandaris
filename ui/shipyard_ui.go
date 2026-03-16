@@ -266,14 +266,14 @@ func (sui *ShipyardUI) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Background panel
+	// Background panel (dark theme)
 	panel := &views.UIPanel{
 		X:           sui.x,
 		Y:           sui.y,
 		Width:       sui.width,
 		Height:      sui.height,
-		BgColor:     color.RGBA{10, 10, 20, 240},
-		BorderColor: color.RGBA{100, 150, 200, 255},
+		BgColor:     utils.Theme.PanelBgSolid,
+		BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 

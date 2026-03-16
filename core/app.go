@@ -30,6 +30,9 @@ type App struct {
 	// Remote connection details (stored for UI components)
 	remoteServerURL string
 	remoteAPIKey    string
+
+	// Toast notifications for important events
+	notifications *notificationOverlay
 }
 
 type empirePlanetHit struct {
@@ -125,6 +128,11 @@ func (a *App) Update() error {
 func (a *App) Draw(screen *ebiten.Image) {
 	a.viewManager.Draw(screen)
 	a.drawTickInfo(screen)
+
+	// Toast notifications (above command bar, below nothing)
+	if a.notifications != nil {
+		a.notifications.draw(screen, a.screenWidth)
+	}
 
 	// Command bar draws on top of everything
 	if a.commandBar != nil {

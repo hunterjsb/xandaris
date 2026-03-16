@@ -67,10 +67,7 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Dark theme colors
-	bgColor := color.RGBA{12, 16, 28, 220}
-	borderColor := color.RGBA{30, 40, 68, 255}
-	accentColor := color.RGBA{127, 219, 202, 255}
+	// Dark theme colors from centralized theme
 
 	// Calculate panel height based on number of items
 	visibleCount := len(items)
@@ -82,13 +79,13 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 	// Draw background panel
 	panel := &views.UIPanel{
 		X: cq.x, Y: cq.y, Width: cq.width, Height: panelHeight,
-		BgColor: bgColor, BorderColor: borderColor,
+		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 
 	// Draw title
 	titleY := cq.y + 15
-	views.DrawText(screen, "Construction Queue", cq.x+10, titleY, accentColor)
+	views.DrawText(screen, "Construction Queue", cq.x+10, titleY, utils.Theme.Accent)
 
 	// Draw total count
 	countY := titleY + 15
@@ -100,7 +97,7 @@ func (cq *ConstructionQueueUI) Draw(screen *ebiten.Image) {
 
 	// Draw separator
 	separatorY := countY + 10
-	views.DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, borderColor)
+	views.DrawLine(screen, cq.x+10, separatorY, cq.x+cq.width-10, separatorY, utils.Theme.PanelBorder)
 
 	// Draw construction items
 	itemY := separatorY + 10
@@ -132,7 +129,7 @@ func (cq *ConstructionQueueUI) drawConstructionItem(screen *ebiten.Image, item C
 	// Item background
 	itemPanel := &views.UIPanel{
 		X: itemX, Y: y, Width: itemW, Height: cq.itemHeight,
-		BgColor: color.RGBA{18, 22, 38, 230}, BorderColor: color.RGBA{30, 40, 68, 255},
+		BgColor: utils.Theme.PanelBgLight, BorderColor: utils.Theme.PanelBorder,
 	}
 	itemPanel.Draw(screen)
 

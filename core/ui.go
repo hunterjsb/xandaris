@@ -30,20 +30,28 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 	x := 10
 	y := a.screenHeight - 55
 
-	panel := views.NewUIPanel(x, y, 340, 45)
+	panel := &views.UIPanel{
+		X: x, Y: y, Width: 400, Height: 45,
+		BgColor:     utils.Theme.PanelBg,
+		BorderColor: utils.Theme.PanelBorder,
+	}
 	panel.Draw(screen)
 
 	textX := x + 10
 	textY := y + 12
 
+	// Line 1: Speed + game time
 	speedStr := a.Server.TickManager.GetSpeedString()
-	pauseStr := ""
+	timeStr := a.Server.TickManager.GetGameTimeFormatted()
 	if a.Server.TickManager.IsPaused() {
-		pauseStr = " [PAUSED]"
+		views.DrawText(screen, fmt.Sprintf("Speed: %s  %s", speedStr, timeStr), textX, textY, utils.Theme.TextDim)
+		views.DrawText(screen, "PAUSED", textX+len(fmt.Sprintf("Speed: %s  %s  ", speedStr, timeStr))*6, textY, utils.SystemYellow)
+	} else {
+		views.DrawText(screen, fmt.Sprintf("Speed: %s  %s", speedStr, timeStr), textX, textY, utils.Theme.TextLight)
 	}
-	views.DrawText(screen, fmt.Sprintf("Speed: %s  %s%s", speedStr, a.Server.TickManager.GetGameTimeFormatted(), pauseStr), textX, textY, utils.TextPrimary)
 
-	credStr := ""
+	// Line 2: Credits with colored net flow + hints
+	textY += 15
 	if human := a.Server.State.HumanPlayer; human != nil {
 		income := 0
 		upkeep := 0
@@ -64,18 +72,31 @@ func (a *App) drawStatusBar(screen *ebiten.Image) {
 				}
 			}
 		}
+
+		credLabel := fmt.Sprintf("Credits: %d ", human.Credits)
+		views.DrawText(screen, credLabel, textX, textY, utils.Theme.TextLight)
+
+		// Color-coded net flow
 		net := income - upkeep
-		netColor := "+"
-		if net < 0 {
-			netColor = ""
+		flowX := textX + len(credLabel)*6
+		if net > 0 {
+			views.DrawText(screen, fmt.Sprintf("(+%d/s)", net), flowX, textY, utils.SystemGreen)
+			flowX += len(fmt.Sprintf("(+%d/s)", net))*6 + 6
+		} else if net < 0 {
+			views.DrawText(screen, fmt.Sprintf("(%d/s)", net), flowX, textY, utils.SystemRed)
+			flowX += len(fmt.Sprintf("(%d/s)", net))*6 + 6
+		} else {
+			views.DrawText(screen, "(0/s)", flowX, textY, utils.Theme.TextDim)
+			flowX += len("(0/s)")*6 + 6
 		}
-		credStr = fmt.Sprintf("Credits: %d (%s%d/s)  ", human.Credits, netColor, net)
+
+		// Hints after credits
+		hints := "[`] Chat"
+		if !a.IsRemote() {
+			hints += "  [Space] Pause"
+		}
+		views.DrawText(screen, hints, flowX, textY, utils.Theme.TextDim)
 	}
-	hints := "[`] Chat"
-	if !a.IsRemote() {
-		hints += "  [Space] Pause  [F5] Save"
-	}
-	views.DrawText(screen, credStr+hints, textX, textY+15, utils.TextSecondary)
 }
 
 // drawEmpirePanel renders a persistent top-right panel with empire vitals.
@@ -94,38 +115,48 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 	// Calculate panel height based on content
 	panelW := 230
 	perPlanet := 50
+	hasPower := false
+	var totalPop int64
 	for _, planet := range human.OwnedPlanets {
-		if planet != nil && planet.PowerConsumed > 0 {
-			perPlanet = 68 // extra room for power bar
-			break
+		if planet == nil {
+			continue
+		}
+		totalPop += planet.Population
+		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
+			hasPower = true
 		}
 	}
-	panelH := 24 + len(human.OwnedPlanets)*perPlanet + 4
-	if panelH > 280 {
-		panelH = 280
+	if hasPower {
+		perPlanet = 68
+	}
+	// +18 for the total pop line
+	panelH := 42 + len(human.OwnedPlanets)*perPlanet + 4
+	if panelH > 380 {
+		panelH = 380
 	}
 	x := a.screenWidth - panelW - 10
 	y := 10
 
-	accentColor := color.RGBA{127, 219, 202, 255}
-	dimColor := color.RGBA{80, 95, 115, 255}
-	textLight := color.RGBA{192, 200, 216, 255}
-
 	panel := &views.UIPanel{
 		X: x, Y: y, Width: panelW, Height: panelH,
-		BgColor:     color.RGBA{12, 16, 28, 220},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BgColor:     utils.Theme.PanelBg,
+		BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 
 	textY := y + 10
-	views.DrawText(screen, human.Name, x+10, textY, accentColor)
+	views.DrawText(screen, human.Name, x+10, textY, utils.Theme.Accent)
 
 	// Credits right-aligned
 	credStr := formatCredits(human.Credits)
 	credW := len(credStr) * 6
-	views.DrawText(screen, credStr, x+panelW-credW-10, textY, textLight)
-	textY += 18
+	views.DrawText(screen, credStr, x+panelW-credW-10, textY, utils.Theme.TextLight)
+	textY += 14
+
+	// Total population + planet count summary
+	popSummary := fmt.Sprintf("Pop: %s  %d planets", utils.FormatInt64WithCommas(totalPop), len(human.OwnedPlanets))
+	views.DrawText(screen, popSummary, x+10, textY, utils.Theme.TextDim)
+	textY += 16
 
 	a.empirePlanetHits = a.empirePlanetHits[:0] // reset hit regions
 
@@ -137,7 +168,7 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		hitStart := textY
 
 		// Planet name (clickable)
-		views.DrawText(screen, planet.Name, x+10, textY, accentColor)
+		views.DrawText(screen, planet.Name, x+10, textY, utils.Theme.Accent)
 		textY += 15
 
 		// Population + happiness on same line
@@ -146,7 +177,7 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		if popCap > 0 {
 			popStr = fmt.Sprintf("Pop: %d/%d", planet.Population, popCap)
 		}
-		views.DrawText(screen, popStr, x+14, textY, dimColor)
+		views.DrawText(screen, popStr, x+14, textY, utils.Theme.TextDim)
 
 		happyStr := fmt.Sprintf("%.0f%%", planet.Happiness*100)
 		happyColor := utils.SystemGreen
@@ -159,14 +190,14 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		textY += 15
 
 		// Power bar + label
-		if planet.PowerConsumed > 0 {
+		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
 			powerRatio := planet.GetPowerRatio()
 			barX := x + 14
 			barW := panelW - 28
 			barH := 5
 
 			bg := &views.UIPanel{X: barX, Y: textY, Width: barW, Height: barH,
-				BgColor: color.RGBA{20, 25, 40, 255}, BorderColor: color.RGBA{30, 35, 55, 255}}
+				BgColor: utils.Theme.BarBg, BorderColor: color.RGBA{30, 35, 55, 255}}
 			bg.Draw(screen)
 
 			fillW := int(float64(barW) * powerRatio)
@@ -183,10 +214,32 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 			}
 
 			pwrLabel := fmt.Sprintf("%.0f/%.0fMW", planet.PowerGenerated, planet.PowerConsumed)
-			views.DrawText(screen, pwrLabel, barX, textY+barH+3, dimColor)
+			views.DrawText(screen, pwrLabel, barX, textY+barH+3, utils.Theme.TextDim)
 			textY += barH + 16
 		} else {
 			textY += 8
+		}
+
+		// Resource warnings (compact, one-line)
+		var warnings []string
+		waterStored := planet.GetStoredAmount("Water")
+		if planet.Population > 0 && waterStored < 10 {
+			warnings = append(warnings, "Water!")
+		}
+		fuelStored := planet.GetStoredAmount("Fuel")
+		if (planet.PowerGenerated > 0 || planet.PowerConsumed > 0) && fuelStored < 5 {
+			warnings = append(warnings, "Fuel!")
+		}
+		if len(warnings) > 0 {
+			warnStr := ""
+			for i, w := range warnings {
+				if i > 0 {
+					warnStr += " "
+				}
+				warnStr += w
+			}
+			views.DrawText(screen, warnStr, x+14, textY, utils.SystemRed)
+			textY += 12
 		}
 
 		// Record clickable hit region for this planet

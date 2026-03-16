@@ -407,8 +407,8 @@ func (fui *FleetInfoUI) Draw(screen *ebiten.Image) {
 		Y:           fui.y,
 		Width:       fui.width,
 		Height:      fui.height,
-		BgColor:     utils.Background,
-		BorderColor: utils.PanelBorder,
+		BgColor:     utils.Theme.PanelBgSolid,
+		BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 

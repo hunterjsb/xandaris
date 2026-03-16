@@ -13,6 +13,8 @@ import (
 	"github.com/hunterjsb/xandaris/utils"
 )
 
+var mvRectCache = utils.NewRectImageCache()
+
 type marketResourceRow struct {
 	resource       string
 	humanStock     int
@@ -63,8 +65,8 @@ func NewMarketView(ctx GameContext) *MarketView {
 		Y:           panelMargin,
 		Width:       ScreenWidth - panelMargin*2,
 		Height:      ScreenHeight - panelMargin*2,
-		BgColor:     color.RGBA{12, 16, 28, 245},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BgColor:     utils.Theme.PanelBgSolid,
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	header := &UIPanel{
@@ -73,7 +75,7 @@ func NewMarketView(ctx GameContext) *MarketView {
 		Width:       background.Width - 30,
 		Height:      55,
 		BgColor:     color.RGBA{18, 22, 42, 250},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	table := &UIPanel{
@@ -82,7 +84,7 @@ func NewMarketView(ctx GameContext) *MarketView {
 		Width:       header.Width,
 		Height:      background.Height - header.Height - 80,
 		BgColor:     color.RGBA{14, 18, 34, 240},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	instructions := &UIPanel{
@@ -91,7 +93,7 @@ func NewMarketView(ctx GameContext) *MarketView {
 		Width:       background.Width - 30,
 		Height:      35,
 		BgColor:     color.RGBA{18, 22, 42, 240},
-		BorderColor: color.RGBA{30, 40, 68, 255},
+		BorderColor: utils.Theme.PanelBorder,
 	}
 
 	return &MarketView{
@@ -205,16 +207,13 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	mv.tablePanel.Draw(screen)
 	mv.instructionsPanel.Draw(screen)
 
-	accentColor := color.RGBA{127, 219, 202, 255}
-	dimColor := color.RGBA{80, 95, 115, 255}
-
 	title := "MARKET"
 	if mv.tradingPlanet != nil {
 		title = fmt.Sprintf("MARKET — %s", mv.tradingPlanet.Name)
 	}
-	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+15, accentColor)
+	DrawText(screen, title, mv.headerPanel.X+20, mv.headerPanel.Y+15, utils.Theme.Accent)
 	credStr := fmt.Sprintf("Credits: %s", formatNumber(mv.humanCredits))
-	DrawText(screen, credStr, mv.headerPanel.X+20, mv.headerPanel.Y+35, color.RGBA{192, 200, 216, 255})
+	DrawText(screen, credStr, mv.headerPanel.X+20, mv.headerPanel.Y+35, utils.Theme.TextLight)
 
 	// Stock + trade mode (right side)
 	if mv.tradingPlanet != nil {
@@ -226,7 +225,7 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		}
 		stockInfo := fmt.Sprintf("Stock: %s  Pop: %s", formatNumber(totalStock), formatPopulation(mv.tradingPlanet.Population))
 		stockWidth := len(stockInfo) * 6
-		DrawText(screen, stockInfo, mv.headerPanel.X+mv.headerPanel.Width-stockWidth-20, mv.headerPanel.Y+15, dimColor)
+		DrawText(screen, stockInfo, mv.headerPanel.X+mv.headerPanel.Width-stockWidth-20, mv.headerPanel.Y+15, utils.Theme.TextDim)
 
 		// Trade mode indicator
 		tradeMode := "Galaxy (fees apply)"
@@ -266,18 +265,18 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 	colFee := mv.tablePanel.X + 645
 	colAction := mv.tablePanel.X + mv.tablePanel.Width - 120
 
-	DrawText(screen, "Commodity", colResource, headerY, dimColor)
-	DrawText(screen, "Stock", colStock, headerY, dimColor)
-	DrawText(screen, "Galaxy", colGalSupply, headerY, dimColor)
-	DrawText(screen, "Buy @", colBuy, headerY, dimColor)
-	DrawText(screen, "Sell @", colSell, headerY, dimColor)
-	DrawText(screen, "Best@", colBase, headerY, dimColor)
-	DrawText(screen, "Flow", colDemand, headerY, dimColor)
-	DrawText(screen, "Status", colTrend, headerY, dimColor)
-	DrawText(screen, "Fee", colFee, headerY, dimColor)
-	DrawText(screen, "Trade", colAction, headerY, dimColor)
+	DrawText(screen, "Commodity", colResource, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Stock", colStock, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Galaxy", colGalSupply, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Buy @", colBuy, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Sell @", colSell, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Best@", colBase, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Flow", colDemand, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Status", colTrend, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Fee", colFee, headerY, utils.Theme.TextDim)
+	DrawText(screen, "Trade", colAction, headerY, utils.Theme.TextDim)
 
-	DrawLine(screen, mv.tablePanel.X+12, headerY+14, mv.tablePanel.X+mv.tablePanel.Width-12, headerY+14, color.RGBA{30, 40, 68, 255})
+	DrawLine(screen, mv.tablePanel.X+12, headerY+14, mv.tablePanel.X+mv.tablePanel.Width-12, headerY+14, utils.Theme.PanelBorder)
 
 	if len(mv.rows) == 0 {
 		DrawText(screen, "No tradable inventory available yet. Build Trading Posts and accumulate goods.",
@@ -300,14 +299,13 @@ func (mv *MarketView) Draw(screen *ebiten.Image) {
 		// Hover highlight
 		if mx >= mv.tablePanel.X+12 && mx <= mv.tablePanel.X+mv.tablePanel.Width-12 &&
 			my >= y-4 && my < y+rowHeight-4 {
-			hoverBg := ebiten.NewImage(mv.tablePanel.Width-24, rowHeight)
-			hoverBg.Fill(color.RGBA{25, 32, 55, 200})
+			hoverBg := mvRectCache.GetOrCreate(mv.tablePanel.Width-24, rowHeight, utils.Theme.PanelHover)
 			opts := &ebiten.DrawImageOptions{}
 			opts.GeoM.Translate(float64(mv.tablePanel.X+12), float64(y-4))
 			screen.DrawImage(hoverBg, opts)
 		}
 
-		DrawText(screen, row.resource, colResource, y, color.RGBA{192, 200, 216, 255})
+		DrawText(screen, row.resource, colResource, y, utils.Theme.TextLight)
 
 		// Stock: player's stock on trading planet (white = plenty, red = low)
 		stockColor := utils.TextPrimary
@@ -529,9 +527,8 @@ func (mv *MarketView) setStatus(msg string, c color.RGBA) {
 }
 
 func (mv *MarketView) drawInstructions(screen *ebiten.Image) {
-	dimColor := color.RGBA{80, 95, 115, 255}
 	instr := fmt.Sprintf("Click Buy/Sell to trade %d units  |  Scroll to browse  |  Esc to close", tradeLot)
-	DrawTextCentered(screen, instr, mv.instructionsPanel.X+mv.instructionsPanel.Width/2, mv.instructionsPanel.Y+12, dimColor, 0.9)
+	DrawTextCentered(screen, instr, mv.instructionsPanel.X+mv.instructionsPanel.Width/2, mv.instructionsPanel.Y+12, utils.Theme.TextDim, 0.9)
 }
 
 func (mv *MarketView) getRow(resource string) *marketResourceRow {

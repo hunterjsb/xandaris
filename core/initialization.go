@@ -65,6 +65,12 @@ func (a *App) InitializeClientViews() {
 	// Command bar (overlay on all views)
 	a.commandBar = ui.NewCommandBar(a, a.screenWidth, a.screenHeight)
 	a.commandBar.Init()
+
+	// Toast notifications for important events
+	a.notifications = newNotificationOverlay()
+	if human := a.Server.State.HumanPlayer; human != nil {
+		a.notifications.subscribe(a.Server.GetEventLog(), human.Name)
+	}
 }
 
 // ConfigureCommandBar sets server URL and API key for the command bar's chat feature.

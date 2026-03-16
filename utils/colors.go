@@ -49,16 +49,17 @@ var (
 	HyperlaneActive = color.RGBA{80, 80, 160, 255}
 )
 
-// UI Theme Colors
+// UI Theme Colors — these are aliases into Theme for backward compatibility.
+// Prefer using Theme.X directly in new code.
 var (
 	Background     = color.RGBA{5, 5, 15, 255}
 	BackgroundDark = color.RGBA{15, 15, 25, 255}
-	PanelBg        = color.RGBA{20, 20, 40, 230}
-	PanelBorder    = color.RGBA{100, 100, 150, 255}
+	PanelBg        = Theme.PanelBgLight // inner sub-panels
+	PanelBorder    = Theme.PanelBorder
 	Highlight      = color.RGBA{255, 255, 100, 255}
 	TextPrimary    = color.RGBA{255, 255, 255, 255}
-	TextSecondary  = color.RGBA{200, 200, 200, 255}
-	ButtonActive   = color.RGBA{40, 80, 120, 230}
+	TextSecondary  = Theme.TextLight
+	ButtonActive   = Theme.ButtonActive
 	ButtonDisabled = color.RGBA{60, 60, 60, 230}
 )
 

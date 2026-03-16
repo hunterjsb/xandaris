@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hunterjsb/xandaris/entities"
@@ -55,22 +54,18 @@ func (rsu *ResourceStorageUI) Draw(screen *ebiten.Image) {
 	}
 
 	// Dark theme panel
-	bgColor := color.RGBA{12, 16, 28, 220}
-	borderColor := color.RGBA{30, 40, 68, 255}
-	accentColor := color.RGBA{127, 219, 202, 255}
-
 	panel := &views.UIPanel{
 		X: rsu.x, Y: rsu.y, Width: rsu.width, Height: rsu.height,
-		BgColor: bgColor, BorderColor: borderColor,
+		BgColor: utils.Theme.PanelBg, BorderColor: utils.Theme.PanelBorder,
 	}
 	panel.Draw(screen)
 
 	// Title
 	titleY := rsu.y + 15
-	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, accentColor)
+	views.DrawText(screen, "Resource Storage", rsu.x+10, titleY, utils.Theme.Accent)
 
 	// Power status (right of title)
-	if pd.PowerConsumed > 0 {
+	if pd.PowerConsumed > 0 || pd.PowerRatio < 1.0 {
 		pwrColor := utils.SystemGreen
 		if pd.PowerRatio < 0.5 {
 			pwrColor = utils.SystemRed

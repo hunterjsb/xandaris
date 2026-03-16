@@ -382,31 +382,31 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	accentColor := color.RGBA{127, 219, 202, 255}
-	dimColor := color.RGBA{80, 95, 115, 255}
-	textLight := color.RGBA{192, 200, 216, 255}
-
 	details := formatPlanetDetails(pv.planet)
 	panelHeight := 22 + len(details)*15 + 20
 	humanPlayer := pv.ctx.GetHumanPlayer()
 	isOwned := humanPlayer != nil && pv.planet.Owner == humanPlayer.Name
 
 	infoPanel := NewUIPanel(6, 6, 260, panelHeight)
-	infoPanel.BgColor = color.RGBA{12, 16, 28, 220}
-	infoPanel.BorderColor = color.RGBA{30, 40, 68, 255}
+	infoPanel.BgColor = utils.Theme.PanelBg
+	infoPanel.BorderColor = utils.Theme.PanelBorder
 	infoPanel.Draw(screen)
 
-	DrawText(screen, pv.planet.Name, 14, 14, accentColor)
+	DrawText(screen, pv.planet.Name, 14, 14, utils.Theme.Accent)
+	afterName := 14 + len(pv.planet.Name)*6 + 8
+	if pv.system != nil {
+		DrawText(screen, pv.system.Name, afterName, 14, utils.Theme.TextDim)
+		afterName += len(pv.system.Name)*6 + 8
+	}
 	if pv.planet.Owner != "" {
-		ownerX := 14 + len(pv.planet.Name)*6 + 8
-		DrawText(screen, pv.planet.Owner, ownerX, 14, dimColor)
+		DrawText(screen, pv.planet.Owner, afterName, 14, utils.Theme.TextDim)
 	}
 
 	infoY := 32
 	for _, line := range details {
-		lineColor := dimColor
+		lineColor := utils.Theme.TextDim
 		if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
-			lineColor = textLight
+			lineColor = utils.Theme.TextLight
 		}
 		DrawText(screen, line, 14, infoY, lineColor)
 		infoY += 15
@@ -415,9 +415,9 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 	// Hints at bottom of panel
 	infoY += 4
 	if isOwned {
-		DrawText(screen, "[B] Build  [Shift+Click] Mine  [Esc] Back", 14, infoY, dimColor)
+		DrawText(screen, "[B] Build  [Shift+Click] Mine  [Esc] Back", 14, infoY, utils.Theme.TextDim)
 	} else {
-		DrawText(screen, "[Esc] Back to system", 14, infoY, dimColor)
+		DrawText(screen, "[Esc] Back to system", 14, infoY, utils.Theme.TextDim)
 	}
 
 	pv.drawWorkforceToggleButton(screen)
@@ -807,19 +807,25 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 	pop := utils.FormatInt64WithCommas(planet.Population)
 	cap := planet.GetTotalPopulationCapacity()
 	if cap > 0 {
-		lines = append(lines, fmt.Sprintf("Pop: %s / %s", pop, utils.FormatInt64WithCommas(cap)))
-	} else {
-		lines = append(lines, fmt.Sprintf("Pop: %s", pop))
+		lines = append(lines, fmt.Sprintf("Population: %s / %s", pop, utils.FormatInt64WithCommas(cap)))
+	} else if planet.Population > 0 {
+		lines = append(lines, fmt.Sprintf("Population: %s", pop))
 	}
 
 	// Happiness + productivity (compact)
 	if planet.Population > 0 {
-		lines = append(lines, fmt.Sprintf("Happiness: %.0f%% (%.1fx prod)",
-			planet.Happiness*100, planet.ProductivityBonus))
+		happyPct := planet.Happiness * 100
+		prodLabel := ""
+		if planet.ProductivityBonus > 1.05 {
+			prodLabel = fmt.Sprintf("  +%.0f%% prod", (planet.ProductivityBonus-1.0)*100)
+		} else if planet.ProductivityBonus < 0.95 {
+			prodLabel = fmt.Sprintf("  %.0f%% prod", (planet.ProductivityBonus-1.0)*100)
+		}
+		lines = append(lines, fmt.Sprintf("Happiness: %.0f%%%s", happyPct, prodLabel))
 	}
 
-	// Power (compact)
-	if planet.PowerConsumed > 0 {
+	// Power (compact) — show whenever there are buildings that consume power
+	if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
 		lines = append(lines, fmt.Sprintf("Power: %.0f/%.0f MW (%.0f%%)",
 			planet.PowerGenerated, planet.PowerConsumed, planet.GetPowerRatio()*100))
 	}
@@ -839,23 +845,28 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 
 func (pv *PlanetView) drawWorkforceToggleButton(screen *ebiten.Image) {
 	rect := pv.workforceButtonRect()
+	bgColor := utils.Theme.PanelBg
+	borderColor := utils.Theme.PanelBorder
+	if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
+		bgColor = utils.Theme.ButtonActive
+		accentBorder := utils.Theme.Accent
+		accentBorder.A = 180
+		borderColor = accentBorder
+	}
 	panel := &UIPanel{
 		X:           rect.Min.X,
 		Y:           rect.Min.Y,
 		Width:       rect.Dx(),
 		Height:      rect.Dy(),
-		BgColor:     utils.PanelBg,
-		BorderColor: utils.PanelBorder,
-	}
-	if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
-		panel.BgColor = utils.ButtonActive
+		BgColor:     bgColor,
+		BorderColor: borderColor,
 	}
 	panel.Draw(screen)
 
 	label := "Workforce [W]"
-	textColor := utils.TextSecondary
+	textColor := utils.Theme.TextDim
 	if pv.workforceOverlay != nil && pv.workforceOverlay.Visible() {
-		textColor = utils.TextPrimary
+		textColor = utils.Theme.Accent
 	}
 	DrawTextCenteredInRect(screen, label, rect, textColor)
 }

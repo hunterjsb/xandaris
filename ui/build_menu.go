@@ -435,13 +435,17 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		return
 	}
 
-	// Draw background panel
-	panel := views.NewUIPanel(bm.x, bm.y, bm.width, bm.height)
+	// Draw background panel (dark theme)
+	panel := &views.UIPanel{
+		X: bm.x, Y: bm.y, Width: bm.width, Height: bm.height,
+		BgColor:     utils.Theme.PanelBgSolid,
+		BorderColor: utils.Theme.PanelBorder,
+	}
 	panel.Draw(screen)
 
 	// Draw title
 	titleY := bm.y + 15
-	views.DrawCenteredText(screen, "Build Menu", bm.x+bm.width/2, titleY)
+	views.DrawText(screen, "Build Menu", bm.x+10, titleY, utils.Theme.Accent)
 
 	// Draw subtitle based on attachment type
 	subtitleY := titleY + 20
@@ -455,7 +459,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 
 	// Draw separator line
 	lineY := creditsY + 15
-	views.DrawLine(screen, bm.x+10, lineY, bm.x+bm.width-10, lineY, utils.PanelBorder)
+	views.DrawLine(screen, bm.x+10, lineY, bm.x+bm.width-10, lineY, utils.Theme.PanelBorder)
 
 	// Draw building items
 	contentTop := bm.getContentTop()
@@ -510,15 +514,17 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		}
 
 		// Draw item background (highlight if selected, gray out if can't build)
-		itemBg := utils.PanelBg
+		itemBg := utils.Theme.PanelBgLight
 		if !canBuild {
-			itemBg = color.RGBA{30, 30, 30, 230} // Dark gray for disabled
+			itemBg = color.RGBA{20, 20, 25, 230}
 		} else if i == bm.selectedIndex {
-			itemBg = color.RGBA{40, 40, 80, 230}
+			itemBg = utils.Theme.ButtonAccentBg
 		}
 
-		itemPanel := views.NewUIPanel(itemX, itemY, itemW, buildMenuItemHeight)
-		itemPanel.BgColor = itemBg
+		itemPanel := &views.UIPanel{
+			X: itemX, Y: itemY, Width: itemW, Height: buildMenuItemHeight,
+			BgColor: itemBg, BorderColor: utils.Theme.PanelBorder,
+		}
 		itemPanel.Draw(screen)
 
 		// Draw building color indicator

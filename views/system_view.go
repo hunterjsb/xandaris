@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -187,18 +188,46 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw UI info
-	accentColor := color.RGBA{127, 219, 202, 255}
-	dimColor := color.RGBA{80, 95, 115, 255}
-	textLight := color.RGBA{192, 200, 216, 255}
+	// System name + star type
+	DrawText(screen, sv.system.Name, 10, 10, utils.Theme.Accent)
 
-	DrawText(screen, sv.system.Name, 10, 10, accentColor)
-	DrawText(screen, "Double-click planet to enter  |  Esc to galaxy", 10, 28, dimColor)
+	// Compact resource summary for the system
+	resSet := make(map[string]bool)
+	planetCount := 0
+	ownedCount := 0
+	for _, e := range sv.system.Entities {
+		if p, ok := e.(*entities.Planet); ok {
+			planetCount++
+			if p.Owner != "" {
+				ownedCount++
+			}
+			for _, resEntity := range p.Resources {
+				if res, ok := resEntity.(*entities.Resource); ok {
+					resSet[res.ResourceType] = true
+				}
+			}
+		}
+	}
+	summaryParts := fmt.Sprintf("%d planets", planetCount)
+	if ownedCount > 0 {
+		summaryParts += fmt.Sprintf("  %d owned", ownedCount)
+	}
+	if len(resSet) > 0 {
+		resList := ""
+		for r := range resSet {
+			if resList != "" {
+				resList += ", "
+			}
+			resList += r
+		}
+		summaryParts += "  |  " + resList
+	}
+	summaryX := 10 + len(sv.system.Name)*6 + 12
+	DrawText(screen, summaryParts, summaryX, 10, utils.Theme.TextDim)
+
+	DrawText(screen, "Double-click planet to enter  |  Esc to galaxy", 10, 28, utils.Theme.TextDim)
 
 	if selected := sv.clickHandler.GetSelectedObject(); selected != nil {
-		// Info panel background
-		panelBg := color.RGBA{12, 16, 28, 220}
-		panelBorder := color.RGBA{30, 40, 68, 255}
-
 		if planet, ok := selected.(*entities.Planet); ok {
 			details := formatPlanetDetails(planet)
 			panelHeight := 30 + len(details)*15
@@ -212,40 +241,51 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 			}
 			if storageCount > 0 {
 				panelHeight += 20 + storageCount*14
+			} else if len(planet.Resources) > 0 {
+				// Deposits section for unowned planets
+				panelHeight += 20 + len(planet.Resources)*14
 			}
 
 			infoPanel := NewUIPanel(6, 42, 240, panelHeight)
-			infoPanel.BgColor = panelBg
-			infoPanel.BorderColor = panelBorder
+			infoPanel.BgColor = utils.Theme.PanelBg
+			infoPanel.BorderColor = utils.Theme.PanelBorder
 			infoPanel.Draw(screen)
 
 			infoY := 52
-			DrawText(screen, planet.Name, 14, infoY, accentColor)
+			DrawText(screen, planet.Name, 14, infoY, utils.Theme.Accent)
 			if planet.Owner != "" {
 				ownerWidth := len(planet.Name)*6 + 10
-				DrawText(screen, planet.Owner, 14+ownerWidth, infoY, dimColor)
+				DrawText(screen, planet.Owner, 14+ownerWidth, infoY, utils.Theme.TextDim)
 			}
 			infoY += 18
 
 			for _, line := range details {
-				lineColor := dimColor
+				lineColor := utils.Theme.TextDim
 				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
-					lineColor = textLight
+					lineColor = utils.Theme.TextLight
 				}
 				DrawText(screen, line, 14, infoY, lineColor)
 				infoY += 15
 			}
 
-			// Storage with fill indicators
+			// Storage with fill indicators (sorted for stable display)
 			if storageCount > 0 {
 				infoY += 6
-				DrawText(screen, "Storage", 14, infoY, dimColor)
+				DrawText(screen, "Storage", 14, infoY, utils.Theme.TextDim)
 				infoY += 15
-				for resType, storage := range planet.StoredResources {
-					if storage == nil {
-						continue
+
+				// Sort resource types for stable ordering
+				sortedTypes := make([]string, 0, len(planet.StoredResources))
+				for resType, s := range planet.StoredResources {
+					if s != nil {
+						sortedTypes = append(sortedTypes, resType)
 					}
-					resColor := dimColor
+				}
+				sort.Strings(sortedTypes)
+
+				for _, resType := range sortedTypes {
+					storage := planet.StoredResources[resType]
+					resColor := utils.Theme.TextDim
 					fillRatio := float64(0)
 					if storage.Capacity > 0 {
 						fillRatio = float64(storage.Amount) / float64(storage.Capacity)
@@ -255,51 +295,67 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 					} else if fillRatio > 0.8 {
 						resColor = color.RGBA{100, 200, 130, 255}
 					} else {
-						resColor = textLight
+						resColor = utils.Theme.TextLight
 					}
 
 					label := fmt.Sprintf("  %s: %d", resType, storage.Amount)
 					DrawText(screen, label, 14, infoY, resColor)
 
-					// Small fill bar
+					// Small fill bar (use cached images to avoid per-frame allocation)
 					barX := 170
 					barW := 60
 					barH := 3
-					barBg := ebiten.NewImage(barW, barH)
-					barBg.Fill(color.RGBA{20, 25, 40, 255})
+					barBgImg := systemRectCache.GetOrCreate(barW, barH, utils.Theme.BarBg)
 					barOpts := &ebiten.DrawImageOptions{}
 					barOpts.GeoM.Translate(float64(barX), float64(infoY+4))
-					screen.DrawImage(barBg, barOpts)
+					screen.DrawImage(barBgImg, barOpts)
 					if fillRatio > 0 {
 						fillW := int(float64(barW) * fillRatio)
 						if fillW < 1 {
 							fillW = 1
 						}
-						barFill := ebiten.NewImage(fillW, barH)
-						barFill.Fill(resColor)
+						barFillImg := systemRectCache.GetOrCreate(fillW, barH, resColor)
 						fillOpts := &ebiten.DrawImageOptions{}
 						fillOpts.GeoM.Translate(float64(barX), float64(infoY+4))
-						screen.DrawImage(barFill, fillOpts)
+						screen.DrawImage(barFillImg, fillOpts)
 					}
 
 					infoY += 14
 				}
 			}
+
+			// Show resource deposits (useful for scouting unowned planets)
+			if len(planet.Resources) > 0 && storageCount == 0 {
+				infoY += 6
+				DrawText(screen, "Deposits", 14, infoY, utils.Theme.TextDim)
+				infoY += 15
+				for _, resEntity := range planet.Resources {
+					if res, ok := resEntity.(*entities.Resource); ok {
+						depColor := utils.Theme.TextLight
+						if res.Abundance < 20 {
+							depColor = utils.SystemOrange
+						}
+						label := fmt.Sprintf("  %s  %d abundance", res.ResourceType, res.Abundance)
+						DrawText(screen, label, 14, infoY, depColor)
+						infoY += 14
+					}
+				}
+			}
 		} else if provider, ok := selected.(ContextMenuProvider); ok {
 			items := provider.GetContextMenuItems()
 			infoPanel := NewUIPanel(6, 42, 240, 20+len(items)*15)
-			infoPanel.BgColor = panelBg
-			infoPanel.BorderColor = panelBorder
+			infoPanel.BgColor = utils.Theme.PanelBg
+			infoPanel.BorderColor = utils.Theme.PanelBorder
 			infoPanel.Draw(screen)
 
 			infoY := 52
-			DrawText(screen, provider.GetContextMenuTitle(), 14, infoY, accentColor)
+			DrawText(screen, provider.GetContextMenuTitle(), 14, infoY, utils.Theme.Accent)
 			infoY += 18
 			for _, line := range items {
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
-				DrawText(screen, line, 14, infoY, dimColor)
+				DrawText(screen, line, 14, infoY, utils.Theme.TextDim)
 				infoY += 15
 			}
 		}
