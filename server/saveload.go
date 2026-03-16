@@ -286,16 +286,67 @@ func (gs *GameServer) LoadGame(path string) error {
 		}
 	}
 
-	// Rebuild player references (HomePlanet, HomeSystem, planet owners)
-	for _, player := range gs.State.Players {
-		for _, planet := range player.OwnedPlanets {
-			planet.Owner = player.Name
-			// Restore HomePlanet to the first owned planet (best heuristic after load)
-			if player.HomePlanet == nil {
-				player.HomePlanet = planet
+	// Build system entity planet lookup (authoritative copies after gob decode)
+	systemPlanets := make(map[int]*entities.Planet)
+	for _, sys := range gs.State.Systems {
+		for _, e := range sys.Entities {
+			if p, ok := e.(*entities.Planet); ok {
+				systemPlanets[p.GetID()] = p
 			}
 		}
-		// Restore HomeSystem by finding the system containing HomePlanet
+	}
+
+	// Rebuild player references — replace OwnedPlanets with system entity pointers
+	// (gob decode creates separate copies; we need shared pointers so tickable systems
+	// that modify system entity planets are visible through player.OwnedPlanets)
+	for _, player := range gs.State.Players {
+		for i, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			if livePlanet, ok := systemPlanets[planet.GetID()]; ok {
+				// Copy player-specific state to the system entity planet
+				livePlanet.Owner = player.Name
+				// Copy stored resources from saved player planet to system entity
+				for resType, storage := range planet.StoredResources {
+					if storage != nil {
+						livePlanet.StoredResources[resType] = storage
+					}
+				}
+				// Replace with shared pointer
+				player.OwnedPlanets[i] = livePlanet
+			} else {
+				planet.Owner = player.Name
+			}
+			if player.HomePlanet == nil {
+				player.HomePlanet = player.OwnedPlanets[i]
+			}
+		}
+
+		// Also relink ships: replace OwnedShips with system entity copies
+		systemShips := make(map[int]*entities.Ship)
+		for _, sys := range gs.State.Systems {
+			for _, e := range sys.Entities {
+				if s, ok := e.(*entities.Ship); ok {
+					systemShips[s.GetID()] = s
+				}
+			}
+		}
+		for i, ship := range player.OwnedShips {
+			if ship == nil {
+				continue
+			}
+			if liveShip, ok := systemShips[ship.GetID()]; ok {
+				// Sync any player-side state to system entity ship
+				liveShip.Status = ship.Status
+				liveShip.TargetSystem = ship.TargetSystem
+				liveShip.TravelProgress = ship.TravelProgress
+				liveShip.CurrentFuel = ship.CurrentFuel
+				player.OwnedShips[i] = liveShip
+			}
+		}
+
+		// Restore HomeSystem
 		if player.HomePlanet != nil {
 			for _, sys := range gs.State.Systems {
 				for _, e := range sys.Entities {
