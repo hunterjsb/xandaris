@@ -233,8 +233,20 @@ func (rs *RemoteSync) syncPlayer() {
 		changed = true
 	}
 
+	// Set home planet and home system from server data
 	if hp.HomePlanet == nil && len(hp.OwnedPlanets) > 0 {
 		hp.HomePlanet = hp.OwnedPlanets[0]
+		// Find the matching system for the home planet
+		if len(resp.Data.Planets) > 0 {
+			homeSystemID := resp.Data.Planets[0].SystemID
+			for _, sys := range rs.gs.State.Systems {
+				if sys.ID == homeSystemID {
+					hp.HomeSystem = sys
+					break
+				}
+			}
+		}
+		fmt.Printf("[Sync] Set home: %s in system %d\n", hp.HomePlanet.Name, resp.Data.Planets[0].SystemID)
 	}
 	_ = changed
 }
