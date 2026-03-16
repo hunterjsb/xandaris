@@ -159,6 +159,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer"},"dest_planet_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "find_trades", Description: "Find the best cross-system arbitrage opportunities. Shows where to buy cheap and sell dear — the foundation for profitable cargo ship routes. Returns top 20 by profit margin.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "standing_order", Description: "Create a standing order for automatic local trade. Sell when stock exceeds threshold, or buy when stock drops below threshold. Executes automatically every 30 ticks.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer","description":"amount per execution"},"threshold":{"type":"integer","description":"sell when stock > threshold, buy when stock < threshold"}},"required":["planet_id","resource","action","quantity","threshold"]}`),
 	}},
@@ -245,6 +249,12 @@ func executeTool(name string, args string, factionName string) string {
 		var p struct{ SystemID int `json:"system_id"` }
 		json.Unmarshal([]byte(args), &p)
 		result, err := callAPI("GET", fmt.Sprintf("/api/systems/%d", p.SystemID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "find_trades":
+		result, err := callAPI("GET", "/api/trade-opportunities", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}

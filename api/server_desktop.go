@@ -1708,6 +1708,127 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// Trade opportunities: find the best cross-system arbitrage
+	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		market := p.GetMarket()
+		if market == nil {
+			writeJSON(w, APIResponse{OK: true, Data: []interface{}{}})
+			return
+		}
+
+		systems := p.GetSystems()
+		players := p.GetPlayers()
+
+		// Build per-system stock map
+		type SystemStock struct {
+			SystemID int
+			Stock    map[string]int
+			Owners   []string
+		}
+		systemStocks := make(map[int]*SystemStock)
+		for _, sys := range systems {
+			ss := &SystemStock{SystemID: sys.ID, Stock: make(map[string]int)}
+			for _, e := range sys.Entities {
+				planet, ok := e.(*entities.Planet)
+				if !ok || planet.Owner == "" {
+					continue
+				}
+				found := false
+				for _, o := range ss.Owners {
+					if o == planet.Owner {
+						found = true
+						break
+					}
+				}
+				if !found {
+					ss.Owners = append(ss.Owners, planet.Owner)
+				}
+				for resType, s := range planet.StoredResources {
+					if s != nil && s.Amount > 0 {
+						ss.Stock[resType] += s.Amount
+					}
+				}
+			}
+			if len(ss.Owners) > 0 {
+				systemStocks[sys.ID] = ss
+			}
+		}
+
+		// Find arbitrage: resource cheap in system A, expensive in system B
+		type Opportunity struct {
+			Resource   string  `json:"resource"`
+			FromSystem int     `json:"from_system"`
+			ToSystem   int     `json:"to_system"`
+			BuyPrice   float64 `json:"buy_price"`
+			SellPrice  float64 `json:"sell_price"`
+			Margin     float64 `json:"margin"`
+			Available  int     `json:"available"`
+			Demand     int     `json:"demand"` // how much the dest system lacks
+		}
+
+		var opps []Opportunity
+		resources := []string{"Iron", "Water", "Oil", "Fuel", "Rare Metals", "Helium-3", "Electronics"}
+
+		for _, res := range resources {
+			basePrice := market.GetBuyPrice(res)
+			_ = players // used indirectly via systemStocks
+
+			for fromID, fromSS := range systemStocks {
+				fromStock := fromSS.Stock[res]
+				if fromStock < 50 {
+					continue // not enough to trade
+				}
+				fromBuyMult := economy.LocalPriceMultiplier(fromStock, 0)
+
+				for toID, toSS := range systemStocks {
+					if toID == fromID {
+						continue
+					}
+					toStock := toSS.Stock[res]
+					toSellMult := economy.LocalSellPriceMultiplier(toStock)
+
+					buyAt := basePrice * fromBuyMult
+					sellAt := market.GetSellPrice(res) * toSellMult
+					margin := sellAt - buyAt
+
+					if margin > 10 { // minimum 10cr profit per unit
+						opps = append(opps, Opportunity{
+							Resource:   res,
+							FromSystem: fromID,
+							ToSystem:   toID,
+							BuyPrice:   buyAt,
+							SellPrice:  sellAt,
+							Margin:     margin,
+							Available:  fromStock,
+							Demand:     1000 - toStock, // rough demand estimate
+						})
+					}
+				}
+			}
+		}
+
+		// Sort by margin descending
+		for i := 0; i < len(opps); i++ {
+			for j := i + 1; j < len(opps); j++ {
+				if opps[j].Margin > opps[i].Margin {
+					opps[i], opps[j] = opps[j], opps[i]
+				}
+			}
+		}
+
+		// Return top 20
+		if len(opps) > 20 {
+			opps = opps[:20]
+		}
+
+		writeJSON(w, APIResponse{OK: true, Data: opps})
+	})
+
 	// --- Logistics Endpoints ---
 
 	// POST /api/ships/dock — dock a ship at a planet
