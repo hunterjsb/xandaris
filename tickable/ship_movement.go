@@ -110,41 +110,20 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		fmt.Printf("[ShipMovement] tick=%d sysShips=%d playerMoving=%d\n", tick, sms.ShipsFound, playerMoving)
 	}
 
-	// Sync player-owned ship status to system entity copies
-	// (player ships and system entity ships can be different objects after save/load)
+	// Process player-owned ships that are Moving but weren't found in system entities
+	// (after save/load, player ships and system entity ships have different IDs)
 	for _, player := range game.GetPlayers() {
 		if player == nil {
 			continue
 		}
 		for _, pShip := range player.OwnedShips {
-			if pShip == nil {
+			if pShip == nil || pShip.Status != entities.ShipStatusMoving {
 				continue
 			}
 			if !seen[pShip.GetID()] {
-				// Ship not in any system — add it and process
-				seen[pShip.GetID()] = true
-				if sys := systemsMap[pShip.CurrentSystem]; sys != nil {
-					sys.AddEntity(pShip)
-				}
+				// This moving ship wasn't in any system — process it directly
+				sms.MovingFound++
 				sms.processShipMovement(pShip, systemsMap)
-			} else if pShip.Status == entities.ShipStatusMoving {
-				// Ship IS in system but system copy might have stale status
-				if sys := systemsMap[pShip.CurrentSystem]; sys != nil {
-					for _, e := range sys.Entities {
-						if sysShip, ok := e.(*entities.Ship); ok && sysShip.GetID() == pShip.GetID() {
-							if sysShip.Status != entities.ShipStatusMoving {
-								// Sync status from player ship to system entity
-								sysShip.Status = pShip.Status
-								sysShip.TargetSystem = pShip.TargetSystem
-								sysShip.TravelProgress = pShip.TravelProgress
-								sysShip.CurrentFuel = pShip.CurrentFuel
-								sms.MovingFound++
-								sms.processShipMovement(sysShip, systemsMap)
-							}
-							break
-						}
-					}
-				}
 			}
 		}
 	}
