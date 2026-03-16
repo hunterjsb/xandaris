@@ -111,6 +111,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"building_index":{"type":"integer"}},"required":["planet_id","building_index"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_ships", Description: "Get all your ships with location, cargo, fuel, and status. Essential for planning cargo routes.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "get_construction", Description: "Check construction queue — see what's being built and progress",
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
@@ -217,6 +221,12 @@ func executeTool(name string, args string, factionName string) string {
 		return result
 	case "get_flows":
 		result, err := callAPI("GET", "/api/flows", "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "get_ships":
+		result, err := callAPI("GET", "/api/ships", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}

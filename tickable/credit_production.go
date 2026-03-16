@@ -68,24 +68,26 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 			// 1. Population labor: 1cr per 100 pop (base)
 			laborIncome := int(float64(planet.Population/100) * productivityMult * techMult)
 
-			// 2. Domestic economy: population consuming resources generates credits.
+			// 2. Domestic economy: population demand generates credits.
 			// This represents the internal economy — citizens buying goods, factories
-			// operating, services rendered. A colony that produces and consumes IS
-			// an economy, even without external trade.
+			// operating, services rendered. A colony with population IS an economy.
+			// Income scales with what the colony CAN supply (has mines/production).
 			domesticIncome := 0
 			for _, rate := range economy.PopulationConsumption {
-				consumed := float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
-				if consumed < 0.5 {
+				demand := float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
+				if demand < 0.5 {
 					continue
 				}
-				// Only count consumption that was actually fulfilled (resource in stock)
+				// Scale by how much of this resource the planet can supply.
+				// Having mines/refineries/factories for a resource = domestic production.
+				// Check both stored stock AND whether the planet produces this resource.
 				stored := float64(planet.GetStoredAmount(rate.ResourceType))
-				fulfilled := consumed
-				if fulfilled > stored {
-					fulfilled = stored
+				supplyRatio := 1.0
+				if stored <= 0 {
+					supplyRatio = 0.3 // minimal economy even without stock (services, labor)
 				}
 				if price, ok := domesticPrices[rate.ResourceType]; ok {
-					domesticIncome += int(fulfilled * price * productivityMult)
+					domesticIncome += int(demand * price * productivityMult * supplyRatio)
 				}
 			}
 
