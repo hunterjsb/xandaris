@@ -70,27 +70,38 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		}
 	}
 
-	// Also check player-owned ships not found in system entities
+	// Sync player-owned ship status to system entity copies
+	// (player ships and system entity ships can be different objects after save/load)
 	for _, player := range game.GetPlayers() {
 		if player == nil {
 			continue
 		}
-		for _, ship := range player.OwnedShips {
-			if ship != nil && !seen[ship.GetID()] {
-				seen[ship.GetID()] = true
-				sms.processShipMovement(ship, systemsMap)
-				// If ship is moving, ensure it's in its current system's entity list
-				if ship.Status == entities.ShipStatusMoving {
-					if sys := systemsMap[ship.CurrentSystem]; sys != nil {
-						found := false
-						for _, e := range sys.Entities {
-							if e.GetID() == ship.GetID() {
-								found = true
-								break
+		for _, pShip := range player.OwnedShips {
+			if pShip == nil {
+				continue
+			}
+			if !seen[pShip.GetID()] {
+				// Ship not in any system — add it and process
+				seen[pShip.GetID()] = true
+				if sys := systemsMap[pShip.CurrentSystem]; sys != nil {
+					sys.AddEntity(pShip)
+				}
+				sms.processShipMovement(pShip, systemsMap)
+			} else if pShip.Status == entities.ShipStatusMoving {
+				// Ship IS in system but system copy might have stale status
+				if sys := systemsMap[pShip.CurrentSystem]; sys != nil {
+					for _, e := range sys.Entities {
+						if sysShip, ok := e.(*entities.Ship); ok && sysShip.GetID() == pShip.GetID() {
+							if sysShip.Status != entities.ShipStatusMoving {
+								// Sync status from player ship to system entity
+								sysShip.Status = pShip.Status
+								sysShip.TargetSystem = pShip.TargetSystem
+								sysShip.TravelProgress = pShip.TravelProgress
+								sysShip.CurrentFuel = pShip.CurrentFuel
+								sms.MovingFound++
+								sms.processShipMovement(sysShip, systemsMap)
 							}
-						}
-						if !found {
-							sys.AddEntity(ship)
+							break
 						}
 					}
 				}
@@ -217,6 +228,17 @@ func (smh *ShipMovementHelper) StartJourney(ship *entities.Ship, targetSystemID 
 	ship.Status = entities.ShipStatusMoving
 	ship.TargetSystem = targetSystemID
 	ship.TravelProgress = 0.0
+
+	// Also update the ship in the system entity list (may be a different object)
+	for _, e := range currentSystem.Entities {
+		if sysShip, ok := e.(*entities.Ship); ok && sysShip.GetID() == ship.GetID() {
+			sysShip.Status = entities.ShipStatusMoving
+			sysShip.TargetSystem = targetSystemID
+			sysShip.TravelProgress = 0.0
+			sysShip.CurrentFuel = ship.CurrentFuel
+			break
+		}
+	}
 
 	return true
 }
