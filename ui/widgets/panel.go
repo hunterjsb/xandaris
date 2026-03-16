@@ -151,15 +151,21 @@ func (p *Panel) Draw(screen *ebiten.Image) {
 		widthPx += pad * 2
 	}
 
-	// Count visible lines for height
-	visibleLines := 0
+	// Count visible lines for height (bars with labels take extra space)
+	heightContent := 0
 	for _, line := range p.lines {
 		if line.align == Align(-1) {
 			continue // skip pair color markers
 		}
-		visibleLines++
+		if line.bar != nil && line.bar.label != "" {
+			heightContent += lh + 10 // bar + label
+		} else if line.separator {
+			heightContent += lh / 2
+		} else {
+			heightContent += lh
+		}
 	}
-	heightPx := pad + visibleLines*lh + pad/2
+	heightPx := pad + heightContent + pad/2
 
 	// Calculate position based on anchor
 	px, py := p.X, p.Y
@@ -210,7 +216,7 @@ func (p *Panel) Draw(screen *ebiten.Image) {
 		if line.bar != nil {
 			// Draw progress bar
 			barH := 6
-			barBg := &views.UIPanel{X: textX, Y: textY + 4, Width: contentW, Height: barH,
+			barBg := &views.UIPanel{X: textX, Y: textY + 2, Width: contentW, Height: barH,
 				BgColor: utils.Theme.BarBg, BorderColor: utils.Theme.PanelBorder}
 			barBg.Draw(screen)
 			if line.bar.max > 0 {
@@ -220,15 +226,17 @@ func (p *Panel) Draw(screen *ebiten.Image) {
 				}
 				fillW := int(float64(contentW) * ratio)
 				if fillW > 0 {
-					fill := &views.UIPanel{X: textX + 1, Y: textY + 5, Width: fillW - 2, Height: barH - 2,
+					fill := &views.UIPanel{X: textX + 1, Y: textY + 3, Width: fillW - 2, Height: barH - 2,
 						BgColor: line.bar.color, BorderColor: line.bar.color}
 					fill.Draw(screen)
 				}
 			}
 			if line.bar.label != "" {
-				views.DrawText(screen, line.bar.label, textX, textY+barH+6, utils.Theme.TextDim)
+				views.DrawText(screen, line.bar.label, textX, textY+barH+4, utils.Theme.TextDim)
+				textY += lh + barH + 4 // bar + label needs two lines of space
+			} else {
+				textY += barH + 4
 			}
-			textY += lh + 4
 			continue
 		}
 
@@ -282,13 +290,20 @@ func (p *Panel) GetBounds() (x, y, w, h int) {
 		}
 		widthPx += pad * 2
 	}
-	visibleLines := 0
+	heightContent := 0
 	for _, line := range p.lines {
-		if line.align != Align(-1) {
-			visibleLines++
+		if line.align == Align(-1) {
+			continue
+		}
+		if line.bar != nil && line.bar.label != "" {
+			heightContent += lh + 10
+		} else if line.separator {
+			heightContent += lh / 2
+		} else {
+			heightContent += lh
 		}
 	}
-	heightPx := pad + visibleLines*lh + pad/2
+	heightPx := pad + heightContent + pad/2
 
 	px, py := p.X, p.Y
 	switch p.Anchor {

@@ -2145,18 +2145,18 @@ const edges=[
 {from:'mine',to:'oil',res:'Oil',c:'#606060'},
 {from:'mine',to:'rm',res:'Rare Metals',c:'#c8b464'},
 {from:'mine',to:'he3',res:'Helium-3',c:'#b4dcff'},
-{from:'oil',to:'refinery',res:'Oil',c:'#808080'},
-{from:'refinery',to:'fuel',res:'Fuel',c:'#50a050'},
-{from:'rm',to:'factory',res:'Rare Metals',c:'#c8b464'},
-{from:'iron',to:'factory',res:'Iron',c:'#b4784f'},
-{from:'factory',to:'elec',res:'Electronics',c:'#5090d0'},
-{from:'fuel',to:'gen',res:'Fuel',c:'#ffa030'},
-{from:'he3',to:'fusion',res:'Helium-3',c:'#64dcff'},
+{from:'oil',to:'refinery',res:'Oil',c:'#808080',lbl:'2\u00d7'},
+{from:'refinery',to:'fuel',res:'Fuel',c:'#50a050',lbl:'3\u00d7'},
+{from:'rm',to:'factory',res:'Rare Metals',c:'#c8b464',lbl:'2\u00d7'},
+{from:'iron',to:'factory',res:'Iron',c:'#b4784f',lbl:'1\u00d7'},
+{from:'factory',to:'elec',res:'Electronics',c:'#5090d0',lbl:'2\u00d7'},
+{from:'fuel',to:'gen',res:'Fuel',c:'#ffa030',lbl:'50MW'},
+{from:'he3',to:'fusion',res:'Helium-3',c:'#64dcff',lbl:'200MW'},
 {from:'gen',to:'power',c:'#ffcc00'},
 {from:'fusion',to:'power',c:'#ffcc00'},
 {from:'power',to:'happy',c:'#50c878'},
 {from:'happy',to:'growth',c:'#7fdbca'},
-{from:'elec',to:'tech',res:'Electronics',c:'#a0a0ff'},
+{from:'elec',to:'tech',res:'Electronics',c:'#a0a0ff',lbl:'+3%/lvl'},
 ];
 const nMap={};nodes.forEach(n=>nMap[n.id]=n);
 // Particles
@@ -2176,6 +2176,11 @@ function drawFlow(){
 ft+=0.016;
 const w=W(),h=H();
 fx.clearRect(0,0,w,h);
+// Title
+fx.fillStyle='#556';fx.font='9px monospace';fx.textAlign='left';
+fx.fillText('PRODUCTION CHAINS',6,12);
+fx.fillStyle='#334';fx.font='8px monospace';
+fx.fillText('particles = resource flow rate',6,22);
 // Draw edges
 edges.forEach(e=>{
 const a=nMap[e.from],b=nMap[e.to];if(!a||!b)return;
@@ -2186,7 +2191,12 @@ fx.beginPath();fx.moveTo(x1,y1);fx.lineTo(x2,y2);fx.stroke();
 const ang=Math.atan2(y2-y1,x2-x1);const d=6;
 fx.fillStyle=e.c+'50';fx.beginPath();
 fx.moveTo(x2,y2);fx.lineTo(x2-d*Math.cos(ang-0.4),y2-d*Math.sin(ang-0.4));
-fx.lineTo(x2-d*Math.cos(ang+0.4),y2-d*Math.sin(ang+0.4));fx.fill()});
+fx.lineTo(x2-d*Math.cos(ang+0.4),y2-d*Math.sin(ang+0.4));fx.fill();
+// Edge label (conversion ratio)
+if(e.lbl){
+const mx2=(x1+x2)/2,my2=(y1+y2)/2-6;
+fx.fillStyle=e.c+'90';fx.font='7px monospace';fx.textAlign='center';
+fx.fillText(e.lbl,mx2,my2)}});
 // Draw particles
 particles.forEach(p=>{
 p.t+=p.speed;if(p.t>1)p.t-=1;
@@ -2195,6 +2205,10 @@ const px=a.x*w+(b.x-a.x)*w*p.t,py=a.y*h+(b.y-a.y)*h*p.t;
 const alpha=p.t<0.1?p.t/0.1:p.t>0.9?(1-p.t)/0.1:1;
 fx.fillStyle=p.e.c;fx.globalAlpha=alpha*0.8;
 fx.beginPath();fx.arc(px,py,2,0,Math.PI*2);fx.fill();fx.globalAlpha=1});
+// Category headers
+fx.fillStyle='#2a3050';fx.font='8px monospace';fx.textAlign='center';
+const cats=[{label:'EXTRACTION',x:0.09},{label:'RAW',x:0.19},{label:'PROCESSING',x:0.36},{label:'PRODUCTS',x:0.50},{label:'POWER',x:0.64},{label:'OUTCOME',x:0.88}];
+cats.forEach(c=>{fx.fillText(c.label,c.x*w,h-4)});
 // Draw nodes
 nodes.forEach(n=>{
 const nx=n.x*w,ny=n.y*h;
