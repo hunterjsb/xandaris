@@ -112,6 +112,7 @@ type ConstructionQueueItem struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	Location       string `json:"location"`
+	Owner          string `json:"owner"`
 	Progress       int    `json:"progress"` // 0-100
 	RemainingTicks int    `json:"remaining_ticks"`
 	TotalTicks     int    `json:"total_ticks"`

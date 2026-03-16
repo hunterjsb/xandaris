@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/hunterjsb/xandaris/api"
@@ -54,10 +55,15 @@ func (a *App) getRemoteConstructionItems(playerName string) []CachedConstruction
 					ID:             item.ID,
 					Name:           item.Name,
 					Location:       item.Location,
+					Owner:          item.Owner,
 					Progress:       item.Progress,
 					RemainingTicks: item.RemainingTicks,
 				})
 			}
+			// Sort by progress descending (most complete first) for stable display
+			sort.Slice(result, func(i, j int) bool {
+				return result[i].Progress > result[j].Progress
+			})
 
 			cc.mu.Lock()
 			cc.items = result
@@ -66,7 +72,14 @@ func (a *App) getRemoteConstructionItems(playerName string) []CachedConstruction
 		}()
 	}
 
-	return items
+	// Filter to only this player's items
+	var filtered []CachedConstructionItem
+	for _, item := range items {
+		if item.Owner == playerName || item.Owner == "" {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }
 
 func (a *App) remoteGet(endpoint string) ([]byte, error) {

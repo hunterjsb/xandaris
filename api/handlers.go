@@ -1312,6 +1312,7 @@ func handleGetConstructionQueue(p GameStateProvider) interface{} {
 				ID:             item.ID,
 				Name:           item.Name,
 				Location:       item.Location,
+				Owner:          item.Owner,
 				Progress:       progress,
 				RemainingTicks: item.RemainingTicks,
 				TotalTicks:     item.TotalTicks,

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -53,5 +54,9 @@ func (a *App) getLocalConstructionItems(playerName string) []CachedConstructionI
 		})
 		item.Mutex.RUnlock()
 	}
+	// Sort by progress descending for stable display
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Progress > result[j].Progress
+	})
 	return result
 }
