@@ -32,8 +32,9 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 		for _, planet := range player.OwnedPlanets {
 			for _, resourceEntity := range planet.Resources {
 				if resource, ok := resourceEntity.(*entities.Resource); ok {
+					// Auto-fix resource ownership to match planet owner
 					if resource.Owner != player.Name {
-						continue
+						resource.Owner = player.Name
 					}
 
 					extractionAmount := computeResourceExtraction(resource, planet)
