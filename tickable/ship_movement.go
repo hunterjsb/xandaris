@@ -110,18 +110,14 @@ func (sms *ShipMovementSystem) OnTick(tick int64) {
 		fmt.Printf("[ShipMovement] tick=%d sysShips=%d playerMoving=%d\n", tick, sms.ShipsFound, playerMoving)
 	}
 
-	// Process player-owned ships that are Moving but weren't found in system entities
-	// (after save/load, player ships and system entity ships have different IDs)
+	// Process ALL player-owned Moving ships directly
+	// System entities may have stale copies with different status (Docked vs Moving)
 	for _, player := range game.GetPlayers() {
 		if player == nil {
 			continue
 		}
 		for _, pShip := range player.OwnedShips {
-			if pShip == nil || pShip.Status != entities.ShipStatusMoving {
-				continue
-			}
-			if !seen[pShip.GetID()] {
-				// This moving ship wasn't in any system — process it directly
+			if pShip != nil && pShip.Status == entities.ShipStatusMoving {
 				sms.MovingFound++
 				sms.processShipMovement(pShip, systemsMap)
 			}
