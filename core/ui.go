@@ -194,6 +194,40 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		}
 	}
 
+	// Ships summary
+	if len(human.OwnedShips) > 0 {
+		p.Sep()
+		p.Line(fmt.Sprintf("Ships (%d)", len(human.OwnedShips)), utils.Theme.Accent)
+		shown := 0
+		for _, ship := range human.OwnedShips {
+			if ship == nil || shown >= 4 {
+				continue
+			}
+			status := string(ship.Status)
+			statusColor := utils.Theme.TextDim
+			label := fmt.Sprintf("%s", ship.Name)
+			switch ship.Status {
+			case entities.ShipStatusMoving:
+				status = "in transit"
+				statusColor = utils.SystemGreen
+			case entities.ShipStatusOrbiting:
+				status = "orbiting"
+			case entities.ShipStatusDocked:
+				status = "docked"
+			case entities.ShipStatusIdle:
+				status = "idle"
+			}
+			if ship.GetTotalCargo() > 0 {
+				status += fmt.Sprintf(" [%d]", ship.GetTotalCargo())
+			}
+			p.LinePair(label, utils.Theme.TextLight, status, statusColor)
+			shown++
+		}
+		if len(human.OwnedShips) > shown {
+			p.Line(fmt.Sprintf("+%d more", len(human.OwnedShips)-shown), utils.Theme.TextDim)
+		}
+	}
+
 	p.Draw(screen)
 
 	// Update click hit regions from panel bounds
