@@ -30,15 +30,25 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 
 	for _, player := range players {
 		for _, planet := range player.OwnedPlanets {
+			if len(planet.Resources) > 0 && tick%1000 == 0 {
+				fmt.Printf("[ResAccum] %s owns %s: %d resources, %d buildings\n",
+					player.Name, planet.Name, len(planet.Resources), len(planet.Buildings))
+			}
 			for _, resourceEntity := range planet.Resources {
 				if resource, ok := resourceEntity.(*entities.Resource); ok {
 					// Auto-fix resource ownership to match planet owner
 					if resource.Owner != player.Name {
+						fmt.Printf("[ResAccum] Fixed ownership: %s %s -> %s\n",
+							resource.ResourceType, resource.Owner, player.Name)
 						resource.Owner = player.Name
 					}
 
 					extractionAmount := computeResourceExtraction(resource, planet)
 					if extractionAmount <= 0 {
+						if tick%1000 == 0 {
+							fmt.Printf("[ResAccum] %s on %s: extraction=0 (abund=%d)\n",
+								resource.ResourceType, planet.Name, resource.Abundance)
+						}
 						continue
 					}
 
