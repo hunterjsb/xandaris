@@ -312,12 +312,20 @@ func (gv *GalaxyView) GetType() ViewType {
 func (gv *GalaxyView) drawHyperlanes(screen *ebiten.Image) {
 	hyperlaneColor := utils.HyperlaneNormal
 
-	for _, hyperlane := range gv.ctx.GetHyperlanes() {
-		systems := gv.ctx.GetSystems()
-		fromSystem := systems[hyperlane.From]
-		toSystem := systems[hyperlane.To]
+	// Build ID -> system lookup (hyperlane From/To are system IDs, not array indices)
+	systems := gv.ctx.GetSystems()
+	byID := make(map[int]*entities.System, len(systems))
+	for _, sys := range systems {
+		byID[sys.ID] = sys
+	}
 
-		// Draw line between systems (use absolute positions set in Draw)
+	for _, hyperlane := range gv.ctx.GetHyperlanes() {
+		fromSystem := byID[hyperlane.From]
+		toSystem := byID[hyperlane.To]
+		if fromSystem == nil || toSystem == nil {
+			continue
+		}
+
 		fx, fy := fromSystem.GetAbsolutePosition()
 		tx, ty := toSystem.GetAbsolutePosition()
 		DrawLine(screen,
