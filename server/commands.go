@@ -213,6 +213,14 @@ func (gs *GameServer) handleBuildShipCommand(cmd game.GameCommand) {
 	}
 
 	shipType := entities.ShipType(sd.ShipType)
+
+	// Ship tech requirement check
+	shipTechReq := entities.GetShipTechRequirement(shipType)
+	if shipTechReq > 0 && planet.TechLevel < shipTechReq {
+		sendResult(cmd, fmt.Errorf("%s requires tech level %.1f (planet has %.1f)", shipType, shipTechReq, planet.TechLevel))
+		return
+	}
+
 	cost := entities.GetShipBuildCost(shipType)
 	if human.Credits < cost {
 		sendResult(cmd, fmt.Errorf("insufficient credits (need %d, have %d)", cost, human.Credits))

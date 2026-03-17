@@ -564,9 +564,19 @@ func (sv *SystemView) drawPlanet(screen *ebiten.Image, planet *entities.Planet) 
 	labelY := centerY + radius + lh
 	DrawCenteredText(screen, planet.Name, centerX, labelY)
 
+	// Draw tech era label for owned planets
+	if planet.Owner != "" && planet.TechLevel > 0.01 {
+		era := entities.TechEraName(planet.TechLevel)
+		eraWidth := len(era) * utils.CharWidth()
+		DrawText(screen, era, centerX-eraWidth/2, labelY+lh-4, utils.Theme.TextDim)
+	}
+
 	// Draw resource dots below name (compact visual indicator)
 	if len(planet.Resources) > 0 {
-		dotY := labelY + lh - 2
+		dotY := labelY + lh*2 - 6
+		if planet.Owner == "" || planet.TechLevel <= 0.01 {
+			dotY = labelY + lh - 2 // No era label, keep dots close
+		}
 		totalDots := len(planet.Resources)
 		dotSpacing := 8
 		startX := centerX - (totalDots*dotSpacing)/2

@@ -355,8 +355,9 @@ func handleGetLeaderboard(p GameStateProvider) interface{} {
 			}
 		}
 
-		// Score: credits + stock base value + population/10 + buildings*200 + ships*500 + planets*2000
-		score := pl.Credits + stockValue + int(pop/10) + bldgs*200 + len(pl.OwnedShips)*500 + len(pl.OwnedPlanets)*2000
+		// Score: credits + stock + pop/10 + buildings*200 + ships*500 + planets*2000 + tech*1000
+		techScore := int(maxTech * 1000)
+		score := pl.Credits + stockValue + int(pop/10) + bldgs*200 + len(pl.OwnedShips)*500 + len(pl.OwnedPlanets)*2000 + techScore
 
 		entries = append(entries, LeaderboardEntry{
 			Name:       pl.Name,
@@ -563,13 +564,16 @@ func handleGetStatus(p GameStateProvider, authPlayer string) interface{} {
 				}
 			}
 			playerStatus.Planets = append(playerStatus.Planets, PlanetBrief{
-				ID:         planet.GetID(),
-				Name:       planet.Name,
-				SystemID:   sysID,
-				Population: planet.Population,
-				Storage:    storage,
-				Buildings:  bldgCount,
-				Mines:      mines,
+				ID:              planet.GetID(),
+				Name:            planet.Name,
+				SystemID:        sysID,
+				Population:      planet.Population,
+				Storage:         storage,
+				StorageCapacity: int(float64(entities.DEFAULT_RESOURCE_CAPACITY) * (1.0 + planet.TechLevel*0.2)),
+				Buildings:       bldgCount,
+				Mines:           mines,
+				TechLevel:       math.Round(planet.TechLevel*100) / 100,
+				TechEra:         entities.TechEraName(planet.TechLevel),
 			})
 		}
 	}
@@ -639,11 +643,43 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 			}
 		}
 	}
-	if !hasShipyard && human.Credits > 2000 {
-		hints = append(hints, "Build a Shipyard to construct ships for trade and exploration")
+	// Find highest tech level across planets
+	maxTech := 0.0
+	hasElectronics := false
+	hasFactory := false
+	for _, planet := range human.OwnedPlanets {
+		if planet == nil {
+			continue
+		}
+		if planet.TechLevel > maxTech {
+			maxTech = planet.TechLevel
+		}
+		if planet.GetStoredAmount("Electronics") > 0 {
+			hasElectronics = true
+		}
+		for _, be := range planet.Buildings {
+			if b, ok := be.(*entities.Building); ok && b.BuildingType == "Factory" {
+				hasFactory = true
+			}
+		}
 	}
-	if !hasRefinery && hasOil && !hasFuel {
-		hints = append(hints, "Build a Refinery to convert Oil into Fuel (needed for ships)")
+
+	// Tech progression hints
+	if maxTech < 0.5 && !hasElectronics {
+		hints = append(hints, "Buy Electronics from the market to grow tech level — POST /api/market/trade {resource: \"Electronics\", quantity: 10, action: \"buy\"}")
+	}
+	if maxTech >= 0.5 && !hasRefinery && hasOil {
+		hints = append(hints, "Tech 0.5 reached — build a Refinery to convert Oil into Fuel")
+	} else if !hasRefinery && hasOil && !hasFuel && maxTech < 0.5 {
+		hints = append(hints, "Refinery unlocks at Tech 0.5 — buy Electronics to advance")
+	}
+	if maxTech >= 1.0 && !hasShipyard && human.Credits > 2000 {
+		hints = append(hints, "Tech 1.0 reached — build a Shipyard for ships")
+	} else if !hasShipyard && maxTech < 1.0 {
+		hints = append(hints, fmt.Sprintf("Shipyard unlocks at Tech 1.0 (current: %.1f) — stockpile Electronics", maxTech))
+	}
+	if maxTech >= 1.0 && !hasFactory {
+		hints = append(hints, "Build a Factory to produce Electronics locally (no more buying!)")
 	}
 
 	// Post-infrastructure progression hints

@@ -496,13 +496,16 @@ type PlayerStatus struct {
 
 // PlanetBrief is a compact planet summary for GameStatus.
 type PlanetBrief struct {
-	ID         int            `json:"id"`
-	Name       string         `json:"name"`
-	SystemID   int            `json:"system_id"`
-	Population int64          `json:"population"`
-	Storage    map[string]int `json:"storage"`
-	Buildings  int            `json:"buildings"`
-	Mines      int            `json:"mines"`
+	ID              int            `json:"id"`
+	Name            string         `json:"name"`
+	SystemID        int            `json:"system_id"`
+	Population      int64          `json:"population"`
+	Storage         map[string]int `json:"storage"`
+	StorageCapacity int            `json:"storage_capacity"` // per-resource cap
+	Buildings       int            `json:"buildings"`
+	Mines           int            `json:"mines"`
+	TechLevel       float64        `json:"tech_level"`
+	TechEra         string         `json:"tech_era"`
 }
 
 // EconomyOverview is a galaxy-wide economic summary.

@@ -26,11 +26,16 @@ func (fps *FactoryProductionSystem) OnTick(tick int64) {
 		return
 	}
 
-	players := context.GetPlayers()
-
-	for _, player := range players {
-		for _, planet := range player.OwnedPlanets {
-			fps.processFactories(planet)
+	// Use system entity planets (authoritative) instead of player.OwnedPlanets (stale)
+	game := context.GetGame()
+	if game == nil {
+		return
+	}
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" {
+				fps.processFactories(planet)
+			}
 		}
 	}
 }
@@ -47,7 +52,7 @@ func (fps *FactoryProductionSystem) processFactories(planet *entities.Planet) {
 
 // processFactory processes a single factory.
 // Base: 2 Rare Metals + 1 Iron → 2 Electronics per interval.
-// Each level adds 30% throughput.
+// Each level adds 30% throughput. Tech adds +3% per level.
 func (fps *FactoryProductionSystem) processFactory(planet *entities.Planet, factory *entities.Building) {
 	baseRareMetals := 2
 	baseIron := 1
@@ -59,9 +64,13 @@ func (fps *FactoryProductionSystem) processFactory(planet *entities.Planet, fact
 	// Power scaling: factories need power. 25% output at 0% power, 100% at full.
 	powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
 
-	rareMetalsNeeded := int(float64(baseRareMetals) * levelMultiplier * staffing * powerFactor)
-	ironNeeded := int(float64(baseIron) * levelMultiplier * staffing * powerFactor)
-	electronicsProduced := int(float64(baseElectronics) * levelMultiplier * staffing * powerFactor)
+	// Tech bonus: +3% per tech level (same as mining)
+	techBonus := 1.0 + planet.TechLevel*0.03
+
+	combined := levelMultiplier * staffing * powerFactor * techBonus
+	rareMetalsNeeded := int(float64(baseRareMetals) * combined)
+	ironNeeded := int(float64(baseIron) * combined)
+	electronicsProduced := int(float64(baseElectronics) * combined)
 
 	if rareMetalsNeeded < 1 || ironNeeded < 1 || electronicsProduced < 1 {
 		return
@@ -100,4 +109,3 @@ func (fps *FactoryProductionSystem) processFactory(planet *entities.Planet, fact
 		planet.AddStoredResource(entities.ResIron, ironNeeded)
 	}
 }
-

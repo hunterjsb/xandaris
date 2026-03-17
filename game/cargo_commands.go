@@ -120,11 +120,14 @@ func (cce *CargoCommandExecutor) UnloadCargo(ship *entities.Ship, planet *entiti
 		return 0, fmt.Errorf("failed to remove cargo")
 	}
 
-	// Add to planet
-	planet.AddStoredResource(resource, removed)
+	// Add to planet — return any excess that didn't fit back to the ship
+	accepted := planet.AddStoredResource(resource, removed)
+	if accepted < removed {
+		ship.AddCargo(resource, removed-accepted)
+	}
 
-	fmt.Printf("[Cargo] Unloaded %d %s from %s to %s\n", removed, resource, ship.Name, planet.Name)
-	return removed, nil
+	fmt.Printf("[Cargo] Unloaded %d %s from %s to %s\n", accepted, resource, ship.Name, planet.Name)
+	return accepted, nil
 }
 
 // isShipAtPlanet checks if a ship can interact with a planet.
@@ -295,8 +298,12 @@ func (cce *CargoCommandExecutor) SellAtDock(ship *entities.Ship, resource string
 		return 0, 0, fmt.Errorf("failed to remove cargo")
 	}
 
-	// Add resources to planet
-	planet.AddStoredResource(resource, removed)
+	// Add resources to planet (excess beyond capacity is lost — storage overflow)
+	accepted := planet.AddStoredResource(resource, removed)
+	if accepted < removed {
+		fmt.Printf("[DockSale] WARNING: %d %s lost to storage overflow on %s\n",
+			removed-accepted, resource, planet.Name)
+	}
 
 	fmt.Printf("[DockSale] %s sold %d %s at %s for %d credits\n",
 		ship.Name, removed, resource, planet.Name, total)

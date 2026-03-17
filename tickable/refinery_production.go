@@ -27,11 +27,16 @@ func (rps *RefineryProductionSystem) OnTick(tick int64) {
 		return
 	}
 
-	players := context.GetPlayers()
-
-	for _, player := range players {
-		for _, planet := range player.OwnedPlanets {
-			rps.processRefineries(planet)
+	// Use system entity planets (authoritative) instead of player.OwnedPlanets (stale)
+	game := context.GetGame()
+	if game == nil {
+		return
+	}
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" {
+				rps.processRefineries(planet)
+			}
 		}
 	}
 }
@@ -47,10 +52,9 @@ func (rps *RefineryProductionSystem) processRefineries(planet *entities.Planet) 
 	}
 }
 
-// processRefinery processes a single refinery
+// processRefinery processes a single refinery.
+// Base: 2 Oil → 3 Fuel per interval. +30% per level. +3% per tech level.
 func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, refinery *entities.Building) {
-	// Base: consumes 2 Oil, produces 3 Fuel per interval (10-tick cycle).
-	// More efficient conversion that can run with less Oil stockpile.
 	baseOilConsumption := 2
 	baseFuelProduction := 3
 
@@ -61,8 +65,12 @@ func (rps *RefineryProductionSystem) processRefinery(planet *entities.Planet, re
 	// At 0% power: 25% throughput. At 100% power: full throughput.
 	powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
 
-	oilNeeded := int(float64(baseOilConsumption) * levelMultiplier * powerFactor)
-	fuelProduced := int(float64(baseFuelProduction) * levelMultiplier * powerFactor)
+	// Tech bonus: +3% per tech level (consistent with mines and factories)
+	techBonus := 1.0 + planet.TechLevel*0.03
+
+	combined := levelMultiplier * powerFactor * techBonus
+	oilNeeded := int(float64(baseOilConsumption) * combined)
+	fuelProduced := int(float64(baseFuelProduction) * combined)
 	if oilNeeded < 1 {
 		oilNeeded = 1
 	}

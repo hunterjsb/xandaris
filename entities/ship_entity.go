@@ -378,6 +378,20 @@ func GetShipBuildTime(shipType ShipType) int {
 	}
 }
 
+// GetShipTechRequirement returns the minimum tech level to build a ship type.
+// Basic ships (Scout, Colony, Cargo) have no requirement beyond the Shipyard's Tech 1.0.
+// Military ships require higher tech.
+func GetShipTechRequirement(shipType ShipType) float64 {
+	switch shipType {
+	case ShipTypeDestroyer:
+		return 1.5
+	case ShipTypeCruiser:
+		return 2.0
+	default:
+		return 0 // Scout, Colony, Cargo, Frigate: just need a Shipyard
+	}
+}
+
 // GetShipResourceRequirements returns the resources needed to build a ship
 func GetShipResourceRequirements(shipType ShipType) map[string]int {
 	requirements := make(map[string]int)

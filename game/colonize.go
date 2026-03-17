@@ -32,6 +32,16 @@ func ColonizePlanet(planet *entities.Planet, ship *entities.Ship, player *entiti
 	TransferPlanetOwnership(planet, nil, player)
 	planet.Population = int64(ship.Colonists)
 
+	// Colonists bring technology — seed at half the player's highest tech level.
+	// This prevents new colonies from starting at zero when the player is advanced.
+	maxTech := 0.0
+	for _, p := range player.OwnedPlanets {
+		if p != nil && p.TechLevel > maxTech {
+			maxTech = p.TechLevel
+		}
+	}
+	planet.TechLevel = maxTech * 0.5
+
 	// Ensure essential deposits exist for self-sustaining colony
 	EnsureResourceDeposit(planet, entities.ResWater, player.Name)     // survival
 	EnsureResourceDeposit(planet, entities.ResIron, player.Name)      // construction
