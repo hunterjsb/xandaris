@@ -2690,19 +2690,31 @@ func StartServer(provider GameStateProvider) {
 		if events != nil {
 			for _, e := range events.Recent(200) {
 				msg := e.Message
-				switch {
-				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "🔮 " || msg[:4] == "🔮"):
-					intel = append(intel, IntelItem{Type: "anomaly", Message: msg})
-				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "🏴" || strings.Contains(msg,"Pirate fleet")):
-					intel = append(intel, IntelItem{Type: "pirate", Message: msg})
-				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "🌀" || strings.Contains(msg,"Wormhole") || strings.Contains(msg,"wormhole")):
-					intel = append(intel, IntelItem{Type: "wormhole", Message: msg})
-				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "👑" || strings.Contains(msg,"controls")):
-					intel = append(intel, IntelItem{Type: "sector_control", Message: msg})
-				case e.Type == "event" && strings.Contains(msg,"LEGENDARY"):
-					intel = append(intel, IntelItem{Type: "legendary", Message: msg})
-				case e.Type == "event" && strings.Contains(msg,"AUCTION"):
-					intel = append(intel, IntelItem{Type: "auction", Message: msg})
+				if e.Type == "event" || e.Type == "explore" {
+					switch {
+					case strings.Contains(msg, "Anomaly detected"):
+						intel = append(intel, IntelItem{Type: "anomaly", Message: msg})
+					case strings.Contains(msg, "Pirate fleet") || strings.Contains(msg, "pirate"):
+						intel = append(intel, IntelItem{Type: "pirate", Message: msg})
+					case strings.Contains(msg, "Wormhole") || strings.Contains(msg, "wormhole"):
+						intel = append(intel, IntelItem{Type: "wormhole", Message: msg})
+					case strings.Contains(msg, "controls") && strings.Contains(msg, "production bonus"):
+						intel = append(intel, IntelItem{Type: "sector_control", Message: msg})
+					case strings.Contains(msg, "LEGENDARY"):
+						intel = append(intel, IntelItem{Type: "legendary", Message: msg})
+					case strings.Contains(msg, "AUCTION"):
+						intel = append(intel, IntelItem{Type: "auction", Message: msg})
+					case strings.Contains(msg, "Trade boom"):
+						intel = append(intel, IntelItem{Type: "trade_boom", Message: msg})
+					case strings.Contains(msg, "Solar flare"):
+						intel = append(intel, IntelItem{Type: "solar_flare", Message: msg})
+					case strings.Contains(msg, "Asteroid"):
+						intel = append(intel, IntelItem{Type: "asteroid", Message: msg})
+					case strings.Contains(msg, "Population boom"):
+						intel = append(intel, IntelItem{Type: "pop_boom", Message: msg})
+					case strings.Contains(msg, "Void Crystal") || strings.Contains(msg, "data cache") || strings.Contains(msg, "Ancient Ruins") || strings.Contains(msg, "Derelict"):
+						intel = append(intel, IntelItem{Type: "discovery", Message: msg})
+					}
 				}
 			}
 		}
