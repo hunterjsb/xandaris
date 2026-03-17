@@ -98,11 +98,13 @@ func computeHappiness(planet *entities.Planet) {
 		weightedSum += sufficiency * weight
 	}
 
-	// Power is critical — weighted 4.0 (heavier than water at 3.0)
+	// Power matters but isn't existential — a primitive colony survives without it.
+	// Weight 2.0, with a floor of 0.3 so zero power doesn't obliterate happiness.
 	powerRatio := planet.GetPowerRatio()
 	if planet.PowerConsumed > 0 {
-		totalWeight += 4.0
-		weightedSum += powerRatio * 4.0
+		powerScore := 0.3 + 0.7*powerRatio // floor at 0.3 even with zero power
+		totalWeight += 2.0
+		weightedSum += powerScore * 2.0
 	}
 
 	if totalWeight <= 0 {
