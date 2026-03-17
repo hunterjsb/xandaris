@@ -55,11 +55,13 @@ func (sbs *SolarBonusSystem) OnTick(tick int64) {
 			}
 
 			// Free solar power based on orbit distance
-			solarMW := 10.0
+			// Combined with 50MW base power, gives 80-100MW free total —
+			// enough to run mines + habitats even with 0 fuel
+			solarMW := 30.0
 			if planet.OrbitDistance < 100 {
-				solarMW = 30.0
+				solarMW = 50.0
 			} else if planet.OrbitDistance < 200 {
-				solarMW = 20.0
+				solarMW = 40.0
 			}
 
 			planet.PowerGenerated += solarMW
