@@ -35,6 +35,8 @@ type GameStateProvider interface {
 	GetOrderBook() *economy.OrderBook
 	GetContractManager() *economy.ContractManager
 	GetDiplomacyManager() *economy.DiplomacyManager
+	GetEspionageManager() *economy.EspionageManager
+	GetBountyBoard() *economy.BountyBoard
 	RemovePlayer(name string) bool
 }
 

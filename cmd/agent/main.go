@@ -221,6 +221,18 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "spy", Description: "Launch espionage against another faction. 'intel'(500cr) reveals data, 'sabotage'(2000cr) damages a building, 'steal_tech'(5000cr) steals tech. Shields reduce success.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"type":{"type":"string","enum":["intel","sabotage","steal_tech"]},"system_id":{"type":"integer"}},"required":["target","type","system_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "post_bounty", Description: "Post a bounty for other factions to complete. Reward held in escrow. Types: deliver, clear_pirates, explore, custom.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"type":{"type":"string","enum":["deliver","clear_pirates","explore","custom"]},"description":{"type":"string"},"reward":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"},"system_id":{"type":"integer"}},"required":["type","description","reward"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_bounties", Description: "View bounties available for claiming on the galaxy-wide board.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "create_route", Description: "Create an automated shipping route. A Cargo ship will auto-cycle: load resource at source planet → fly to dest → unload → return. Use PLANET IDs (5+ digit numbers from get_planet), NOT system IDs. ship_id 0 = auto-assign an idle Cargo ship.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer","description":"PLANET ID (5+ digits, from get_planet or get_status)"},"dest_planet_id":{"type":"integer","description":"PLANET ID (5+ digits), NOT a system ID"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
 	}},
@@ -357,6 +369,12 @@ func executeTool(name string, args string, factionName string) string {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
+	case "get_bounties":
+		result, err := callAPI("GET", "/api/bounties", "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
 	case "get_relations":
 		result, err := callAPI("GET", "/api/diplomacy", "", factionName)
 		if err != nil {
@@ -405,6 +423,8 @@ func executeTool(name string, args string, factionName string) string {
 			"standing_order":    "/api/orders",
 			"create_contract":   "/api/contracts",
 			"diplomacy":         "/api/diplomacy",
+			"spy":               "/api/espionage",
+			"post_bounty":       "/api/bounties",
 			"place_limit_order": "/api/orders/limit",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)

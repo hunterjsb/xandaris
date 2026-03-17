@@ -2377,6 +2377,121 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Espionage: launch spy operations
+	mux.HandleFunc("/api/espionage", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		em := p.GetEspionageManager()
+		if em == nil {
+			writeErr(w, http.StatusInternalServerError, "espionage not available")
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			playerName := getAuthPlayer(r)
+			writeJSON(w, APIResponse{OK: true, Data: em.GetActiveOps(playerName)})
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				Target   string `json:"target"`
+				Type     string `json:"type"`
+				SystemID int    `json:"system_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			costs := map[string]int{"intel": 500, "sabotage": 2000, "steal_tech": 5000}
+			durations := map[string]int{"intel": 200, "sabotage": 500, "steal_tech": 1000}
+			cost, ok := costs[req.Type]
+			if !ok {
+				writeErr(w, http.StatusBadRequest, "type must be 'intel', 'sabotage', or 'steal_tech'")
+				return
+			}
+			player := findPlayer(p, playerName)
+			if player == nil || player.Credits < cost {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf("need %d credits", cost))
+				return
+			}
+			player.Credits -= cost
+			op := em.LaunchOperation(playerName, req.Target, req.Type, req.SystemID, cost, durations[req.Type])
+			writeJSON(w, APIResponse{OK: true, Data: op})
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET or POST")
+		}
+	})
+
+	// Bounty board
+	mux.HandleFunc("/api/bounties", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		bb := p.GetBountyBoard()
+		if bb == nil {
+			writeErr(w, http.StatusInternalServerError, "bounty board not available")
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, APIResponse{OK: true, Data: bb.GetActiveBounties()})
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				Type        string `json:"type"`
+				Description string `json:"description"`
+				Reward      int    `json:"reward"`
+				Resource    string `json:"resource,omitempty"`
+				Quantity    int    `json:"quantity,omitempty"`
+				PlanetID    int    `json:"planet_id,omitempty"`
+				SystemID    int    `json:"system_id,omitempty"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if req.Reward <= 0 {
+				writeErr(w, http.StatusBadRequest, "reward must be positive")
+				return
+			}
+			player := findPlayer(p, playerName)
+			if player == nil || player.Credits < req.Reward {
+				writeErr(w, http.StatusBadRequest, "insufficient credits")
+				return
+			}
+			player.Credits -= req.Reward
+			bounty := bb.PostBounty(playerName, req.Type, req.Description, req.Reward,
+				req.Resource, req.Quantity, req.PlanetID, req.SystemID)
+			writeJSON(w, APIResponse{OK: true, Data: bounty})
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET or POST")
+		}
+	})
+
+	mux.HandleFunc("/api/bounties/claim", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		bb := getProvider().GetBountyBoard()
+		if bb == nil {
+			writeErr(w, http.StatusInternalServerError, "bounty board not available")
+			return
+		}
+		playerName := getAuthPlayer(r)
+		var req struct{ BountyID int `json:"bounty_id"` }
+		json.NewDecoder(r.Body).Decode(&req)
+		if bb.ClaimBounty(req.BountyID, playerName) {
+			writeJSON(w, APIResponse{OK: true, Data: "claimed"})
+		} else {
+			writeErr(w, http.StatusBadRequest, "bounty not available")
+		}
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

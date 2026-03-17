@@ -201,6 +201,14 @@ func (gs *GameServer) GetDiplomacyManager() *economy.DiplomacyManager {
 	return gs.DiplomacyMgr
 }
 
+func (gs *GameServer) GetEspionageManager() *economy.EspionageManager {
+	return gs.EspionageMgr
+}
+
+func (gs *GameServer) GetBountyBoard() *economy.BountyBoard {
+	return gs.BountyBoard
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil
