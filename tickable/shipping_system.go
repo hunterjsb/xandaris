@@ -142,6 +142,28 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 	atSource := ship.CurrentSystem == sourceSystemID
 	atDest := ship.CurrentSystem == destSystemID
 
+	// Auto-refuel: if ship is low on fuel at either endpoint, try to refuel
+	if ship.CurrentFuel < ship.FuelPerJump*2 {
+		refuelPlanet := sourcePlanet
+		if atDest {
+			refuelPlanet = destPlanet
+		}
+		if refuelPlanet != nil && refuelPlanet.GetStoredAmount("Fuel") > 0 {
+			needed := ship.MaxFuel - ship.CurrentFuel
+			available := refuelPlanet.GetStoredAmount("Fuel")
+			refuel := needed
+			if refuel > available {
+				refuel = available
+			}
+			if refuel > 0 {
+				refuelPlanet.RemoveStoredResource("Fuel", refuel)
+				ship.CurrentFuel += refuel
+				fmt.Printf("[Shipping] Route #%d: %s refueled %d at %s (fuel: %d/%d)\n",
+					route.ID, ship.Name, refuel, refuelPlanet.Name, ship.CurrentFuel, ship.MaxFuel)
+			}
+		}
+	}
+
 	if atSource && ship.GetTotalCargo() == 0 {
 		// At source with empty hold — load cargo
 		qty := route.Quantity
