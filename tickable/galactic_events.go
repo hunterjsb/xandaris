@@ -64,7 +64,7 @@ func (ges *GalacticEventSystem) OnTick(tick int64) {
 	case 3:
 		ges.populationBoom(game, systems)
 	case 4:
-		ges.tradeBoom(game)
+		ges.tradeBoom(game, players, systems)
 	case 5:
 		ges.asteroidImpact(game, systems)
 	case 6:
@@ -182,8 +182,8 @@ func (ges *GalacticEventSystem) populationBoom(game GameProvider, systems []*ent
 			planet.Name, bonus))
 }
 
-// tradeBoom: temporarily boost a resource's market price
-func (ges *GalacticEventSystem) tradeBoom(game GameProvider) {
+// tradeBoom: demand surge rewards factions with stockpiles
+func (ges *GalacticEventSystem) tradeBoom(game GameProvider, players []*entities.Player, systems []*entities.System) {
 	market := game.GetMarketEngine()
 	if market == nil {
 		return
@@ -191,10 +191,43 @@ func (ges *GalacticEventSystem) tradeBoom(game GameProvider) {
 	resources := []string{entities.ResOil, entities.ResHelium3, entities.ResElectronics,
 		entities.ResRareMetals, entities.ResWater}
 	res := resources[rand.Intn(len(resources))]
-	// Add artificial demand to spike the price
+
+	// Spike demand
 	market.AddTradeVolume(res, 500+rand.Intn(1000), true)
+
+	// Reward factions who have this resource stocked — galactic buyers pay premium
+	price := market.GetSellPrice(res)
+	for _, sys := range systems {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok || planet.Owner == "" {
+				continue
+			}
+			stored := planet.GetStoredAmount(res)
+			if stored <= 50 {
+				continue
+			}
+			// Sell up to 50 units at 2x price to "galactic demand"
+			sellQty := 50
+			if sellQty > stored-20 {
+				sellQty = stored - 20 // keep 20 buffer
+			}
+			if sellQty <= 0 {
+				continue
+			}
+			credits := int(price * 2.0 * float64(sellQty))
+			planet.RemoveStoredResource(res, sellQty)
+			for _, p := range players {
+				if p != nil && p.Name == planet.Owner {
+					p.Credits += credits
+					break
+				}
+			}
+		}
+	}
+
 	game.LogEvent("event", "",
-		fmt.Sprintf("📈 Trade boom! Demand for %s surges across the galaxy", res))
+		fmt.Sprintf("📈 Trade boom! Galactic demand for %s surges — stockpilers rewarded at 2x price!", res))
 }
 
 // asteroidImpact: a planet loses some stored resources (reduced by shield)

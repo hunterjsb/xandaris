@@ -155,8 +155,13 @@ func (les *LocalExchangeSystem) processSystem(sys *entities.System, players []*e
 					continue
 				}
 
-				// TP fee (lower fee = better for both parties)
+				// TP fee adjusted by diplomatic relations
 				feeRate := economy.TradingPostFee(seller.tpLevel)
+				// Check diplomacy — allies get reduced fees
+				if dm := game.GetDiplomacyManager(); dm != nil {
+					relation := dm.GetRelation(seller.player.Name, buyer.player.Name)
+					feeRate *= economy.DockingFeeMultiplier(relation)
+				}
 				fee := int(float64(total) * feeRate)
 				sellerGets := total - fee
 
