@@ -350,16 +350,51 @@ func (p *Planet) RebalanceWorkforce() {
 		p.WorkforceUsed += assign
 	}
 
+	// Priority-based assignment: power generators first, then mines, then others.
+	// This ensures colonies bootstrap power before anything else.
+	priorityOrder := []string{
+		BuildingGenerator,     // Power first — everything depends on it
+		BuildingFusionReactor, // Advanced power
+		BuildingMine,          // Resource extraction
+		BuildingRefinery,      // Fuel production (feeds generators)
+		BuildingFactory,       // Electronics production
+		BuildingResearchLab,   // Passive electronics
+	}
+	assigned := make(map[*Building]bool)
+
+	// Pass 1: assign by priority
+	for _, priorityType := range priorityOrder {
+		for _, entity := range p.Buildings {
+			building, ok := entity.(*Building)
+			if !ok || assigned[building] || (base != nil && building == base) {
+				continue
+			}
+			if building.BuildingType != priorityType {
+				continue
+			}
+			target := int64(building.WorkersRequired)
+			if building.DesiredWorkers >= 0 {
+				target = min(int64(building.DesiredWorkers), int64(building.WorkersRequired))
+			}
+			if target <= 0 {
+				building.SetWorkersAssigned(0)
+				assigned[building] = true
+				continue
+			}
+			assign := min(target, available)
+			building.SetWorkersAssigned(int(assign))
+			available -= assign
+			p.WorkforceUsed += assign
+			assigned[building] = true
+		}
+	}
+
+	// Pass 2: assign remaining buildings (Trading Post, Habitat, Shipyard, etc.)
 	for _, entity := range p.Buildings {
 		building, ok := entity.(*Building)
-		if !ok {
+		if !ok || assigned[building] || (base != nil && building == base) {
 			continue
 		}
-
-		if base != nil && building == base {
-			continue
-		}
-
 		target := int64(building.WorkersRequired)
 		if building.DesiredWorkers >= 0 {
 			target = min(int64(building.DesiredWorkers), int64(building.WorkersRequired))
@@ -368,9 +403,7 @@ func (p *Planet) RebalanceWorkforce() {
 			building.SetWorkersAssigned(0)
 			continue
 		}
-
 		assign := min(target, available)
-
 		building.SetWorkersAssigned(int(assign))
 		available -= assign
 		p.WorkforceUsed += assign
