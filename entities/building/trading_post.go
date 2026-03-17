@@ -54,7 +54,7 @@ func (g *TradingPostGenerator) Generate(params entities.GenerationParams) entiti
 	building.MaxLevel = 5
 	building.Size = 6
 	building.Description = "Establishes a commercial foothold and links the planet to interstellar trade routes."
-	building.SetWorkersRequired(150)
+	building.SetWorkersRequired(50)
 
 	return building
 }

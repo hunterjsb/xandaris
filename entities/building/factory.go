@@ -53,7 +53,7 @@ func (g *FactoryGenerator) Generate(params entities.GenerationParams) entities.E
 	factory.Size = 8
 	factory.Description = "Converts Rare Metals + Iron into Electronics"
 	factory.ProductionBonus = 1.0
-	factory.SetWorkersRequired(300)
+	factory.SetWorkersRequired(150)
 
 	return factory
 }

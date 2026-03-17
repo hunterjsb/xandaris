@@ -61,7 +61,7 @@ func (g *ShipyardGenerator) Generate(params entities.GenerationParams) entities.
 	building.MaxLevel = 5              // Can upgrade to level 5
 	building.Size = 6                  // 6 pixels (large industrial structure)
 	building.Description = "Constructs and repairs ships. Enables fleet production."
-	building.SetWorkersRequired(400)
+	building.SetWorkersRequired(200)
 
 	return building
 }
