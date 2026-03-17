@@ -217,6 +217,10 @@ func (gs *GameServer) GetAuctionHouse() *economy.AuctionHouse {
 	return gs.AuctionHouse
 }
 
+func (gs *GameServer) GetCouncil() *economy.GalacticCouncil {
+	return gs.Council
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil

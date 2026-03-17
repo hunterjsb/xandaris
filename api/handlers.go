@@ -39,6 +39,7 @@ type GameStateProvider interface {
 	GetBountyBoard() *economy.BountyBoard
 	GetBlackMarket() *economy.BlackMarket
 	GetAuctionHouse() *economy.AuctionHouse
+	GetCouncil() *economy.GalacticCouncil
 	RemovePlayer(name string) bool
 }
 

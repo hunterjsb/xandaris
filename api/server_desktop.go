@@ -2618,6 +2618,62 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Galactic Council: propose and vote on policies
+	mux.HandleFunc("/api/council", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		council := p.GetCouncil()
+		if council == nil {
+			writeErr(w, http.StatusInternalServerError, "council not available")
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, APIResponse{OK: true, Data: council.GetActiveProposals()})
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				Effect      string `json:"effect"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			proposal := council.Propose(playerName, req.Title, req.Description, req.Effect, 3000)
+			writeJSON(w, APIResponse{OK: true, Data: proposal})
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET or POST")
+		}
+	})
+
+	mux.HandleFunc("/api/council/vote", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		playerName := getAuthPlayer(r)
+		council := getProvider().GetCouncil()
+		if council == nil {
+			writeErr(w, http.StatusInternalServerError, "council not available")
+			return
+		}
+		var req struct {
+			ProposalID int  `json:"proposal_id"`
+			Yes        bool `json:"yes"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		if council.Vote(req.ProposalID, playerName, req.Yes) {
+			writeJSON(w, APIResponse{OK: true, Data: "vote recorded"})
+		} else {
+			writeErr(w, http.StatusBadRequest, "proposal not found or voting closed")
+		}
+	})
+
 	// Wormholes: active wormhole connections appear in /api/events
 	mux.HandleFunc("/api/wormholes", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{
