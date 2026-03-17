@@ -2106,14 +2106,17 @@ func StartServer(provider GameStateProvider) {
 
 		// Find arbitrage: resource cheap in system A, expensive in system B
 		type Opportunity struct {
-			Resource   string  `json:"resource"`
-			FromSystem int     `json:"from_system"`
-			ToSystem   int     `json:"to_system"`
-			BuyPrice   float64 `json:"buy_price"`
-			SellPrice  float64 `json:"sell_price"`
-			Margin     float64 `json:"margin"`
-			Available  int     `json:"available"`
-			Demand     int     `json:"demand"` // how much the dest system lacks
+			Resource       string  `json:"resource"`
+			FromSystem     int     `json:"from_system"`
+			ToSystem       int     `json:"to_system"`
+			BuyPrice       float64 `json:"buy_price"`
+			SellPrice      float64 `json:"sell_price"`
+			Margin         float64 `json:"margin"`
+			ProfitPerTrip  int     `json:"profit_per_trip"`  // margin * 500 (cargo capacity)
+			FuelCostPerTrip int    `json:"fuel_cost_per_trip"` // estimated fuel for round trip
+			NetProfitPerTrip int   `json:"net_profit_per_trip"` // profit - fuel cost
+			Available      int     `json:"available"`
+			Demand         int     `json:"demand"`
 		}
 
 		var opps []Opportunity
@@ -2141,16 +2144,25 @@ func StartServer(provider GameStateProvider) {
 					sellAt := market.GetSellPrice(res) * toSellMult
 					margin := sellAt - buyAt
 
-					if margin > 10 { // minimum 10cr profit per unit
+					if margin > 10 {
+						cargoCapacity := 500
+						profitPerTrip := int(margin * float64(cargoCapacity))
+						// Fuel cost: ~25 fuel per jump, fuel worth ~200cr each, round trip = 2 jumps
+						fuelCost := 25 * 2 * 200 // 10,000cr round trip fuel cost estimate
+						netProfit := profitPerTrip - fuelCost
+
 						opps = append(opps, Opportunity{
-							Resource:   res,
-							FromSystem: fromID,
-							ToSystem:   toID,
-							BuyPrice:   buyAt,
-							SellPrice:  sellAt,
-							Margin:     margin,
-							Available:  fromStock,
-							Demand:     1000 - toStock, // rough demand estimate
+							Resource:        res,
+							FromSystem:      fromID,
+							ToSystem:        toID,
+							BuyPrice:        buyAt,
+							SellPrice:       sellAt,
+							Margin:          margin,
+							ProfitPerTrip:   profitPerTrip,
+							FuelCostPerTrip: fuelCost,
+							NetProfitPerTrip: netProfit,
+							Available:       fromStock,
+							Demand:          1000 - toStock,
 						})
 					}
 				}

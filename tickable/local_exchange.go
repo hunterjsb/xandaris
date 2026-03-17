@@ -56,7 +56,7 @@ func (les *LocalExchangeSystem) OnTick(tick int64) {
 
 	// For each system, find planets with TPs and match surplus to shortage
 	for _, sys := range systems {
-		les.processSystem(sys, players, market)
+		les.processSystem(sys, players, market, game)
 	}
 }
 
@@ -66,7 +66,7 @@ type planetInfo struct {
 	tpLevel int
 }
 
-func (les *LocalExchangeSystem) processSystem(sys *entities.System, players []*entities.Player, market *economy.Market) {
+func (les *LocalExchangeSystem) processSystem(sys *entities.System, players []*entities.Player, market *economy.Market, game GameProvider) {
 	// Find all owned planets with Trading Posts in this system
 	var planets []planetInfo
 	for _, e := range sys.Entities {
@@ -172,8 +172,9 @@ func (les *LocalExchangeSystem) processSystem(sys *entities.System, players []*e
 					break
 				}
 
-				fmt.Printf("[Exchange] %s sold %d %s to %s for %dcr (fee %dcr)\n",
-					seller.player.Name, qty, res, buyer.player.Name, sellerGets, fee)
+				game.LogEvent("trade", seller.player.Name,
+					fmt.Sprintf("%s sold %d %s @ %.0fcr to %s (auto-exchange)",
+						seller.player.Name, qty, res, price, buyer.player.Name))
 			}
 		}
 	}
