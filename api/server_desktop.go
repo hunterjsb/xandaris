@@ -2175,6 +2175,133 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Economy report: narrative summary of the galactic economy
+	mux.HandleFunc("/api/economy/report", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		p := getProvider()
+		market := p.GetMarket()
+		players := p.GetPlayers()
+		systems := p.GetSystems()
+		ob := p.GetOrderBook()
+
+		// GDP
+		totalCredits := 0
+		for _, pl := range players {
+			if pl != nil {
+				totalCredits += pl.Credits
+			}
+		}
+
+		// Resource scarcity analysis
+		type ResourceInfo struct {
+			Resource    string  `json:"resource"`
+			TotalSupply int     `json:"total_supply"`
+			PriceRatio  float64 `json:"price_ratio"` // current/base
+			Scarcity    string  `json:"scarcity"`
+			BuyDemand   int     `json:"buy_demand"`  // from order book
+			SellSupply  int     `json:"sell_supply"`  // from order book
+		}
+
+		resources := []string{"Water", "Iron", "Oil", "Fuel", "Rare Metals", "Helium-3", "Electronics"}
+		var resInfo []ResourceInfo
+		for _, res := range resources {
+			supply := 0
+			for _, sys := range systems {
+				for _, e := range sys.Entities {
+					if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" {
+						supply += planet.GetStoredAmount(res)
+					}
+				}
+			}
+
+			priceRatio := 0.0
+			if market != nil {
+				base := economy.GetBasePrice(res)
+				if base > 0 {
+					priceRatio = market.GetBuyPrice(res) / base
+				}
+			}
+
+			scarcity := "Abundant"
+			if priceRatio > 3.0 {
+				scarcity = "Critical"
+			} else if priceRatio > 1.5 {
+				scarcity = "Scarce"
+			} else if priceRatio > 0.8 {
+				scarcity = "Normal"
+			} else {
+				scarcity = "Oversupplied"
+			}
+
+			buyDemand := 0
+			sellSupply := 0
+			if ob != nil {
+				for _, sys := range systems {
+					for _, o := range ob.GetOrders(sys.ID, res) {
+						if o.Action == "buy" {
+							buyDemand += o.Quantity
+						} else {
+							sellSupply += o.Quantity
+						}
+					}
+				}
+			}
+
+			resInfo = append(resInfo, ResourceInfo{
+				Resource: res, TotalSupply: supply, PriceRatio: priceRatio,
+				Scarcity: scarcity, BuyDemand: buyDemand, SellSupply: sellSupply,
+			})
+		}
+
+		// Top traders
+		type FactionSummary struct {
+			Name    string `json:"name"`
+			Credits int    `json:"credits"`
+			Planets int    `json:"planets"`
+			Ships   int    `json:"ships"`
+		}
+		var factions []FactionSummary
+		for _, pl := range players {
+			if pl == nil {
+				continue
+			}
+			ships := 0
+			for _, s := range pl.OwnedShips {
+				if s != nil {
+					ships++
+				}
+			}
+			factions = append(factions, FactionSummary{
+				Name: pl.Name, Credits: pl.Credits,
+				Planets: len(pl.OwnedPlanets), Ships: ships,
+			})
+		}
+
+		// Shipping activity
+		sm := p.GetShippingManager()
+		activeRoutes := 0
+		totalTrips := 0
+		if sm != nil {
+			for _, r := range sm.GetRoutes("") {
+				if r.Active {
+					activeRoutes++
+				}
+				totalTrips += r.TripsComplete
+			}
+		}
+
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"gdp":            totalCredits,
+			"resources":      resInfo,
+			"factions":       factions,
+			"active_routes":  activeRoutes,
+			"total_trips":    totalTrips,
+		}})
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

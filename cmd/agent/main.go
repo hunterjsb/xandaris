@@ -125,6 +125,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_economy_report", Description: "Galaxy economy report: GDP, resource scarcity levels, order book demand/supply imbalances, faction standings, shipping activity. Good for strategic overview.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "get_planet", Description: "Get detailed info about a planet including resource deposits and buildings",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"}},"required":["planet_id"]}`),
 	}},
@@ -285,6 +289,12 @@ func executeTool(name string, args string, factionName string) string {
 		var p struct{ PlanetID int `json:"planet_id"` }
 		json.Unmarshal([]byte(args), &p)
 		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "get_economy_report":
+		result, err := callAPI("GET", "/api/economy/report", "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
