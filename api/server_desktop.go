@@ -1833,6 +1833,43 @@ func StartServer(provider GameStateProvider) {
 			popAdmin += int(pop / 1000)
 		}
 
+		// Resource diversity per planet
+		type PlanetDiversity struct {
+			PlanetID     int      `json:"planet_id"`
+			Name         string   `json:"name"`
+			TypesStocked int      `json:"types_stocked"`
+			Multiplier   float64  `json:"multiplier"`
+			Missing      []string `json:"missing"`
+		}
+		var diversity []PlanetDiversity
+		allResources := []string{"Water", "Iron", "Oil", "Fuel", "Rare Metals", "Helium-3", "Electronics"}
+		for _, planet := range player.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			stocked := 0
+			var missing []string
+			for _, res := range allResources {
+				if planet.GetStoredAmount(res) > 0 {
+					stocked++
+				} else {
+					missing = append(missing, res)
+				}
+			}
+			mult := 1.0
+			if stocked >= 7 {
+				mult = 3.0
+			} else if stocked >= 5 {
+				mult = 2.0
+			} else if stocked >= 3 {
+				mult = 1.5
+			}
+			diversity = append(diversity, PlanetDiversity{
+				PlanetID: planet.GetID(), Name: planet.Name,
+				TypesStocked: stocked, Multiplier: mult, Missing: missing,
+			})
+		}
+
 		totalIncome := laborIncome + domesticIncome + tpIncome
 		totalExpenses := totalUpkeep + popAdmin
 		netFlow := totalIncome - totalExpenses
@@ -1855,6 +1892,7 @@ func StartServer(provider GameStateProvider) {
 			},
 			"net_flow_per_tick": netFlow,
 			"profitable":       netFlow > 0,
+			"diversity":        diversity,
 		}})
 	})
 

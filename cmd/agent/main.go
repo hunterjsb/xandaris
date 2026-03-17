@@ -33,17 +33,26 @@ POWER: Generator burns 2 Fuel→50MW | Fusion Reactor burns 1 He-3→200MW
   - 0%% power = 25%% production output. You NEED power for efficient mining!
 BUILDINGS: Mine(500), Generator(1000), Trading Post(1200), Refinery(1500), Factory(2000), Shipyard(2000), Habitat(800), Fusion Reactor(3000)
 
+RESOURCE DIVERSITY BONUS (critical for income!):
+Your domestic income multiplies based on how many DIFFERENT resource types are stocked:
+- 1-2 types: 1.0x (basic)
+- 3-4 types: 1.5x
+- 5-6 types: 2.0x
+- ALL 7 types: 3.0x (TRIPLE income!)
+Resources: Water, Iron, Oil, Fuel, Rare Metals, Helium-3, Electronics
+Use get_planet to check which types you have. Import what you're missing!
+
 STRATEGY PRIORITIES:
 1. Mine ALL unmined deposits (resource_deposits where has_mine=false)
 2. Build Generator + Refinery for power (Oil→Fuel→Generator→power). Critical!
 3. Build Trading Post (required for all trade)
 4. Build Factory (RM+Iron→Electronics at 800cr base = highest value)
-5. Trade LOCALLY: sell surplus to neighbors in your system, buy what you need
-6. Build Cargo ships for cross-system trade (load→fly→sell_at_dock)
-7. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
-8. Build Habitat when population near capacity
-9. Upgrade mines for higher output (+30%% per level)
-10. More planets + trade routes = more resources = higher score
+5. STOCK ALL 7 RESOURCES for 3x income — buy locally or import via cargo ship
+6. Trade LOCALLY: sell surplus to neighbors, buy what you're missing
+7. Build Cargo ships to import missing resources from other systems
+8. Use find_trades to discover profitable cross-system arbitrage
+9. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
+10. Build Habitat when population near capacity
 
 LOGISTICS WORKFLOW (cross-system trade):
 1. Build a Cargo ship at your Shipyard
