@@ -61,6 +61,9 @@ func computePower(planet *entities.Planet) {
 	generated := 0.0
 	consumed := 0.0
 
+	// Base provides 10MW free power — enough to bootstrap a Refinery or Generator
+	generated += 10.0
+
 	// Population life support: 1 MW per 500 pop
 	consumed += float64(planet.Population) / 500.0
 
