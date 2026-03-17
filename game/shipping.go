@@ -123,6 +123,18 @@ func (sm *ShippingManager) CompleteTrip(routeID int) {
 	}
 }
 
+// AssignShip sets the ship ID for a route.
+func (sm *ShippingManager) AssignShip(routeID, shipID int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	for _, r := range sm.routes {
+		if r.ID == routeID {
+			r.ShipID = shipID
+			return
+		}
+	}
+}
+
 // GetAllRoutes returns all routes (for save/load).
 func (sm *ShippingManager) GetAllRoutes() []*ShippingRoute {
 	sm.mu.RLock()

@@ -225,6 +225,12 @@ func (gs *GameServer) CompleteShippingTrip(routeID int) {
 	}
 }
 
+func (gs *GameServer) AssignShipToRoute(routeID, shipID int) {
+	if gs.ShippingMgr != nil {
+		gs.ShippingMgr.AssignShip(routeID, shipID)
+	}
+}
+
 // --- api.GameStateProvider ---
 
 func (gs *GameServer) GetSystems() []*entities.System     { return gs.State.Systems }

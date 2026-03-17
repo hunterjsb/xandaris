@@ -63,6 +63,7 @@ type GameProvider interface {
 	// Shipping routes
 	GetShippingRoutes() []ShippingRouteInfo
 	CompleteShippingTrip(routeID int)
+	AssignShipToRoute(routeID, shipID int)
 }
 
 // ShippingRouteInfo is a snapshot of a shipping route for the tick system.

@@ -63,6 +63,7 @@ func (m *mockGameProvider) SellAtDock(ship *entities.Ship, resource string, qty 
 func (m *mockGameProvider) GetCreditLedger() *economy.CreditLedger { return nil }
 func (m *mockGameProvider) GetShippingRoutes() []ShippingRouteInfo  { return nil }
 func (m *mockGameProvider) CompleteShippingTrip(routeID int)        {}
+func (m *mockGameProvider) AssignShipToRoute(routeID, shipID int)  {}
 
 // mockSystemContext implements SystemContext for testing.
 type mockSystemContext struct {

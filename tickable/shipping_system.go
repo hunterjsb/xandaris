@@ -37,10 +37,77 @@ func (ss *ShippingSystem) OnTick(tick int64) {
 	systems := gp.GetSystems()
 	systemsMap := gp.GetSystemsMap()
 
+	// Build set of ships already assigned to routes
+	assignedShips := make(map[int]bool)
 	routes := gp.GetShippingRoutes()
 	for _, route := range routes {
-		if !route.Active || route.ShipID == 0 {
+		if route.Active && route.ShipID != 0 {
+			assignedShips[route.ShipID] = true
+		}
+	}
+
+	for _, route := range routes {
+		if !route.Active {
 			continue
+		}
+
+		// Auto-assign: find an idle cargo ship for unassigned routes
+		if route.ShipID == 0 {
+			sourcePlanet := findPlanetByID(systemsMap, route.SourcePlanet)
+			if sourcePlanet == nil {
+				continue
+			}
+			sourceSystem := findSystemForPlanet(sourcePlanet, systems)
+			// Find an idle cargo ship owned by the route owner in the source system
+			for _, p := range players {
+				if p == nil || p.Name != route.Owner {
+					continue
+				}
+				for _, ship := range p.OwnedShips {
+					if ship == nil || ship.ShipType != entities.ShipTypeCargo {
+						continue
+					}
+					if ship.Status == entities.ShipStatusMoving || ship.DeliveryID != 0 {
+						continue
+					}
+					if assignedShips[ship.GetID()] {
+						continue
+					}
+					// Prefer ships in the source system
+					if ship.CurrentSystem == sourceSystem {
+						route.ShipID = ship.GetID()
+						assignedShips[ship.GetID()] = true
+						gp.AssignShipToRoute(route.ID, ship.GetID())
+						fmt.Printf("[Shipping] Auto-assigned %s to route #%d (%s)\n",
+							ship.Name, route.ID, route.Resource)
+						break
+					}
+				}
+				// Fallback: any idle cargo ship
+				if route.ShipID == 0 {
+					for _, ship := range p.OwnedShips {
+						if ship == nil || ship.ShipType != entities.ShipTypeCargo {
+							continue
+						}
+						if ship.Status == entities.ShipStatusMoving || ship.DeliveryID != 0 {
+							continue
+						}
+						if assignedShips[ship.GetID()] {
+							continue
+						}
+						route.ShipID = ship.GetID()
+						assignedShips[ship.GetID()] = true
+						gp.AssignShipToRoute(route.ID, ship.GetID())
+						fmt.Printf("[Shipping] Auto-assigned %s to route #%d (%s, different system)\n",
+							ship.Name, route.ID, route.Resource)
+						break
+					}
+				}
+				break
+			}
+			if route.ShipID == 0 {
+				continue // no ship available
+			}
 		}
 
 		ship := findShipByID(players, route.ShipID)
