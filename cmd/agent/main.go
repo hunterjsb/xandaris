@@ -54,13 +54,26 @@ STRATEGY PRIORITIES:
 9. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
 10. Build Habitat when population near capacity
 
+ADVANCED TRADING:
+- place_limit_order: set a buy/sell price and the order auto-matches with counterparties
+  Example: place_limit_order(system_id=17, planet_id=17523, resource="Oil", action="buy", quantity=100, price=500)
+- create_contract: lock in a recurring supply deal with another faction
+  Example: create_contract(buyer="Llama Logistics", resource="Oil", quantity=50, price_per_unit=400, interval=200, system_id=17, planet_id=17523)
+- standing_order: auto buy/sell when stock hits threshold levels
+
 LOGISTICS WORKFLOW (cross-system trade):
 1. Build a Cargo ship at your Shipyard
 2. load_cargo: put resources on the ship from your planet
 3. move_ship: fly to the target system
 4. unload_cargo: offload at your own planet there, OR
    sell_at_dock: sell cargo at a foreign Trading Post for credits
-5. Repeat! Set up regular trade routes between your planets.
+5. Or create_route to automate: load→fly→unload→return→repeat
+
+EACH TURN, CONSIDER:
+- Check get_finances for diversity gaps — import missing resources for income bonus
+- Check find_trades for profitable cargo routes
+- Place limit orders for resources you need (even if no seller exists yet)
+- Create contracts with neighbors for guaranteed supply
 
 CONTEXT: You are playing continuously. Remember what you did last turn and build on it. Don't repeat failed actions.`
 
