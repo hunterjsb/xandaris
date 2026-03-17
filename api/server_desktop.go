@@ -2674,12 +2674,40 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
-	// Wormholes: active wormhole connections appear in /api/events
-	mux.HandleFunc("/api/wormholes", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, APIResponse{OK: true, Data: map[string]string{
-			"status": "Wormholes appear randomly every ~15 minutes. Watch /api/events for announcements.",
-			"info":   "When a wormhole opens, ships in either connected system can jump through.",
-		}})
+	// Galaxy intel: one-stop overview of special map features
+	mux.HandleFunc("/api/galaxy/intel", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		events := p.GetEventLog()
+
+		// Extract anomalies, pirates, wormholes, sector control from recent events
+		type IntelItem struct {
+			Type     string `json:"type"`
+			SystemID int    `json:"system_id,omitempty"`
+			Message  string `json:"message"`
+		}
+		var intel []IntelItem
+
+		if events != nil {
+			for _, e := range events.Recent(200) {
+				msg := e.Message
+				switch {
+				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "🔮 " || msg[:4] == "🔮"):
+					intel = append(intel, IntelItem{Type: "anomaly", Message: msg})
+				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "🏴" || strings.Contains(msg,"Pirate fleet")):
+					intel = append(intel, IntelItem{Type: "pirate", Message: msg})
+				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "🌀" || strings.Contains(msg,"Wormhole") || strings.Contains(msg,"wormhole")):
+					intel = append(intel, IntelItem{Type: "wormhole", Message: msg})
+				case e.Type == "event" && len(msg) > 2 && (msg[:3] == "👑" || strings.Contains(msg,"controls")):
+					intel = append(intel, IntelItem{Type: "sector_control", Message: msg})
+				case e.Type == "event" && strings.Contains(msg,"LEGENDARY"):
+					intel = append(intel, IntelItem{Type: "legendary", Message: msg})
+				case e.Type == "event" && strings.Contains(msg,"AUCTION"):
+					intel = append(intel, IntelItem{Type: "auction", Message: msg})
+				}
+			}
+		}
+
+		writeJSON(w, APIResponse{OK: true, Data: intel})
 	})
 
 	// Victory progress
