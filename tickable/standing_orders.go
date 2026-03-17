@@ -77,6 +77,11 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 			continue
 		}
 
+		// Credit floor: don't auto-buy if credits are critically low
+		if order.Action == "buy" && player.Credits < 1000 {
+			continue
+		}
+
 		if err := game.ExecuteStandingOrderTrade(order, player); err == nil {
 			game.LogEvent("trade", order.Player,
 				fmt.Sprintf("[Auto] %s %s %d %s (order #%d)",
