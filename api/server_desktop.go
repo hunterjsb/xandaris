@@ -2053,6 +2053,73 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// Order book: limit buy/sell orders per system
+	mux.HandleFunc("/api/orders/limit", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		ob := p.GetOrderBook()
+		if ob == nil {
+			writeErr(w, http.StatusInternalServerError, "order book not available")
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			sysStr := r.URL.Query().Get("system_id")
+			sysID, _ := strconv.Atoi(sysStr)
+			resource := r.URL.Query().Get("resource")
+			playerName := getAuthPlayer(r)
+
+			var orders []*economy.MarketOrder
+			if playerName != "" && sysStr == "" {
+				orders = ob.GetPlayerOrders(playerName)
+			} else {
+				orders = ob.GetOrders(sysID, resource)
+			}
+			writeJSON(w, APIResponse{OK: true, Data: orders})
+
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				SystemID int    `json:"system_id"`
+				PlanetID int    `json:"planet_id"`
+				Resource string `json:"resource"`
+				Action   string `json:"action"` // "buy" or "sell"
+				Quantity int    `json:"quantity"`
+				Price    int    `json:"price"` // limit price
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if req.Action != "buy" && req.Action != "sell" {
+				writeErr(w, http.StatusBadRequest, "action must be 'buy' or 'sell'")
+				return
+			}
+			if req.Quantity <= 0 || req.Price <= 0 {
+				writeErr(w, http.StatusBadRequest, "quantity and price must be positive")
+				return
+			}
+			order := ob.PlaceOrder(req.SystemID, req.PlanetID, playerName, req.Resource, req.Action, req.Quantity, req.Price)
+			writeJSON(w, APIResponse{OK: true, Data: order})
+
+		case http.MethodDelete:
+			playerName := getAuthPlayer(r)
+			orderID, _ := strconv.Atoi(r.URL.Query().Get("order_id"))
+			if ob.CancelOrder(orderID, playerName) {
+				writeJSON(w, APIResponse{OK: true, Data: "cancelled"})
+			} else {
+				writeErr(w, http.StatusNotFound, "order not found")
+			}
+
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET, POST, or DELETE")
+		}
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

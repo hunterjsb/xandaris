@@ -184,6 +184,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "place_limit_order", Description: "Place a limit buy/sell order on a system's order book. Buy: 'I will pay up to X credits for Y units'. Sell: 'I will sell Y units at X credits minimum'. Orders match automatically when buy price >= sell price.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"},"planet_id":{"type":"integer","description":"your planet in this system"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer"},"price":{"type":"integer","description":"limit price per unit"}},"required":["system_id","planet_id","resource","action","quantity","price"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "standing_order", Description: "Create a standing order for automatic local trade. Sell when stock exceeds threshold, or buy when stock drops below threshold. Executes automatically every 30 ticks.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer","description":"amount per execution"},"threshold":{"type":"integer","description":"sell when stock > threshold, buy when stock < threshold"}},"required":["planet_id","resource","action","quantity","threshold"]}`),
 	}},
@@ -324,7 +328,8 @@ func executeTool(name string, args string, factionName string) string {
 			"colonize":       "/api/colonize",
 			"refuel_ship":    "/api/ships/refuel",
 			"create_route":   "/api/shipping/routes",
-			"standing_order": "/api/orders",
+			"standing_order":    "/api/orders",
+			"place_limit_order": "/api/orders/limit",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)
 		if err != nil {

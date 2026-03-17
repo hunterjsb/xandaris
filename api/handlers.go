@@ -32,6 +32,7 @@ type GameStateProvider interface {
 	GetDeliveryManager() *economy.DeliveryManager
 	GetShippingManager() *game.ShippingManager
 	GetCreditLedger() *economy.CreditLedger
+	GetOrderBook() *economy.OrderBook
 	RemovePlayer(name string) bool
 }
 

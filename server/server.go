@@ -30,6 +30,7 @@ type GameServer struct {
 	DeliveryMgr      *economy.DeliveryManager
 	ShippingMgr      *game.ShippingManager
 	CreditLedger     *economy.CreditLedger
+	OrderBook        *economy.OrderBook
 	cmdRegistry      *CommandRegistry
 	mu               sync.Mutex // protects State during save (held by tick loop + autosave)
 	// Remote is set when connected to a remote server (desktop only, not WASM)
@@ -208,6 +209,7 @@ func (gs *GameServer) initSimulation() {
 	gs.DeliveryMgr = economy.NewDeliveryManager()
 	gs.ShippingMgr = game.NewShippingManager()
 	gs.CreditLedger = economy.NewCreditLedger()
+	gs.OrderBook = economy.NewOrderBook()
 
 	if gs.State.TradeExec != nil {
 		gs.State.TradeExec.SetSystems(gs.State.Systems)

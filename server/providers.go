@@ -198,6 +198,10 @@ func (gs *GameServer) GetCreditLedger() *economy.CreditLedger {
 	return gs.CreditLedger
 }
 
+func (gs *GameServer) GetOrderBook() *economy.OrderBook {
+	return gs.OrderBook
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil
