@@ -226,6 +226,12 @@ func (gs *GameServer) AssignShipToRoute(routeID, shipID int) {
 	}
 }
 
+func (gs *GameServer) CancelShippingRoute(routeID int) {
+	if gs.ShippingMgr != nil {
+		gs.ShippingMgr.CancelRoute(routeID)
+	}
+}
+
 // --- api.GameStateProvider ---
 
 func (gs *GameServer) GetSystems() []*entities.System     { return gs.State.Systems }

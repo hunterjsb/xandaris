@@ -65,6 +65,7 @@ func (m *mockGameProvider) GetOrderBook() *economy.OrderBook        { return nil
 func (m *mockGameProvider) GetShippingRoutes() []ShippingRouteInfo  { return nil }
 func (m *mockGameProvider) CompleteShippingTrip(routeID int)        {}
 func (m *mockGameProvider) AssignShipToRoute(routeID, shipID int)  {}
+func (m *mockGameProvider) CancelShippingRoute(routeID int)        {}
 
 // mockSystemContext implements SystemContext for testing.
 type mockSystemContext struct {

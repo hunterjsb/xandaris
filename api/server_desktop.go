@@ -2360,9 +2360,31 @@ func StartServer(provider GameStateProvider) {
 				writeErr(w, http.StatusUnauthorized, "auth required")
 				return
 			}
-			// Validate: planet IDs should be 5+ digits, not system IDs (0-39)
-			if req.SourcePlanetID < 1000 || req.DestPlanetID < 1000 {
-				writeErr(w, http.StatusBadRequest, "invalid planet ID — use planet IDs (5+ digit numbers from get_planet), not system IDs")
+			// Validate planet IDs — must actually exist in the galaxy
+			srcFound := false
+			dstFound := false
+			for _, sys := range p.GetSystems() {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok {
+						if pl.GetID() == req.SourcePlanetID {
+							srcFound = true
+						}
+						if pl.GetID() == req.DestPlanetID {
+							dstFound = true
+						}
+					}
+				}
+			}
+			if !srcFound {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf("source planet %d not found — use planet IDs from get_planet, not system IDs or planet names", req.SourcePlanetID))
+				return
+			}
+			if !dstFound {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf("dest planet %d not found — use planet IDs from get_planet, not system IDs or planet names", req.DestPlanetID))
+				return
+			}
+			if req.SourcePlanetID == req.DestPlanetID {
+				writeErr(w, http.StatusBadRequest, "source and dest cannot be the same planet")
 				return
 			}
 			routeID := sm.CreateRoute(playerName, req.SourcePlanetID, req.DestPlanetID, req.Resource, req.Quantity, req.ShipID)

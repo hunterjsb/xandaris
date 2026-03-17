@@ -130,6 +130,9 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 	sourcePlanet := findPlanetByID(systemsMap, route.SourcePlanet)
 	destPlanet := findPlanetByID(systemsMap, route.DestPlanet)
 	if sourcePlanet == nil || destPlanet == nil {
+		fmt.Printf("[Shipping] Route #%d: invalid planet IDs (src=%d dst=%d) — deactivating\n",
+			route.ID, route.SourcePlanet, route.DestPlanet)
+		gp.CancelShippingRoute(route.ID)
 		return
 	}
 
