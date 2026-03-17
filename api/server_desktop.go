@@ -2492,6 +2492,95 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Black market: high prices, risk of seizure, no location restriction
+	mux.HandleFunc("/api/black-market", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		p := getProvider()
+		bm := p.GetBlackMarket()
+		market := p.GetMarket()
+		if bm == nil || market == nil {
+			writeErr(w, http.StatusInternalServerError, "black market not available")
+			return
+		}
+		playerName := getAuthPlayer(r)
+		if playerName == "" {
+			writeErr(w, http.StatusUnauthorized, "auth required")
+			return
+		}
+		player := findPlayer(p, playerName)
+		if player == nil {
+			writeErr(w, http.StatusNotFound, "player not found")
+			return
+		}
+		var req struct {
+			Action   string `json:"action"` // "buy" or "sell"
+			Resource string `json:"resource"`
+			Quantity int    `json:"quantity"`
+			PlanetID int    `json:"planet_id"` // planet for delivery/pickup
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		// Find the planet
+		var planet *entities.Planet
+		for _, sys := range p.GetSystems() {
+			for _, e := range sys.Entities {
+				if pl, ok := e.(*entities.Planet); ok && pl.GetID() == req.PlanetID && pl.Owner == playerName {
+					planet = pl
+				}
+			}
+		}
+		if planet == nil {
+			writeErr(w, http.StatusBadRequest, "planet not found or not owned")
+			return
+		}
+
+		if req.Action == "sell" {
+			stored := planet.GetStoredAmount(req.Resource)
+			if stored < req.Quantity {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf("need %d %s, have %d", req.Quantity, req.Resource, stored))
+				return
+			}
+			planet.RemoveStoredResource(req.Resource, req.Quantity)
+			basePrice := market.GetSellPrice(req.Resource)
+			credits, seized := bm.BlackMarketSell(basePrice, req.Quantity)
+			if seized {
+				writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+					"action": "sell", "seized": true, "resource": req.Resource, "quantity": req.Quantity,
+					"message": "Goods confiscated by authorities! You lose the resources and get nothing.",
+				}})
+				return
+			}
+			player.Credits += credits
+			writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+				"action": "sell", "seized": false, "resource": req.Resource,
+				"quantity": req.Quantity, "credits": credits,
+				"message": fmt.Sprintf("Black market sale! %d %s for %d credits (3x price)", req.Quantity, req.Resource, credits),
+			}})
+		} else if req.Action == "buy" {
+			basePrice := market.GetBuyPrice(req.Resource)
+			cost := bm.BlackMarketBuy(basePrice, req.Quantity)
+			if player.Credits < cost {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf("need %d credits (1.5x market price)", cost))
+				return
+			}
+			player.Credits -= cost
+			planet.AddStoredResource(req.Resource, req.Quantity)
+			writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+				"action": "buy", "resource": req.Resource,
+				"quantity": req.Quantity, "cost": cost,
+				"message": fmt.Sprintf("Black market purchase! %d %s for %d credits", req.Quantity, req.Resource, cost),
+			}})
+		} else {
+			writeErr(w, http.StatusBadRequest, "action must be 'buy' or 'sell'")
+		}
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

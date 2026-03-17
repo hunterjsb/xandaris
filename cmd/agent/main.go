@@ -229,6 +229,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"type":{"type":"string","enum":["deliver","clear_pirates","explore","custom"]},"description":{"type":"string"},"reward":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"},"system_id":{"type":"integer"}},"required":["type","description","reward"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "black_market", Description: "Trade on the black market: sell at 3x price (15% seizure risk!) or buy at 1.5x (no location restriction). Risky but profitable. No Trading Post or cargo ship needed.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string","enum":["buy","sell"]},"resource":{"type":"string"},"quantity":{"type":"integer"},"planet_id":{"type":"integer"}},"required":["action","resource","quantity","planet_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "get_bounties", Description: "View bounties available for claiming on the galaxy-wide board.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
@@ -425,6 +429,7 @@ func executeTool(name string, args string, factionName string) string {
 			"diplomacy":         "/api/diplomacy",
 			"spy":               "/api/espionage",
 			"post_bounty":       "/api/bounties",
+			"black_market":      "/api/black-market",
 			"place_limit_order": "/api/orders/limit",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)

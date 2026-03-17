@@ -209,6 +209,10 @@ func (gs *GameServer) GetBountyBoard() *economy.BountyBoard {
 	return gs.BountyBoard
 }
 
+func (gs *GameServer) GetBlackMarket() *economy.BlackMarket {
+	return gs.BlackMarket
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil

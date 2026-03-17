@@ -37,6 +37,7 @@ type GameStateProvider interface {
 	GetDiplomacyManager() *economy.DiplomacyManager
 	GetEspionageManager() *economy.EspionageManager
 	GetBountyBoard() *economy.BountyBoard
+	GetBlackMarket() *economy.BlackMarket
 	RemovePlayer(name string) bool
 }
 
