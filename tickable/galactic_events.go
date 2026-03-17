@@ -32,7 +32,7 @@ type GalacticEventSystem struct {
 
 func (ges *GalacticEventSystem) OnTick(tick int64) {
 	if ges.nextEvent == 0 {
-		ges.nextEvent = tick + 1000 + int64(rand.Intn(2000))
+		ges.nextEvent = tick + 200 + int64(rand.Intn(500)) // first event soon after startup
 	}
 	if tick < ges.nextEvent {
 		return

@@ -52,9 +52,9 @@ func (ws *WormholeSystem) OnTick(tick int64) {
 
 	systems := game.GetSystems()
 
-	// Initialize spawn timer
+	// Initialize spawn timer — first wormhole spawns quickly after startup
 	if ws.nextSpawn == 0 {
-		ws.nextSpawn = tick + 5000 + int64(rand.Intn(5000))
+		ws.nextSpawn = tick + 500 + int64(rand.Intn(1000))
 	}
 
 	// Decay existing wormholes

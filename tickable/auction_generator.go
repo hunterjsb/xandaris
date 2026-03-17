@@ -40,7 +40,7 @@ var auctionItems = []auctionTemplate{
 
 func (ags *AuctionGeneratorSystem) OnTick(tick int64) {
 	if ags.nextAuction == 0 {
-		ags.nextAuction = tick + 3000 + int64(rand.Intn(5000))
+		ags.nextAuction = tick + 500 + int64(rand.Intn(1500)) // first auction soon
 	}
 
 	if tick < ags.nextAuction {

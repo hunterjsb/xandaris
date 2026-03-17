@@ -50,7 +50,7 @@ var legendaries = []legendaryDef{
 
 func (lss *LegendaryShipSystem) OnTick(tick int64) {
 	if lss.nextCheck == 0 {
-		lss.nextCheck = tick + 10000 + int64(rand.Intn(10000))
+		lss.nextCheck = tick + 2000 + int64(rand.Intn(3000)) // first check sooner
 	}
 	if tick < lss.nextCheck {
 		return
