@@ -83,6 +83,7 @@ type PlanetDetail struct {
 	PowerConsumed     float64            `json:"power_consumed"`     // MW
 	PowerRatio        float64            `json:"power_ratio"`        // 0.0-1.0
 	Owner             string             `json:"owner,omitempty"`
+	Specialties       map[string]float64 `json:"specialties,omitempty"` // workforce specialization bonuses
 	StoredResources   map[string]int     `json:"stored_resources"`
 	ResourceDeposits  []ResourceDeposit  `json:"resource_deposits"`
 	Buildings         []BuildingInfo     `json:"buildings"`

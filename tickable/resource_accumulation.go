@@ -103,11 +103,17 @@ func computeResourceExtraction(resource *entities.Resource, planet *entities.Pla
 	// Tech bonus: +3% extraction per tech level
 	techBonus := 1.0 + planet.TechLevel*0.03
 
+	// Specialization bonus: mining specialty adds +1% per point
+	specBonus := 1.0
+	if planet.Specialties != nil {
+		specBonus += planet.Specialties["mining"] * 0.01
+	}
+
 	// Power scaling: mines run at 25% without power, scaling up to 100% at full power.
 	// This prevents total shutdown while still making generators important.
 	powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
 
-	amount := float64(8) * resource.ExtractionRate * multiplier * abundanceFactor * techBonus * powerFactor
+	amount := float64(8) * resource.ExtractionRate * multiplier * abundanceFactor * techBonus * powerFactor * specBonus
 	if amount < 1 && multiplier > 0 {
 		amount = 1
 	}

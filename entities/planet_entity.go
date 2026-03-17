@@ -37,6 +37,7 @@ type Planet struct {
 	PowerConsumed     float64                     // MW demanded this tick
 	PowerRatio        float64                     // 0.0-1.0 generated/consumed
 	PowerHistory      []float64                   // last 50 power ratios for sparkline
+	Specialties       map[string]float64          // workforce specialization bonuses (mining, refining, etc.)
 }
 
 // NewPlanet creates a new planet entity

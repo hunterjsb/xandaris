@@ -264,6 +264,7 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 		PowerConsumed:     math.Round(planet.PowerConsumed*10) / 10,
 		PowerRatio:        math.Round(planet.GetPowerRatio()*100) / 100,
 		Owner:             planet.Owner,
+		Specialties:       planet.Specialties,
 		StoredResources:   stored,
 		ResourceDeposits:  deposits,
 		Buildings:         buildings,
