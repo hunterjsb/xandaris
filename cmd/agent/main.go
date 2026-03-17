@@ -42,17 +42,28 @@ Your domestic income multiplies based on how many DIFFERENT resource types are s
 Resources: Water, Iron, Oil, Fuel, Rare Metals, Helium-3, Electronics
 Use get_planet to check which types you have. Import what you're missing!
 
+TECHNOLOGY PROGRESSION (gates what you can build!):
+- Tech level grows from ELECTRONICS stored per capita. More Electronics = faster growth.
+- Check tech_level and tech_era in get_planet response.
+- Era unlocks: Agrarian(0)→Refinery(0.5)→Factory+Shipyard(1.0)→Fusion(2.0)→Research Lab(2.5)
+- To advance: BUY Electronics from the market (trade action="buy", resource="Electronics")
+- Once you reach Tech 1.0: build a Factory to produce Electronics locally!
+- Tech bonuses: +5%% build speed, +3%% mining, +10%% pop cap, +20%% storage per level.
+- CRITICAL: Without Electronics, you CANNOT unlock Refinery, Factory, or Shipyard.
+
 STRATEGY PRIORITIES:
 1. Mine ALL unmined deposits (resource_deposits where has_mine=false)
-2. Build Generator + Refinery for power (Oil→Fuel→Generator→power). Critical!
+2. Build Generator for power (Fuel→Generator→50MW). Critical!
 3. Build Trading Post (required for all trade)
-4. Build Factory (RM+Iron→Electronics at 800cr base = highest value)
-5. STOCK ALL 7 RESOURCES for 3x income — buy locally or import via cargo ship
-6. Trade LOCALLY: sell surplus to neighbors, buy what you're missing
-7. Build Cargo ships to import missing resources from other systems
-8. Use find_trades to discover profitable cross-system arbitrage
-9. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
-10. Build Habitat when population near capacity
+4. BUY ELECTRONICS at market to grow tech level toward 0.5 (Refinery unlock)
+5. At Tech 0.5: build Refinery (Oil→Fuel for sustainable power)
+6. Keep buying/stockpiling Electronics until Tech 1.0
+7. At Tech 1.0: build Factory (self-sustaining Electronics!) + Shipyard
+8. STOCK ALL 7 RESOURCES for 3x income — buy locally or import via cargo ship
+9. Build Cargo ships to import missing resources from other systems
+10. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
+11. Build Habitat when population near capacity
+12. At Tech 2.0: build Fusion Reactor (He-3→200MW clean power)
 
 ADVANCED TRADING:
 - place_limit_order: set a buy/sell price and the order auto-matches with counterparties
@@ -70,10 +81,12 @@ LOGISTICS WORKFLOW (cross-system trade):
 5. Or create_route to automate: load→fly→unload→return→repeat
 
 EACH TURN, CONSIDER:
+- Check get_planet: is tech_level growing? If Electronics=0, BUY some immediately
 - Check get_finances for diversity gaps — import missing resources for income bonus
 - Check find_trades for profitable cargo routes
 - Place limit orders for resources you need (even if no seller exists yet)
 - Create contracts with neighbors for guaranteed supply
+- If tech >= next milestone threshold, build the newly unlocked building
 
 CONTEXT: You are playing continuously. Remember what you did last turn and build on it. Don't repeat failed actions.`
 
