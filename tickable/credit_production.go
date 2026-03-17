@@ -98,6 +98,31 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 				}
 			}
 
+			// 2b. Resource diversity bonus: having ALL resource types stocked
+			// multiplies domestic income. This is the key trade incentive —
+			// you NEED to import resources you don't produce locally.
+			// 3+ types stocked = 1.5x, 5+ = 2x, all 7 = 3x
+			typesStocked := 0
+			for _, res := range []string{
+				entities.ResWater, entities.ResIron, entities.ResOil,
+				entities.ResFuel, entities.ResRareMetals, entities.ResHelium3,
+				entities.ResElectronics,
+			} {
+				if planet.GetStoredAmount(res) > 0 {
+					typesStocked++
+				}
+			}
+			diversityMult := 1.0
+			switch {
+			case typesStocked >= 7:
+				diversityMult = 3.0
+			case typesStocked >= 5:
+				diversityMult = 2.0
+			case typesStocked >= 3:
+				diversityMult = 1.5
+			}
+			domesticIncome = int(float64(domesticIncome) * diversityMult)
+
 			// 3. Trading Post revenue: share of galaxy trade volume
 			tpIncome := 0
 			for _, be := range planet.Buildings {
