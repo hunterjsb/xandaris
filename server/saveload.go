@@ -40,6 +40,8 @@ func init() {
 	gob.Register(map[string]*economy.ResourceMarket{})
 	gob.Register(&economy.PendingDelivery{})
 	gob.Register(&game.ShippingRoute{})
+	gob.Register(&economy.MarketOrder{})
+	gob.Register(&economy.TradeContract{})
 }
 
 // SaveGame saves the current game state.
@@ -88,6 +90,8 @@ func (gs *GameServer) saveGameLocked(playerName string) error {
 		ShippingRoutes     []*game.ShippingRoute
 		CreditOutstanding  map[string]map[string]int
 		CreditLimits       map[string]map[string]int
+		MarketOrders       []*economy.MarketOrder
+		Contracts          []*economy.TradeContract
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -106,6 +110,8 @@ func (gs *GameServer) saveGameLocked(playerName string) error {
 		ShippingRoutes:     gs.getShippingRoutes(),
 		CreditOutstanding:  gs.getCreditOutstanding(),
 		CreditLimits:       gs.getCreditLimits(),
+		MarketOrders:       gs.getMarketOrders(),
+		Contracts:          gs.getContracts(),
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -160,6 +166,8 @@ func (gs *GameServer) AutoSave(path string) error {
 		ShippingRoutes     []*game.ShippingRoute
 		CreditOutstanding  map[string]map[string]int
 		CreditLimits       map[string]map[string]int
+		MarketOrders       []*economy.MarketOrder
+		Contracts          []*economy.TradeContract
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -178,6 +186,8 @@ func (gs *GameServer) AutoSave(path string) error {
 		ShippingRoutes:     gs.getShippingRoutes(),
 		CreditOutstanding:  gs.getCreditOutstanding(),
 		CreditLimits:       gs.getCreditLimits(),
+		MarketOrders:       gs.getMarketOrders(),
+		Contracts:          gs.getContracts(),
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -232,6 +242,20 @@ func (gs *GameServer) getCreditLimits() map[string]map[string]int {
 	return gs.CreditLedger.GetAllLimits()
 }
 
+func (gs *GameServer) getMarketOrders() []*economy.MarketOrder {
+	if gs.OrderBook == nil {
+		return nil
+	}
+	return gs.OrderBook.GetAllOrders()
+}
+
+func (gs *GameServer) getContracts() []*economy.TradeContract {
+	if gs.ContractMgr == nil {
+		return nil
+	}
+	return gs.ContractMgr.GetActiveContracts("")
+}
+
 // LoadGame loads a game from the given path.
 func (gs *GameServer) LoadGame(path string) error {
 	fmt.Printf("[Server] Loading game from: %s\n", path)
@@ -260,6 +284,8 @@ func (gs *GameServer) LoadGame(path string) error {
 		ShippingRoutes     []*game.ShippingRoute
 		CreditOutstanding  map[string]map[string]int
 		CreditLimits       map[string]map[string]int
+		MarketOrders       []*economy.MarketOrder
+		Contracts          []*economy.TradeContract
 	}
 
 	if err := gob.NewDecoder(file).Decode(&saveData); err != nil {
@@ -425,6 +451,20 @@ func (gs *GameServer) LoadGame(path string) error {
 	// Restore credit ledger
 	if gs.CreditLedger != nil {
 		gs.CreditLedger.RestoreLedger(saveData.CreditOutstanding, saveData.CreditLimits)
+	}
+
+	// Restore market orders
+	if saveData.MarketOrders != nil && gs.OrderBook != nil {
+		gs.OrderBook.RestoreOrders(saveData.MarketOrders)
+	}
+
+	// Restore contracts
+	if saveData.Contracts != nil && gs.ContractMgr != nil {
+		for _, c := range saveData.Contracts {
+			if c.Active {
+				gs.ContractMgr.CreateContract(c.Supplier, c.Buyer, c.Resource, c.Quantity, c.PricePerUnit, c.Interval, c.SystemID, c.PlanetID)
+			}
+		}
 	}
 
 	// Start API
