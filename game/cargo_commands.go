@@ -309,3 +309,52 @@ func (cce *CargoCommandExecutor) SellAtDock(ship *entities.Ship, resource string
 		ship.Name, removed, resource, planet.Name, total)
 	return removed, total, nil
 }
+
+// BuyAtDock purchases resources from a docked planet and loads them onto the ship.
+// The ship owner pays the planet owner at the sell price. Resources move from planet to cargo.
+func (cce *CargoCommandExecutor) BuyAtDock(ship *entities.Ship, resource string, qty int, sellPrice float64) (int, int, error) {
+	if ship == nil {
+		return 0, 0, fmt.Errorf("no ship specified")
+	}
+	if ship.DockedAtPlanet == 0 {
+		return 0, 0, fmt.Errorf("ship %s is not docked", ship.Name)
+	}
+
+	planet := cce.FindPlanetByID(ship.DockedAtPlanet)
+	if planet == nil {
+		return 0, 0, fmt.Errorf("docked planet not found")
+	}
+
+	// Check planet has the resource
+	stored := planet.GetStoredAmount(resource)
+	if stored <= 0 {
+		return 0, 0, fmt.Errorf("no %s available on %s", resource, planet.Name)
+	}
+
+	// Clamp to available stock and cargo space
+	actual := qty
+	if actual > stored {
+		actual = stored
+	}
+	cargoSpace := ship.MaxCargo - ship.GetTotalCargo()
+	if actual > cargoSpace {
+		actual = cargoSpace
+	}
+	if actual <= 0 {
+		return 0, 0, fmt.Errorf("no cargo space or stock available")
+	}
+
+	// Calculate cost
+	total := int(math.Round(sellPrice * float64(actual)))
+	if total <= 0 {
+		total = actual
+	}
+
+	// Remove from planet, add to ship
+	planet.RemoveStoredResource(resource, actual)
+	ship.AddCargo(resource, actual)
+
+	fmt.Printf("[DockBuy] %s bought %d %s from %s for %d credits\n",
+		ship.Name, actual, resource, planet.Name, total)
+	return actual, total, nil
+}

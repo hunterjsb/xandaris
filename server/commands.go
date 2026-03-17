@@ -19,7 +19,7 @@ var remoteForwardedCommands = map[game.CommandType]bool{
 	game.CmdFleetMove: true, game.CmdFleetCreate: true, game.CmdFleetDisband: true,
 	game.CmdFleetAddShip: true, game.CmdFleetRemoveShip: true,
 	game.CmdWorkforceAssign: true, game.CmdCancelConstruction: true,
-	game.CmdDockShip: true, game.CmdUndockShip: true, game.CmdSellAtDock: true,
+	game.CmdDockShip: true, game.CmdUndockShip: true, game.CmdSellAtDock: true, game.CmdBuyAtDock: true,
 	game.CmdDemolish: true,
 	game.CmdTransferFuel: true,
 }
@@ -79,6 +79,7 @@ func (gs *GameServer) initCommandRegistry() {
 	cr.Register(game.CmdDockShip, gs.handleDockShipCommand)
 	cr.Register(game.CmdUndockShip, gs.handleUndockShipCommand)
 	cr.Register(game.CmdSellAtDock, gs.handleSellAtDockCommand)
+	cr.Register(game.CmdBuyAtDock, gs.handleBuyAtDockCommand)
 	cr.Register(game.CmdDemolish, gs.handleDemolishCommand)
 	cr.Register(game.CmdTransferFuel, gs.handleTransferFuelCommand)
 
@@ -799,6 +800,66 @@ func (gs *GameServer) handleSellAtDockCommand(cmd game.GameCommand) {
 		"sold":        sold,
 		"credits":     credits,
 		"docking_fee": dockingFee,
+	})
+}
+
+func (gs *GameServer) handleBuyAtDockCommand(cmd game.GameCommand) {
+	sd, ok := cmd.Data.(game.SellAtDockCommandData) // reuse same data shape
+	if !ok {
+		sendResult(cmd, fmt.Errorf("invalid buy-at-dock data"))
+		return
+	}
+	human := gs.resolvePlayer(cmd)
+	if human == nil {
+		sendResult(cmd, fmt.Errorf("no player"))
+		return
+	}
+	ship := game.FindShipByID(gs.State.Players, sd.ShipID)
+	if ship == nil || ship.Owner != human.Name {
+		sendResult(cmd, fmt.Errorf("ship not found or not owned"))
+		return
+	}
+
+	sellPrice := gs.State.Market.GetSellPrice(sd.Resource)
+	bought, cost, err := gs.CargoCommander.BuyAtDock(ship, sd.Resource, sd.Quantity, sellPrice)
+	if err != nil {
+		sendResult(cmd, err)
+		return
+	}
+
+	// Buyer pays
+	if human.Credits < cost {
+		// Return resources to planet
+		planet := gs.CargoCommander.FindPlanetByID(ship.DockedAtPlanet)
+		if planet != nil {
+			planet.AddStoredResource(sd.Resource, bought)
+			ship.RemoveCargo(sd.Resource, bought)
+		}
+		sendResult(cmd, fmt.Errorf("insufficient credits (need %d, have %d)", cost, human.Credits))
+		return
+	}
+	human.Credits -= cost
+
+	// Pay the planet owner
+	planet := gs.CargoCommander.FindPlanetByID(ship.DockedAtPlanet)
+	if planet != nil && planet.Owner != "" && planet.Owner != human.Name {
+		for _, p := range gs.State.Players {
+			if p != nil && p.Name == planet.Owner {
+				p.Credits += cost
+				break
+			}
+		}
+	}
+
+	if gs.State.Market != nil {
+		gs.State.Market.AddTradeVolume(sd.Resource, bought, true)
+	}
+
+	sendSuccess(cmd, map[string]interface{}{
+		"ship_id":  sd.ShipID,
+		"resource": sd.Resource,
+		"bought":   bought,
+		"cost":     cost,
 	})
 }
 

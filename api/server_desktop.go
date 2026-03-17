@@ -2521,6 +2521,34 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// POST /api/ships/buy-at-dock — buy resources from a docked planet into cargo
+	mux.HandleFunc("/api/ships/buy-at-dock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeErr(w, http.StatusMethodNotAllowed, "POST only")
+			return
+		}
+		var req SellAtDockRequest // same shape: ship_id, resource, quantity
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cmd := newCommand(r, game.CmdBuyAtDock, game.SellAtDockCommandData{
+			ShipID: req.ShipID, Resource: req.Resource, Quantity: req.Quantity,
+		})
+		p := getProvider()
+		p.GetCommandChannel() <- cmd
+		select {
+		case res := <-cmd.Result:
+			if err, ok := res.(error); ok {
+				writeErr(w, http.StatusBadRequest, err.Error())
+			} else {
+				writeJSON(w, APIResponse{OK: true, Data: res})
+			}
+		case <-r.Context().Done():
+			writeErr(w, http.StatusGatewayTimeout, "timeout")
+		}
+	})
+
 	// GET/POST /api/shipping/routes — list or create shipping routes
 	mux.HandleFunc("/api/shipping/routes", func(w http.ResponseWriter, r *http.Request) {
 		p := getProvider()

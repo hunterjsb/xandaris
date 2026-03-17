@@ -197,7 +197,11 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"}},"required":["ship_id","planet_id"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
-		Name: "sell_at_dock", Description: "Sell cargo from a DOCKED ship at local market prices. Credits go to the ship owner. This is how you trade cross-system.",
+		Name: "sell_at_dock", Description: "Sell cargo from a DOCKED ship at local market prices. Credits go to the ship owner.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"}},"required":["ship_id","resource","quantity"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "buy_at_dock", Description: "Buy resources from a docked planet INTO your ship's cargo. Pay the planet owner. This is how you IMPORT resources cross-system: fly → dock → buy_at_dock → fly home → unload.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer"}},"required":["ship_id","resource","quantity"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
@@ -379,7 +383,8 @@ func executeTool(name string, args string, factionName string) string {
 			"load_cargo":   "/api/cargo/load",
 			"unload_cargo": "/api/cargo/unload",
 			"dock_ship":    "/api/ships/dock",
-			"sell_at_dock":  "/api/ships/sell-at-dock",
+			"sell_at_dock":   "/api/ships/sell-at-dock",
+			"buy_at_dock":    "/api/ships/buy-at-dock",
 			"colonize":       "/api/colonize",
 			"refuel_ship":    "/api/ships/refuel",
 			"create_route":   "/api/shipping/routes",

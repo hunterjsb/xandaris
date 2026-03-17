@@ -97,6 +97,7 @@ const (
 	CmdDockShip           CommandType = "dock_ship"
 	CmdUndockShip         CommandType = "undock_ship"
 	CmdSellAtDock         CommandType = "sell_at_dock"
+	CmdBuyAtDock          CommandType = "buy_at_dock"
 	CmdDemolish           CommandType = "demolish"
 	CmdTransferFuel       CommandType = "transfer_fuel"
 )
