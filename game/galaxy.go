@@ -149,6 +149,93 @@ func (gg *GalaxyGenerator) GenerateHyperlanes(systems []*entities.System) []enti
 		}
 	}
 
+	// Ensure galaxy is fully connected — find disconnected components and bridge them
+	hyperlanes = ensureConnected(systems, hyperlanes)
+
+	return hyperlanes
+}
+
+// ensureConnected adds bridge hyperlanes so all systems form one connected graph.
+func ensureConnected(systems []*entities.System, hyperlanes []entities.Hyperlane) []entities.Hyperlane {
+	if len(systems) <= 1 {
+		return hyperlanes
+	}
+
+	// Build adjacency from existing hyperlanes
+	adj := make(map[int]map[int]bool)
+	for _, s := range systems {
+		adj[s.ID] = make(map[int]bool)
+	}
+	for _, h := range hyperlanes {
+		adj[h.From][h.To] = true
+		adj[h.To][h.From] = true
+	}
+
+	// Find connected components via BFS
+	visited := make(map[int]bool)
+	var components [][]int
+
+	for _, s := range systems {
+		if visited[s.ID] {
+			continue
+		}
+		// BFS from this system
+		component := []int{}
+		queue := []int{s.ID}
+		visited[s.ID] = true
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			component = append(component, cur)
+			for neighbor := range adj[cur] {
+				if !visited[neighbor] {
+					visited[neighbor] = true
+					queue = append(queue, neighbor)
+				}
+			}
+		}
+		components = append(components, component)
+	}
+
+	if len(components) <= 1 {
+		return hyperlanes // already fully connected
+	}
+
+	fmt.Printf("[Galaxy] Found %d disconnected components, adding bridges\n", len(components))
+
+	// Build ID→System lookup for distance calculation
+	sysMap := make(map[int]*entities.System)
+	for _, s := range systems {
+		sysMap[s.ID] = s
+	}
+
+	// Connect each component to the next by finding the closest pair of systems
+	for i := 0; i < len(components)-1; i++ {
+		bestDist := math.MaxFloat64
+		bestFrom, bestTo := components[i][0], components[i+1][0]
+
+		for _, aID := range components[i] {
+			for _, bID := range components[i+1] {
+				a, b := sysMap[aID], sysMap[bID]
+				dist := math.Sqrt(math.Pow(a.X-b.X, 2) + math.Pow(a.Y-b.Y, 2))
+				if dist < bestDist {
+					bestDist = dist
+					bestFrom = aID
+					bestTo = bID
+				}
+			}
+		}
+
+		hyperlanes = append(hyperlanes, entities.Hyperlane{From: bestFrom, To: bestTo})
+		sysMap[bestFrom].Connections = append(sysMap[bestFrom].Connections, bestTo)
+		sysMap[bestTo].Connections = append(sysMap[bestTo].Connections, bestFrom)
+
+		// Merge components for subsequent iterations
+		components[i+1] = append(components[i+1], components[i]...)
+
+		fmt.Printf("[Galaxy] Bridge: SYS-%d <-> SYS-%d (dist=%.0f)\n", bestFrom, bestTo, bestDist)
+	}
+
 	return hyperlanes
 }
 
