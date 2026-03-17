@@ -126,9 +126,21 @@ func (sms *ShipMovementSystem) processShipMovement(ship *entities.Ship, systems 
 		return
 	}
 
-	// Calculate travel speed (affected by ship's speed multiplier)
+	// Calculate travel speed (affected by ship's speed multiplier + tech bonus)
 	baseSpeed := 0.01 // 1% per tick = 100 ticks to complete jump
-	travelSpeed := baseSpeed * ship.Speed
+	techSpeedBonus := 1.0
+	// Tech bonus from origin system's best planet (+3% per tech level)
+	if originSys := systems[ship.CurrentSystem]; originSys != nil {
+		for _, e := range originSys.Entities {
+			if p, ok := e.(*entities.Planet); ok && p.Owner == ship.Owner {
+				bonus := 1.0 + p.TechLevel*0.03
+				if bonus > techSpeedBonus {
+					techSpeedBonus = bonus
+				}
+			}
+		}
+	}
+	travelSpeed := baseSpeed * ship.Speed * techSpeedBonus
 
 	// Consume fuel while traveling
 	if ship.CurrentFuel > 0 {

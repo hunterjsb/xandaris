@@ -34,11 +34,16 @@ func (pgs *PopulationGrowthSystem) OnTick(tick int64) {
 		return
 	}
 
-	players := context.GetPlayers()
-
-	for _, player := range players {
-		for _, planet := range player.OwnedPlanets {
-			pgs.updatePopulation(planet)
+	// Use system entity planets (authoritative) instead of player.OwnedPlanets (stale)
+	game := context.GetGame()
+	if game == nil {
+		return
+	}
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" {
+				pgs.updatePopulation(planet)
+			}
 		}
 	}
 }

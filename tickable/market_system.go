@@ -34,12 +34,12 @@ func (ms *MarketSystem) OnTick(tick int64) {
 	players := ctx.GetPlayers()
 
 	// Every 10 ticks: consumption + price update (with per-system supply tracking)
+	systems := game.GetSystems()
 	if tick%10 == 0 {
-		result := economy.ProcessConsumption(players)
+		result := economy.ProcessConsumption(players, systems)
 		for resType, d := range result.Demand {
 			market.SetDemand(resType, d)
 		}
-		systems := game.GetSystems()
 		market.UpdatePricesWithSystems(players, systems)
 	}
 

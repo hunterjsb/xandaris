@@ -273,6 +273,7 @@ type CatalogBuilding struct {
 	Type           string         `json:"type"`
 	Description    string         `json:"description"`
 	Cost           int            `json:"cost"`
+	TechRequired   float64        `json:"tech_required"`      // min tech level to build
 	MaxLevel       int            `json:"max_level"`
 	Workers        int            `json:"workers"`
 	CreditUpkeep   int            `json:"credit_upkeep"`
@@ -286,6 +287,7 @@ type CatalogShip struct {
 	Type         string         `json:"type"`
 	Cost         int            `json:"cost"`
 	BuildTime    int            `json:"build_time"`
+	TechRequired float64        `json:"tech_required"` // min tech level (0 = Shipyard only)
 	Resources    map[string]int `json:"resources"`
 	MaxFuel      int            `json:"max_fuel"`
 	MaxCargo     int            `json:"max_cargo"`

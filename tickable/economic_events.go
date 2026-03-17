@@ -61,20 +61,34 @@ func (ees *EconomicEventSystem) OnTick(tick int64) {
 	}
 
 	game := ctx.GetGame()
-
-	// Pick a random player with at least one planet
-	var candidates []*entities.Player
-	for _, p := range players {
-		if p != nil && len(p.OwnedPlanets) > 0 {
-			candidates = append(candidates, p)
-		}
-	}
-	if len(candidates) == 0 {
+	if game == nil {
 		return
 	}
-	player := candidates[rand.Intn(len(candidates))]
-	planet := player.OwnedPlanets[rand.Intn(len(player.OwnedPlanets))]
-	if planet == nil {
+
+	// Build player lookup
+	playerMap := make(map[string]*entities.Player)
+	for _, p := range players {
+		if p != nil {
+			playerMap[p.Name] = p
+		}
+	}
+
+	// Collect owned planets from system entities (authoritative)
+	var ownedPlanets []*entities.Planet
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			if p, ok := e.(*entities.Planet); ok && p.Owner != "" {
+				ownedPlanets = append(ownedPlanets, p)
+			}
+		}
+	}
+	if len(ownedPlanets) == 0 {
+		return
+	}
+
+	planet := ownedPlanets[rand.Intn(len(ownedPlanets))]
+	player := playerMap[planet.Owner]
+	if player == nil {
 		return
 	}
 

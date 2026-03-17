@@ -183,6 +183,13 @@ func (sui *ShipyardUI) buildShip() {
 		return
 	}
 
+	// Check tech requirement
+	shipTechReq := entities.GetShipTechRequirement(sui.selectedShip)
+	if shipTechReq > 0 && sui.planet.TechLevel < shipTechReq {
+		sui.showError(fmt.Sprintf("Requires Tech %.1f (have %.1f)", shipTechReq, sui.planet.TechLevel))
+		return
+	}
+
 	// Check if player has enough credits
 	cost := entities.GetShipBuildCost(sui.selectedShip)
 	if sui.ctx.GetState().HumanPlayer.Credits < cost {
@@ -336,9 +343,15 @@ func (sui *ShipyardUI) drawShipList(screen *ebiten.Image) {
 		}
 		visibleCount++
 
+		// Check if tech-locked
+		shipTechReq := entities.GetShipTechRequirement(shipType)
+		techLocked := shipTechReq > 0 && sui.planet != nil && sui.planet.TechLevel < shipTechReq
+
 		// Item background
 		bgColor := color.RGBA{20, 20, 40, 200}
-		if shipType == sui.selectedShip {
+		if techLocked {
+			bgColor = color.RGBA{15, 15, 20, 200}
+		} else if shipType == sui.selectedShip {
 			bgColor = color.RGBA{40, 60, 100, 220}
 		} else if shipType == sui.hoveredShip {
 			bgColor = color.RGBA{30, 40, 60, 200}
@@ -354,16 +367,24 @@ func (sui *ShipyardUI) drawShipList(screen *ebiten.Image) {
 		}
 		itemPanel.Draw(screen)
 
-		// Ship name
-		views.DrawText(screen, string(shipType), sui.x+30, itemY+10, utils.TextPrimary)
-
-		// Cost
-		cost := entities.GetShipBuildCost(shipType)
-		costColor := utils.TextPrimary
-		if sui.ctx.GetState().HumanPlayer.Credits < cost {
-			costColor = color.RGBA{255, 100, 100, 255}
+		// Ship name (dimmed if tech-locked)
+		nameColor := utils.TextPrimary
+		if techLocked {
+			nameColor = utils.Theme.TextDim
 		}
-		views.DrawText(screen, fmt.Sprintf("Cost: %d credits", cost), sui.x+30, itemY+30, costColor)
+		views.DrawText(screen, string(shipType), sui.x+30, itemY+10, nameColor)
+
+		// Cost or tech requirement
+		cost := entities.GetShipBuildCost(shipType)
+		if techLocked {
+			views.DrawText(screen, fmt.Sprintf("Requires Tech %.1f", shipTechReq), sui.x+30, itemY+30, color.RGBA{200, 130, 60, 255})
+		} else {
+			costColor := utils.TextPrimary
+			if sui.ctx.GetState().HumanPlayer.Credits < cost {
+				costColor = color.RGBA{255, 100, 100, 255}
+			}
+			views.DrawText(screen, fmt.Sprintf("Cost: %d credits", cost), sui.x+30, itemY+30, costColor)
+		}
 
 		// Build time
 		buildTime := entities.GetShipBuildTime(shipType)

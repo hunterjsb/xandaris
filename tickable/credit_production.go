@@ -55,9 +55,27 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 		totalTradeVolume = me.GetTradeVolume()
 	}
 
-	for _, player := range players {
-		for _, planet := range player.OwnedPlanets {
-			if planet == nil || planet.Population <= 0 {
+	// Build player lookup by name
+	playerMap := make(map[string]*entities.Player)
+	for _, p := range players {
+		if p != nil {
+			playerMap[p.Name] = p
+		}
+	}
+
+	// Use system entity planets (authoritative) instead of player.OwnedPlanets (stale)
+	game := context.GetGame()
+	if game == nil {
+		return
+	}
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok || planet.Owner == "" || planet.Population <= 0 {
+				continue
+			}
+			player := playerMap[planet.Owner]
+			if player == nil {
 				continue
 			}
 
@@ -76,32 +94,23 @@ func (cps *CreditProductionSystem) OnTick(tick int64) {
 			}
 
 			// 2. Domestic economy: population demand generates credits.
-			// This represents the internal economy — citizens buying goods, factories
-			// operating, services rendered. A colony with population IS an economy.
-			// Income scales with what the colony CAN supply (has mines/production).
 			domesticIncome := 0
 			for _, rate := range economy.PopulationConsumption {
 				demand := float64(planet.Population) / rate.PopDivisor * rate.PerPopulation
 				if demand < 0.5 {
 					continue
 				}
-				// Scale by how much of this resource the planet can supply.
-				// Having mines/refineries/factories for a resource = domestic production.
-				// Check both stored stock AND whether the planet produces this resource.
 				stored := float64(planet.GetStoredAmount(rate.ResourceType))
 				supplyRatio := 1.0
 				if stored <= 0 {
-					supplyRatio = 0.3 // minimal economy even without stock (services, labor)
+					supplyRatio = 0.3
 				}
 				if price, ok := domesticPrices[rate.ResourceType]; ok {
 					domesticIncome += int(demand * price * productivityMult * supplyRatio)
 				}
 			}
 
-			// 2b. Resource diversity bonus: having ALL resource types stocked
-			// multiplies domestic income. This is the key trade incentive —
-			// you NEED to import resources you don't produce locally.
-			// 3+ types stocked = 1.5x, 5+ = 2x, all 7 = 3x
+			// 2b. Resource diversity bonus
 			typesStocked := 0
 			for _, res := range []string{
 				entities.ResWater, entities.ResIron, entities.ResOil,

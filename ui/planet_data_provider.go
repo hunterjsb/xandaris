@@ -189,10 +189,14 @@ func (p *PlanetDataProvider) buildPlanetData(planet *entities.Planet) *PlanetDat
 }
 
 // buildRatesData computes net production/consumption rates for the planet.
+// Includes tech bonus and power factor to match actual tickable system output.
 func (p *PlanetDataProvider) buildRatesData(planet *entities.Planet) *RatesData {
 	flow := make(map[string]float64)
 
-	// Mine production
+	techBonus := 1.0 + planet.TechLevel*0.03
+	powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
+
+	// Mine production (matches resource_accumulation.go)
 	for _, resEntity := range planet.Resources {
 		res, ok := resEntity.(*entities.Resource)
 		if !ok || res.Abundance <= 0 {
@@ -215,26 +219,39 @@ func (p *PlanetDataProvider) buildRatesData(planet *entities.Planet) *RatesData 
 			if af < 0.1 {
 				af = 0.1
 			}
-			flow[res.ResourceType] += 8.0 * res.ExtractionRate * multiplier * af
+			flow[res.ResourceType] += 8.0 * res.ExtractionRate * multiplier * af * techBonus * powerFactor
 		}
 	}
 
-	// Refinery: +Fuel, -Oil
+	// Refinery: +Fuel, -Oil (matches refinery_production.go)
 	for _, be := range planet.Buildings {
 		if b, ok := be.(*entities.Building); ok && b.BuildingType == "Refinery" && b.IsOperational {
 			lm := 1.0 + float64(b.Level-1)*0.3
-			flow["Fuel"] += 3.0 * lm
-			flow["Oil"] -= 2.0 * lm
+			combined := lm * powerFactor * techBonus
+			flow["Fuel"] += 3.0 * combined
+			flow["Oil"] -= 2.0 * combined
 		}
 	}
 
-	// Factory: +Electronics, -Rare Metals, -Iron
+	// Factory: +Electronics, -Rare Metals, -Iron (matches factory_production.go)
 	for _, be := range planet.Buildings {
 		if b, ok := be.(*entities.Building); ok && b.BuildingType == "Factory" && b.IsOperational {
 			lm := 1.0 + float64(b.Level-1)*0.3
-			flow["Electronics"] += 2.0 * lm
-			flow["Rare Metals"] -= 2.0 * lm
-			flow["Iron"] -= 1.0 * lm
+			staffing := b.GetStaffingRatio()
+			combined := lm * staffing * powerFactor * techBonus
+			flow["Electronics"] += 2.0 * combined
+			flow["Rare Metals"] -= 2.0 * combined
+			flow["Iron"] -= 1.0 * combined
+		}
+	}
+
+	// Research Lab: +Electronics (matches research_production.go)
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.BuildingType == "Research Lab" && b.IsOperational {
+			lm := 1.0 + float64(b.Level-1)*0.3
+			staffing := b.GetStaffingRatio()
+			combined := lm * staffing * powerFactor * techBonus
+			flow["Electronics"] += 1.0 * combined
 		}
 	}
 

@@ -35,6 +35,7 @@ var BuildingResourceUpkeep = map[string][]struct {
 	entities.BuildingShipyard:    {{entities.ResFuel, 2}, {entities.ResElectronics, 1}},
 	entities.BuildingHabitat:     {{entities.ResWater, 1}},
 	entities.BuildingBase:        {},
+	entities.BuildingResearchLab: {{entities.ResWater, 1}}, // researchers need water
 }
 
 // BuildingCreditUpkeep defines the credit cost per building per interval (+ level - 1).
@@ -50,6 +51,7 @@ var BuildingCreditUpkeep = map[string]int{
 	entities.BuildingRefinery:      3, // moderate — resource processing
 	entities.BuildingFactory:       5, // higher — manufacturing
 	entities.BuildingShipyard:      6, // highest — ship construction
+	entities.BuildingResearchLab:   4, // moderate — research operations
 }
 
 // ConsumptionResult contains both demand signals and credit drain info.
@@ -59,19 +61,28 @@ type ConsumptionResult struct {
 }
 
 // ProcessConsumption drains resources from all planets and returns demand + credit drain.
-func ProcessConsumption(players []*entities.Player) ConsumptionResult {
+// Uses system entity planets (authoritative) to avoid stale pointer issues after save/load.
+func ProcessConsumption(players []*entities.Player, systems []*entities.System) ConsumptionResult {
 	result := ConsumptionResult{
 		Demand: make(map[string]float64),
 	}
 
-	for _, player := range players {
-		if player == nil {
-			continue
+	// Build player lookup by name
+	playerMap := make(map[string]*entities.Player)
+	for _, p := range players {
+		if p != nil {
+			playerMap[p.Name] = p
 		}
-		playerCreditDrain := 0
+	}
 
-		for _, planet := range player.OwnedPlanets {
-			if planet == nil {
+	// Track credit drain per player
+	playerCreditDrain := make(map[string]int)
+
+	// Process all owned planets from system entities (authoritative)
+	for _, sys := range systems {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok || planet.Owner == "" {
 				continue
 			}
 
@@ -99,82 +110,90 @@ func ProcessConsumption(players []*entities.Player) ConsumptionResult {
 				}
 
 				if cost, found := BuildingCreditUpkeep[building.BuildingType]; found {
-					// Upkeep scales gradually with level
-					playerCreditDrain += cost + (building.Level - 1)
+					playerCreditDrain[planet.Owner] += cost + (building.Level - 1)
 				}
 			}
-		}
 
-		// Population administration costs (1 credit per 1000 population)
-		for _, planet := range player.OwnedPlanets {
-			if planet != nil {
-				playerCreditDrain += int(planet.Population / 1000)
-			}
+			// Population administration costs (1 credit per 1000 population)
+			playerCreditDrain[planet.Owner] += int(planet.Population / 1000)
 		}
+	}
+
+	// Apply credit drain and wealth tax per player
+	for _, player := range players {
+		if player == nil {
+			continue
+		}
+		drain := playerCreditDrain[player.Name]
 
 		// Wealth tax: 0.05% per interval on excess credits.
-		// Threshold scales with total population (100cr per citizen) + buildings.
-		// A 5000-pop player can hold 500,000cr tax-free.
-		// This prevents infinite hoarding while allowing healthy reserves.
 		totalPop := int64(0)
 		totalBuildings := 0
-		for _, planet := range player.OwnedPlanets {
-			if planet != nil {
-				totalPop += planet.Population
-				totalBuildings += len(planet.Buildings)
+		for _, sys := range systems {
+			for _, e := range sys.Entities {
+				if p, ok := e.(*entities.Planet); ok && p.Owner == player.Name {
+					totalPop += p.Population
+					totalBuildings += len(p.Buildings)
+				}
 			}
 		}
 		taxThreshold := int(totalPop)*100 + totalBuildings*5000
 		if taxThreshold < 50000 {
-			taxThreshold = 50000 // minimum threshold
+			taxThreshold = 50000
 		}
 		if player.Credits > taxThreshold {
-			tax := (player.Credits - taxThreshold) / 2000 // 0.05% rate
+			tax := (player.Credits - taxThreshold) / 2000
 			if tax > 0 {
-				playerCreditDrain += tax
+				drain += tax
 			}
 		}
 
-		// Deduct credit upkeep - if can't afford, shut down non-essential buildings
-		if playerCreditDrain > 0 {
-			if player.Credits >= playerCreditDrain {
-				player.Credits -= playerCreditDrain
+		// Deduct credit upkeep — if can't afford, shut down non-essential buildings
+		if drain > 0 {
+			if player.Credits >= drain {
+				player.Credits -= drain
 			} else {
 				player.Credits = 0
-				for _, planet := range player.OwnedPlanets {
-					if planet == nil {
-						continue
-					}
-					for _, be := range planet.Buildings {
-						if b, ok := be.(*entities.Building); ok {
-							if b.BuildingType != entities.BuildingBase &&
-							b.BuildingType != entities.BuildingTradingPost &&
-							b.BuildingType != entities.BuildingMine &&
-							b.IsOperational {
-								b.IsOperational = false
+				for _, sys := range systems {
+					for _, e := range sys.Entities {
+						if p, ok := e.(*entities.Planet); ok && p.Owner == player.Name {
+							for _, be := range p.Buildings {
+								if b, ok := be.(*entities.Building); ok {
+									if b.BuildingType != entities.BuildingBase &&
+										b.BuildingType != entities.BuildingTradingPost &&
+										b.BuildingType != entities.BuildingMine &&
+										b.IsOperational {
+										b.IsOperational = false
+									}
+								}
 							}
 						}
 					}
 				}
 			}
-			result.CreditDrain += playerCreditDrain
+			result.CreditDrain += drain
 		}
 
 		// Re-enable buildings gradually once credits recover.
-		// Only re-enable ONE building per interval to prevent the oscillation trap:
-		// (accumulate 500 → re-enable ALL → massive drain → bankrupt → repeat)
 		if player.Credits > 200 {
 			reEnabled := false
-			for _, planet := range player.OwnedPlanets {
-				if planet == nil || reEnabled {
-					continue
+			for _, sys := range systems {
+				if reEnabled {
+					break
 				}
-				for _, be := range planet.Buildings {
-					if b, ok := be.(*entities.Building); ok {
-						if !b.IsOperational && b.BuildingType != entities.BuildingBase {
-							b.IsOperational = true
-							reEnabled = true
-							break // one building per interval
+				for _, e := range sys.Entities {
+					if reEnabled {
+						break
+					}
+					if p, ok := e.(*entities.Planet); ok && p.Owner == player.Name {
+						for _, be := range p.Buildings {
+							if b, ok := be.(*entities.Building); ok {
+								if !b.IsOperational && b.BuildingType != entities.BuildingBase {
+									b.IsOperational = true
+									reEnabled = true
+									break
+								}
+							}
 						}
 					}
 				}

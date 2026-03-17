@@ -16,6 +16,7 @@ const (
 	BuildingHabitat       = "Habitat"
 	BuildingTradingPost   = "Trading Post"
 	BuildingShipyard      = "Shipyard"
+	BuildingResearchLab   = "Research Lab"
 )
 
 // BuildingTechRequirement returns the minimum tech level needed to construct a building.
@@ -30,6 +31,7 @@ var BuildingTechRequirement = map[string]float64{
 	BuildingFactory:       1.0,  // requires some tech investment
 	BuildingShipyard:      1.0,  // advanced construction
 	BuildingFusionReactor: 2.0,  // high-tech power
+	BuildingResearchLab:   2.5,  // passive Electronics generation
 }
 
 // GetTechRequirement returns the minimum tech level for a building type.
@@ -68,7 +70,12 @@ func NextTechUnlock(techLevel float64) (string, float64) {
 		{BuildingRefinery, 0.5},
 		{BuildingFactory, 1.0},
 		{BuildingShipyard, 1.0},
+		{"Destroyer", 1.5},
+		{"Upgrades L6+", 1.5},
 		{BuildingFusionReactor, 2.0},
+		{"Cruiser", 2.0},
+		{"Upgrades L8+", 2.0},
+		{BuildingResearchLab, 2.5},
 	}
 	// Find the next tier
 	nextReq := 0.0
@@ -113,6 +120,8 @@ func BuildingColor(buildingType string) color.RGBA {
 		return color.RGBA{255, 180, 50, 255}
 	case BuildingFusionReactor:
 		return color.RGBA{100, 220, 255, 255}
+	case BuildingResearchLab:
+		return color.RGBA{160, 255, 180, 255} // green-white for science
 	default:
 		return color.RGBA{150, 150, 150, 255}
 	}
@@ -260,6 +269,22 @@ func (b *Building) GetContextMenuItems() []string {
 	}
 
 	return items
+}
+
+// GetUpgradeTechRequirement returns the minimum tech level to upgrade to the next level.
+// Levels 1-3: no requirement. Level 4-5: Tech 1.0. Level 6-7: Tech 1.5. Level 8+: Tech 2.0.
+func GetUpgradeTechRequirement(currentLevel int) float64 {
+	nextLevel := currentLevel + 1
+	switch {
+	case nextLevel <= 3:
+		return 0
+	case nextLevel <= 5:
+		return 1.0
+	case nextLevel <= 7:
+		return 1.5
+	default:
+		return 2.0
+	}
 }
 
 // CanUpgrade returns whether the building can be upgraded

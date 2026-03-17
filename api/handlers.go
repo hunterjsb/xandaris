@@ -682,6 +682,22 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 	if maxTech >= 1.0 && !hasFactory {
 		hints = append(hints, "Build a Factory to produce Electronics locally (no more buying!)")
 	}
+	if maxTech >= 2.5 {
+		hasLab := false
+		for _, planet := range human.OwnedPlanets {
+			if planet == nil {
+				continue
+			}
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingResearchLab {
+					hasLab = true
+				}
+			}
+		}
+		if !hasLab {
+			hints = append(hints, "Tech 2.5 reached — build a Research Lab for passive Electronics generation")
+		}
+	}
 
 	// Post-infrastructure progression hints
 	if hasShipyard && len(human.OwnedShips) <= 1 && len(human.OwnedFleets) == 0 {
@@ -1000,7 +1016,10 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 			consumption := make(map[string]float64)
 			netFlow := make(map[string]float64)
 
-			// Calculate mine production
+			techBonus := 1.0 + planet.TechLevel*0.03
+			powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
+
+			// Calculate mine production (matches resource_accumulation.go)
 			for _, resEntity := range planet.Resources {
 				res, ok := resEntity.(*entities.Resource)
 				if !ok || res.Abundance <= 0 {
@@ -1023,27 +1042,40 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 					if abundanceFactor < 0.1 {
 						abundanceFactor = 0.1
 					}
-					amt := 8.0 * res.ExtractionRate * multiplier * abundanceFactor
+					amt := 8.0 * res.ExtractionRate * multiplier * abundanceFactor * techBonus * powerFactor
 					production[res.ResourceType] += amt
 				}
 			}
 
-			// Calculate refinery production
+			// Calculate refinery production (matches refinery_production.go)
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Refinery" && b.IsOperational {
 					levelMult := 1.0 + float64(b.Level-1)*0.3
-					production["Fuel"] += 3.0 * levelMult
-					consumption["Oil"] += 2.0 * levelMult
+					combined := levelMult * powerFactor * techBonus
+					production["Fuel"] += 3.0 * combined
+					consumption["Oil"] += 2.0 * combined
 				}
 			}
 
-			// Calculate factory production
+			// Calculate factory production (matches factory_production.go)
 			for _, be := range planet.Buildings {
 				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Factory" && b.IsOperational {
 					levelMult := 1.0 + float64(b.Level-1)*0.3
-					production["Electronics"] += 2.0 * levelMult
-					consumption["Rare Metals"] += 2.0 * levelMult
-					consumption["Iron"] += 1.0 * levelMult
+					staffing := b.GetStaffingRatio()
+					combined := levelMult * staffing * powerFactor * techBonus
+					production["Electronics"] += 2.0 * combined
+					consumption["Rare Metals"] += 2.0 * combined
+					consumption["Iron"] += 1.0 * combined
+				}
+			}
+
+			// Research Lab production (matches research_production.go)
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == "Research Lab" && b.IsOperational {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					staffing := b.GetStaffingRatio()
+					combined := levelMult * staffing * powerFactor * techBonus
+					production["Electronics"] += 1.0 * combined
 				}
 			}
 
@@ -1111,6 +1143,8 @@ func handleGetCatalog() interface{} {
 		{"Fusion Reactor", "Helium-3 fusion produces 200 MW power (1 He-3/interval)", 5, 200, nil, nil},
 		{"Habitat", "Provides housing for population (+700 capacity per level)", 10, 200, nil, nil},
 		{"Shipyard", "Enables ship construction", 5, 400, nil, nil},
+		{"Research Lab", "Generates 1 Electronics/interval passively (no inputs)", 5, 200,
+			map[string]int{"Electronics": 1}, nil},
 	}
 
 	buildings := make([]CatalogBuilding, 0, len(buildingTypes))
@@ -1129,6 +1163,7 @@ func handleGetCatalog() interface{} {
 			Type:           bt.name,
 			Description:    bt.description,
 			Cost:           game.GetBuildingCost(bt.name),
+			TechRequired:   entities.GetTechRequirement(bt.name),
 			MaxLevel:       bt.maxLevel,
 			Workers:        bt.workers,
 			CreditUpkeep:   creditUpkeep,

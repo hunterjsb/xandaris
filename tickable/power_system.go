@@ -31,6 +31,7 @@ var buildingPowerDraw = map[string]float64{
 	entities.BuildingShipyard:      35,
 	entities.BuildingGenerator:     5,
 	entities.BuildingFusionReactor: 10,
+	entities.BuildingResearchLab:   20,
 }
 
 func (ps *PowerSystem) OnTick(tick int64) {

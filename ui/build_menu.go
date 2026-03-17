@@ -198,6 +198,17 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		AttachmentType: "Planet",
 		Color:          color.RGBA{100, 220, 255, 255},
 	})
+
+	// Research Lab (Tech 2.5)
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Research Lab",
+		Name:           "Research Lab",
+		Description:    "Generates Electronics passively (no inputs needed)",
+		Cost:           2500,
+		TechRequired:   entities.GetTechRequirement("Research Lab"),
+		AttachmentType: "Planet",
+		Color:          color.RGBA{160, 255, 180, 255},
+	})
 }
 
 // loadResourceBuildings populates menu with buildings that can be built on resources

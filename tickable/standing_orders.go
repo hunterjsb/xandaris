@@ -63,8 +63,8 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 			continue
 		}
 
-		planet := findPlayerPlanetByID(player, order.PlanetID)
-		if planet == nil {
+		planet := findPlanetByIDFromSystems(game.GetSystems(), order.PlanetID)
+		if planet == nil || planet.Owner != order.Player {
 			continue
 		}
 
@@ -85,10 +85,13 @@ func (sos *StandingOrderSystem) OnTick(tick int64) {
 	}
 }
 
-func findPlayerPlanetByID(player *entities.Player, planetID int) *entities.Planet {
-	for _, p := range player.OwnedPlanets {
-		if p != nil && p.GetID() == planetID {
-			return p
+// findPlanetByIDFromSystems looks up a planet from authoritative system entities.
+func findPlanetByIDFromSystems(systems []*entities.System, planetID int) *entities.Planet {
+	for _, sys := range systems {
+		for _, e := range sys.Entities {
+			if p, ok := e.(*entities.Planet); ok && p.GetID() == planetID {
+				return p
+			}
 		}
 	}
 	return nil

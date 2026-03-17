@@ -337,6 +337,14 @@ func (gs *GameServer) handleUpgradeCommand(cmd game.GameCommand) {
 		return
 	}
 
+	// Tech requirement for higher upgrade levels
+	upgradeTechReq := entities.GetUpgradeTechRequirement(building.Level)
+	if upgradeTechReq > 0 && planet.TechLevel < upgradeTechReq {
+		sendResult(cmd, fmt.Errorf("upgrade to level %d requires tech %.1f (planet has %.1f)",
+			building.Level+1, upgradeTechReq, planet.TechLevel))
+		return
+	}
+
 	cost := building.GetUpgradeCost()
 	if human.Credits < cost {
 		sendResult(cmd, fmt.Errorf("insufficient credits (need %d, have %d)", cost, human.Credits))

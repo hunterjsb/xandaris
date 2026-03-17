@@ -26,15 +26,22 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 		return
 	}
 
-	players := context.GetPlayers()
-
-	for _, player := range players {
-		for _, planet := range player.OwnedPlanets {
+	// Use system entity planets (authoritative) instead of player.OwnedPlanets (stale)
+	game := context.GetGame()
+	if game == nil {
+		return
+	}
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			planet, ok := e.(*entities.Planet)
+			if !ok || planet.Owner == "" {
+				continue
+			}
 			for _, resourceEntity := range planet.Resources {
 				if resource, ok := resourceEntity.(*entities.Resource); ok {
 					// Auto-fix resource ownership to match planet owner
-					if resource.Owner != player.Name {
-						resource.Owner = player.Name
+					if resource.Owner != planet.Owner {
+						resource.Owner = planet.Owner
 					}
 
 					extractionAmount := computeResourceExtraction(resource, planet)
@@ -46,7 +53,6 @@ func (ras *ResourceAccumulationSystem) OnTick(tick int64) {
 
 					// Depletion: lose 1 abundance per 10,000 ticks (~17 min at 1x).
 					// Deposits bottom out at 10 (still produce, just slower).
-					// This means a deposit lasts 60×17 = ~1000 minutes from 70→10.
 					if resource.Abundance > 10 && tick%10000 == 0 {
 						resource.Abundance--
 					}

@@ -60,12 +60,14 @@ func (sss *ScoutSurveySystem) OnTick(tick int64) {
 				continue
 			}
 
-			// 15% chance per check to discover something
-			if rand.Intn(100) > 15 {
+			// Discovery chance: 15% base + 1% per tech level of player's best planet
+			maxTech := playerMaxTech(player)
+			discoveryChance := 15 + int(maxTech)
+			if rand.Intn(100) > discoveryChance {
 				continue
 			}
 
-			sss.surveySystem(sys, player, ship, game)
+			sss.surveySystem(sys, player, ship, game, maxTech)
 		}
 	}
 }
@@ -81,7 +83,18 @@ var surveyableResources = []struct {
 	{entities.ResHelium3, 5},
 }
 
-func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entities.Player, ship *entities.Ship, logger GameProvider) {
+// playerMaxTech returns the highest tech level across a player's planets.
+func playerMaxTech(player *entities.Player) float64 {
+	maxTech := 0.0
+	for _, p := range player.OwnedPlanets {
+		if p != nil && p.TechLevel > maxTech {
+			maxTech = p.TechLevel
+		}
+	}
+	return maxTech
+}
+
+func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entities.Player, ship *entities.Ship, logger GameProvider, techLevel float64) {
 	// Find planets in this system
 	for _, e := range sys.Entities {
 		planet, ok := e.(*entities.Planet)
@@ -127,9 +140,13 @@ func (sss *ScoutSurveySystem) surveySystem(sys *entities.System, player *entitie
 			continue
 		}
 
-		// Create the new deposit
-		abundance := 30 + rand.Intn(40) // 30-70
-		extractionRate := 0.5 + rand.Float64()*0.5
+		// Create the new deposit — tech improves quality
+		baseAbundance := 30 + rand.Intn(40) // 30-70
+		abundance := baseAbundance + int(techLevel*3) // +3 abundance per tech level
+		if abundance > 100 {
+			abundance = 100
+		}
+		extractionRate := 0.5 + rand.Float64()*0.5 + techLevel*0.05 // +0.05 rate per tech level
 		nodePos := rand.Float64() * 2 * math.Pi
 
 		deposit := &entities.Resource{

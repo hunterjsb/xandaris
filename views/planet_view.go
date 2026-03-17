@@ -826,14 +826,21 @@ func (pv *PlanetView) drawBuilding(screen *ebiten.Image, building *entities.Buil
 	}
 	DrawCenteredText(screen, label, centerX, labelY)
 
-	// Show operational status or upgrade cost
+	// Show operational status or upgrade cost/tech requirement
 	if !building.IsOperational {
 		offWidth := len("OFFLINE") * utils.CharWidth()
 		DrawText(screen, "OFFLINE", centerX-offWidth/2, labelY+lh, utils.SystemRed)
 	} else if building.CanUpgrade() {
-		costStr := fmt.Sprintf("↑%dcr", building.GetUpgradeCost())
-		costWidth := len(costStr) * utils.CharWidth()
-		DrawText(screen, costStr, centerX-costWidth/2, labelY+lh, utils.SystemGreen)
+		upgradeTechReq := entities.GetUpgradeTechRequirement(building.Level)
+		if upgradeTechReq > 0 && pv.planet != nil && pv.planet.TechLevel < upgradeTechReq {
+			techStr := fmt.Sprintf("Tech %.1f", upgradeTechReq)
+			techWidth := len(techStr) * utils.CharWidth()
+			DrawText(screen, techStr, centerX-techWidth/2, labelY+lh, utils.SystemOrange)
+		} else {
+			costStr := fmt.Sprintf("↑%dcr", building.GetUpgradeCost())
+			costWidth := len(costStr) * utils.CharWidth()
+			DrawText(screen, costStr, centerX-costWidth/2, labelY+lh, utils.SystemGreen)
+		}
 	}
 }
 

@@ -59,7 +59,7 @@ func (ch *ConstructionHandler) HandleConstructionComplete(completion tickable.Co
 								if _, exists := planet.StoredResources[entities.ResFuel]; !exists {
 									planet.AddStoredResource(entities.ResFuel, 0)
 								}
-							case entities.BuildingFactory:
+							case entities.BuildingFactory, entities.BuildingResearchLab:
 								if _, exists := planet.StoredResources[entities.ResElectronics]; !exists {
 									planet.AddStoredResource(entities.ResElectronics, 0)
 								}
