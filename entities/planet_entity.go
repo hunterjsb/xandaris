@@ -419,7 +419,7 @@ func (p *Planet) RebalanceWorkforce() {
 
 // getStorageCapacity returns the effective per-resource storage cap for this planet.
 // Tech level grants +20% capacity per level (e.g. Tech 2.0 = 1400, Tech 5.0 = 2000).
-func (p *Planet) getStorageCapacity() int {
+func (p *Planet) GetStorageCapacity() int {
 	cap := float64(DEFAULT_RESOURCE_CAPACITY) * (1.0 + p.TechLevel*0.2)
 	return int(cap)
 }
@@ -430,7 +430,7 @@ func (p *Planet) AddStoredResource(resourceType string, amount int) int {
 		p.StoredResources = make(map[string]*ResourceStorage)
 	}
 
-	effectiveCap := p.getStorageCapacity()
+	effectiveCap := p.GetStorageCapacity()
 
 	storage, exists := p.StoredResources[resourceType]
 	if !exists {

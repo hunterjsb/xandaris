@@ -160,6 +160,21 @@ func (aos *AutoOrderSystem) OnTick(tick int64) {
 						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "sell", surplus, sellPrice)
 					}
 				}
+
+				// Emergency overflow: if storage > 90% capacity, dump at half price
+				// Prevents resources from being wasted when storage is full
+				cap := planet.GetStorageCapacity()
+				if cap > 0 && stored > cap*9/10 {
+					dumpQty := stored - cap*3/4 // dump down to 75%
+					if dumpQty > 200 {
+						dumpQty = 200
+					}
+					if dumpQty > 0 {
+						dumpPrice := sellPrice / 2
+						if dumpPrice < 1 { dumpPrice = 1 }
+						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "sell", dumpQty, dumpPrice)
+					}
+				}
 			}
 		}
 	}
