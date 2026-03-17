@@ -279,6 +279,21 @@ func (p *Planet) HasOperationalBuilding(buildingType string) bool {
 	return false
 }
 
+// GetDockingFeeRate returns the trade fee rate for this planet's Trading Post.
+// L1=5%, L2=4%, L3=3%, L4=2%, L5=1%. Returns 0 if no Trading Post.
+func (p *Planet) GetDockingFeeRate() float64 {
+	for _, be := range p.Buildings {
+		if b, ok := be.(*Building); ok && b.BuildingType == BuildingTradingPost && b.IsOperational {
+			rate := 0.06 - float64(b.Level)*0.01
+			if rate < 0.01 {
+				rate = 0.01
+			}
+			return rate
+		}
+	}
+	return 0
+}
+
 // GetAvailablePopulationCapacity returns the remaining space before reaching capacity
 func (p *Planet) GetAvailablePopulationCapacity() int64 {
 	capacity := p.GetTotalPopulationCapacity()

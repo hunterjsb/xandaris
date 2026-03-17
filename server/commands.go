@@ -745,17 +745,7 @@ func (gs *GameServer) handleSellAtDockCommand(cmd game.GameCommand) {
 	if ship.DockedAtPlanet != 0 {
 		planet := gs.CargoCommander.FindPlanetByID(ship.DockedAtPlanet)
 		if planet != nil && planet.Owner != "" && planet.Owner != human.Name {
-			// Fee: 5% base, reduced by TP level (L1=5%, L2=4%, L3=3%, L4=2%, L5=1%)
-			feeRate := 0.05
-			for _, be := range planet.Buildings {
-				if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingTradingPost {
-					feeRate = 0.06 - float64(b.Level)*0.01
-					if feeRate < 0.01 {
-						feeRate = 0.01
-					}
-					break
-				}
-			}
+			feeRate := planet.GetDockingFeeRate()
 			dockingFee = int(float64(credits) * feeRate)
 			// Pay the fee to the planet owner
 			for _, p := range gs.State.Players {

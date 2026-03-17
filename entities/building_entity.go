@@ -40,6 +40,43 @@ func GetTechRequirement(buildingType string) float64 {
 	return 0
 }
 
+// TechEraName returns a human-readable era name for a given tech level.
+func TechEraName(techLevel float64) string {
+	switch {
+	case techLevel < 0.5:
+		return "Agrarian"
+	case techLevel < 1.0:
+		return "Early Industrial"
+	case techLevel < 2.0:
+		return "Industrial"
+	case techLevel < 3.5:
+		return "Space Age"
+	default:
+		return "Advanced"
+	}
+}
+
+// NextTechUnlock returns the next building unlock name and required tech level,
+// or ("", 0) if all buildings are unlocked at the given tech level.
+func NextTechUnlock(techLevel float64) (string, float64) {
+	type unlock struct {
+		name string
+		req  float64
+	}
+	unlocks := []unlock{
+		{BuildingRefinery, 0.5},
+		{BuildingFactory, 1.0},
+		{BuildingShipyard, 1.0},
+		{BuildingFusionReactor, 2.0},
+	}
+	for _, u := range unlocks {
+		if techLevel < u.req {
+			return u.name, u.req
+		}
+	}
+	return "", 0
+}
+
 // BuildingColor returns the default color for a building type.
 func BuildingColor(buildingType string) color.RGBA {
 	switch buildingType {

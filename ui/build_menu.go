@@ -30,7 +30,8 @@ type BuildMenuItem struct {
 	Name           string
 	Description    string
 	Cost           int
-	AttachmentType string // "Planet" or "Resource"
+	TechRequired   float64 // minimum tech level to build
+	AttachmentType string  // "Planet" or "Resource"
 	Color          color.RGBA
 	Bounds         struct {
 		X, Y, Width, Height int
@@ -127,28 +128,20 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		Name:           "Habitat Module",
 		Description:    "Provides housing for 10M population",
 		Cost:           800,
+		TechRequired:   entities.GetTechRequirement("Habitat"),
 		AttachmentType: "Planet",
 		Color:          color.RGBA{100, 180, 220, 255},
 	})
 
-	// Shipyard
+	// Generator (available early — key for power bootstrap)
 	bm.items = append(bm.items, &BuildMenuItem{
-		BuildingType:   "Shipyard",
-		Name:           "Orbital Shipyard",
-		Description:    "Enables ship construction (+100% speed)",
-		Cost:           2000,
+		BuildingType:   "Generator",
+		Name:           "Fuel Generator",
+		Description:    "Burns Fuel → 50 MW power for buildings + life support",
+		Cost:           1000,
+		TechRequired:   entities.GetTechRequirement("Generator"),
 		AttachmentType: "Planet",
-		Color:          color.RGBA{150, 160, 180, 255},
-	})
-
-	// Refinery
-	bm.items = append(bm.items, &BuildMenuItem{
-		BuildingType:   "Refinery",
-		Name:           "Oil Refinery",
-		Description:    "Converts Oil into Fuel (10 Oil/s → 5 Fuel/s)",
-		Cost:           1500,
-		AttachmentType: "Planet",
-		Color:          utils.StationRefinery, // Orange color
+		Color:          color.RGBA{255, 180, 50, 255},
 	})
 
 	// Trading Post
@@ -157,36 +150,51 @@ func (bm *BuildMenu) loadPlanetBuildings() {
 		Name:           "Trading Post",
 		Description:    "Opens interstellar commerce and grants access to the market.",
 		Cost:           1200,
+		TechRequired:   entities.GetTechRequirement("Trading Post"),
 		AttachmentType: "Planet",
 		Color:          color.RGBA{210, 175, 95, 255},
 	})
 
-	// Factory
+	// Refinery (Tech 0.5)
+	bm.items = append(bm.items, &BuildMenuItem{
+		BuildingType:   "Refinery",
+		Name:           "Oil Refinery",
+		Description:    "Converts Oil into Fuel (10 Oil/s → 5 Fuel/s)",
+		Cost:           1500,
+		TechRequired:   entities.GetTechRequirement("Refinery"),
+		AttachmentType: "Planet",
+		Color:          utils.StationRefinery,
+	})
+
+	// Factory (Tech 1.0)
 	bm.items = append(bm.items, &BuildMenuItem{
 		BuildingType:   "Factory",
 		Name:           "Electronics Factory",
 		Description:    "Converts Rare Metals + Iron into Electronics",
 		Cost:           2000,
+		TechRequired:   entities.GetTechRequirement("Factory"),
 		AttachmentType: "Planet",
 		Color:          color.RGBA{180, 130, 255, 255},
 	})
 
-	// Fuel Generator
+	// Shipyard (Tech 1.0)
 	bm.items = append(bm.items, &BuildMenuItem{
-		BuildingType:   "Generator",
-		Name:           "Fuel Generator",
-		Description:    "Burns Fuel → 50 MW power for buildings + life support",
-		Cost:           1000,
+		BuildingType:   "Shipyard",
+		Name:           "Orbital Shipyard",
+		Description:    "Enables ship construction (+100% speed)",
+		Cost:           2000,
+		TechRequired:   entities.GetTechRequirement("Shipyard"),
 		AttachmentType: "Planet",
-		Color:          color.RGBA{255, 180, 50, 255},
+		Color:          color.RGBA{150, 160, 180, 255},
 	})
 
-	// Fusion Reactor
+	// Fusion Reactor (Tech 2.0)
 	bm.items = append(bm.items, &BuildMenuItem{
 		BuildingType:   "Fusion Reactor",
 		Name:           "Fusion Reactor",
 		Description:    "Helium-3 fusion → 200 MW clean power",
 		Cost:           3000,
+		TechRequired:   entities.GetTechRequirement("Fusion Reactor"),
 		AttachmentType: "Planet",
 		Color:          color.RGBA{100, 220, 255, 255},
 	})
@@ -340,6 +348,20 @@ func (bm *BuildMenu) resourceHasMine(planet *entities.Planet, resourceID int) bo
 	return false
 }
 
+// getPlanetTechLevel returns the tech level of the planet being built on.
+func (bm *BuildMenu) getPlanetTechLevel() float64 {
+	if planet, ok := bm.attachedTo.(*entities.Planet); ok {
+		return planet.TechLevel
+	}
+	if resource, ok := bm.attachedTo.(*entities.Resource); ok {
+		planet := bm.findParentPlanet(resource)
+		if planet != nil {
+			return planet.TechLevel
+		}
+	}
+	return 0
+}
+
 // startConstruction queues a building for construction
 func (bm *BuildMenu) startConstruction(itemIndex int) {
 	if itemIndex < 0 || itemIndex >= len(bm.items) {
@@ -347,6 +369,16 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 	}
 
 	item := bm.items[itemIndex]
+
+	// Check tech requirement
+	if item.TechRequired > 0 {
+		techLevel := bm.getPlanetTechLevel()
+		if techLevel < item.TechRequired {
+			bm.notification = fmt.Sprintf("Requires Tech %.1f (have %.1f)", item.TechRequired, techLevel)
+			bm.notificationTimer = 120
+			return
+		}
+	}
 
 	// Check if building a mine on a resource node that already has a mine or is being built
 	if item.BuildingType == "Mine" && bm.attachmentType == "Resource" {
@@ -498,6 +530,9 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 
 		// Check if this item can be built
 		canBuild := true
+		if item.TechRequired > 0 && bm.getPlanetTechLevel() < item.TechRequired {
+			canBuild = false
+		}
 		if item.BuildingType == "Mine" && bm.attachmentType == "Resource" {
 			if resource, ok := bm.attachedTo.(*entities.Resource); ok {
 				resourceIDStr := fmt.Sprintf("%d", resource.GetID())

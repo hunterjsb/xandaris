@@ -109,6 +109,7 @@ func (p *PlanetDataProvider) fetchPlanetDetail(planetID int) {
 		Happiness:     resp.Data.Happiness,
 		PowerConsumed: resp.Data.PowerConsumed,
 		PowerRatio:    resp.Data.PowerRatio,
+		TechLevel:     resp.Data.TechLevel,
 	}
 
 	storage := make([]StoredResourceEntry, 0, len(resp.Data.StoredResources))
@@ -238,6 +239,7 @@ func (p *PlanetDataProvider) populateRemoteEntities(planet *entities.Planet) boo
 	planet.ProductivityBonus = resp.Data.ProductivityBonus
 	planet.PowerGenerated = resp.Data.PowerGenerated
 	planet.PowerConsumed = resp.Data.PowerConsumed
+	planet.TechLevel = resp.Data.TechLevel
 
 	// Update stored resources
 	for resType, amount := range resp.Data.StoredResources {

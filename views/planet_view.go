@@ -460,6 +460,10 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 			c = utils.Theme.Accent // planet name
 		} else if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Workforce") {
 			c = utils.Theme.TextLight
+		} else if strings.HasPrefix(line, "Tech:") {
+			c = utils.Theme.Accent
+		} else if strings.HasPrefix(line, "  Next:") {
+			c = utils.Theme.TextDim
 		} else if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "  [") {
 			c = utils.Theme.TextLight // building names (indented)
 		}
@@ -877,6 +881,16 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 	if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
 		lines = append(lines, fmt.Sprintf("Power: %.0f/%.0f MW (%.0f%%)",
 			planet.PowerGenerated, planet.PowerConsumed, planet.GetPowerRatio()*100))
+	}
+
+	// Tech level with era name
+	if planet.TechLevel > 0.01 || planet.Population > 0 {
+		era := entities.TechEraName(planet.TechLevel)
+		lines = append(lines, fmt.Sprintf("Tech: %.1f (%s)", planet.TechLevel, era))
+		// Show next unlock hint
+		if nextName, nextReq := entities.NextTechUnlock(planet.TechLevel); nextName != "" {
+			lines = append(lines, fmt.Sprintf("  Next: %s @ %.1f", nextName, nextReq))
+		}
 	}
 
 	// Workforce

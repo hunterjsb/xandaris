@@ -23,6 +23,7 @@ type PlanetDataResult struct {
 	Happiness       float64
 	PowerConsumed   float64
 	PowerRatio      float64
+	TechLevel       float64
 	StoredResources []StoredResourceEntry
 }
 
@@ -169,6 +170,7 @@ func (p *PlanetDataProvider) buildPlanetData(planet *entities.Planet) *PlanetDat
 		Happiness:     planet.Happiness,
 		PowerConsumed: planet.PowerConsumed,
 		PowerRatio:    planet.GetPowerRatio(),
+		TechLevel:     planet.TechLevel,
 	}
 
 	// Build sorted resource list
