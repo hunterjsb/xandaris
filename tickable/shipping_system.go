@@ -142,13 +142,30 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 	atSource := ship.CurrentSystem == sourceSystemID
 	atDest := ship.CurrentSystem == destSystemID
 
-	// Auto-refuel: if ship is low on fuel at either endpoint, try to refuel
+	// Auto-refuel: if ship is low on fuel, try to refuel from any planet in current system
 	if ship.CurrentFuel < ship.FuelPerJump*2 {
-		refuelPlanet := sourcePlanet
-		if atDest {
+		// Try route endpoints first, then any owned planet in current system
+		var refuelPlanet *entities.Planet
+		if atSource && sourcePlanet.GetStoredAmount("Fuel") > 0 {
+			refuelPlanet = sourcePlanet
+		} else if atDest && destPlanet.GetStoredAmount("Fuel") > 0 {
 			refuelPlanet = destPlanet
+		} else {
+			// Stranded — find any owned planet in this system with Fuel
+			for _, sys := range systems {
+				if sys.ID != ship.CurrentSystem {
+					continue
+				}
+				for _, e := range sys.Entities {
+					if p, ok := e.(*entities.Planet); ok && p.Owner == ship.Owner && p.GetStoredAmount("Fuel") > 0 {
+						refuelPlanet = p
+						break
+					}
+				}
+				break
+			}
 		}
-		if refuelPlanet != nil && refuelPlanet.GetStoredAmount("Fuel") > 0 {
+		if refuelPlanet != nil {
 			needed := ship.MaxFuel - ship.CurrentFuel
 			available := refuelPlanet.GetStoredAmount("Fuel")
 			refuel := needed
@@ -158,7 +175,7 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 			if refuel > 0 {
 				refuelPlanet.RemoveStoredResource("Fuel", refuel)
 				ship.CurrentFuel += refuel
-				fmt.Printf("[Shipping] Route #%d: %s refueled %d at %s (fuel: %d/%d)\n",
+				fmt.Printf("[Shipping] Route #%d: %s refueled %d from %s (fuel: %d/%d)\n",
 					route.ID, ship.Name, refuel, refuelPlanet.Name, ship.CurrentFuel, ship.MaxFuel)
 			}
 		}
