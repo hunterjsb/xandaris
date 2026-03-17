@@ -482,10 +482,12 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 	titleY := bm.y + lh
 	views.DrawText(screen, "Build Menu", bm.x+10, titleY, utils.Theme.Accent)
 
-	// Draw subtitle based on attachment type
+	// Draw subtitle: tech level and credits
 	subtitleY := titleY + lh
-	subtitle := fmt.Sprintf("Building on: %s", bm.attachmentType)
-	views.DrawText(screen, subtitle, bm.x+10, subtitleY, utils.Theme.TextDim)
+	techLvl := bm.getPlanetTechLevel()
+	era := entities.TechEraName(techLvl)
+	subtitle := fmt.Sprintf("Tech %.1f (%s)", techLvl, era)
+	views.DrawText(screen, subtitle, bm.x+10, subtitleY, utils.Theme.Accent)
 
 	// Draw player credits
 	creditsY := subtitleY + lh
@@ -530,8 +532,10 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 
 		// Check if this item can be built
 		canBuild := true
+		techLocked := false
 		if item.TechRequired > 0 && bm.getPlanetTechLevel() < item.TechRequired {
 			canBuild = false
+			techLocked = true
 		}
 		if item.BuildingType == "Mine" && bm.attachmentType == "Resource" {
 			if resource, ok := bm.attachedTo.(*entities.Resource); ok {
@@ -543,7 +547,7 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 				}
 
 				// Check completed buildings
-				if canBuild {
+				if canBuild && !techLocked {
 					planet := bm.findParentPlanet(resource)
 					if planet != nil && bm.resourceHasMine(planet, resource.GetID()) {
 						canBuild = false
@@ -566,28 +570,41 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 		}
 		itemPanel.Draw(clipImg)
 
-		// Draw building color indicator
+		// Draw building color indicator (dimmed if tech-locked)
 		colorBoxSize := 12
 		colorBoxX := itemX + 10
 		colorBoxY := itemY + 10
-		colorBox := buildMenuRectCache.GetOrCreate(colorBoxSize, colorBoxSize, item.Color)
+		displayColor := item.Color
+		if techLocked {
+			displayColor = color.RGBA{item.Color.R / 3, item.Color.G / 3, item.Color.B / 3, 180}
+		}
+		colorBox := buildMenuRectCache.GetOrCreate(colorBoxSize, colorBoxSize, displayColor)
 		opts := &ebiten.DrawImageOptions{}
 		opts.GeoM.Translate(float64(colorBoxX), float64(colorBoxY))
 		clipImg.DrawImage(colorBox, opts)
 
-		// Draw building name
+		// Draw building name (dimmed if tech-locked)
 		nameX := colorBoxX + colorBoxSize + 10
 		nameY := itemY + lh - 4
-		views.DrawText(clipImg, item.Name, nameX, nameY, utils.TextPrimary)
-
-		// Draw cost
-		costText := fmt.Sprintf("Cost: %d cr", item.Cost)
-		costY := nameY + lh
-		costColor := utils.TextSecondary
-		if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
-			costColor = color.RGBA{200, 100, 100, 255}
+		nameColor := utils.TextPrimary
+		if techLocked {
+			nameColor = utils.Theme.TextDim
 		}
-		views.DrawText(clipImg, costText, nameX, costY, costColor)
+		views.DrawText(clipImg, item.Name, nameX, nameY, nameColor)
+
+		// Draw cost or tech requirement
+		costY := nameY + lh
+		if techLocked {
+			techText := fmt.Sprintf("Requires Tech %.1f", item.TechRequired)
+			views.DrawText(clipImg, techText, nameX, costY, color.RGBA{200, 130, 60, 255})
+		} else {
+			costText := fmt.Sprintf("Cost: %d cr", item.Cost)
+			costColor := utils.TextSecondary
+			if bm.ctx.GetState().HumanPlayer.Credits < item.Cost {
+				costColor = color.RGBA{200, 100, 100, 255}
+			}
+			views.DrawText(clipImg, costText, nameX, costY, costColor)
+		}
 
 		// Draw description (truncate to fit)
 		desc := item.Description
@@ -596,11 +613,35 @@ func (bm *BuildMenu) Draw(screen *ebiten.Image) {
 			desc = desc[:maxDescChars-2] + ".."
 		}
 		descY := costY + lh
-		views.DrawText(clipImg, desc, nameX, descY, utils.TextSecondary)
+		descColor := utils.TextSecondary
+		if techLocked {
+			descColor = utils.Theme.TextDim
+		}
+		views.DrawText(clipImg, desc, nameX, descY, descColor)
 
-		// Draw build time
+		// Draw build time or tech hint
 		buildTimeY := descY + lh
-		views.DrawText(clipImg, "Build: 60s", nameX, buildTimeY, utils.TextSecondary)
+		if techLocked {
+			hint := "Buy/produce Electronics to advance"
+			views.DrawText(clipImg, hint, nameX, buildTimeY, utils.Theme.TextDim)
+		} else {
+			// Estimate build time based on planet tech + happiness
+			baseTicks := item.Cost / 2
+			if baseTicks < 100 { baseTicks = 100 }
+			techMult := 1.0 + bm.getPlanetTechLevel()*0.05
+			prodMult := 1.0
+			if planet, ok := bm.attachedTo.(*entities.Planet); ok && planet.ProductivityBonus > 0 {
+				prodMult = planet.ProductivityBonus
+			} else if resource, ok := bm.attachedTo.(*entities.Resource); ok {
+				if p := bm.findParentPlanet(resource); p != nil && p.ProductivityBonus > 0 {
+					prodMult = p.ProductivityBonus
+				}
+			}
+			estTicks := float64(baseTicks) / (techMult * prodMult)
+			estSec := estTicks / 10.0 // 10 ticks per second at 1x
+			buildText := fmt.Sprintf("Build: %.0fs", estSec)
+			views.DrawText(clipImg, buildText, nameX, buildTimeY, utils.TextSecondary)
+		}
 
 		itemY += buildMenuItemHeight + buildMenuItemPadding
 	}

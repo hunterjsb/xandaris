@@ -56,8 +56,9 @@ func TechEraName(techLevel float64) string {
 	}
 }
 
-// NextTechUnlock returns the next building unlock name and required tech level,
+// NextTechUnlock returns the next building unlock(s) and required tech level,
 // or ("", 0) if all buildings are unlocked at the given tech level.
+// Groups buildings at the same tier (e.g. "Factory + Shipyard @ 1.0").
 func NextTechUnlock(techLevel float64) (string, float64) {
 	type unlock struct {
 		name string
@@ -69,12 +70,28 @@ func NextTechUnlock(techLevel float64) (string, float64) {
 		{BuildingShipyard, 1.0},
 		{BuildingFusionReactor, 2.0},
 	}
+	// Find the next tier
+	nextReq := 0.0
 	for _, u := range unlocks {
 		if techLevel < u.req {
-			return u.name, u.req
+			nextReq = u.req
+			break
 		}
 	}
-	return "", 0
+	if nextReq == 0 {
+		return "", 0
+	}
+	// Collect all buildings at that tier
+	names := ""
+	for _, u := range unlocks {
+		if u.req == nextReq {
+			if names != "" {
+				names += " + "
+			}
+			names += u.name
+		}
+	}
+	return names, nextReq
 }
 
 // BuildingColor returns the default color for a building type.

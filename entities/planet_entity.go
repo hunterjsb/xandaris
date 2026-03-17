@@ -233,9 +233,15 @@ func (p *Planet) SetBaseOwner(owner string) {
 	}
 }
 
-// GetTotalPopulationCapacity returns total housing capacity (planet + buildings)
+// GetTotalPopulationCapacity returns total housing capacity (planet + buildings).
+// Tech level provides +10% capacity per level (e.g. Tech 2.0 = +20%).
 func (p *Planet) GetTotalPopulationCapacity() int64 {
-	return p.GetBuildingPopulationCapacity()
+	base := p.GetBuildingPopulationCapacity()
+	if p.TechLevel > 0 {
+		techMult := 1.0 + p.TechLevel*0.1
+		base = int64(float64(base) * techMult)
+	}
+	return base
 }
 
 // GetPowerRatio returns the power supply ratio (0.0-1.0). Returns 1.0 if no power needed.
@@ -377,20 +383,32 @@ func (p *Planet) RebalanceWorkforce() {
 	}
 }
 
+// getStorageCapacity returns the effective per-resource storage cap for this planet.
+// Tech level grants +20% capacity per level (e.g. Tech 2.0 = 1400, Tech 5.0 = 2000).
+func (p *Planet) getStorageCapacity() int {
+	cap := float64(DEFAULT_RESOURCE_CAPACITY) * (1.0 + p.TechLevel*0.2)
+	return int(cap)
+}
+
 // AddStoredResource adds an amount of a resource to the planet's storage
 func (p *Planet) AddStoredResource(resourceType string, amount int) int {
 	if p.StoredResources == nil {
 		p.StoredResources = make(map[string]*ResourceStorage)
 	}
 
+	effectiveCap := p.getStorageCapacity()
+
 	storage, exists := p.StoredResources[resourceType]
 	if !exists {
 		storage = &ResourceStorage{
 			ResourceType: resourceType,
 			Amount:       0,
-			Capacity:     DEFAULT_RESOURCE_CAPACITY,
+			Capacity:     effectiveCap,
 		}
 		p.StoredResources[resourceType] = storage
+	} else {
+		// Update capacity to reflect current tech level
+		storage.Capacity = effectiveCap
 	}
 
 	// Calculate how much can be added (limited by capacity)

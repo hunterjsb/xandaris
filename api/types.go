@@ -77,6 +77,8 @@ type PlanetDetail struct {
 	Happiness         float64            `json:"happiness"`          // 0.0-1.0
 	ProductivityBonus float64            `json:"productivity_bonus"` // 0.5-1.5
 	TechLevel         float64            `json:"tech_level"`         // 0.0-5.0
+	TechEra           string             `json:"tech_era"`           // e.g. "Agrarian", "Industrial"
+	StorageCapacity   int                `json:"storage_capacity"`   // per-resource cap (scales with tech)
 	PowerGenerated    float64            `json:"power_generated"`    // MW
 	PowerConsumed     float64            `json:"power_consumed"`     // MW
 	PowerRatio        float64            `json:"power_ratio"`        // 0.0-1.0

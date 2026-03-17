@@ -464,6 +464,8 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 			c = utils.Theme.Accent
 		} else if strings.HasPrefix(line, "  Next:") {
 			c = utils.Theme.TextDim
+		} else if strings.HasPrefix(line, "  Tip:") {
+			c = utils.SystemOrange
 		} else if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "  [") {
 			c = utils.Theme.TextLight // building names (indented)
 		}
@@ -886,10 +888,19 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 	// Tech level with era name
 	if planet.TechLevel > 0.01 || planet.Population > 0 {
 		era := entities.TechEraName(planet.TechLevel)
-		lines = append(lines, fmt.Sprintf("Tech: %.1f (%s)", planet.TechLevel, era))
-		// Show next unlock hint
+		techBonuses := ""
+		if planet.TechLevel >= 0.1 {
+			techBonuses = fmt.Sprintf("  +%.0f%%build +%.0f%%mine +%.0f%%cap",
+				planet.TechLevel*5, planet.TechLevel*3, planet.TechLevel*10)
+		}
+		lines = append(lines, fmt.Sprintf("Tech: %.1f (%s)%s", planet.TechLevel, era, techBonuses))
+		// Show next unlock hint or progression tip
 		if nextName, nextReq := entities.NextTechUnlock(planet.TechLevel); nextName != "" {
 			lines = append(lines, fmt.Sprintf("  Next: %s @ %.1f", nextName, nextReq))
+		}
+		// Hint when stuck at low tech with no electronics
+		if planet.TechLevel < 0.5 && planet.GetStoredAmount(entities.ResElectronics) == 0 && planet.Population > 500 {
+			lines = append(lines, "  Tip: Buy Electronics at market")
 		}
 	}
 

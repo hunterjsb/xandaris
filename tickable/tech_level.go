@@ -1,6 +1,7 @@
 package tickable
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/hunterjsb/xandaris/entities"
@@ -8,7 +9,8 @@ import (
 
 func init() {
 	RegisterSystem(&TechLevelSystem{
-		BaseSystem: NewBaseSystem("TechLevel", 9),
+		BaseSystem:    NewBaseSystem("TechLevel", 9),
+		prevTechLevel: make(map[int]float64),
 	})
 }
 
@@ -22,6 +24,18 @@ func init() {
 // Decays slowly if Electronics supply drops (use it or lose it).
 type TechLevelSystem struct {
 	*BaseSystem
+	prevTechLevel map[int]float64 // planet ID -> previous tech level (for milestone detection)
+}
+
+// techMilestones defines the thresholds that trigger alerts when crossed.
+var techMilestones = []struct {
+	threshold float64
+	message   string
+}{
+	{0.5, "reached Early Industrial — Refinery unlocked!"},
+	{1.0, "reached Industrial era — Factory and Shipyard unlocked!"},
+	{2.0, "reached Space Age — Fusion Reactor unlocked!"},
+	{3.5, "reached Advanced era — all bonuses maximized!"},
 }
 
 func (tls *TechLevelSystem) OnTick(tick int64) {
@@ -34,12 +48,38 @@ func (tls *TechLevelSystem) OnTick(tick int64) {
 		return
 	}
 
-	players := ctx.GetPlayers()
+	game := ctx.GetGame()
+	if game == nil {
+		return
+	}
 
-	for _, player := range players {
-		for _, planet := range player.OwnedPlanets {
-			if planet != nil && planet.Population > 0 {
+	// On first tick, seed prevTechLevel from current state to avoid
+	// re-firing all milestones after server restart / save load.
+	if len(tls.prevTechLevel) == 0 {
+		for _, sys := range game.GetSystems() {
+			for _, e := range sys.Entities {
+				if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" {
+					tls.prevTechLevel[planet.GetID()] = planet.TechLevel
+				}
+			}
+		}
+	}
+
+	for _, sys := range game.GetSystems() {
+		for _, e := range sys.Entities {
+			if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" && planet.Population > 0 {
+				prevLevel := tls.prevTechLevel[planet.GetID()]
 				updateTechLevel(planet)
+				newLevel := planet.TechLevel
+
+				// Check milestone crossings (only fires on NEW transitions)
+				for _, m := range techMilestones {
+					if prevLevel < m.threshold && newLevel >= m.threshold {
+						game.LogEvent("event", planet.Owner,
+							fmt.Sprintf("%s %s", planet.Name, m.message))
+					}
+				}
+				tls.prevTechLevel[planet.GetID()] = newLevel
 			}
 		}
 	}
