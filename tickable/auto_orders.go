@@ -110,34 +110,40 @@ func (aos *AutoOrderSystem) OnTick(tick int64) {
 
 			for _, res := range resources {
 				stored := planet.GetStoredAmount(res)
+				buyPrice := int(market.GetBuyPrice(res))
+				sellPrice := int(market.GetSellPrice(res))
+				if buyPrice <= 0 { buyPrice = 10 }
+				if sellPrice <= 0 { sellPrice = 5 }
+
+				// Dynamic sell threshold: high-value resources sell sooner
+				// Oil/Electronics at 5x+ base price → sell above 100 (not 500)
+				// Cheap resources → only sell real surplus above 300
+				sellThreshold := 300
+				if sellPrice > 200 {
+					sellThreshold = 100 // valuable resource, sell sooner
+				} else if sellPrice > 50 {
+					sellThreshold = 200
+				}
+				keepBuffer := sellThreshold / 2
 
 				if stored < 50 && player.Credits > 500 {
-					// Need this resource — place buy order at market price
-					price := int(market.GetBuyPrice(res))
-					if price <= 0 {
-						price = 10
-					}
-					// Don't overspend — cap at 10% of credits
+					// Need this resource — place buy order
 					maxSpend := player.Credits / 10
 					qty := 50
-					if price*qty > maxSpend {
-						qty = maxSpend / price
+					if buyPrice*qty > maxSpend {
+						qty = maxSpend / buyPrice
 					}
 					if qty > 0 {
-						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "buy", qty, price)
+						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "buy", qty, buyPrice)
 					}
-				} else if stored > 500 {
-					// Surplus — place sell order at market price
-					price := int(market.GetSellPrice(res))
-					if price <= 0 {
-						price = 5
-					}
-					surplus := stored - 200 // keep 200 buffer
+				} else if stored > sellThreshold {
+					// Surplus — sell above buffer
+					surplus := stored - keepBuffer
 					if surplus > 100 {
-						surplus = 100 // max 100 per order
+						surplus = 100
 					}
 					if surplus > 0 {
-						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "sell", surplus, price)
+						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "sell", surplus, sellPrice)
 					}
 				}
 			}
