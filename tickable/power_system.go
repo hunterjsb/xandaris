@@ -104,6 +104,9 @@ func computePower(planet *entities.Planet) {
 				planet.RemoveStoredResource(entities.ResHelium3, he3Needed)
 				generated += 200.0 * levelMult * staffing
 			}
+		case entities.BuildingDysonCollector:
+			// Mega-structure: 500 MW free power (no fuel needed!)
+			generated += 500.0 * levelMult * staffing
 		}
 	}
 

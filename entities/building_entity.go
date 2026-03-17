@@ -18,6 +18,9 @@ const (
 	BuildingShipyard      = "Shipyard"
 	BuildingResearchLab   = "Research Lab"
 	BuildingPlanetShield  = "Planetary Shield"
+	BuildingOrbitalDock   = "Orbital Dock"   // mega: doubles ship build speed + repair
+	BuildingDysonCollector = "Dyson Collector" // mega: unlimited clean power
+	BuildingTradeNexus    = "Trade Nexus"     // mega: 10x TP throughput + attracts trade
 )
 
 // BuildingTechRequirement returns the minimum tech level needed to construct a building.
@@ -28,11 +31,15 @@ var BuildingTechRequirement = map[string]float64{
 	BuildingGenerator:     0,
 	BuildingTradingPost:   0,
 	BuildingHabitat:       0,
-	BuildingRefinery:      0.5,  // basic processing
+	BuildingRefinery:      0,    // essential bootstrap (Oil→Fuel→Power chain)
 	BuildingFactory:       1.0,  // requires some tech investment
 	BuildingShipyard:      1.0,  // advanced construction
 	BuildingFusionReactor: 2.0,  // high-tech power
 	BuildingResearchLab:   2.5,  // passive Electronics generation
+	BuildingPlanetShield:  2.0,  // defense
+	BuildingOrbitalDock:   3.0,  // mega-structure
+	BuildingDysonCollector: 4.0, // mega-structure
+	BuildingTradeNexus:    3.5,  // mega-structure
 }
 
 // GetTechRequirement returns the minimum tech level for a building type.
@@ -68,7 +75,6 @@ func NextTechUnlock(techLevel float64) (string, float64) {
 		req  float64
 	}
 	unlocks := []unlock{
-		{BuildingRefinery, 0.5},
 		{BuildingFactory, 1.0},
 		{BuildingShipyard, 1.0},
 		{"Destroyer", 1.5},
@@ -123,6 +129,14 @@ func BuildingColor(buildingType string) color.RGBA {
 		return color.RGBA{100, 220, 255, 255}
 	case BuildingResearchLab:
 		return color.RGBA{160, 255, 180, 255} // green-white for science
+	case BuildingPlanetShield:
+		return color.RGBA{100, 200, 255, 255} // cyan for defense
+	case BuildingOrbitalDock:
+		return color.RGBA{255, 200, 100, 255} // gold for mega
+	case BuildingDysonCollector:
+		return color.RGBA{255, 255, 50, 255} // bright yellow for solar
+	case BuildingTradeNexus:
+		return color.RGBA{255, 100, 255, 255} // magenta for trade mega
 	default:
 		return color.RGBA{150, 150, 150, 255}
 	}
