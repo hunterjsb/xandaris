@@ -2605,18 +2605,61 @@ func StartServer(provider GameStateProvider) {
 			return
 		}
 
-		// GET — list routes
+		// GET — list routes with diagnostic info
 		playerName := getAuthPlayer(r)
 		routes := sm.GetRoutes(playerName)
-		result := make([]ShippingRouteInfo, 0, len(routes))
+
+		type RouteWithDiag struct {
+			ShippingRouteInfo
+			SourceStock int    `json:"source_stock"`
+			ShipFuel    int    `json:"ship_fuel,omitempty"`
+			ShipSystem  int    `json:"ship_system,omitempty"`
+			Status      string `json:"status"` // "running", "no_stock", "no_fuel", "no_ship"
+		}
+
+		result := make([]RouteWithDiag, 0, len(routes))
 		for _, rt := range routes {
-			result = append(result, ShippingRouteInfo{
-				ID: rt.ID, Owner: rt.Owner,
-				SourcePlanet: rt.SourcePlanet, DestPlanet: rt.DestPlanet,
-				Resource: rt.Resource, Quantity: rt.Quantity,
-				ShipID: rt.ShipID, Active: rt.Active,
-				TripsComplete: rt.TripsComplete,
-			})
+			diag := RouteWithDiag{
+				ShippingRouteInfo: ShippingRouteInfo{
+					ID: rt.ID, Owner: rt.Owner,
+					SourcePlanet: rt.SourcePlanet, DestPlanet: rt.DestPlanet,
+					Resource: rt.Resource, Quantity: rt.Quantity,
+					ShipID: rt.ShipID, Active: rt.Active,
+					TripsComplete: rt.TripsComplete,
+				},
+				Status: "no_ship",
+			}
+
+			// Check source stock
+			for _, sys := range p.GetSystems() {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok && pl.GetID() == rt.SourcePlanet {
+						diag.SourceStock = pl.GetStoredAmount(rt.Resource)
+					}
+				}
+			}
+
+			// Check ship status
+			if rt.ShipID != 0 {
+				for _, pl := range p.GetPlayers() {
+					if pl == nil { continue }
+					for _, s := range pl.OwnedShips {
+						if s != nil && s.GetID() == rt.ShipID {
+							diag.ShipFuel = s.CurrentFuel
+							diag.ShipSystem = s.CurrentSystem
+							if s.CurrentFuel < s.FuelPerJump {
+								diag.Status = "no_fuel"
+							} else if diag.SourceStock == 0 {
+								diag.Status = "no_stock"
+							} else {
+								diag.Status = "ready"
+							}
+						}
+					}
+				}
+			}
+
+			result = append(result, diag)
 		}
 		writeJSON(w, APIResponse{OK: true, Data: result})
 	})
