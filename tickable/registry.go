@@ -73,14 +73,15 @@ type GameProvider interface {
 
 // ShippingRouteInfo is a snapshot of a shipping route for the tick system.
 type ShippingRouteInfo struct {
-	ID           int
-	Owner        string
-	SourcePlanet int
-	DestPlanet   int
-	Resource     string
-	Quantity     int
-	ShipID       int
-	Active       bool
+	ID            int
+	Owner         string
+	SourcePlanet  int
+	DestPlanet    int
+	Resource      string
+	Quantity      int
+	ShipID        int
+	Active        bool
+	TripsComplete int
 }
 
 // SystemContext provides access to game state for tickable systems

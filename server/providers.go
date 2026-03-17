@@ -221,14 +221,15 @@ func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	result := make([]tickable.ShippingRouteInfo, 0, len(routes))
 	for _, r := range routes {
 		result = append(result, tickable.ShippingRouteInfo{
-			ID:           r.ID,
-			Owner:        r.Owner,
-			SourcePlanet: r.SourcePlanet,
-			DestPlanet:   r.DestPlanet,
-			Resource:     r.Resource,
-			Quantity:     r.Quantity,
-			ShipID:       r.ShipID,
-			Active:       r.Active,
+			ID:            r.ID,
+			Owner:         r.Owner,
+			SourcePlanet:  r.SourcePlanet,
+			DestPlanet:    r.DestPlanet,
+			Resource:      r.Resource,
+			Quantity:      r.Quantity,
+			ShipID:        r.ShipID,
+			Active:        r.Active,
+			TripsComplete: r.TripsComplete,
 		})
 	}
 	return result

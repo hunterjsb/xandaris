@@ -2581,6 +2581,66 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Wormholes: active wormhole connections appear in /api/events
+	mux.HandleFunc("/api/wormholes", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, APIResponse{OK: true, Data: map[string]string{
+			"status": "Wormholes appear randomly every ~15 minutes. Watch /api/events for announcements.",
+			"info":   "When a wormhole opens, ships in either connected system can jump through.",
+		}})
+	})
+
+	// Victory progress
+	mux.HandleFunc("/api/victory", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		players := p.GetPlayers()
+		systems := p.GetSystems()
+
+		type VictoryProgress struct {
+			Player     string         `json:"player"`
+			Credits    int            `json:"credits"`
+			Planets    int            `json:"planets"`
+			MaxTech    float64        `json:"max_tech"`
+			Population int64          `json:"population"`
+			Progress   map[string]string `json:"progress"`
+		}
+
+		var results []VictoryProgress
+		for _, player := range players {
+			if player == nil {
+				continue
+			}
+			planets := 0
+			maxTech := 0.0
+			var pop int64
+			for _, sys := range systems {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok && pl.Owner == player.Name {
+						planets++
+						pop += pl.Population
+						if pl.TechLevel > maxTech {
+							maxTech = pl.TechLevel
+						}
+					}
+				}
+			}
+
+			progress := map[string]string{
+				"economic":   fmt.Sprintf("%d / 50,000,000 credits", player.Credits),
+				"domination": fmt.Sprintf("%d / 20 planets", planets),
+				"technology": fmt.Sprintf("%.1f / 5.0 tech level", maxTech),
+				"population": fmt.Sprintf("%d / 1,000,000 citizens", pop),
+			}
+
+			results = append(results, VictoryProgress{
+				Player: player.Name, Credits: player.Credits,
+				Planets: planets, MaxTech: maxTech, Population: pop,
+				Progress: progress,
+			})
+		}
+
+		writeJSON(w, APIResponse{OK: true, Data: results})
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
