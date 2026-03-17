@@ -163,8 +163,8 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"},"amount":{"type":"integer","description":"0 = fill up"}},"required":["ship_id","planet_id"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
-		Name: "create_route", Description: "Create an automated shipping route. A Cargo ship will auto-cycle: load resource at source planet → fly to dest → unload → return. Assign a ship_id or 0 for auto-assign.",
-		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer"},"dest_planet_id":{"type":"integer"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
+		Name: "create_route", Description: "Create an automated shipping route. A Cargo ship will auto-cycle: load resource at source planet → fly to dest → unload → return. Use PLANET IDs (5+ digit numbers from get_planet), NOT system IDs. ship_id 0 = auto-assign an idle Cargo ship.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer","description":"PLANET ID (5+ digits, from get_planet or get_status)"},"dest_planet_id":{"type":"integer","description":"PLANET ID (5+ digits), NOT a system ID"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "find_trades", Description: "Find the best cross-system arbitrage opportunities. Shows where to buy cheap and sell dear — the foundation for profitable cargo ship routes. Returns top 20 by profit margin.",

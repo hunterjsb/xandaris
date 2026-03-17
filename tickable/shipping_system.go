@@ -117,6 +117,10 @@ func (ss *ShippingSystem) OnTick(tick int64) {
 		if ship.DeliveryID != 0 {
 			continue
 		}
+		// Only cargo ships can run trade routes
+		if ship.ShipType != entities.ShipTypeCargo {
+			continue
+		}
 
 		ss.processRoute(route, ship, gp, players, systems, systemsMap)
 	}

@@ -2086,6 +2086,11 @@ func StartServer(provider GameStateProvider) {
 				writeErr(w, http.StatusUnauthorized, "auth required")
 				return
 			}
+			// Validate: planet IDs should be 5+ digits, not system IDs (0-39)
+			if req.SourcePlanetID < 1000 || req.DestPlanetID < 1000 {
+				writeErr(w, http.StatusBadRequest, "invalid planet ID — use planet IDs (5+ digit numbers from get_planet), not system IDs")
+				return
+			}
 			routeID := sm.CreateRoute(playerName, req.SourcePlanetID, req.DestPlanetID, req.Resource, req.Quantity, req.ShipID)
 			writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
 				"route_id": routeID,
