@@ -257,6 +257,8 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 		Happiness:         math.Round(planet.Happiness*100) / 100,
 		ProductivityBonus: math.Round(planet.ProductivityBonus*100) / 100,
 		TechLevel:         math.Round(planet.TechLevel*100) / 100,
+		TechEra:           entities.TechEraName(planet.TechLevel),
+		StorageCapacity:   int(float64(entities.DEFAULT_RESOURCE_CAPACITY) * (1.0 + planet.TechLevel*0.2)),
 		PowerGenerated:    math.Round(planet.PowerGenerated*10) / 10,
 		PowerConsumed:     math.Round(planet.PowerConsumed*10) / 10,
 		PowerRatio:        math.Round(planet.GetPowerRatio()*100) / 100,
@@ -335,12 +337,16 @@ func handleGetLeaderboard(p GameStateProvider) interface{} {
 		var pop int64
 		bldgs := 0
 		stockValue := 0
+		maxTech := 0.0
 		for _, planet := range pl.OwnedPlanets {
 			if planet == nil {
 				continue
 			}
 			pop += planet.Population
 			bldgs += len(planet.Buildings)
+			if planet.TechLevel > maxTech {
+				maxTech = planet.TechLevel
+			}
 			// Use BASE prices for stable scoring (not volatile market prices)
 			for resType, s := range planet.StoredResources {
 				if s != nil {
@@ -362,6 +368,8 @@ func handleGetLeaderboard(p GameStateProvider) interface{} {
 			Ships:      len(pl.OwnedShips),
 			Buildings:  bldgs,
 			StockValue: stockValue,
+			MaxTech:    math.Round(maxTech*100) / 100,
+			TechEra:    entities.TechEraName(maxTech),
 		})
 	}
 
@@ -1037,6 +1045,7 @@ func handleGetPlanetRates(p GameStateProvider, planetID int) (interface{}, bool)
 				Happiness:         math.Round(planet.Happiness*100) / 100,
 				ProductivityBonus: math.Round(planet.ProductivityBonus*100) / 100,
 				TechLevel:         math.Round(planet.TechLevel*100) / 100,
+				TechEra:           entities.TechEraName(planet.TechLevel),
 				Production:        production,
 				Consumption:       consumption,
 				NetFlow:           netFlow,
@@ -1346,12 +1355,8 @@ func handleGetGalaxyFlows(p GameStateProvider) interface{} {
 }
 
 func handleGetConstructionQueue(p GameStateProvider) interface{} {
-	constructionSystem := tickable.GetSystemByName("Construction")
-	if constructionSystem == nil {
-		return []ConstructionQueueItem{}
-	}
-	cs, ok := constructionSystem.(*tickable.ConstructionSystem)
-	if !ok {
+	cs := tickable.GetConstructionSystem()
+	if cs == nil {
 		return []ConstructionQueueItem{}
 	}
 

@@ -301,16 +301,18 @@ type PopConsumptionRate struct {
 
 // LeaderboardEntry ranks a player by empire score.
 type LeaderboardEntry struct {
-	Rank       int    `json:"rank"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Score      int    `json:"score"`
-	Credits    int    `json:"credits"`
-	Population int64  `json:"population"`
-	Planets    int    `json:"planets"`
-	Ships      int    `json:"ships"`
-	Buildings  int    `json:"buildings"`
-	StockValue int    `json:"stock_value"`
+	Rank       int     `json:"rank"`
+	Name       string  `json:"name"`
+	Type       string  `json:"type"`
+	Score      int     `json:"score"`
+	Credits    int     `json:"credits"`
+	Population int64   `json:"population"`
+	Planets    int     `json:"planets"`
+	Ships      int     `json:"ships"`
+	Buildings  int     `json:"buildings"`
+	StockValue int     `json:"stock_value"`
+	MaxTech    float64 `json:"max_tech"`    // highest tech level across all planets
+	TechEra    string  `json:"tech_era"`    // era name of highest tech planet
 }
 
 // CatalogResource describes a tradeable resource.
@@ -467,6 +469,7 @@ type PlanetRates struct {
 	Happiness         float64            `json:"happiness"`
 	ProductivityBonus float64            `json:"productivity_bonus"`
 	TechLevel         float64            `json:"tech_level"`
+	TechEra           string             `json:"tech_era"`
 	Production        map[string]float64 `json:"production"`
 	Consumption       map[string]float64 `json:"consumption"`
 	NetFlow           map[string]float64 `json:"net_flow"`

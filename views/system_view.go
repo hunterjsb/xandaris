@@ -265,6 +265,10 @@ func (sv *SystemView) Draw(screen *ebiten.Image) {
 				lineColor := utils.Theme.TextDim
 				if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Housing") || strings.HasPrefix(line, "Workforce") {
 					lineColor = utils.Theme.TextLight
+				} else if strings.HasPrefix(line, "Tech:") {
+					lineColor = utils.Theme.Accent
+				} else if strings.HasPrefix(line, "  Tip:") {
+					lineColor = utils.SystemOrange
 				}
 				DrawText(screen, line, 14, infoY, lineColor)
 				infoY += lineH

@@ -112,12 +112,16 @@ func (p *PlanetDataProvider) fetchPlanetDetail(planetID int) {
 		TechLevel:     resp.Data.TechLevel,
 	}
 
+	storageCap := resp.Data.StorageCapacity
+	if storageCap <= 0 {
+		storageCap = 1000 // fallback for older servers
+	}
 	storage := make([]StoredResourceEntry, 0, len(resp.Data.StoredResources))
 	for resType, amount := range resp.Data.StoredResources {
 		storage = append(storage, StoredResourceEntry{
 			ResourceType: resType,
 			Amount:       amount,
-			Capacity:     1000,
+			Capacity:     storageCap,
 		})
 	}
 	sort.Slice(storage, func(i, j int) bool {
@@ -242,14 +246,19 @@ func (p *PlanetDataProvider) populateRemoteEntities(planet *entities.Planet) boo
 	planet.TechLevel = resp.Data.TechLevel
 
 	// Update stored resources
+	remoteCap := resp.Data.StorageCapacity
+	if remoteCap <= 0 {
+		remoteCap = 1000
+	}
 	for resType, amount := range resp.Data.StoredResources {
 		if s, ok := planet.StoredResources[resType]; ok && s != nil {
 			s.Amount = amount
+			s.Capacity = remoteCap
 		} else {
 			planet.StoredResources[resType] = &entities.ResourceStorage{
 				ResourceType: resType,
 				Amount:       amount,
-				Capacity:     1000,
+				Capacity:     remoteCap,
 			}
 		}
 	}

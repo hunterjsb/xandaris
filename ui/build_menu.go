@@ -438,6 +438,13 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 	// Deduct cost
 	bm.ctx.GetState().HumanPlayer.Credits -= item.Cost
 
+	// Build time scales with cost: 1 tick per 2 credits, minimum 100 ticks
+	// Matches server-side formula in handleBuildCommand
+	buildTicks := item.Cost / 2
+	if buildTicks < 100 {
+		buildTicks = 100
+	}
+
 	// Create construction item
 	constructionItem := &tickable.ConstructionItem{
 		ID:             fmt.Sprintf("%s_%d_%d", bm.attachmentID, bm.ctx.GetTickManager().GetCurrentTick(), itemIndex),
@@ -446,15 +453,14 @@ func (bm *BuildMenu) startConstruction(itemIndex int) {
 		Location:       bm.attachmentID,
 		Owner:          bm.ctx.GetState().HumanPlayer.Name,
 		Progress:       0,
-		TotalTicks:     600, // 60 seconds at 1x speed
-		RemainingTicks: 600,
+		TotalTicks:     buildTicks,
+		RemainingTicks: buildTicks,
 		Cost:           item.Cost,
 		Started:        bm.ctx.GetTickManager().GetCurrentTick(),
 	}
 
 	// Add to construction queue
-	constructionSystem := tickable.GetSystemByName("Construction")
-	if cs, ok := constructionSystem.(*tickable.ConstructionSystem); ok {
+	if cs := tickable.GetConstructionSystem(); cs != nil {
 		cs.AddToQueue(bm.attachmentID, constructionItem)
 	}
 
