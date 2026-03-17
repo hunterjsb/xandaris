@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -1893,6 +1894,162 @@ func StartServer(provider GameStateProvider) {
 			"net_flow_per_tick": netFlow,
 			"profitable":       netFlow > 0,
 			"diversity":        diversity,
+		}})
+	})
+
+	// Per-planet resource flows: what's being produced and consumed
+	mux.HandleFunc("/api/planet-flows/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeErr(w, http.StatusMethodNotAllowed, "GET only")
+			return
+		}
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/planet-flows/"), "/")
+		planetID, err := strconv.Atoi(parts[0])
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid planet_id")
+			return
+		}
+
+		p := getProvider()
+		systems := p.GetSystems()
+		market := p.GetMarket()
+
+		// Find the planet
+		var planet *entities.Planet
+		for _, sys := range systems {
+			for _, e := range sys.Entities {
+				if pl, ok := e.(*entities.Planet); ok && pl.GetID() == planetID {
+					planet = pl
+					break
+				}
+			}
+			if planet != nil {
+				break
+			}
+		}
+		if planet == nil {
+			writeErr(w, http.StatusNotFound, "planet not found")
+			return
+		}
+
+		type ResourceFlow struct {
+			Resource    string  `json:"resource"`
+			Stored      int     `json:"stored"`
+			Production  float64 `json:"production"`  // per interval from mines
+			PopDrain    float64 `json:"pop_drain"`    // consumed by population
+			BuildDrain  float64 `json:"build_drain"`  // consumed by buildings (refinery, generator, etc)
+			NetFlow     float64 `json:"net_flow"`
+			TicksUntilEmpty int `json:"ticks_until_empty"` // at current drain rate, 0=stable/growing
+		}
+
+		pop := float64(planet.Population)
+		var flows []ResourceFlow
+
+		allRes := []string{"Water", "Iron", "Oil", "Fuel", "Rare Metals", "Helium-3", "Electronics"}
+		for _, res := range allRes {
+			stored := planet.GetStoredAmount(res)
+			production := 0.0
+			popDrain := 0.0
+			buildDrain := 0.0
+
+			// Population consumption
+			for _, rate := range economy.PopulationConsumption {
+				if rate.ResourceType == res {
+					popDrain = pop / rate.PopDivisor * rate.PerPopulation
+				}
+			}
+
+			// Building consumption
+			for _, be := range planet.Buildings {
+				b, ok := be.(*entities.Building)
+				if !ok || !b.IsOperational || b.GetStaffingRatio() <= 0 {
+					continue
+				}
+				if upkeeps, found := economy.BuildingResourceUpkeep[b.BuildingType]; found {
+					for _, u := range upkeeps {
+						if u.ResourceType == res {
+							buildDrain += float64(u.Amount)
+						}
+					}
+				}
+				// Power system fuel/he3 burn
+				if b.BuildingType == entities.BuildingGenerator && res == "Fuel" {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					buildDrain += 2.0 * levelMult
+				}
+				if b.BuildingType == entities.BuildingFusionReactor && res == "Helium-3" {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					buildDrain += 1.0 * levelMult
+				}
+				// Refinery consumes Oil
+				if b.BuildingType == entities.BuildingRefinery && res == "Oil" {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					buildDrain += 2.0 * levelMult
+				}
+				// Refinery produces Fuel
+				if b.BuildingType == entities.BuildingRefinery && res == "Fuel" {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					production += 3.0 * levelMult
+				}
+				// Factory consumes RM + Iron, produces Electronics
+				if b.BuildingType == entities.BuildingFactory {
+					levelMult := 1.0 + float64(b.Level-1)*0.3
+					staffing := b.GetStaffingRatio()
+					if res == "Rare Metals" {
+						buildDrain += 2.0 * levelMult * staffing
+					}
+					if res == "Iron" {
+						buildDrain += 1.0 * levelMult * staffing
+					}
+					if res == "Electronics" {
+						production += 2.0 * levelMult * staffing
+					}
+				}
+			}
+
+			// Mine production (estimate from deposits)
+			for _, re := range planet.Resources {
+				if resource, ok := re.(*entities.Resource); ok && resource.ResourceType == res {
+					for _, be := range planet.Buildings {
+						if b, ok := be.(*entities.Building); ok && b.BuildingType == "Mine" && b.IsOperational {
+							resID := fmt.Sprintf("%d", resource.GetID())
+							if b.AttachedTo == resID && b.GetStaffingRatio() > 0 {
+								rate := 8.0 * resource.ExtractionRate * b.GetStaffingRatio() * b.ProductionBonus
+								abFactor := float64(resource.Abundance) / 70.0
+								if abFactor > 1.0 {
+									abFactor = 1.0
+								}
+								powerFactor := 0.25 + 0.75*planet.GetPowerRatio()
+								production += rate * abFactor * powerFactor
+							}
+						}
+					}
+				}
+			}
+
+			netFlow := production - popDrain - buildDrain
+			tte := 0
+			if netFlow < 0 && stored > 0 {
+				tte = int(float64(stored) / (-netFlow))
+			}
+
+			flows = append(flows, ResourceFlow{
+				Resource: res, Stored: stored,
+				Production: math.Round(production*10) / 10,
+				PopDrain: math.Round(popDrain*10) / 10,
+				BuildDrain: math.Round(buildDrain*10) / 10,
+				NetFlow: math.Round(netFlow*10) / 10,
+				TicksUntilEmpty: tte,
+			})
+		}
+
+		_ = market // available if needed for price context
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"planet_id":   planet.GetID(),
+			"planet_name": planet.Name,
+			"population":  planet.Population,
+			"power_ratio": planet.GetPowerRatio(),
+			"flows":       flows,
 		}})
 	})
 

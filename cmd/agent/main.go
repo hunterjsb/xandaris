@@ -100,7 +100,11 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"}},"required":["planet_id"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
-		Name: "get_finances", Description: "Get your income vs expenses breakdown: labor income, domestic economy, trading post revenue vs building upkeep. Shows if your empire is profitable or bleeding credits.",
+		Name: "get_planet_flows", Description: "Get per-resource production vs consumption for a planet. Shows mine output, population drain, building consumption, net flow, and ticks until empty. Essential for planning what to import/export.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"}},"required":["planet_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_finances", Description: "Get your income vs expenses breakdown: labor income, domestic economy, trading post revenue vs building upkeep. Shows resource diversity per planet and what's MISSING for the 3x income bonus.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
@@ -240,6 +244,14 @@ func executeTool(name string, args string, factionName string) string {
 		var p struct{ PlanetID int `json:"planet_id"` }
 		json.Unmarshal([]byte(args), &p)
 		result, err := callAPI("GET", fmt.Sprintf("/api/planets/%d", p.PlanetID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "get_planet_flows":
+		var p struct{ PlanetID int `json:"planet_id"` }
+		json.Unmarshal([]byte(args), &p)
+		result, err := callAPI("GET", fmt.Sprintf("/api/planet-flows/%d", p.PlanetID), "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
