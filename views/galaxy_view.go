@@ -415,7 +415,7 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 	labelY := centerY + circleRadius + 15
 	DrawCenteredText(screen, system.Name, centerX, labelY)
 
-	// Show compact owner info for inhabited systems
+	// Show compact owner info + tech era for inhabited systems
 	lh := int(15.0 * utils.UIScale)
 	for _, entity := range system.Entities {
 		if p, ok := entity.(*entities.Planet); ok && p.Owner != "" {
@@ -431,6 +431,13 @@ func (gv *GalaxyView) drawSystem(screen *ebiten.Image, system *entities.System) 
 			}
 			infoWidth := len(info) * utils.CharWidth()
 			DrawText(screen, info, centerX-infoWidth/2, labelY+lh, infoColor)
+
+			// Show tech era below owner info
+			if p.TechLevel > 0.01 {
+				era := entities.TechEraName(p.TechLevel)
+				eraWidth := len(era) * utils.CharWidth()
+				DrawText(screen, era, centerX-eraWidth/2, labelY+lh*2, utils.Theme.TextDim)
+			}
 			break
 		}
 	}
