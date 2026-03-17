@@ -355,8 +355,8 @@ func (p *Planet) RebalanceWorkforce() {
 	priorityOrder := []string{
 		BuildingGenerator,     // Power first — everything depends on it
 		BuildingFusionReactor, // Advanced power
+		BuildingRefinery,      // Fuel production (feeds generators — must come before mines)
 		BuildingMine,          // Resource extraction
-		BuildingRefinery,      // Fuel production (feeds generators)
 		BuildingFactory,       // Electronics production
 		BuildingResearchLab,   // Passive electronics
 	}
