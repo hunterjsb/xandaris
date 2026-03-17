@@ -623,14 +623,10 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 	// Check buildings
 	hasShipyard := false
 	hasRefinery := false
-	hasFuel := false
 	hasOil := false
 	for _, planet := range human.OwnedPlanets {
 		if planet == nil {
 			continue
-		}
-		if planet.GetStoredAmount("Fuel") > 0 {
-			hasFuel = true
 		}
 		if planet.GetStoredAmount("Oil") > 20 {
 			hasOil = true
@@ -671,10 +667,8 @@ func generateHints(human *entities.Player, player *PlayerStatus, econ *EconomyOv
 	if maxTech < 0.5 && !hasElectronics {
 		hints = append(hints, "Buy Electronics from the market to grow tech level — POST /api/market/trade {resource: \"Electronics\", quantity: 10, action: \"buy\"}")
 	}
-	if maxTech >= 0.5 && !hasRefinery && hasOil {
-		hints = append(hints, "Tech 0.5 reached — build a Refinery to convert Oil into Fuel")
-	} else if !hasRefinery && hasOil && !hasFuel && maxTech < 0.5 {
-		hints = append(hints, "Refinery unlocks at Tech 0.5 — buy Electronics to advance")
+	if !hasRefinery && hasOil {
+		hints = append(hints, "Build a Refinery to convert Oil into Fuel (needed for Generators)")
 	}
 	if maxTech >= 1.0 && !hasShipyard && human.Credits > 2000 {
 		hints = append(hints, "Tech 1.0 reached — build a Shipyard for ships")

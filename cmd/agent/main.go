@@ -45,20 +45,20 @@ Use get_planet to check which types you have. Import what you're missing!
 TECHNOLOGY PROGRESSION (gates what you can build!):
 - Tech level grows from ELECTRONICS stored per capita. More Electronics = faster growth.
 - Check tech_level and tech_era in get_planet response.
-- Era unlocks: Agrarian(0)→Refinery(0.5)→Factory+Shipyard(1.0)→Fusion(2.0)→Research Lab(2.5)
+- Era unlocks: Agrarian(0)→Factory+Shipyard(1.0)→Fusion(2.0)→Research Lab(2.5)
+- Refinery and Generator are always available (no tech needed for power chain)
 - To advance: BUY Electronics from the market (trade action="buy", resource="Electronics")
 - Once you reach Tech 1.0: build a Factory to produce Electronics locally!
 - Tech bonuses: +5%% build speed, +3%% mining, +10%% pop cap, +20%% storage per level.
-- CRITICAL: Without Electronics, you CANNOT unlock Refinery, Factory, or Shipyard.
+- CRITICAL: Without Electronics, you CANNOT unlock Factory or Shipyard.
 
 STRATEGY PRIORITIES:
 1. Mine ALL unmined deposits (resource_deposits where has_mine=false)
-2. Build Generator for power (Fuel→Generator→50MW). Critical!
+2. Build Refinery (Oil→Fuel) + Generator (Fuel→50MW power). CRITICAL for survival!
 3. Build Trading Post (required for all trade)
-4. BUY ELECTRONICS at market to grow tech level toward 0.5 (Refinery unlock)
-5. At Tech 0.5: build Refinery (Oil→Fuel for sustainable power)
-6. Keep buying/stockpiling Electronics until Tech 1.0
-7. At Tech 1.0: build Factory (self-sustaining Electronics!) + Shipyard
+4. BUY ELECTRONICS at market to grow tech level toward 1.0
+5. Keep buying/stockpiling Electronics until Tech 1.0
+6. At Tech 1.0: build Factory (self-sustaining Electronics!) + Shipyard
 8. STOCK ALL 7 RESOURCES for 3x income — buy locally or import via cargo ship
 9. Build Cargo ships to import missing resources from other systems
 10. COLONIZE: build_ship Colony → move to new system → colonize unclaimed planets
