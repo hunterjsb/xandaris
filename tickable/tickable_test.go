@@ -64,6 +64,7 @@ func (m *mockGameProvider) GetCreditLedger() *economy.CreditLedger { return nil 
 func (m *mockGameProvider) GetOrderBook() *economy.OrderBook              { return nil }
 func (m *mockGameProvider) GetContractManager() *economy.ContractManager  { return nil }
 func (m *mockGameProvider) GetDiplomacyManager() *economy.DiplomacyManager { return nil }
+func (m *mockGameProvider) GetAuctionHouse() *economy.AuctionHouse        { return nil }
 func (m *mockGameProvider) GetShippingRoutes() []ShippingRouteInfo  { return nil }
 func (m *mockGameProvider) CompleteShippingTrip(routeID int)        {}
 func (m *mockGameProvider) AssignShipToRoute(routeID, shipID int)  {}

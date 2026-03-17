@@ -2581,6 +2581,43 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Auctions: bid on rare items
+	mux.HandleFunc("/api/auctions", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		ah := p.GetAuctionHouse()
+		if ah == nil {
+			writeErr(w, http.StatusInternalServerError, "auctions not available")
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, APIResponse{OK: true, Data: ah.GetActiveAuctions()})
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				AuctionID int `json:"auction_id"`
+				Bid       int `json:"bid"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if ah.PlaceBid(req.AuctionID, playerName, req.Bid) {
+				writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+					"auction_id": req.AuctionID, "bid": req.Bid, "bidder": playerName,
+				}})
+			} else {
+				writeErr(w, http.StatusBadRequest, "bid rejected (too low, auction ended, or you're the seller)")
+			}
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET or POST")
+		}
+	})
+
 	// Wormholes: active wormhole connections appear in /api/events
 	mux.HandleFunc("/api/wormholes", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, APIResponse{OK: true, Data: map[string]string{

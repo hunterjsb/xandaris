@@ -36,6 +36,7 @@ type GameServer struct {
 	EspionageMgr     *economy.EspionageManager
 	BountyBoard      *economy.BountyBoard
 	BlackMarket      *economy.BlackMarket
+	AuctionHouse     *economy.AuctionHouse
 	cmdRegistry      *CommandRegistry
 	mu               sync.Mutex // protects State during save (held by tick loop + autosave)
 	// Remote is set when connected to a remote server (desktop only, not WASM)
@@ -220,6 +221,7 @@ func (gs *GameServer) initSimulation() {
 	gs.EspionageMgr = economy.NewEspionageManager()
 	gs.BountyBoard = economy.NewBountyBoard()
 	gs.BlackMarket = economy.NewBlackMarket()
+	gs.AuctionHouse = economy.NewAuctionHouse()
 
 	if gs.State.TradeExec != nil {
 		gs.State.TradeExec.SetSystems(gs.State.Systems)

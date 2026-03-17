@@ -60,10 +60,11 @@ type GameProvider interface {
 	SellAtDock(ship *entities.Ship, resource string, qty int) (int, int, error)
 	// Credit limits
 	GetCreditLedger() *economy.CreditLedger
-	// Order book + contracts + diplomacy
+	// Order book + contracts + diplomacy + auctions
 	GetOrderBook() *economy.OrderBook
 	GetContractManager() *economy.ContractManager
 	GetDiplomacyManager() *economy.DiplomacyManager
+	GetAuctionHouse() *economy.AuctionHouse
 	// Shipping routes
 	GetShippingRoutes() []ShippingRouteInfo
 	CompleteShippingTrip(routeID int)

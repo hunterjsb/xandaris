@@ -213,6 +213,10 @@ func (gs *GameServer) GetBlackMarket() *economy.BlackMarket {
 	return gs.BlackMarket
 }
 
+func (gs *GameServer) GetAuctionHouse() *economy.AuctionHouse {
+	return gs.AuctionHouse
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil
