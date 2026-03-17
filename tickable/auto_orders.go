@@ -3,6 +3,7 @@ package tickable
 import (
 	"fmt"
 
+	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
 )
 
@@ -108,26 +109,39 @@ func (aos *AutoOrderSystem) OnTick(tick int64) {
 				continue
 			}
 
+			// Count resource types stocked for diversity awareness
+			typesStocked := 0
+			for _, res := range resources {
+				if planet.GetStoredAmount(res) > 0 {
+					typesStocked++
+				}
+			}
+
 			for _, res := range resources {
 				stored := planet.GetStoredAmount(res)
 				buyPrice := int(market.GetBuyPrice(res))
 				sellPrice := int(market.GetSellPrice(res))
+				basePrice := int(economy.GetBasePrice(res))
 				if buyPrice <= 0 { buyPrice = 10 }
 				if sellPrice <= 0 { sellPrice = 5 }
+				if basePrice <= 0 { basePrice = 100 }
 
-				// Dynamic sell threshold: high-value resources sell sooner
-				// Oil/Electronics at 5x+ base price → sell above 100 (not 500)
-				// Cheap resources → only sell real surplus above 300
+				// Sell threshold considers diversity impact
+				// Don't sell a resource if it would drop diversity below current level
+				// AND the resource isn't very profitable to sell
+				priceRatio := float64(sellPrice) / float64(basePrice)
 				sellThreshold := 300
-				if sellPrice > 200 {
-					sellThreshold = 100 // valuable resource, sell sooner
-				} else if sellPrice > 50 {
-					sellThreshold = 200
+				if priceRatio > 2.0 {
+					sellThreshold = 50 // very profitable, sell aggressively
+				} else if priceRatio > 1.0 {
+					sellThreshold = 150
+				} else if typesStocked <= 5 {
+					sellThreshold = 500 // cheap resource + low diversity = hoard for bonus
 				}
 				keepBuffer := sellThreshold / 2
 
 				if stored < 50 && player.Credits > 500 {
-					// Need this resource — place buy order
+					// Need this resource — buy for diversity
 					maxSpend := player.Credits / 10
 					qty := 50
 					if buyPrice*qty > maxSpend {
