@@ -216,15 +216,36 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 			fmt.Printf("[Shipping] Route #%d: %s heading to SYS-%d\n",
 				route.ID, ship.Name, destSystemID)
 		} else {
-			fmt.Printf("[Shipping] Route #%d: TRAVEL FAILED — %s fuel=%d/%d, fuelPerJump=%d, from sys %d → sys %d\n",
-				route.ID, ship.Name, ship.CurrentFuel, ship.MaxFuel, ship.FuelPerJump, sourceSystemID, destSystemID)
-			// Can't depart — return cargo to source planet
-			gp.UnloadCargo(ship, sourcePlanet, route.Resource, loaded)
+			// Not directly connected — try hopping toward destination
+			connected := gp.GetConnectedSystems(sourceSystemID)
+			hopped := false
+			for _, nextHop := range connected {
+				if gp.StartShipJourney(ship, nextHop) {
+					fmt.Printf("[Shipping] Route #%d: %s hopping via SYS-%d toward dest SYS-%d\n",
+						route.ID, ship.Name, nextHop, destSystemID)
+					hopped = true
+					break
+				}
+			}
+			if !hopped {
+				fmt.Printf("[Shipping] Route #%d: TRAVEL FAILED — %s fuel=%d/%d, from sys %d → sys %d\n",
+					route.ID, ship.Name, ship.CurrentFuel, ship.MaxFuel, sourceSystemID, destSystemID)
+				// Can't depart — return cargo to source planet
+				gp.UnloadCargo(ship, sourcePlanet, route.Resource, loaded)
+			}
 		}
 	} else if atDest && ship.GetTotalCargo() == 0 {
 		// At destination empty — return to source for next load
 		if sourceSystemID != destSystemID {
-			gp.StartShipJourney(ship, sourceSystemID)
+			if !gp.StartShipJourney(ship, sourceSystemID) {
+				// Not directly connected — hop toward source
+				connected := gp.GetConnectedSystems(destSystemID)
+				for _, nextHop := range connected {
+					if gp.StartShipJourney(ship, nextHop) {
+						break
+					}
+				}
+			}
 		}
 	} else if atDest && ship.GetTotalCargo() > 0 {
 		// At destination with cargo — unload
@@ -245,11 +266,25 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 			gp.StartShipJourney(ship, sourceSystemID)
 		}
 	} else if !atSource && !atDest {
-		// Somewhere else — route to the right place
+		// Somewhere else — navigate toward the right place
+		// Try direct jump first; if not connected, find next hop via connected systems
+		targetSys := sourceSystemID
 		if ship.GetTotalCargo() > 0 {
-			gp.StartShipJourney(ship, destSystemID)
-		} else {
-			gp.StartShipJourney(ship, sourceSystemID)
+			targetSys = destSystemID
+		}
+
+		if !gp.StartShipJourney(ship, targetSys) {
+			// Not directly connected — find an intermediate system to hop through
+			connected := gp.GetConnectedSystems(ship.CurrentSystem)
+			for _, nextHop := range connected {
+				// Pick the first connected system that gets us closer
+				// (any hop is better than being stuck)
+				if gp.StartShipJourney(ship, nextHop) {
+					fmt.Printf("[Shipping] Route #%d: %s hopping via SYS-%d toward SYS-%d\n",
+						route.ID, ship.Name, nextHop, targetSys)
+					break
+				}
+			}
 		}
 	}
 }
