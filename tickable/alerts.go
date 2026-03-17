@@ -20,7 +20,7 @@ type AlertSystem struct {
 	lastAlerted map[string]int64 // "player:alert_type" -> last tick alerted (prevents spam)
 }
 
-const alertCooldown = 500 // ticks between repeated alerts (~50 seconds)
+const alertCooldown = 3000 // ticks between repeated alerts (~5 minutes, was 500)
 
 func (as *AlertSystem) OnTick(tick int64) {
 	if tick%50 != 0 {

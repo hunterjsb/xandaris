@@ -190,7 +190,7 @@ func (gs *GameServer) cleanupBotPlayers() {
 // initSimulation sets up fleet/cargo commanders, tickable systems, and construction handler.
 func (gs *GameServer) initSimulation() {
 	gs.initCommandRegistry()
-	gs.Events = game.NewEventLog(500)
+	gs.Events = game.NewEventLog(2000) // large buffer so periodic events aren't drowned by alerts
 	gs.Chat = game.NewChatLog(50)
 	if gs.Registry == nil {
 		gs.Registry = game.NewPlayerRegistry(os.Getenv("XANDARIS_API_KEY"))
