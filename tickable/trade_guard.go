@@ -72,6 +72,13 @@ func (tgs *TradeGuardSystem) OnTick(tick int64) {
 			continue // only recent trades
 		}
 
+		// Skip already-blocked resources (don't re-detect and spam alerts)
+		if tgs.blocked[record.Player] != nil {
+			if unblock, exists := tgs.blocked[record.Player][record.Resource]; exists && tick < unblock {
+				continue
+			}
+		}
+
 		playerTrades := tgs.recentTrades[record.Player]
 
 		// Check for buy-then-sell-at-loss
