@@ -81,6 +81,15 @@ func (cm *ContractManager) GetActiveContracts(player string) []*TradeContract {
 	return result
 }
 
+// GetAllContracts returns all contracts (for save/load persistence).
+func (cm *ContractManager) GetAllContracts() []*TradeContract {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	result := make([]*TradeContract, len(cm.contracts))
+	copy(result, cm.contracts)
+	return result
+}
+
 // CancelContract cancels a contract (either party can cancel).
 func (cm *ContractManager) CancelContract(id int, player string) bool {
 	cm.mu.Lock()

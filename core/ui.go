@@ -143,6 +143,18 @@ func (a *App) drawEmpirePanel(screen *ebiten.Image) {
 		}
 		p.LinePair(popStr, utils.Theme.TextDim, happyStr, happyColor)
 
+		// Tech level (compact)
+		if planet.TechLevel > 0.01 {
+			era := entities.TechEraName(planet.TechLevel)
+			techColor := utils.Theme.TextDim
+			techStr := fmt.Sprintf("Tech %.1f %s", planet.TechLevel, era)
+			if planet.GetStoredAmount(entities.ResElectronics) == 0 && planet.TechLevel > 0.1 && planet.Population > 500 {
+				techColor = utils.SystemOrange
+				techStr += " !"
+			}
+			p.Line(techStr, techColor)
+		}
+
 		// Power bar
 		if planet.PowerConsumed > 0 || planet.PowerGenerated > 0 {
 			powerRatio := planet.GetPowerRatio()

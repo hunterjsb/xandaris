@@ -461,7 +461,13 @@ func (pv *PlanetView) Draw(screen *ebiten.Image) {
 		} else if strings.HasPrefix(line, "Population") || strings.HasPrefix(line, "Workforce") {
 			c = utils.Theme.TextLight
 		} else if strings.HasPrefix(line, "Tech:") {
-			c = utils.Theme.Accent
+			if strings.HasSuffix(line, "DECLINING") {
+				c = utils.SystemOrange
+			} else {
+				c = utils.Theme.Accent
+			}
+		} else if strings.HasPrefix(line, "  No Electronics") {
+			c = utils.SystemRed
 		} else if strings.HasPrefix(line, "  Next:") {
 			c = utils.Theme.TextDim
 		} else if strings.HasPrefix(line, "  Tip:") {
@@ -900,7 +906,13 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 			techBonuses = fmt.Sprintf("  +%.0f%%build +%.0f%%mine +%.0f%%cap",
 				planet.TechLevel*5, planet.TechLevel*3, planet.TechLevel*10)
 		}
-		lines = append(lines, fmt.Sprintf("Tech: %.1f (%s)%s", planet.TechLevel, era, techBonuses))
+		// Detect tech decline: no electronics + tech will decay
+		declining := planet.TechLevel > 0.1 && planet.GetStoredAmount(entities.ResElectronics) == 0 && planet.Population > 500
+		declineLabel := ""
+		if declining {
+			declineLabel = " DECLINING"
+		}
+		lines = append(lines, fmt.Sprintf("Tech: %.1f (%s)%s%s", planet.TechLevel, era, techBonuses, declineLabel))
 		// Show next unlock hint or progression tip
 		if nextName, nextReq := entities.NextTechUnlock(planet.TechLevel); nextName != "" {
 			lines = append(lines, fmt.Sprintf("  Next: %s @ %.1f", nextName, nextReq))
@@ -908,6 +920,8 @@ func formatPlanetDetails(planet *entities.Planet) []string {
 		// Hint when stuck at low tech with no electronics
 		if planet.TechLevel < 0.5 && planet.GetStoredAmount(entities.ResElectronics) == 0 && planet.Population > 500 {
 			lines = append(lines, "  Tip: Buy Electronics at market")
+		} else if declining {
+			lines = append(lines, "  No Electronics — tech decaying!")
 		}
 	}
 
