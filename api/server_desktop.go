@@ -3257,7 +3257,7 @@ function pc(name){return COLORS[name]||'#6688aa'}
 function hexA(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
 async function load(){
 try{
-const[g,s,p,e,f,ev,pw,dl,cx]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows','/api/events?limit=15','/api/power','/api/deliveries','/api/construction'].map(u=>fetch(B+u).then(r=>r.json())));
+const[g,s,p,e,f,ev,pw,dl,cx]=await Promise.all(['/api/galaxy','/api/ships','/api/players','/api/economy','/api/flows','/api/events?limit=50','/api/power','/api/deliveries','/api/construction'].map(u=>fetch(B+u).then(r=>r.json())));
 systems=g.data;ships=s.data;players=p.data;economy=e.data;flows=f.data;power=pw.data||[];deliveries=dl.data||[];construction=cx.data||[];
 document.getElementById('status').textContent='Live · '+new Date().toLocaleTimeString();
 document.getElementById('players').innerHTML=players.sort((a,b)=>b.credits-a.credits).map(p=>{
@@ -3286,7 +3286,7 @@ return'<div style="padding:1px 0;color:#889">'+x.name+' <span style="color:'+pc(
 // Events
 const evts=ev.data||[];
 document.getElementById('events').innerHTML=evts.map(x=>{
-const c=x.type==='trade'?'#889':x.type==='colonize'?'#7fdbca':x.type==='build'?'#6c6':x.type==='alert'?'#c55':'#889';
+const c=x.type==='trade'?'#889':x.type==='colonize'?'#7fdbca':x.type==='build'?'#6c6':x.type==='alert'?'#c55':x.type==='event'?'#f0c050':x.type==='news'?'#50c0f0':x.type==='achievement'?'#ffd700':x.type==='explore'?'#c080ff':x.type==='combat'?'#ff4444':x.type==='victory'?'#00ff88':'#889';
 return'<div style="color:'+c+';padding:1px 0">'+x.time+' '+x.message+'</div>'}).join('');
 }catch(e){document.getElementById('status').textContent='Disconnected';document.getElementById('status').style.color='#a44'}}
 async function loadDetail(sysId){
