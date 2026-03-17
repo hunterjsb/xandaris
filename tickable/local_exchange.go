@@ -118,27 +118,34 @@ func (les *LocalExchangeSystem) processSystem(sys *entities.System, players []*e
 	for _, res := range resources {
 		for i, seller := range planets {
 			sellerStock := seller.planet.GetStoredAmount(res)
-			if sellerStock <= 200 {
-				continue // not surplus
+			// Surplus: keep 100 as buffer, trade anything above that
+			if sellerStock <= 100 {
+				continue
 			}
-			surplus := sellerStock - 200 // keep 200 as buffer
+			surplus := sellerStock - 100
 
 			for j, buyer := range planets {
 				if i == j {
 					continue
 				}
 				if seller.player == buyer.player {
-					continue // don't trade with yourself
+					continue
 				}
 				buyerStock := buyer.planet.GetStoredAmount(res)
-				if buyerStock >= 50 {
-					continue // buyer doesn't need it
+				// Buyer wants it if they have less than 200 (was 50 — too restrictive)
+				if buyerStock >= 200 {
+					continue
 				}
 
-				// Trade: transfer up to 20 units per tick (small automatic trades)
-				qty := 20
+				// Trade batch: up to 50 units per tick (was 20), or whatever surplus allows
+				qty := 50
 				if qty > surplus {
 					qty = surplus
+				}
+				// Don't oversupply the buyer
+				maxNeed := 200 - buyerStock
+				if qty > maxNeed {
+					qty = maxNeed
 				}
 
 				// Price: local sell price
