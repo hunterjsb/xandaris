@@ -96,21 +96,36 @@ func (ges *GalacticEventSystem) solarFlare(game GameProvider, systems []*entitie
 	}
 	sys := systems[rand.Intn(len(systems))]
 	affected := 0
+	shielded := 0
 	for _, e := range sys.Entities {
 		if planet, ok := e.(*entities.Planet); ok && planet.Owner != "" {
-			// Drain 50% of stored Fuel
 			fuel := planet.GetStoredAmount(entities.ResFuel)
-			if fuel > 0 {
-				drain := fuel / 2
-				planet.RemoveStoredResource(entities.ResFuel, drain)
-				affected++
+			if fuel <= 0 {
+				continue
 			}
+			// Check for shield
+			hasShield := false
+			for _, be := range planet.Buildings {
+				if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingPlanetShield && b.IsOperational {
+					hasShield = true
+					break
+				}
+			}
+			if hasShield {
+				shielded++
+				continue // shield protects against solar flare
+			}
+			drain := fuel / 2
+			planet.RemoveStoredResource(entities.ResFuel, drain)
+			affected++
 		}
 	}
-	if affected > 0 {
-		game.LogEvent("event", "",
-			fmt.Sprintf("☀️ Solar flare in %s! Fuel reserves depleted across %d planets",
-				sys.Name, affected))
+	if affected > 0 || shielded > 0 {
+		msg := fmt.Sprintf("☀️ Solar flare in %s! %d planets affected", sys.Name, affected)
+		if shielded > 0 {
+			msg += fmt.Sprintf(" (%d shielded)", shielded)
+		}
+		game.LogEvent("event", "", msg)
 	}
 }
 
@@ -182,13 +197,22 @@ func (ges *GalacticEventSystem) tradeBoom(game GameProvider) {
 		fmt.Sprintf("📈 Trade boom! Demand for %s surges across the galaxy", res))
 }
 
-// asteroidImpact: a planet loses some stored resources
+// asteroidImpact: a planet loses some stored resources (reduced by shield)
 func (ges *GalacticEventSystem) asteroidImpact(game GameProvider, systems []*entities.System) {
 	planet := randomOwnedPlanet(systems)
 	if planet == nil {
 		return
 	}
-	// Destroy 20-40% of a random stored resource
+
+	// Check for Planetary Shield — reduces damage
+	shieldLevel := 0
+	for _, be := range planet.Buildings {
+		if b, ok := be.(*entities.Building); ok && b.BuildingType == entities.BuildingPlanetShield && b.IsOperational {
+			shieldLevel = b.Level
+			break
+		}
+	}
+
 	resources := []string{entities.ResIron, entities.ResWater, entities.ResOil,
 		entities.ResRareMetals}
 	res := resources[rand.Intn(len(resources))]
@@ -196,10 +220,31 @@ func (ges *GalacticEventSystem) asteroidImpact(game GameProvider, systems []*ent
 	if stored <= 10 {
 		return
 	}
-	loss := int(float64(stored) * (0.2 + rand.Float64()*0.2))
+
+	// Base loss 20-40%, reduced 15% per shield level (L5 = 75% reduction)
+	baseLoss := 0.2 + rand.Float64()*0.2
+	shieldReduction := float64(shieldLevel) * 0.15
+	if shieldReduction > 0.90 {
+		shieldReduction = 0.90
+	}
+	actualLoss := baseLoss * (1.0 - shieldReduction)
+	loss := int(float64(stored) * actualLoss)
+	if loss <= 0 {
+		game.LogEvent("event", planet.Owner,
+			fmt.Sprintf("☄️ Asteroid deflected by %s's Planetary Shield!", planet.Name))
+		return
+	}
+
 	planet.RemoveStoredResource(res, loss)
-	game.LogEvent("event", planet.Owner,
-		fmt.Sprintf("☄️ Asteroid impact on %s! Lost %d %s", planet.Name, loss, res))
+	if shieldLevel > 0 {
+		game.LogEvent("event", planet.Owner,
+			fmt.Sprintf("☄️ Asteroid hit %s! Shield reduced damage — lost %d %s (%.0f%% blocked)",
+				planet.Name, loss, res, shieldReduction*100))
+	} else {
+		game.LogEvent("event", planet.Owner,
+			fmt.Sprintf("☄️ Asteroid impact on %s! Lost %d %s (build a Planetary Shield!)",
+				planet.Name, loss, res))
+	}
 }
 
 // refugeeWave: an unclaimed habitable planet gets free colonists

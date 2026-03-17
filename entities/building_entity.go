@@ -17,6 +17,7 @@ const (
 	BuildingTradingPost   = "Trading Post"
 	BuildingShipyard      = "Shipyard"
 	BuildingResearchLab   = "Research Lab"
+	BuildingPlanetShield  = "Planetary Shield"
 )
 
 // BuildingTechRequirement returns the minimum tech level needed to construct a building.
