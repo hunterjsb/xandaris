@@ -308,17 +308,16 @@ func (te *TradeExecutor) Sell(player *entities.Player, players []*entities.Playe
 	srcPlanet.RemoveStoredResource(resource, quantity)
 
 	// Local delivery — credits paid on completion, not instantly
-	if te.Deliveries != nil {
-		te.Deliveries.CreateLocalDelivery(
-			te.tick, "", player.Name, resource, quantity,
-			price, total, destPlanetID, sellSystemID,
-			DeliveryDirectionSell, 5,
-		)
-	} else {
-		// No delivery manager fallback — instant (shouldn't happen in production)
-		te.addToOtherPlanet(players, player, resource, quantity, sellSystemID)
-		player.Credits += total
+	if te.Deliveries == nil {
+		// Put resources back — can't trade without delivery system
+		srcPlanet.AddStoredResource(resource, quantity)
+		return TradeRecord{}, fmt.Errorf("delivery system not available")
 	}
+	te.Deliveries.CreateLocalDelivery(
+		te.tick, "", player.Name, resource, quantity,
+		price, total, destPlanetID, sellSystemID,
+		DeliveryDirectionSell, 5,
+	)
 
 	te.market.AddTradeVolume(resource, quantity, false)
 
@@ -377,66 +376,7 @@ func (te *TradeExecutor) getSystemForPlanet(planet *entities.Planet) int {
 	return -1
 }
 
-// addToOtherPlanet adds resources to another player's planet, preferring same system.
-func (te *TradeExecutor) addToOtherPlanet(players []*entities.Player, exclude *entities.Player, resource string, qty int, preferSystemID int) {
-	// Try same system first
-	if preferSystemID >= 0 && te.systems != nil {
-		for _, p := range players {
-			if p == nil || p == exclude {
-				continue
-			}
-			for _, planet := range p.OwnedPlanets {
-				if planet == nil {
-					continue
-				}
-				if te.getSystemForPlanet(planet) == preferSystemID {
-					planet.AddStoredResource(resource, qty)
-					return
-				}
-			}
-		}
-	}
-	// Fallback: any other player's planet with a trading post
-	for _, p := range players {
-		if p == nil || p == exclude {
-			continue
-		}
-		dest := firstPlanetWithTradingPost(p)
-		if dest != nil {
-			dest.AddStoredResource(resource, qty)
-			return
-		}
-	}
-	// Last resort: any other player's planet
-	for _, p := range players {
-		if p == nil || p == exclude {
-			continue
-		}
-		if len(p.OwnedPlanets) > 0 && p.OwnedPlanets[0] != nil {
-			p.OwnedPlanets[0].AddStoredResource(resource, qty)
-			return
-		}
-	}
-}
 
-// aggregateOtherStock sums stock of a resource across all players EXCEPT the given one.
-func aggregateOtherStock(players []*entities.Player, exclude *entities.Player, resource string) int {
-	total := 0
-	for _, p := range players {
-		if p == nil || p == exclude {
-			continue
-		}
-		for _, planet := range p.OwnedPlanets {
-			if planet == nil {
-				continue
-			}
-			if s := planet.StoredResources[resource]; s != nil {
-				total += s.Amount
-			}
-		}
-	}
-	return total
-}
 
 // aggregateOtherStockInSystem sums NPC stock only on planets in the same system.
 func (te *TradeExecutor) aggregateOtherStockInSystem(players []*entities.Player, exclude *entities.Player, resource string, systemID int) int {
@@ -461,28 +401,6 @@ func (te *TradeExecutor) aggregateOtherStockInSystem(players []*entities.Player,
 	return total
 }
 
-// removeFromOthers removes qty of resource from other players' planets.
-func removeFromOthers(players []*entities.Player, exclude *entities.Player, resource string, qty int) {
-	remaining := qty
-	for _, p := range players {
-		if p == nil || p == exclude || remaining <= 0 {
-			continue
-		}
-		for _, planet := range p.OwnedPlanets {
-			if planet == nil || remaining <= 0 {
-				continue
-			}
-			if s := planet.StoredResources[resource]; s != nil && s.Amount > 0 {
-				take := remaining
-				if take > s.Amount {
-					take = s.Amount
-				}
-				planet.RemoveStoredResource(resource, take)
-				remaining -= take
-			}
-		}
-	}
-}
 
 // removeFromOthersInSystem removes from NPC planets only in the specified system.
 func (te *TradeExecutor) removeFromOthersInSystem(players []*entities.Player, exclude *entities.Player, resource string, qty int, systemID int) {
@@ -511,35 +429,7 @@ func (te *TradeExecutor) removeFromOthersInSystem(players []*entities.Player, ex
 	}
 }
 
-func aggregatePlayerStock(player *entities.Player, resource string) int {
-	total := 0
-	for _, planet := range player.OwnedPlanets {
-		if planet == nil {
-			continue
-		}
-		if s := planet.StoredResources[resource]; s != nil {
-			total += s.Amount
-		}
-	}
-	return total
-}
 
-func removeFromPlayer(player *entities.Player, resource string, qty int) {
-	remaining := qty
-	for _, planet := range player.OwnedPlanets {
-		if planet == nil || remaining <= 0 {
-			continue
-		}
-		if s := planet.StoredResources[resource]; s != nil && s.Amount > 0 {
-			take := remaining
-			if take > s.Amount {
-				take = s.Amount
-			}
-			planet.RemoveStoredResource(resource, take)
-			remaining -= take
-		}
-	}
-}
 
 func firstPlanetWithTradingPost(player *entities.Player) *entities.Planet {
 	if player == nil {
