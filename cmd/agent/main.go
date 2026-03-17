@@ -213,6 +213,14 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"ship_id":{"type":"integer"},"planet_id":{"type":"integer"},"amount":{"type":"integer","description":"0 = fill up"}},"required":["ship_id","planet_id"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "diplomacy", Description: "View or change relations with another faction. Actions: 'improve' (move toward Allied) or 'degrade' (move toward Hostile). Relations affect docking fees: Allies get 75% discount, Hostile pays double.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string","description":"faction name"},"action":{"type":"string","enum":["improve","degrade"]}},"required":["target","action"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_relations", Description: "View your diplomatic relations with all factions. Relations: Hostile(-2), Cold(-1), Neutral(0), Friendly(+1), Allied(+2). Affects docking fees and trade.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "create_route", Description: "Create an automated shipping route. A Cargo ship will auto-cycle: load resource at source planet → fly to dest → unload → return. Use PLANET IDs (5+ digit numbers from get_planet), NOT system IDs. ship_id 0 = auto-assign an idle Cargo ship.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"source_planet_id":{"type":"integer","description":"PLANET ID (5+ digits, from get_planet or get_status)"},"dest_planet_id":{"type":"integer","description":"PLANET ID (5+ digits), NOT a system ID"},"resource":{"type":"string"},"quantity":{"type":"integer","description":"per trip, 0=fill cargo"},"ship_id":{"type":"integer","description":"0=auto-assign"}},"required":["source_planet_id","dest_planet_id","resource"]}`),
 	}},
@@ -349,6 +357,12 @@ func executeTool(name string, args string, factionName string) string {
 			return fmt.Sprintf("Error: %v", err)
 		}
 		return result
+	case "get_relations":
+		result, err := callAPI("GET", "/api/diplomacy", "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
 	case "get_limit_orders":
 		var p struct{ SystemID int `json:"system_id"` }
 		json.Unmarshal([]byte(args), &p)
@@ -390,6 +404,7 @@ func executeTool(name string, args string, factionName string) string {
 			"create_route":   "/api/shipping/routes",
 			"standing_order":    "/api/orders",
 			"create_contract":   "/api/contracts",
+			"diplomacy":         "/api/diplomacy",
 			"place_limit_order": "/api/orders/limit",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)

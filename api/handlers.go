@@ -34,6 +34,7 @@ type GameStateProvider interface {
 	GetCreditLedger() *economy.CreditLedger
 	GetOrderBook() *economy.OrderBook
 	GetContractManager() *economy.ContractManager
+	GetDiplomacyManager() *economy.DiplomacyManager
 	RemovePlayer(name string) bool
 }
 

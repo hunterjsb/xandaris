@@ -197,6 +197,10 @@ func (gs *GameServer) GetContractManager() *economy.ContractManager {
 	return gs.ContractMgr
 }
 
+func (gs *GameServer) GetDiplomacyManager() *economy.DiplomacyManager {
+	return gs.DiplomacyMgr
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil

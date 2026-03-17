@@ -2302,6 +2302,81 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// Diplomacy: view and manage faction relations
+	mux.HandleFunc("/api/diplomacy", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		dm := p.GetDiplomacyManager()
+		if dm == nil {
+			writeErr(w, http.StatusInternalServerError, "diplomacy not available")
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				// Return all relations overview
+				players := p.GetPlayers()
+				overview := make(map[string]map[string]string)
+				for _, pl := range players {
+					if pl == nil {
+						continue
+					}
+					rels := dm.GetAllRelations(pl.Name)
+					named := make(map[string]string)
+					for k, v := range rels {
+						named[k] = economy.RelationName(v)
+					}
+					if len(named) > 0 {
+						overview[pl.Name] = named
+					}
+				}
+				writeJSON(w, APIResponse{OK: true, Data: overview})
+			} else {
+				rels := dm.GetAllRelations(playerName)
+				named := make(map[string]string)
+				for k, v := range rels {
+					named[k] = economy.RelationName(v)
+				}
+				writeJSON(w, APIResponse{OK: true, Data: named})
+			}
+
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				Target string `json:"target"`
+				Action string `json:"action"` // "improve" or "degrade"
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			var newLevel int
+			switch req.Action {
+			case "improve":
+				newLevel = dm.ImproveRelation(playerName, req.Target)
+			case "degrade":
+				newLevel = dm.DegradeRelation(playerName, req.Target)
+			default:
+				writeErr(w, http.StatusBadRequest, "action must be 'improve' or 'degrade'")
+				return
+			}
+			writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+				"you":      playerName,
+				"target":   req.Target,
+				"relation": economy.RelationName(newLevel),
+				"level":    newLevel,
+			}})
+
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET or POST")
+		}
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
