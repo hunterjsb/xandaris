@@ -196,9 +196,21 @@ func (gs *GameServer) initSimulation() {
 		gs.Registry = game.NewPlayerRegistry(os.Getenv("XANDARIS_API_KEY"))
 	}
 
-	// Wire trade event logging
+	// Wire trade event logging — throttled to prevent trade spam flooding the event feed.
+	// Only log trades above a minimum value or at most once per player per 500 ticks.
 	if gs.State.TradeExec != nil {
+		tradeThrottle := make(map[string]int64) // playerName → last logged tick
 		gs.State.TradeExec.OnTrade = func(r economy.TradeRecord) {
+			// Always log high-value trades (>500cr)
+			// For small trades, throttle to once per 500 ticks per player
+			if r.Total < 500 {
+				lastLog, ok := tradeThrottle[r.Player]
+				if ok && r.Tick-lastLog < 500 {
+					return // throttled
+				}
+			}
+			tradeThrottle[r.Player] = r.Tick
+
 			action := "bought"
 			if r.Action == "sell" {
 				action = "sold"

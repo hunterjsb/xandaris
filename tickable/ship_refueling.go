@@ -54,10 +54,10 @@ func (srs *ShipRefuelingSystem) OnTick(tick int64) {
 				continue
 			}
 
-			// Take up to 5 fuel per interval (gradual refueling)
+			// Take up to 25 fuel per interval (ships need to refuel fast to run routes)
 			refuelAmount := needed
-			if refuelAmount > 5 {
-				refuelAmount = 5
+			if refuelAmount > 25 {
+				refuelAmount = 25
 			}
 			if refuelAmount > available {
 				refuelAmount = available

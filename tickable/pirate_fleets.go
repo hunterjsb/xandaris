@@ -113,6 +113,10 @@ func (pfs *PirateFleetSystem) pirateRaid(game GameProvider, pirate *PirateFleet,
 			if ship.ShipType != entities.ShipTypeCargo || ship.GetTotalCargo() == 0 {
 				continue
 			}
+			// Convoy protection: escorted cargo ships are immune to pirate raids
+			if HasEscort(ship, players) {
+				continue
+			}
 			// Pirates steal cargo based on strength
 			// Strength 1: 5%, Strength 3: 15%
 			stealRate := float64(pirate.Strength) * 0.05

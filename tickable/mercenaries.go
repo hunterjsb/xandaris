@@ -80,7 +80,7 @@ func (ms *MercenarySystem) HireMercenaries(player *entities.Player, mercType str
 			createMercShip(entities.ShipTypeFrigate, player.Name, systemID),
 			createMercShip(entities.ShipTypeFrigate, player.Name, systemID))
 	default:
-		return 0, fmt.Errorf("unknown merc type: %s (use escort, strike_force, or armada)")
+		return 0, fmt.Errorf("unknown merc type (use escort, strike_force, or armada)")
 	}
 
 	if player.Credits < cost {

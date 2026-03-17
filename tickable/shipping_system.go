@@ -192,6 +192,9 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 		}
 		loaded, err := gp.LoadCargo(ship, sourcePlanet, route.Resource, qty)
 		if err != nil || loaded <= 0 {
+			fmt.Printf("[Shipping] Route #%d: LOAD FAILED — %s has %d %s, ship %s in sys %d, planet in sys %d: %v\n",
+				route.ID, sourcePlanet.Name, sourcePlanet.GetStoredAmount(route.Resource),
+				route.Resource, ship.Name, ship.CurrentSystem, sourceSystemID, err)
 			return
 		}
 		fmt.Printf("[Shipping] Route #%d: %s loaded %d %s from %s\n",
@@ -213,6 +216,8 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 			fmt.Printf("[Shipping] Route #%d: %s heading to SYS-%d\n",
 				route.ID, ship.Name, destSystemID)
 		} else {
+			fmt.Printf("[Shipping] Route #%d: TRAVEL FAILED — %s fuel=%d/%d, fuelPerJump=%d, from sys %d → sys %d\n",
+				route.ID, ship.Name, ship.CurrentFuel, ship.MaxFuel, ship.FuelPerJump, sourceSystemID, destSystemID)
 			// Can't depart — return cargo to source planet
 			gp.UnloadCargo(ship, sourcePlanet, route.Resource, loaded)
 		}
