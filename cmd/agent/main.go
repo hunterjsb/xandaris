@@ -188,6 +188,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"},"planet_id":{"type":"integer","description":"your planet in this system"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer"},"price":{"type":"integer","description":"limit price per unit"}},"required":["system_id","planet_id","resource","action","quantity","price"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "create_contract", Description: "Create a supply contract: you commit to delivering X units of a resource to a buyer every N ticks at a fixed price. The delivery auto-executes if you have stock in the same system. Great for guaranteed income.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"buyer":{"type":"string","description":"buyer faction name"},"resource":{"type":"string"},"quantity":{"type":"integer"},"price_per_unit":{"type":"integer"},"interval":{"type":"integer","description":"ticks between deliveries (100=~10sec)"},"system_id":{"type":"integer"},"planet_id":{"type":"integer","description":"buyer's planet for delivery"}},"required":["buyer","resource","quantity","price_per_unit","interval","system_id","planet_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "standing_order", Description: "Create a standing order for automatic local trade. Sell when stock exceeds threshold, or buy when stock drops below threshold. Executes automatically every 30 ticks.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"planet_id":{"type":"integer"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer","description":"amount per execution"},"threshold":{"type":"integer","description":"sell when stock > threshold, buy when stock < threshold"}},"required":["planet_id","resource","action","quantity","threshold"]}`),
 	}},
@@ -329,6 +333,7 @@ func executeTool(name string, args string, factionName string) string {
 			"refuel_ship":    "/api/ships/refuel",
 			"create_route":   "/api/shipping/routes",
 			"standing_order":    "/api/orders",
+			"create_contract":   "/api/contracts",
 			"place_limit_order": "/api/orders/limit",
 		}[name]
 		result, err := callAPI("POST", endpoint, args, factionName)

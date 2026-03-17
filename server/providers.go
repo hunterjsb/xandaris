@@ -193,6 +193,10 @@ func (gs *GameServer) GetOrderBook() *economy.OrderBook {
 	return gs.OrderBook
 }
 
+func (gs *GameServer) GetContractManager() *economy.ContractManager {
+	return gs.ContractMgr
+}
+
 func (gs *GameServer) GetShippingRoutes() []tickable.ShippingRouteInfo {
 	if gs.ShippingMgr == nil {
 		return nil

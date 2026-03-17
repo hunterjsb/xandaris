@@ -2120,6 +2120,61 @@ func StartServer(provider GameStateProvider) {
 		}
 	})
 
+	// Trade contracts: binding supply agreements
+	mux.HandleFunc("/api/contracts", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		cm := p.GetContractManager()
+		if cm == nil {
+			writeErr(w, http.StatusInternalServerError, "contracts not available")
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			playerName := getAuthPlayer(r)
+			contracts := cm.GetActiveContracts(playerName)
+			writeJSON(w, APIResponse{OK: true, Data: contracts})
+
+		case http.MethodPost:
+			playerName := getAuthPlayer(r)
+			if playerName == "" {
+				writeErr(w, http.StatusUnauthorized, "auth required")
+				return
+			}
+			var req struct {
+				Buyer        string `json:"buyer"`
+				Resource     string `json:"resource"`
+				Quantity     int    `json:"quantity"`
+				PricePerUnit int    `json:"price_per_unit"`
+				Interval     int    `json:"interval"` // ticks between deliveries
+				SystemID     int    `json:"system_id"`
+				PlanetID     int    `json:"planet_id"` // buyer's delivery planet
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeErr(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if req.Quantity <= 0 || req.PricePerUnit <= 0 || req.Interval <= 0 {
+				writeErr(w, http.StatusBadRequest, "quantity, price, and interval must be positive")
+				return
+			}
+			contract := cm.CreateContract(playerName, req.Buyer, req.Resource, req.Quantity, req.PricePerUnit, req.Interval, req.SystemID, req.PlanetID)
+			writeJSON(w, APIResponse{OK: true, Data: contract})
+
+		case http.MethodDelete:
+			playerName := getAuthPlayer(r)
+			contractID, _ := strconv.Atoi(r.URL.Query().Get("contract_id"))
+			if cm.CancelContract(contractID, playerName) {
+				writeJSON(w, APIResponse{OK: true, Data: "cancelled"})
+			} else {
+				writeErr(w, http.StatusNotFound, "contract not found or not yours")
+			}
+
+		default:
+			writeErr(w, http.StatusMethodNotAllowed, "GET, POST, or DELETE")
+		}
+	})
+
 	// Trade opportunities: find the best cross-system arbitrage
 	mux.HandleFunc("/api/trade-opportunities", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

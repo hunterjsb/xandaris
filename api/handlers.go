@@ -33,6 +33,7 @@ type GameStateProvider interface {
 	GetShippingManager() *game.ShippingManager
 	GetCreditLedger() *economy.CreditLedger
 	GetOrderBook() *economy.OrderBook
+	GetContractManager() *economy.ContractManager
 	RemovePlayer(name string) bool
 }
 
@@ -1149,13 +1150,14 @@ func handleGetCatalog() interface{} {
 	ships := make([]CatalogShip, 0, len(shipTypes))
 	for _, st := range shipTypes {
 		ships = append(ships, CatalogShip{
-			Type:      string(st),
-			Cost:      entities.GetShipBuildCost(st),
-			BuildTime: entities.GetShipBuildTime(st),
-			Resources: entities.GetShipResourceRequirements(st),
-			MaxFuel:   entities.GetShipMaxFuel(st),
-			MaxCargo:  entities.GetShipMaxCargo(st),
-			MaxHealth: entities.GetShipMaxHealth(st),
+			Type:         string(st),
+			Cost:         entities.GetShipBuildCost(st),
+			BuildTime:    entities.GetShipBuildTime(st),
+			TechRequired: entities.GetShipTechRequirement(st),
+			Resources:    entities.GetShipResourceRequirements(st),
+			MaxFuel:      entities.GetShipMaxFuel(st),
+			MaxCargo:     entities.GetShipMaxCargo(st),
+			MaxHealth:    entities.GetShipMaxHealth(st),
 		})
 	}
 
