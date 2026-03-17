@@ -217,7 +217,7 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string","description":"faction name"},"action":{"type":"string","enum":["improve","degrade"]}},"required":["target","action"]}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
-		Name: "get_relations", Description: "View your diplomatic relations with all factions. Relations: Hostile(-2), Cold(-1), Neutral(0), Friendly(+1), Allied(+2). Affects docking fees and trade.",
+		Name: "get_relations", Description: "View diplomatic relations. Hostile factions auto-fight when military ships meet! Allied factions get trade discounts. Improve relations through trade, degrade through espionage/war.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
