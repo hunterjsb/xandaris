@@ -69,11 +69,24 @@ func (aos *AutoOrderSystem) OnTick(tick int64) {
 		entities.ResElectronics,
 	}
 
+	// Prune dead orders first
+	ob.PruneExpired()
+
+	// Track which players we've cleared per system (so we clear once, place fresh)
+	cleared := make(map[string]bool)
+
 	for _, sys := range systems {
 		for _, e := range sys.Entities {
 			planet, ok := e.(*entities.Planet)
 			if !ok || planet.Owner == "" {
 				continue
+			}
+
+			// Clear old auto-orders for this player in this system (once)
+			clearKey := fmt.Sprintf("%s:%d", planet.Owner, sys.ID)
+			if !cleared[clearKey] {
+				ob.ClearPlayerOrders(planet.Owner, sys.ID)
+				cleared[clearKey] = true
 			}
 
 			// Must have a Trading Post

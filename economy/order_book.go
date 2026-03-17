@@ -36,6 +36,31 @@ func NewOrderBook() *OrderBook {
 	}
 }
 
+// ClearPlayerOrders removes all active orders for a player in a system.
+// Used by auto-orders to refresh instead of stacking.
+func (ob *OrderBook) ClearPlayerOrders(player string, systemID int) {
+	ob.mu.Lock()
+	defer ob.mu.Unlock()
+	for _, o := range ob.orders {
+		if o.Active && o.Player == player && o.SystemID == systemID {
+			o.Active = false
+		}
+	}
+}
+
+// PruneExpired removes filled and inactive orders to prevent unbounded growth.
+func (ob *OrderBook) PruneExpired() {
+	ob.mu.Lock()
+	defer ob.mu.Unlock()
+	alive := make([]*MarketOrder, 0, len(ob.orders)/2)
+	for _, o := range ob.orders {
+		if o.Active && o.Quantity > 0 {
+			alive = append(alive, o)
+		}
+	}
+	ob.orders = alive
+}
+
 // PlaceOrder adds a new limit order to the book.
 func (ob *OrderBook) PlaceOrder(systemID, planetID int, player, resource, action string, quantity, price int) *MarketOrder {
 	ob.mu.Lock()
