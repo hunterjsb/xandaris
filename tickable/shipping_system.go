@@ -216,6 +216,11 @@ func (ss *ShippingSystem) processRoute(route ShippingRouteInfo, ship *entities.S
 			// Can't depart — return cargo to source planet
 			gp.UnloadCargo(ship, sourcePlanet, route.Resource, loaded)
 		}
+	} else if atDest && ship.GetTotalCargo() == 0 {
+		// At destination empty — return to source for next load
+		if sourceSystemID != destSystemID {
+			gp.StartShipJourney(ship, sourceSystemID)
+		}
 	} else if atDest && ship.GetTotalCargo() > 0 {
 		// At destination with cargo — unload
 		unloaded, err := gp.UnloadCargo(ship, destPlanet, route.Resource, ship.CargoHold[route.Resource])
