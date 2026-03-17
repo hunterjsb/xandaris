@@ -383,8 +383,9 @@ func (gs *GameServer) handleDemolishCommand(cmd game.GameCommand) {
 	// Refund 25% of build cost
 	refund := game.GetBuildingCost(building.BuildingType) / 4
 
-	// Remove from planet
+	// Remove from planet and rebalance workforce
 	planet.Buildings = append(planet.Buildings[:dd.BuildingIndex], planet.Buildings[dd.BuildingIndex+1:]...)
+	planet.RebalanceWorkforce()
 	human.Credits += refund
 
 	sendSuccess(cmd, map[string]interface{}{
