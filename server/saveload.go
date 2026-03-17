@@ -253,7 +253,7 @@ func (gs *GameServer) getContracts() []*economy.TradeContract {
 	if gs.ContractMgr == nil {
 		return nil
 	}
-	return gs.ContractMgr.GetActiveContracts("")
+	return gs.ContractMgr.GetAllContracts()
 }
 
 // LoadGame loads a game from the given path.

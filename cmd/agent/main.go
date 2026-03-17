@@ -80,12 +80,15 @@ LOGISTICS WORKFLOW (cross-system trade):
    sell_at_dock: sell cargo at a foreign Trading Post for credits
 5. Or create_route to automate: load→fly→unload→return→repeat
 
-EACH TURN, CONSIDER:
-- Check get_planet: is tech_level growing? If Electronics=0, BUY some immediately
-- Check get_finances for diversity gaps — import missing resources for income bonus
-- Check find_trades for profitable cargo routes
-- Place limit orders for resources you need (even if no seller exists yet)
-- Create contracts with neighbors for guaranteed supply
+EACH TURN CHECKLIST (follow this order):
+1. get_status → check credits, planets, storage
+2. get_planet → check tech_level (if Electronics=0, BUY some to grow tech)
+3. get_finances → check diversity multiplier. If <3x, you're losing income!
+4. For each resource you're MISSING: place_limit_order action="buy" at a fair price
+5. For each resource you have SURPLUS (>200): place_limit_order action="sell"
+6. If neighbor in same system: create_contract for steady supply of what you need
+7. If you have a Cargo ship idle: find_trades → load_cargo → move_ship → sell_at_dock
+8. End with CHAT: share what you did this turn
 - If tech >= next milestone threshold, build the newly unlocked building
 
 CONTEXT: You are playing continuously. Remember what you did last turn and build on it. Don't repeat failed actions.`
@@ -210,6 +213,10 @@ var tools = []openai.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{}}`),
 	}},
 	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
+		Name: "get_limit_orders", Description: "View active limit orders in a system. See what others are buying/selling and at what price — helps you set competitive prices.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"}},"required":["system_id"]}`),
+	}},
+	{Type: openai.ToolTypeFunction, Function: &openai.FunctionDefinition{
 		Name: "place_limit_order", Description: "Place a limit buy/sell order on a system's order book. Buy: 'I will pay up to X credits for Y units'. Sell: 'I will sell Y units at X credits minimum'. Orders match automatically when buy price >= sell price.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"system_id":{"type":"integer"},"planet_id":{"type":"integer","description":"your planet in this system"},"resource":{"type":"string"},"action":{"type":"string","enum":["buy","sell"]},"quantity":{"type":"integer"},"price":{"type":"integer","description":"limit price per unit"}},"required":["system_id","planet_id","resource","action","quantity","price"]}`),
 	}},
@@ -324,6 +331,14 @@ func executeTool(name string, args string, factionName string) string {
 		var p struct{ SystemID int `json:"system_id"` }
 		json.Unmarshal([]byte(args), &p)
 		result, err := callAPI("GET", fmt.Sprintf("/api/systems/%d", p.SystemID), "", factionName)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return result
+	case "get_limit_orders":
+		var p struct{ SystemID int `json:"system_id"` }
+		json.Unmarshal([]byte(args), &p)
+		result, err := callAPI("GET", fmt.Sprintf("/api/orders/limit?system_id=%d", p.SystemID), "", factionName)
 		if err != nil {
 			return fmt.Sprintf("Error: %v", err)
 		}
