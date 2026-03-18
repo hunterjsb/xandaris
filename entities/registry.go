@@ -28,6 +28,12 @@ type EntityGenerator interface {
 	GetSubType() string
 }
 
+// FormationFunc is the hook for physics-based planet formation.
+// Set by entities/planet/formation.go init(). When non-nil, replaces
+// random planet generation with a formation simulation driven by
+// star properties and orbital mechanics.
+var FormationFunc func(star *Star, rng *rand.Rand, systemID int, seed int64) []Entity
+
 // Registry holds all registered entity generators
 var registry []EntityGenerator
 
@@ -100,20 +106,32 @@ func GenerateEntitiesForSystem(systemID int, seed int64) []Entity {
 		entity := gen.Generate(params)
 		entities = append(entities, entity)
 	}
-	// Generate planets (2-6 per system)
-	planetCount := 2 + rng.Intn(5)
-	planetGenerators := GetGeneratorsByType(EntityTypePlanet)
-	if len(planetGenerators) > 0 {
-		for i := range make([]struct{}, planetCount) {
-			gen := SelectRandomGenerator(planetGenerators)
-			params := GenerationParams{
-				SystemID:      systemID,
-				OrbitDistance: 50.0 + float64(i)*30.0,
-				OrbitAngle:    rng.Float64() * 6.28,
-				SystemSeed:    seed,
+	// Generate planets — use formation sim if available, else fall back to random
+	var star *Star
+	if len(entities) > 0 {
+		star, _ = entities[0].(*Star)
+	}
+
+	if star != nil && FormationFunc != nil {
+		// Physics-based formation: star properties drive planet creation
+		planets := FormationFunc(star, rng, systemID, seed)
+		entities = append(entities, planets...)
+	} else {
+		// Legacy random generation
+		planetCount := 2 + rng.Intn(5)
+		planetGenerators := GetGeneratorsByType(EntityTypePlanet)
+		if len(planetGenerators) > 0 {
+			for i := range make([]struct{}, planetCount) {
+				gen := SelectRandomGenerator(planetGenerators)
+				params := GenerationParams{
+					SystemID:      systemID,
+					OrbitDistance: 50.0 + float64(i)*30.0,
+					OrbitAngle:    rng.Float64() * 6.28,
+					SystemSeed:    seed,
+				}
+				entity := gen.Generate(params)
+				entities = append(entities, entity)
 			}
-			entity := gen.Generate(params)
-			entities = append(entities, entity)
 		}
 	}
 

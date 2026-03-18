@@ -42,6 +42,7 @@ func init() {
 	gob.Register(&game.ShippingRoute{})
 	gob.Register(&economy.MarketOrder{})
 	gob.Register(&economy.TradeContract{})
+	gob.Register(entities.Composition{})
 }
 
 // SaveGame saves the current game state.

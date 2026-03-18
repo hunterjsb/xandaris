@@ -14,10 +14,22 @@ type ResourceStorage struct {
 	Capacity     int
 }
 
+// Composition represents the mass fractions of a planet's materials.
+// Values should sum to approximately 1.0. Drives the entire physical
+// property chain: density → mass → radius → gravity → habitability.
+type Composition struct {
+	Iron      float64 // Metallic core (maps to Iron resource deposits)
+	Silicate  float64 // Rocky mantle material
+	Water     float64 // H2O — ice or liquid (maps to Water deposits)
+	Gas       float64 // H/He gas envelope (gas giants)
+	Organics  float64 // Carbon compounds (maps to Oil deposits)
+	RareEarth float64 // Heavy/rare elements (maps to Rare Metals + He-3)
+}
+
 // Planet represents a planet entity in a star system
 type Planet struct {
 	BaseEntity
-	Size            int                         // Radius in pixels
+	Size            int                         // Radius in pixels (visual)
 	PlanetType      string                      // Subtype like "Terrestrial", "Gas Giant", etc.
 	Population      int64                       // Number of inhabitants
 	Resources       []Entity                    // Resource entities on this planet
@@ -38,6 +50,14 @@ type Planet struct {
 	PowerRatio        float64                     // 0.0-1.0 generated/consumed
 	PowerHistory      []float64                   // last 50 power ratios for sparkline
 	Specialties       map[string]float64          // workforce specialization bonuses (mining, refining, etc.)
+
+	// Physics-based properties (from formation simulation)
+	Mass        float64     // Earth masses (1.0 = Earth). 0 = legacy planet.
+	RadiusAU    float64     // Physical radius in Earth radii (1.0 = Earth)
+	Gravity     float64     // Surface gravity in g (1.0 = Earth)
+	Density     float64     // Bulk density in g/cm³ (Earth ≈ 5.5)
+	Comp        Composition // Material mass fractions
+	OrbitAU     float64     // Orbital distance in AU (0 = legacy)
 }
 
 // NewPlanet creates a new planet entity
@@ -105,6 +125,13 @@ func (p *Planet) GetContextMenuItems() []string {
 	items := []string{}
 
 	items = append(items, fmt.Sprintf("Type: %s", p.PlanetType))
+	if p.Mass > 0 {
+		items = append(items, fmt.Sprintf("Mass: %.2f M⊕ | Gravity: %.2fg", p.Mass, p.Gravity))
+		items = append(items, fmt.Sprintf("Radius: %.2f R⊕ | Density: %.1f g/cm³", p.RadiusAU, p.Density))
+		if p.OrbitAU > 0 {
+			items = append(items, fmt.Sprintf("Orbit: %.2f AU", p.OrbitAU))
+		}
+	}
 	items = append(items, fmt.Sprintf("Temperature: %d°C", p.Temperature))
 	items = append(items, fmt.Sprintf("Atmosphere: %s", p.Atmosphere))
 	capacity := p.GetTotalPopulationCapacity()
