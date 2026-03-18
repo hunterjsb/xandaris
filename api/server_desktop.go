@@ -1605,6 +1605,8 @@ func StartServer(provider GameStateProvider) {
 			fmt.Fprint(w, spectatorHTML)
 		case "/data":
 			fmt.Fprint(w, dashboardHTML)
+		case "/logistics":
+			fmt.Fprint(w, logisticsHTML)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3136,6 +3138,139 @@ func StartServer(provider GameStateProvider) {
 		writeJSON(w, APIResponse{OK: true, Data: result})
 	})
 
+	// GET /api/logistics — enriched route data with planet/system names for the logistics page
+	mux.HandleFunc("/api/logistics", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		sm := p.GetShippingManager()
+		if sm == nil {
+			writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{"routes": []interface{}{}}})
+			return
+		}
+
+		// Build planet→name and planet→system maps
+		planetName := make(map[int]string)
+		planetSystem := make(map[int]int)
+		systemName := make(map[int]string)
+		for _, sys := range p.GetSystems() {
+			systemName[sys.ID] = sys.Name
+			for _, e := range sys.Entities {
+				if pl, ok := e.(*entities.Planet); ok {
+					planetName[pl.GetID()] = pl.Name
+					planetSystem[pl.GetID()] = sys.ID
+				}
+			}
+		}
+
+		// Build ship lookup
+		type shipInfo struct {
+			Name    string `json:"name"`
+			Fuel    int    `json:"fuel"`
+			MaxFuel int    `json:"max_fuel"`
+			System  int    `json:"system"`
+			SysName string `json:"sys_name"`
+			Status  string `json:"status"`
+			Cargo   int    `json:"cargo"`
+		}
+		shipMap := make(map[int]shipInfo)
+		for _, pl := range p.GetPlayers() {
+			if pl == nil { continue }
+			for _, s := range pl.OwnedShips {
+				if s == nil { continue }
+				sn := systemName[s.CurrentSystem]
+				if sn == "" { sn = fmt.Sprintf("SYS-%d", s.CurrentSystem+1) }
+				shipMap[s.GetID()] = shipInfo{
+					Name: s.Name, Fuel: s.CurrentFuel, MaxFuel: s.MaxFuel,
+					System: s.CurrentSystem, SysName: sn,
+					Status: string(s.Status), Cargo: s.GetTotalCargo(),
+				}
+			}
+		}
+
+		type enrichedRoute struct {
+			ID             int      `json:"id"`
+			Owner          string   `json:"owner"`
+			Resource       string   `json:"resource"`
+			Quantity       int      `json:"quantity"`
+			TripsComplete  int      `json:"trips_complete"`
+			Active         bool     `json:"active"`
+			SourcePlanet   string   `json:"source_planet"`
+			SourceSystem   string   `json:"source_system"`
+			DestPlanet     string   `json:"dest_planet"`
+			DestSystem     string   `json:"dest_system"`
+			SourceStock    int      `json:"source_stock"`
+			ShipID         int      `json:"ship_id"`
+			Ship           *shipInfo `json:"ship,omitempty"`
+			Status         string   `json:"status"`
+		}
+
+		routes := sm.GetRoutes("")
+		result := make([]enrichedRoute, 0, len(routes))
+		for _, rt := range routes {
+			srcName := planetName[rt.SourcePlanet]
+			if srcName == "" { srcName = fmt.Sprintf("Planet-%d", rt.SourcePlanet) }
+			dstName := planetName[rt.DestPlanet]
+			if dstName == "" { dstName = fmt.Sprintf("Planet-%d", rt.DestPlanet) }
+			srcSysID := planetSystem[rt.SourcePlanet]
+			dstSysID := planetSystem[rt.DestPlanet]
+			srcSysName := systemName[srcSysID]
+			if srcSysName == "" { srcSysName = fmt.Sprintf("SYS-%d", srcSysID+1) }
+			dstSysName := systemName[dstSysID]
+			if dstSysName == "" { dstSysName = fmt.Sprintf("SYS-%d", dstSysID+1) }
+
+			// Source stock
+			srcStock := 0
+			for _, sys := range p.GetSystems() {
+				for _, e := range sys.Entities {
+					if pl, ok := e.(*entities.Planet); ok && pl.GetID() == rt.SourcePlanet {
+						srcStock = pl.GetStoredAmount(rt.Resource)
+					}
+				}
+			}
+
+			status := "no_ship"
+			var ship *shipInfo
+			if rt.ShipID != 0 {
+				if si, ok := shipMap[rt.ShipID]; ok {
+					ship = &si
+					if si.Fuel < 25 {
+						status = "no_fuel"
+					} else if srcStock == 0 {
+						status = "no_stock"
+					} else if si.Status == "Moving" {
+						status = "in_transit"
+					} else {
+						status = "ready"
+					}
+				}
+			}
+
+			result = append(result, enrichedRoute{
+				ID: rt.ID, Owner: rt.Owner, Resource: rt.Resource,
+				Quantity: rt.Quantity, TripsComplete: rt.TripsComplete,
+				Active: rt.Active,
+				SourcePlanet: srcName, SourceSystem: srcSysName,
+				DestPlanet: dstName, DestSystem: dstSysName,
+				SourceStock: srcStock, ShipID: rt.ShipID,
+				Ship: ship, Status: status,
+			})
+		}
+
+		// Summary stats
+		totalTrips := 0
+		delivering := 0
+		for _, r := range result {
+			totalTrips += r.TripsComplete
+			if r.TripsComplete > 0 { delivering++ }
+		}
+
+		writeJSON(w, APIResponse{OK: true, Data: map[string]interface{}{
+			"routes":     result,
+			"total":      len(result),
+			"delivering": delivering,
+			"total_trips": totalTrips,
+		}})
+	})
+
 	// Rate limiter: 30 reads/sec, 10 writes/sec per key, burst of 60/20
 	rateLimiter := NewRateLimiter(30, 10, 60, 20)
 
@@ -3985,6 +4120,147 @@ fx.fillStyle=fc2;fx.font='8px monospace';fx.textAlign='center';
 fx.fillText((v>0?'+':'')+v.toFixed(0)+'/s',nx,ny+bh/2+10)}});
 requestAnimationFrame(drawFlow)}
 drawFlow()})();
+</script></body></html>`
+
+const logisticsHTML = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xandaris II — Logistics Command</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0c14;color:#c0c8d8;font-family:'Courier New',monospace;padding:16px 24px}
+h1{color:#7fdbca;font-size:1.6em;display:inline}
+.sub{color:#445;font-size:12px}
+a{color:#5bc0de;text-decoration:none}
+a:hover{text-decoration:underline}
+.stats-row{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:flex-end}
+.stat{text-align:center;padding:2px 10px}
+.stat .val{font-size:26px;color:#7fdbca;font-weight:bold}
+.stat .lbl{font-size:8px;color:#334;text-transform:uppercase;letter-spacing:0.5px}
+.stat-sep{width:1px;height:30px;background:#1a2040;align-self:center}
+.filters{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
+.filters button{background:#10142a;border:1px solid #1a2040;color:#889;padding:4px 12px;border-radius:3px;font-family:inherit;font-size:11px;cursor:pointer}
+.filters button.active{border-color:#7fdbca;color:#7fdbca}
+.filters button:hover{border-color:#3a5a7a}
+.route-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.route{background:#10142a;border:1px solid #1a2040;border-radius:6px;padding:12px 16px;transition:border-color 0.2s}
+.route:hover{border-color:#2a3a5a}
+.route-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.route-id{color:#7fdbca;font-weight:bold;font-size:13px}
+.route-owner{color:#5bc0de;font-size:11px}
+.route-status{padding:2px 8px;border-radius:3px;font-size:9px;text-transform:uppercase;font-weight:bold}
+.st-ready{background:#1a3a1a;color:#5cb85c;border:1px solid #2a5a2a}
+.st-in_transit{background:#1a2a4a;color:#5bc0de;border:1px solid #2a4a6a}
+.st-no_fuel{background:#3a2a1a;color:#c8a84e;border:1px solid #5a4a2a}
+.st-no_stock{background:#3a1a2a;color:#d9534f;border:1px solid #5a2a3a}
+.st-no_ship{background:#1a1a2a;color:#556;border:1px solid #2a2a3a}
+.route-path{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px}
+.route-path .node{background:#0c1020;padding:4px 10px;border-radius:4px;border:1px solid #1a2040}
+.route-path .arrow{color:#2a4a3a;font-size:16px}
+.route-path .res{color:#c8a84e;font-weight:bold}
+.route-details{display:flex;gap:16px;font-size:10px;color:#556;margin-top:6px;flex-wrap:wrap}
+.route-details .detail{display:flex;gap:4px}
+.route-details .detail b{color:#889}
+.bar-sm{width:80px;height:6px;background:#0c1020;border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle}
+.bar-sm .fill{height:100%;border-radius:3px}
+.trips-chart{display:flex;align-items:flex-end;gap:1px;height:40px;margin-top:8px}
+.trips-bar{background:#1a4a2a;border-radius:2px 2px 0 0;min-width:4px;flex:1;transition:height 0.3s}
+.g{color:#5cb85c}.r{color:#d9534f}.o{color:#c8a84e}.b{color:#5bc0de}.d{color:#334}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0}
+.summary-card{background:#10142a;border:1px solid #1a2040;border-radius:6px;padding:12px}
+.summary-card h3{color:#7fdbca;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+.faction-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #0c1020;font-size:11px}
+.st2{position:fixed;bottom:6px;right:10px;font-size:9px;color:#3a5}
+</style></head><body>
+<h1>LOGISTICS COMMAND</h1> <span class="sub">&mdash; <a href="/data">Dashboard</a> &bull; Shipping Routes &amp; Fleet</span>
+<div class="stats-row" id="topStats"></div>
+<div class="filters" id="filters"></div>
+<div class="summary-grid" id="summary"></div>
+<div class="route-list" id="routes"></div>
+<div id="st2" class="st2">Loading...</div>
+<script>
+const B=location.origin;
+let filter='all',sortBy='trips';
+async function R(){try{
+const[data,ev]=await Promise.all([
+fetch(B+'/api/logistics').then(r=>r.json()),
+fetch(B+'/api/events?limit=20').then(r=>r.json())]);
+const d=data.data;const routes=d.routes||[];
+const total=d.total||0,delivering=d.delivering||0,totalTrips=d.total_trips||0;
+
+// Top stats
+const st=(l,v)=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>';
+const sep='<div class="stat-sep"></div>';
+const healthPct=total>0?Math.round(delivering/total*100):0;
+const hc=healthPct>=50?'g':healthPct>=20?'o':'r';
+document.getElementById('topStats').innerHTML=
+st('Routes',total)+st('Delivering',delivering)+st('Stuck',total-delivering)+sep+
+st('Total Trips',totalTrips)+sep+
+'<div class="stat"><div class="val '+hc+'" style="font-size:26px">'+healthPct+'%</div><div class="lbl">network health</div></div>';
+
+// Filters
+const owners=[...new Set(routes.map(r=>r.owner))].sort();
+const statuses=[...new Set(routes.map(r=>r.status))].sort();
+let fhtml='<button class="'+(filter==='all'?'active':'')+'" onclick="filter=\'all\';R()">All ('+total+')</button>';
+owners.forEach(o=>{const c=routes.filter(r=>r.owner===o).length;fhtml+='<button class="'+(filter===o?'active':'')+'" onclick="filter=\''+o+'\';R()">'+o+' ('+c+')</button>'});
+fhtml+='<span style="width:1px;height:20px;background:#1a2040;align-self:center"></span>';
+statuses.forEach(s=>{const c=routes.filter(r=>r.status===s).length;fhtml+='<button class="'+(filter===s?'active':'')+'" onclick="filter=\''+s+'\';R()">'+s+' ('+c+')</button>'});
+document.getElementById('filters').innerHTML=fhtml;
+
+// Summary cards per faction
+const byOwner={};
+routes.forEach(r=>{
+if(!byOwner[r.owner])byOwner[r.owner]={routes:0,delivering:0,trips:0,resources:{}};
+byOwner[r.owner].routes++;
+if(r.trips_complete>0)byOwner[r.owner].delivering++;
+byOwner[r.owner].trips+=r.trips_complete;
+byOwner[r.owner].resources[r.resource]=(byOwner[r.owner].resources[r.resource]||0)+1});
+let sumHtml='';
+Object.entries(byOwner).sort((a,b)=>b[1].trips-a[1].trips).forEach(([name,d])=>{
+const hp=d.routes>0?Math.round(d.delivering/d.routes*100):0;
+const hc2=hp>=50?'g':hp>=20?'o':'r';
+sumHtml+='<div class="summary-card"><h3>'+name+'</h3>';
+sumHtml+='<div style="font-size:20px;color:#7fdbca;font-weight:bold">'+d.trips+' <span style="font-size:11px;color:#556">trips</span></div>';
+sumHtml+='<div style="font-size:11px;margin:4px 0">'+d.routes+' routes, '+d.delivering+' delivering <span class="'+hc2+'">('+hp+'%)</span></div>';
+sumHtml+='<div style="font-size:10px;color:#445">'+Object.entries(d.resources).map(([r,c])=>c+'x '+r).join(', ')+'</div>';
+sumHtml+='</div>'});
+document.getElementById('summary').innerHTML=sumHtml;
+
+// Filter routes
+let filtered=routes;
+if(filter!=='all'){
+filtered=routes.filter(r=>r.owner===filter||r.status===filter)}
+// Sort
+filtered.sort((a,b)=>b.trips_complete-a.trips_complete);
+
+// Render routes
+let rhtml='';
+filtered.forEach(r=>{
+const stCls='st-'+r.status;
+const fuelPct=r.ship?Math.round(r.ship.fuel/r.ship.max_fuel*100):0;
+const fuelColor=fuelPct>50?'#1a4a2a':fuelPct>20?'#4a3a1a':'#4a1a1a';
+rhtml+='<div class="route">';
+rhtml+='<div class="route-header"><span class="route-id">#'+r.id+' '+r.resource+'</span><span class="route-owner">'+r.owner+'</span><span class="route-status '+stCls+'">'+r.status.replace('_',' ')+'</span></div>';
+rhtml+='<div class="route-path">';
+rhtml+='<span class="node">'+r.source_planet+'<br><span class="d" style="font-size:9px">'+r.source_system+'</span></span>';
+rhtml+='<span class="arrow">\u2192 <span class="res">'+r.resource+'</span> \u2192</span>';
+rhtml+='<span class="node">'+r.dest_planet+'<br><span class="d" style="font-size:9px">'+r.dest_system+'</span></span>';
+rhtml+='</div>';
+rhtml+='<div class="route-details">';
+rhtml+='<span class="detail"><b>Trips:</b> <span class="'+(r.trips_complete>0?'g':'d')+'">'+r.trips_complete+'</span></span>';
+rhtml+='<span class="detail"><b>Source stock:</b> <span class="'+(r.source_stock>50?'g':r.source_stock>0?'o':'r')+'">'+r.source_stock+'</span></span>';
+if(r.ship){
+rhtml+='<span class="detail"><b>Ship:</b> '+r.ship.name+'</span>';
+rhtml+='<span class="detail"><b>Fuel:</b> <span class="bar-sm"><span class="fill" style="width:'+fuelPct+'%;background:'+fuelColor+'"></span></span> '+r.ship.fuel+'/'+r.ship.max_fuel+'</span>';
+rhtml+='<span class="detail"><b>At:</b> '+r.ship.sys_name+'</span>';
+rhtml+='<span class="detail"><b>Cargo:</b> '+(r.ship.cargo||0)+'</span>';
+rhtml+='<span class="detail"><b>Status:</b> '+r.ship.status+'</span>';
+}else{rhtml+='<span class="detail r"><b>No ship assigned</b></span>'}
+rhtml+='</div></div>'});
+document.getElementById('routes').innerHTML=rhtml||'<div style="text-align:center;padding:40px;color:#334">No routes match filter</div>';
+document.getElementById('st2').textContent='Live \u2022 '+new Date().toLocaleTimeString()+' \u2022 '+total+' routes';
+}catch(err){document.getElementById('st2').textContent='Disconnected';document.getElementById('st2').style.color='#a44'}}
+R();setInterval(R,3000);
 </script></body></html>`
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
