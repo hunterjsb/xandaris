@@ -123,6 +123,18 @@ func (sm *ShippingManager) CompleteTrip(routeID int) {
 	}
 }
 
+// SetTrips directly sets the trip count for a route (used by save/load).
+func (sm *ShippingManager) SetTrips(routeID, trips int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	for _, r := range sm.routes {
+		if r.ID == routeID {
+			r.TripsComplete = trips
+			return
+		}
+	}
+}
+
 // AssignShip sets the ship ID for a route.
 func (sm *ShippingManager) AssignShip(routeID, shipID int) {
 	sm.mu.Lock()

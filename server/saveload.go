@@ -92,6 +92,7 @@ func (gs *GameServer) saveGameLocked(playerName string) error {
 		CreditLimits       map[string]map[string]int
 		MarketOrders       []*economy.MarketOrder
 		Contracts          []*economy.TradeContract
+		DiplomacyRelations map[string]map[string]int
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -112,6 +113,7 @@ func (gs *GameServer) saveGameLocked(playerName string) error {
 		CreditLimits:       gs.getCreditLimits(),
 		MarketOrders:       gs.getMarketOrders(),
 		Contracts:          gs.getContracts(),
+		DiplomacyRelations: gs.getDiplomacyRelations(),
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -168,6 +170,7 @@ func (gs *GameServer) AutoSave(path string) error {
 		CreditLimits       map[string]map[string]int
 		MarketOrders       []*economy.MarketOrder
 		Contracts          []*economy.TradeContract
+		DiplomacyRelations map[string]map[string]int
 	}{
 		Version:            SaveVersion,
 		SavedAt:            time.Now(),
@@ -188,6 +191,7 @@ func (gs *GameServer) AutoSave(path string) error {
 		CreditLimits:       gs.getCreditLimits(),
 		MarketOrders:       gs.getMarketOrders(),
 		Contracts:          gs.getContracts(),
+		DiplomacyRelations: gs.getDiplomacyRelations(),
 	}
 
 	if err := gob.NewEncoder(file).Encode(saveData); err != nil {
@@ -256,6 +260,13 @@ func (gs *GameServer) getContracts() []*economy.TradeContract {
 	return gs.ContractMgr.GetAllContracts()
 }
 
+func (gs *GameServer) getDiplomacyRelations() map[string]map[string]int {
+	if gs.DiplomacyMgr == nil {
+		return nil
+	}
+	return gs.DiplomacyMgr.GetAllRelationsMap()
+}
+
 // LoadGame loads a game from the given path.
 func (gs *GameServer) LoadGame(path string) error {
 	fmt.Printf("[Server] Loading game from: %s\n", path)
@@ -286,6 +297,7 @@ func (gs *GameServer) LoadGame(path string) error {
 		CreditLimits       map[string]map[string]int
 		MarketOrders       []*economy.MarketOrder
 		Contracts          []*economy.TradeContract
+		DiplomacyRelations map[string]map[string]int
 	}
 
 	if err := gob.NewDecoder(file).Decode(&saveData); err != nil {
@@ -441,11 +453,15 @@ func (gs *GameServer) LoadGame(path string) error {
 		gs.DeliveryMgr.RestoreDeliveries(saveData.Deliveries)
 	}
 
-	// Restore shipping routes
+	// Restore shipping routes (preserving TripsComplete!)
 	if saveData.ShippingRoutes != nil && gs.ShippingMgr != nil {
 		for _, route := range saveData.ShippingRoutes {
-			gs.ShippingMgr.CreateRoute(route.Owner, route.SourcePlanet, route.DestPlanet, route.Resource, route.Quantity, route.ShipID)
+			id := gs.ShippingMgr.CreateRoute(route.Owner, route.SourcePlanet, route.DestPlanet, route.Resource, route.Quantity, route.ShipID)
+			if route.TripsComplete > 0 {
+				gs.ShippingMgr.SetTrips(id, route.TripsComplete)
+			}
 		}
+		fmt.Printf("[Load] Restored %d shipping routes\n", len(saveData.ShippingRoutes))
 	}
 
 	// Restore credit ledger
@@ -465,6 +481,12 @@ func (gs *GameServer) LoadGame(path string) error {
 				gs.ContractMgr.CreateContract(c.Supplier, c.Buyer, c.Resource, c.Quantity, c.PricePerUnit, c.Interval, c.SystemID, c.PlanetID)
 			}
 		}
+	}
+
+	// Restore diplomacy relations
+	if saveData.DiplomacyRelations != nil && gs.DiplomacyMgr != nil {
+		gs.DiplomacyMgr.RestoreRelations(saveData.DiplomacyRelations)
+		fmt.Printf("[Load] Restored diplomacy relations for %d factions\n", len(saveData.DiplomacyRelations))
 	}
 
 	// Start API
