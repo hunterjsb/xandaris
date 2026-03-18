@@ -94,19 +94,10 @@ func (ecrs *EnergyCrisisResponseSystem) OnTick(tick int64) {
 					inCrisis, totalOwned))
 		}
 
-		// During crisis: emergency fuel injection to worst planets
-		for _, sys := range systems {
-			for _, e := range sys.Entities {
-				planet, ok := e.(*entities.Planet)
-				if !ok || planet.Owner == "" {
-					continue
-				}
-				if planet.GetPowerRatio() < 0.1 && planet.GetStoredAmount(entities.ResFuel) == 0 {
-					// Critical: inject 3 emergency fuel
-					planet.AddStoredResource(entities.ResFuel, 3)
-				}
-			}
-		}
+		// During crisis: Oil→Fuel conversion already handles per-planet relief above.
+		// Previously injected free Fuel here, but that created resource inflation.
+		// With base power (75MW), solar bonus, and building repair, planets
+		// can survive long enough for Oil→Fuel conversion to restore Generators.
 	} else if crisisRatio < 0.3 {
 		if ecrs.crisisActive {
 			ecrs.crisisActive = false
