@@ -38,7 +38,7 @@ var shipMaintenanceCost = map[entities.ShipType]int{
 }
 
 func (sms *ShipMaintenanceSystem) OnTick(tick int64) {
-	if tick%100 != 0 {
+	if tick%300 != 0 {
 		return
 	}
 

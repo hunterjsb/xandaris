@@ -96,7 +96,7 @@ func (ags *AutoGeneratorSystem) OnTick(tick int64) {
 			}
 
 			// Auto-build Generator if power is low
-			if planet.GetPowerRatio() < 0.3 && generators < 2 {
+			if planet.GetPowerRatio() < 0.3 && generators < 4 {
 				player.Credits -= 1000
 				ags.lastBuild[pid] = tick
 				game.AIBuildOnPlanet(planet, entities.BuildingGenerator, planet.Owner, sys.ID)
