@@ -3593,7 +3593,9 @@ td{padding:3px 4px}
 <div class="panel" style="padding:6px 8px 0;overflow:hidden;position:relative"><div id="priceTickers" style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap"></div><canvas id="priceChart" style="width:100%;height:200px;display:block;cursor:crosshair"></canvas><div id="priceTooltip" style="display:none;position:absolute;background:rgba(8,12,24,0.95);border:1px solid #2a3060;border-radius:4px;padding:6px 8px;font-size:10px;color:#c0c8d8;pointer-events:none;z-index:10;white-space:nowrap"></div></div>
 <div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
 <div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:240px;display:block"></canvas></div>
-<div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:220px;overflow-y:auto"></div></div>
+<div class="panel"><h2>Shipping Routes <span class="tag">logistics network</span></h2><div id="sr"></div></div>
+<div class="panel"><h2>Galaxy Status <span class="tag">live</span></h2><div id="gs2"></div></div>
+<div class="panel"><h2>Events <span class="tag">activity feed</span></h2><div id="ev" style="max-height:320px;overflow-y:auto"></div></div>
 <div class="panel"><h2>Fleet <span class="tag">ships by faction</span></h2><div id="sh"></div></div>
 </div>
 <div id="s" class="st">Loading...</div>
@@ -3633,7 +3635,7 @@ return{player:parts[1],action:parts[2],qty:parts[3],resource:parts[4],price:part
 updateTicker()}}catch(e){}}
 pollTrades();setInterval(pollTrades,5000);requestAnimationFrame(animateTicker);
 async function R(){try{
-const[e,p,f,g,lb,pw,ev,sh,ch]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=20','/api/ships','/api/chat/messages'].map(u=>fetch(B+u).then(r=>r.json())));
+const[e,p,f,g,lb,pw,ev,sh,ch,sr]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=50','/api/ships','/api/chat/messages','/api/shipping/routes'].map(u=>fetch(B+u).then(r=>r.json())));
 const d=g.data;
 const st=(l,v)=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>';
 const sep='<div class="stat-sep"></div>';
@@ -3687,13 +3689,45 @@ document.getElementById('ch').innerHTML=(ch.data||[]).map(x=>{
 return'<div class="chat"><span class="d">['+x.time+']</span> <span class="name">'+x.player+'</span> '+x.message+'</div>'}).join('')||'<div class="d" style="padding:20px;text-align:center;font-size:12px">Waiting for factions to chat...</div>';
 // Events
 document.getElementById('ev').innerHTML=(ev.data||[]).map(x=>{
-const c=x.type=='trade'?'g':x.type=='build'?'b':x.type=='alert'?'r':x.type=='event'?'o':x.type=='join'||x.type=='colonize'?'p':'d';
+const c=x.type=='trade'?'g':x.type=='build'?'b':x.type=='alert'?'r':x.type=='event'?'o':x.type=='intel'?'b':x.type=='logistics'?'p':x.type=='explore'?'o':x.type=='combat'||x.type=='military'?'r':x.type=='victory'?'o':x.type=='join'||x.type=='colonize'?'p':'d';
 return'<div class="event"><span class="d">['+x.time+']</span> <span class="'+c+'">'+x.message+'</span></div>'}).join('');
 // Ships
 const so={};(sh.data||[]).forEach(s=>{if(!so[s.owner])so[s.owner]=[];so[s.owner].push(s)});
 document.getElementById('sh').innerHTML=Object.entries(so).sort().map(([o,ss])=>{
 const t={};ss.forEach(s=>{t[s.type]=(t[s.type]||0)+1});const mv=ss.filter(s=>s.status==='Moving').length;
 return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).map(([k,v])=>v+'\u00d7'+k).join(' ')+(mv?' <span class="o">('+mv+' moving)</span>':'')+'</span></div>'}).join('');
+// Shipping Routes panel
+const routes=(sr.data||[]);
+const activeR=routes.filter(r=>r.active!==false);
+const deliveringR=activeR.filter(r=>r.trips_complete>0);
+const totalTrips=activeR.reduce((s,r)=>s+(r.trips_complete||0),0);
+const srByOwner={};activeR.forEach(r=>{if(!srByOwner[r.owner])srByOwner[r.owner]={routes:0,trips:0,delivering:0};srByOwner[r.owner].routes++;srByOwner[r.owner].trips+=(r.trips_complete||0);if(r.trips_complete>0)srByOwner[r.owner].delivering++});
+let srH='<div style="display:flex;gap:12px;margin-bottom:6px;font-size:11px"><span class="g">'+activeR.length+' routes</span><span class="b">'+deliveringR.length+' delivering</span><span class="o">'+totalTrips+' total trips</span></div>';
+srH+=Object.entries(srByOwner).sort((a,b)=>b[1].trips-a[1].trips).map(([name,d])=>{
+const health=d.routes>0?Math.round(d.delivering/d.routes*100):0;
+const hc=health>=80?'g':health>=50?'o':health>0?'r':'d';
+return'<div class="row"><span>'+name+'</span><span class="d">'+d.routes+'r '+d.delivering+'d '+d.trips+'t <span class="'+hc+'">'+health+'%</span></span></div>'}).join('');
+// Top routes by trips
+const topR=activeR.filter(r=>r.trips_complete>0).sort((a,b)=>b.trips_complete-a.trips_complete).slice(0,5);
+if(topR.length>0){srH+='<div style="margin-top:6px;font-size:9px;color:#334;text-transform:uppercase">Top Routes</div>';
+srH+=topR.map(r=>'<div class="row"><span class="g">#'+r.id+' '+r.resource+'</span><span class="d">'+r.owner+' \u2022 '+r.trips_complete+' trips</span></div>').join('')}
+document.getElementById('sr').innerHTML=srH;
+// Galaxy Status panel
+const tick=d.tick||0;const cyclePos=tick%20000;
+const season=cyclePos<5000?'\uD83C\uDF31 Spring':cyclePos<10000?'\u2600\uFE0F Summer':cyclePos<15000?'\uD83C\uDF42 Autumn':'\u2744\uFE0F Winter';
+const gameHours=Math.floor(tick/36000);const gameMins=Math.floor((tick%36000)/600);
+// Extract intel events for status
+const intelEvents=(ev.data||[]).filter(x=>x.type==='intel'||x.type==='event').slice(0,8);
+let gs2H='<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
+gs2H+='<span class="stat" style="padding:2px 6px"><span class="val" style="font-size:14px">'+season+'</span><span class="lbl">season</span></span>';
+gs2H+='<span class="stat" style="padding:2px 6px"><span class="val" style="font-size:14px">'+gameHours+'h'+String(gameMins).padStart(2,'0')+'m</span><span class="lbl">galaxy age</span></span>';
+gs2H+='<span class="stat" style="padding:2px 6px"><span class="val" style="font-size:14px">'+(e.data.total_credits||0).toLocaleString()+'</span><span class="lbl">galaxy wealth</span></span>';
+gs2H+='</div>';
+gs2H+='<div style="font-size:9px;color:#334;text-transform:uppercase;margin-bottom:4px">Latest Intel</div>';
+gs2H+=intelEvents.map(x=>{
+const ic=x.type==='intel'?'b':'o';
+return'<div class="event"><span class="'+ic+'">'+x.message+'</span></div>'}).join('');
+document.getElementById('gs2').innerHTML=gs2H;
 document.getElementById('s').textContent='Live \u2022 '+new Date().toLocaleTimeString();
 }catch(err){document.getElementById('s').textContent='Disconnected';document.getElementById('s').style.color='#a44'}}
 R();setInterval(R,3000);
