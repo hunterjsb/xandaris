@@ -194,12 +194,12 @@ func (ss *SiegeSystem) applySiegeDamage(planet *entities.Planet, siege *Siege, p
 		}
 	}
 
-	// Damage a random operational building
+	// Damage a random operational building (never the Base)
 	if len(planet.Buildings) > 0 && rand.Intn(2) == 0 {
-		// Find operational buildings
+		// Find operational buildings (excluding Base)
 		var operational []int
 		for i, be := range planet.Buildings {
-			if b, ok := be.(*entities.Building); ok && b.IsOperational {
+			if b, ok := be.(*entities.Building); ok && b.IsOperational && b.BuildingType != entities.BuildingBase {
 				operational = append(operational, i)
 			}
 		}
@@ -217,6 +217,9 @@ func (ss *SiegeSystem) applySiegeDamage(planet *entities.Planet, siege *Siege, p
 	fled := planet.Population / 50 // 2% per tick
 	if fled > 0 {
 		planet.Population -= fled
+		if planet.Population < 500 {
+			planet.Population = 500 // Colony core survives even under siege
+		}
 	}
 
 	// Check for conquest: all buildings destroyed + population low

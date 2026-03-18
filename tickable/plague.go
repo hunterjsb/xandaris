@@ -113,6 +113,9 @@ func (ps *PlagueSystem) applyInfection(pid int, inf *Infection, systems []*entit
 			loss := int64(float64(planet.Population) * inf.Severity)
 			if loss > 0 && planet.Population > loss {
 				planet.Population -= loss
+				if planet.Population < 500 {
+					planet.Population = 500 // Colony core survives
+				}
 			}
 
 			// Happiness penalty

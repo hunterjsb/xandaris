@@ -128,6 +128,9 @@ func (ees *ExtinctionEventSystem) executeEvent(game GameProvider, ctx SystemCont
 					hit++
 					loss := planet.Population / 2
 					planet.Population -= loss
+					if planet.Population < 500 {
+						planet.Population = 500
+					}
 					totalLost += loss
 				}
 			}
@@ -160,6 +163,9 @@ func (ees *ExtinctionEventSystem) executeEvent(game GameProvider, ctx SystemCont
 				} else {
 					infected++
 					planet.Population -= planet.Population / 4
+					if planet.Population < 500 {
+						planet.Population = 500
+					}
 					planet.Happiness -= 0.2
 					if planet.Happiness < 0.05 {
 						planet.Happiness = 0.05

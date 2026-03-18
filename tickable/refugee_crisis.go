@@ -93,6 +93,9 @@ func (rcs *RefugeeCrisisSystem) generateCrisis(source *entities.Planet, sourceSy
 	}
 
 	source.Population -= refugees
+	if source.Population < 500 {
+		source.Population = 500 // Colony core survives
+	}
 
 	// Find nearest planet with capacity
 	placed := int64(0)

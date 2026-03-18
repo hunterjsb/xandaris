@@ -129,10 +129,10 @@ func (rs *RebellionSystem) evaluatePlanet(tick int64, planet *entities.Planet, s
 	// Stage 2: Riots (5000+ ticks) — damage buildings, population flees
 	if unrestDuration >= 5000 && unrestDuration < 8000 {
 		if rand.Intn(3) == 0 {
-			// Damage a random building
+			// Damage a random building (never the Base)
 			if len(planet.Buildings) > 0 {
 				idx := rand.Intn(len(planet.Buildings))
-				if b, ok := planet.Buildings[idx].(*entities.Building); ok && b.IsOperational {
+				if b, ok := planet.Buildings[idx].(*entities.Building); ok && b.IsOperational && b.BuildingType != entities.BuildingBase {
 					b.IsOperational = false
 					game.LogEvent("alert", planet.Owner,
 						fmt.Sprintf("🔥 Riots on %s! %s has been damaged and is offline",

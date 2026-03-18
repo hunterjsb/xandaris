@@ -57,12 +57,14 @@ func (pgs *PopulationGrowthSystem) updatePopulation(planet *entities.Planet) {
 
 	capacity := planet.GetTotalPopulationCapacity()
 	if capacity <= 0 {
-		if planet.Population > 0 {
+		if planet.Population > 500 {
 			loss := int64(math.Ceil(float64(planet.Population) * 0.05))
 			planet.Population -= loss
-			if planet.Population < 0 {
-				planet.Population = 0
+			if planet.Population < 500 {
+				planet.Population = 500 // Colony core survives
 			}
+		} else if planet.Population <= 0 {
+			planet.Population = 500 // Bootstrap dead colony
 		}
 		return
 	}

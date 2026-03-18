@@ -132,7 +132,7 @@ func (nds *NaturalDisasterSystem) tectonicQuake(planet *entities.Planet, hasShie
 		if damaged >= severity {
 			break
 		}
-		if b, ok := be.(*entities.Building); ok && b.IsOperational {
+		if b, ok := be.(*entities.Building); ok && b.IsOperational && b.BuildingType != entities.BuildingBase {
 			_ = i
 			b.IsOperational = false
 			damaged++
@@ -197,9 +197,9 @@ func (nds *NaturalDisasterSystem) cometImpact(planet *entities.Planet, hasShield
 	popLoss := planet.Population / 20 // 5%
 	planet.Population -= popLoss
 
-	// Damage a building
+	// Damage a building (never the Base)
 	for _, be := range planet.Buildings {
-		if b, ok := be.(*entities.Building); ok && b.IsOperational {
+		if b, ok := be.(*entities.Building); ok && b.IsOperational && b.BuildingType != entities.BuildingBase {
 			b.IsOperational = false
 			break
 		}
