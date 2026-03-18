@@ -142,6 +142,11 @@ func (aos *AutoOrderSystem) OnTick(tick int64) {
 
 				if stored < 50 && player.Credits > 500 {
 					// Need this resource — buy for diversity
+					// Skip luxury resources at floor prices (oversupplied)
+					isEssential := res == entities.ResWater || res == entities.ResFuel || res == entities.ResIron
+					if !isEssential && priceRatio < 0.3 {
+						continue
+					}
 					maxSpend := player.Credits / 10
 					qty := 50
 					if buyPrice*qty > maxSpend {
@@ -150,8 +155,8 @@ func (aos *AutoOrderSystem) OnTick(tick int64) {
 					if qty > 0 {
 						ob.PlaceOrder(sys.ID, planet.GetID(), planet.Owner, res, "buy", qty, buyPrice)
 					}
-				} else if stored > sellThreshold {
-					// Surplus — sell above buffer
+				} else if stored > sellThreshold && priceRatio > 0.3 {
+					// Surplus — sell above buffer (but not at floor prices)
 					surplus := stored - keepBuffer
 					if surplus > 100 {
 						surplus = 100
