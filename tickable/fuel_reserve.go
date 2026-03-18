@@ -90,16 +90,14 @@ func (frs *FuelReserveSystem) OnTick(tick int64) {
 			if shipsInSystem*10 > reserve {
 				reserve = shipsInSystem * 10
 			}
-
-			// Emergency fuel injection: generator diverts output to fuel cells
-			if stored == 0 {
-				planet.AddStoredResource(entities.ResFuel, 10)
+			if reserve > 100 {
+				reserve = 100 // cap — don't set unreachable reserve for congested systems
 			}
 
-			// Warn if fuel is below reserve
+			// Warn if fuel is below reserve (reduced frequency)
 			if stored < reserve {
 				lastWarn := frs.lastWarning[planet.GetID()]
-				if tick-lastWarn > 3000 {
+				if tick-lastWarn > 10000 {
 					frs.lastWarning[planet.GetID()] = tick
 					game.LogEvent("logistics", planet.Owner,
 						fmt.Sprintf("⛽ Low fuel reserve on %s! %d/%d Fuel. Ships may be stranded. Build Refineries or import Fuel!",
