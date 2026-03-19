@@ -790,12 +790,17 @@ func computeInternalHeat(mass, density float64, rng *rand.Rand) float64 {
 }
 
 func computeMagneticField(coreIronFrac, internalHeat, mass float64, tidallyLocked bool) float64 {
-	// Dynamo requires: molten iron core + rotation (not tidally locked)
-	// Earth = 1.0 (core iron 0.32, internal heat 0.087)
-	if tidallyLocked {
-		return coreIronFrac * internalHeat * 0.5 // weak field if locked
+	// Dynamo requires: substantial molten iron core + internal heat + rotation
+	// Earth = 1.0 (core iron ~0.32, internal heat ~0.087)
+	// Minimum core fraction of 0.10 needed for meaningful dynamo
+	if coreIronFrac < 0.05 {
+		return 0 // too little iron for a dynamo
 	}
-	field := coreIronFrac * internalHeat * mass * 8
+	if tidallyLocked {
+		return math.Min(0.5, coreIronFrac*internalHeat*2)
+	}
+	// Field scales with core size, heat, and sqrt(mass) — not linearly with mass
+	field := coreIronFrac * internalHeat * math.Sqrt(mass) * 10
 	if field > 2.0 {
 		field = 2.0
 	}
