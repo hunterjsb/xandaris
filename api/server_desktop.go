@@ -3271,6 +3271,53 @@ func StartServer(provider GameStateProvider) {
 		}})
 	})
 
+	// GET /api/planets/physics — planet formation data for dashboard
+	mux.HandleFunc("/api/planets/physics", func(w http.ResponseWriter, r *http.Request) {
+		p := getProvider()
+		type planetPhys struct {
+			ID        int     `json:"id"`
+			Name      string  `json:"name"`
+			Type      string  `json:"type"`
+			Owner     string  `json:"owner"`
+			System    string  `json:"system"`
+			Mass      float64 `json:"mass"`
+			Radius    float64 `json:"radius"`
+			Gravity   float64 `json:"gravity"`
+			Density   float64 `json:"density"`
+			OrbitAU   float64 `json:"orbit_au"`
+			TempC     int     `json:"temp_c"`
+			Iron      float64 `json:"iron"`
+			Silicate  float64 `json:"silicate"`
+			Water     float64 `json:"water"`
+			Gas       float64 `json:"gas"`
+			Organics  float64 `json:"organics"`
+			RareEarth float64 `json:"rare_earth"`
+		}
+		var result []planetPhys
+		for _, sys := range p.GetSystems() {
+			for _, e := range sys.Entities {
+				pl, ok := e.(*entities.Planet)
+				if !ok || pl.Mass == 0 {
+					continue
+				}
+				result = append(result, planetPhys{
+					ID: pl.GetID(), Name: pl.Name, Type: pl.PlanetType,
+					Owner: pl.Owner, System: sys.Name,
+					Mass: math.Round(pl.Mass*100) / 100,
+					Radius: math.Round(pl.RadiusAU*100) / 100,
+					Gravity: math.Round(pl.Gravity*100) / 100,
+					Density: math.Round(pl.Density*10) / 10,
+					OrbitAU: math.Round(pl.OrbitAU*100) / 100,
+					TempC: pl.Temperature,
+					Iron: pl.Comp.Iron, Silicate: pl.Comp.Silicate,
+					Water: pl.Comp.Water, Gas: pl.Comp.Gas,
+					Organics: pl.Comp.Organics, RareEarth: pl.Comp.RareEarth,
+				})
+			}
+		}
+		writeJSON(w, APIResponse{OK: true, Data: result})
+	})
+
 	// Rate limiter: 30 reads/sec, 10 writes/sec per key, burst of 60/20
 	rateLimiter := NewRateLimiter(30, 10, 60, 20)
 
@@ -3727,6 +3774,7 @@ td{padding:3px 4px}
 <div class="panel"><h2>Power Grid <span class="tag">MW</span></h2><div id="pw"></div></div>
 <div class="panel" style="padding:6px 8px 0;overflow:hidden;position:relative"><div id="priceTickers" style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap"></div><canvas id="priceChart" style="width:100%;height:200px;display:block;cursor:crosshair"></canvas><div id="priceTooltip" style="display:none;position:absolute;background:rgba(8,12,24,0.95);border:1px solid #2a3060;border-radius:4px;padding:6px 8px;font-size:10px;color:#c0c8d8;pointer-events:none;z-index:10;white-space:nowrap"></div></div>
 <div class="panel"><h2>Trading Hubs <span class="tag">top planets by stock</span></h2><div id="hubs"></div></div>
+<div class="panel"><h2>Planet Physics <span class="tag">formation data</span></h2><div id="phys" style="max-height:240px;overflow-y:auto"></div></div>
 <div class="panel wide" style="background:#0d1125;border-color:#152040;padding:0;overflow:hidden"><canvas id="flowCanvas" style="width:100%;height:240px;display:block"></canvas></div>
 <div class="panel"><h2>Shipping Routes <span class="tag">logistics network</span></h2><div id="sr"></div></div>
 <div class="panel"><h2>Galaxy Status <span class="tag">live</span></h2><div id="gs2"></div></div>
@@ -3770,7 +3818,7 @@ return{player:parts[1],action:parts[2],qty:parts[3],resource:parts[4],price:part
 updateTicker()}}catch(e){}}
 pollTrades();setInterval(pollTrades,5000);requestAnimationFrame(animateTicker);
 async function R(){try{
-const[e,p,f,g,lb,pw,ev,sh,ch,sr]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=50','/api/ships','/api/chat/messages','/api/shipping/routes'].map(u=>fetch(B+u).then(r=>r.json())));
+const[e,p,f,g,lb,pw,ev,sh,ch,sr,ph]=await Promise.all(['/api/economy','/api/players','/api/flows','/api/game','/api/leaderboard','/api/power','/api/events?limit=50','/api/ships','/api/chat/messages','/api/shipping/routes','/api/planets/physics'].map(u=>fetch(B+u).then(r=>r.json())));
 const d=g.data;
 const st=(l,v)=>'<div class="stat"><div class="val">'+v+'</div><div class="lbl">'+l+'</div></div>';
 const sep='<div class="stat-sep"></div>';
@@ -3831,6 +3879,28 @@ const so={};(sh.data||[]).forEach(s=>{if(!so[s.owner])so[s.owner]=[];so[s.owner]
 document.getElementById('sh').innerHTML=Object.entries(so).sort().map(([o,ss])=>{
 const t={};ss.forEach(s=>{t[s.type]=(t[s.type]||0)+1});const mv=ss.filter(s=>s.status==='Moving').length;
 return'<div class="row"><span>'+o+'</span><span class="d">'+Object.entries(t).map(([k,v])=>v+'\u00d7'+k).join(' ')+(mv?' <span class="o">('+mv+' moving)</span>':'')+'</span></div>'}).join('');
+// Planet Physics panel
+const planets=(ph.data||[]);
+if(planets.length>0){
+const CC={iron:'#b4784f',silicate:'#8a7050',water:'#508cc8',gas:'#b4dcff',organics:'#50a050',rare_earth:'#c8b464'};
+let phH='';
+planets.sort((a,b)=>b.mass-a.mass).slice(0,12).forEach(pl=>{
+const compBar=[
+{k:'iron',v:pl.iron,c:CC.iron},{k:'sil',v:pl.silicate,c:CC.silicate},
+{k:'h2o',v:pl.water,c:CC.water},{k:'gas',v:pl.gas,c:CC.gas},
+{k:'org',v:pl.organics,c:CC.organics},{k:'re',v:pl.rare_earth*10,c:CC.rare_earth}]
+.filter(x=>x.v>0.02).map(x=>'<span style="display:inline-block;height:8px;width:'+Math.max(2,x.v*120)+'px;background:'+x.c+';border-radius:1px" title="'+x.k+': '+(x.v*100).toFixed(1)+'%"></span>').join('');
+const oc=pl.owner?'b':'d';
+phH+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0c1020;font-size:10px">';
+phH+='<span style="width:75px;color:#7fdbca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+pl.name+'</span>';
+phH+='<span class="d" style="width:55px;font-size:9px">'+pl.type+'</span>';
+phH+='<span style="width:40px;text-align:right">'+pl.mass.toFixed(1)+'M\u2295</span>';
+phH+='<span style="width:35px;text-align:right;color:#889">'+pl.gravity.toFixed(1)+'g</span>';
+phH+='<span style="flex:1;display:flex;gap:1px">'+compBar+'</span>';
+phH+='<span class="'+oc+'" style="width:50px;font-size:9px;text-align:right;overflow:hidden;text-overflow:ellipsis">'+( pl.owner||'unclaimed')+'</span>';
+phH+='</div>'});
+document.getElementById('phys').innerHTML=phH;
+}else{document.getElementById('phys').innerHTML='<div class="d" style="padding:20px;text-align:center;font-size:11px">No formation data (legacy planets)</div>'}
 // Shipping Routes panel
 const routes=(sr.data||[]);
 const activeR=routes.filter(r=>r.active!==false);

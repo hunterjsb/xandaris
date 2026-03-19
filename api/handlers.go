@@ -254,7 +254,7 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 		}
 	}
 
-	return PlanetDetail{
+	detail := PlanetDetail{
 		ID:                planet.GetID(),
 		Name:              planet.Name,
 		PlanetType:        planet.PlanetType,
@@ -276,6 +276,25 @@ func buildPlanetDetail(planet *entities.Planet, systemID int) PlanetDetail {
 		Buildings:         buildings,
 		SystemID:          systemID,
 	}
+
+	// Physics from formation sim (non-zero = formation-generated planet)
+	if planet.Mass > 0 {
+		detail.Mass = math.Round(planet.Mass*100) / 100
+		detail.Radius = math.Round(planet.RadiusAU*100) / 100
+		detail.Gravity = math.Round(planet.Gravity*100) / 100
+		detail.Density = math.Round(planet.Density*10) / 10
+		detail.OrbitAU = math.Round(planet.OrbitAU*100) / 100
+		detail.Composition = &CompositionInfo{
+			Iron:      math.Round(planet.Comp.Iron*1000) / 1000,
+			Silicate:  math.Round(planet.Comp.Silicate*1000) / 1000,
+			Water:     math.Round(planet.Comp.Water*1000) / 1000,
+			Gas:       math.Round(planet.Comp.Gas*1000) / 1000,
+			Organics:  math.Round(planet.Comp.Organics*1000) / 1000,
+			RareEarth: math.Round(planet.Comp.RareEarth*1000) / 1000,
+		}
+	}
+
+	return detail
 }
 
 func handleGetPowerGrid(p GameStateProvider) interface{} {

@@ -88,6 +88,23 @@ type PlanetDetail struct {
 	ResourceDeposits  []ResourceDeposit  `json:"resource_deposits"`
 	Buildings         []BuildingInfo     `json:"buildings"`
 	SystemID          int                `json:"system_id"`
+	// Physics (from formation sim, zero for legacy planets)
+	Mass              float64            `json:"mass,omitempty"`        // Earth masses
+	Radius            float64            `json:"radius,omitempty"`      // Earth radii
+	Gravity           float64            `json:"gravity,omitempty"`     // surface g
+	Density           float64            `json:"density,omitempty"`     // g/cm³
+	OrbitAU           float64            `json:"orbit_au,omitempty"`    // AU
+	Composition       *CompositionInfo   `json:"composition,omitempty"` // mass fractions
+}
+
+// CompositionInfo represents planet material composition for the API.
+type CompositionInfo struct {
+	Iron      float64 `json:"iron"`
+	Silicate  float64 `json:"silicate"`
+	Water     float64 `json:"water"`
+	Gas       float64 `json:"gas"`
+	Organics  float64 `json:"organics"`
+	RareEarth float64 `json:"rare_earth"`
 }
 
 // ResourceDeposit is a minable resource node on a planet.
