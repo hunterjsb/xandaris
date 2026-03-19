@@ -76,19 +76,35 @@ func TestFormationVariety(t *testing.T) {
 		gasGiants, terrestrials, oceans, deserts, ices, lavas, barrens)
 	t.Logf("  Habitable (>30): %d", habitable)
 
-	// We should see variety across 20 systems
+	// We should see variety across 20 systems — all 7 types represented
 	if gasGiants == 0 {
-		t.Error("PROBLEM: zero gas giants in 20 Sun-like systems — formation is broken")
+		t.Error("PROBLEM: zero gas giants — need outer-system formation")
+	}
+	if terrestrials == 0 {
+		t.Error("PROBLEM: zero terrestrials — inner system composition wrong")
+	}
+	if oceans == 0 {
+		t.Error("PROBLEM: zero oceans — water fraction or hydrosphere broken")
+	}
+	if deserts == 0 {
+		t.Error("PROBLEM: zero deserts — inner system too cold?")
+	}
+	if ices == 0 {
+		t.Error("PROBLEM: zero ice worlds — outer system broken")
 	}
 	if habitable == 0 {
-		t.Error("PROBLEM: zero habitable worlds in 20 systems — habitability calc too harsh")
-	}
-	if terrestrials+oceans == 0 {
-		t.Error("PROBLEM: no terrestrial or ocean worlds — inner system too hot?")
+		t.Error("PROBLEM: zero habitable worlds — habitability too harsh")
 	}
 	if totalMoons == 0 {
 		t.Error("PROBLEM: no moons generated")
 	}
+	if totalBelts == 0 {
+		t.Error("PROBLEM: no asteroid belts generated")
+	}
+	// Lava is rare but should appear at least sometimes
+	// (not enforced — depends on close orbits + greenhouse)
+	t.Logf("All types: GG=%d Terr=%d Ocean=%d Desert=%d Ice=%d Lava=%d Barren=%d",
+		gasGiants, terrestrials, oceans, deserts, ices, lavas, barrens)
 }
 
 func TestFormationBlueGiant(t *testing.T) {

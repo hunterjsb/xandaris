@@ -992,8 +992,8 @@ func classifyPlanetDeep(mass float64, comp entities.Composition, tempC int, ocea
 	if comp.Water > 0.20 && tempC < -30 {
 		return "Ice"
 	}
-	if tempC > 400 {
-		return "Lava"
+	if tempC > 300 || (tempC > 200 && atmoPressure > 20) {
+		return "Lava" // Venus-like: extreme greenhouse + close orbit
 	}
 	if comp.Silicate > 0.30 {
 		if tempC > 60 || (atmoPressure < 0.01 && tempC > 20) {
