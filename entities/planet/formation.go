@@ -868,12 +868,20 @@ func computeTemperature(starLum, orbitAU, atmoPressure float64, comp entities.Co
 	tempK := 278.0 * math.Pow(starLum, 0.25) / math.Sqrt(orbitAU)
 
 	// Greenhouse effect: depends on pressure AND composition
-	// Earth: ~33K greenhouse from 1 atm with 0.04% CO2
-	// Venus: ~500K greenhouse from 92 atm of 96% CO2
+	// Earth: ~33K from 1 atm with ~2% greenhouse gases
+	// Venus: ~500K from 92 atm of 96% CO2
 	greenhouseGas := comp.Gas*0.2 + comp.Organics*0.4 + comp.Water*0.05
+	// Two-regime model: log for moderate, sqrt for extreme pressure
 	greenhouse := math.Log1p(atmoPressure) * greenhouseGas * 50
-	if greenhouse > 500 {
-		greenhouse = 500
+	if atmoPressure > 5 {
+		// High-pressure regime: runaway greenhouse (Venus-like)
+		// 90 atm × 0.18 gas fraction → sqrt(90)*0.18*80 ≈ 136K extra
+		greenhouse += math.Sqrt(atmoPressure) * greenhouseGas * 80
+		// Pressure itself traps heat (collisional broadening)
+		greenhouse += math.Log1p(atmoPressure) * 20
+	}
+	if greenhouse > 600 {
+		greenhouse = 600
 	}
 	tempK += greenhouse
 
