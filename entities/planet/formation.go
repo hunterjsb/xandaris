@@ -43,10 +43,18 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 	}
 
 	// Place orbits using Titius-Bode-like geometric progression
+	// Ensure at least 1-2 planets beyond the frost line for gas giant formation
 	orbits := make([]float64, planetCount)
-	orbits[0] = 0.2 + rng.Float64()*0.3 // 0.2-0.5 AU
+	orbits[0] = 0.3 + rng.Float64()*0.4 // 0.3-0.7 AU
 	for i := 1; i < planetCount; i++ {
-		orbits[i] = orbits[i-1] * (1.4 + rng.Float64()*0.6)
+		orbits[i] = orbits[i-1] * (1.5 + rng.Float64()*0.8) // wider spacing
+	}
+	// If all orbits are inside frost line and we have 4+ planets, push last 1-2 out
+	if planetCount >= 4 && orbits[planetCount-1] < frostLine*1.2 {
+		orbits[planetCount-1] = frostLine * (1.2 + rng.Float64()*1.5)
+		if planetCount >= 5 {
+			orbits[planetCount-2] = frostLine * (0.8 + rng.Float64()*0.5)
+		}
 	}
 
 	// Total feeding zone for mass distribution
@@ -802,16 +810,17 @@ func computeTemperature(starLum, orbitAU, atmoPressure float64, comp entities.Co
 	tempK := 278.0 * math.Pow(starLum, 0.25) / math.Sqrt(orbitAU)
 
 	// Greenhouse effect: depends on pressure AND composition
-	// CO2/methane equivalent from organics + gas composition
-	greenhouseGas := comp.Gas*0.3 + comp.Organics*0.5 + comp.Water*0.1
-	greenhouse := math.Log1p(atmoPressure) * greenhouseGas * 100
+	// Earth: ~33K greenhouse from 1 atm with 0.04% CO2
+	// Venus: ~500K greenhouse from 92 atm of 96% CO2
+	greenhouseGas := comp.Gas*0.2 + comp.Organics*0.4 + comp.Water*0.05
+	greenhouse := math.Log1p(atmoPressure) * greenhouseGas * 50
 	if greenhouse > 500 {
-		greenhouse = 500 // Venus-like maximum
+		greenhouse = 500
 	}
 	tempK += greenhouse
 
-	// Volcanic outgassing adds heat
-	tempK += volcanism * 50
+	// Volcanic outgassing adds modest heat
+	tempK += volcanism * 20
 
 	return tempK
 }
