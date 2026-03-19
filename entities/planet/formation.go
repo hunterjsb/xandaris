@@ -33,6 +33,14 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 	diskMass := star.Mass * star.Metallicity * 0.01 * 3300 // Earth masses
 	frostLine := 2.7 * math.Sqrt(star.Luminosity)          // AU
 
+	// Binary star systems: companion disrupts disk, reduces planet count,
+	// creates unstable zone where no planets can form
+	binaryGap := 0.0 // AU range where no planets form
+	if star.IsBinary {
+		diskMass *= 0.6 // companion captures some disk material
+		binaryGap = 0.5 + rng.Float64()*1.5 // 0.5-2.0 AU gap
+	}
+
 	// Planet count: 2-7, biased by disk mass
 	planetCount := 2 + rng.Intn(4)
 	if diskMass > 50 {
@@ -67,6 +75,12 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 
 	for i := 0; i < planetCount; i++ {
 		au := orbits[i]
+
+		// Binary systems: skip planets in the unstable zone
+		if binaryGap > 0 && au > binaryGap*0.5 && au < binaryGap*1.5 {
+			continue
+		}
+
 		insideFrost := au < frostLine
 
 		// Composition from zone
@@ -238,6 +252,43 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 		}
 	}
 	result = append(result, moons...)
+
+	// === Asteroid belt generation ===
+	// Asteroid belts form at the frost line where Jupiter-like planets
+	// prevented planetesimal accretion, or at the binary gap
+	if planetCount >= 3 && rng.Float64() < 0.6 {
+		beltAU := frostLine * (0.8 + rng.Float64()*0.4)
+		if binaryGap > 0 {
+			beltAU = binaryGap // belt forms at binary instability zone
+		}
+
+		beltOrbitPx := auToPixels(beltAU)
+		beltID := systemID*1000 + 900 + rng.Intn(99)
+		belt := entities.NewPlanet(beltID, fmt.Sprintf("Asteroid Belt %d", rng.Intn(99)+1),
+			"Asteroid Belt", beltOrbitPx, 0, color.RGBA{160, 140, 120, 255})
+		belt.Size = 2
+		belt.Mass = 0.001 // very low mass
+		belt.OrbitAU = beltAU
+		belt.Habitability = 0
+		belt.Atmosphere = entities.AtmosphereNone
+		belt.Temperature = int(278.0*math.Pow(star.Luminosity, 0.25)/math.Sqrt(beltAU) - 273)
+		belt.Comp = entities.Composition{
+			Iron: 0.35, Silicate: 0.40, Water: 0.10,
+			Organics: 0.05, RareEarth: star.Metallicity * 0.05,
+		}
+		// Normalize
+		total := belt.Comp.Iron + belt.Comp.Silicate + belt.Comp.Water + belt.Comp.Organics + belt.Comp.RareEarth
+		belt.Comp.Iron /= total
+		belt.Comp.Silicate /= total
+		belt.Comp.Water /= total
+		belt.Comp.Organics /= total
+		belt.Comp.RareEarth /= total
+
+		// Asteroid belts have rich but hard-to-extract resources
+		generateResourcesFromComposition(belt, belt.Comp, rng)
+
+		result = append(result, belt)
+	}
 
 	return result
 }

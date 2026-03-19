@@ -33,6 +33,12 @@ func TestFormationSunlike(t *testing.T) {
 			t.Fatal("non-planet entity returned from FormSystem")
 		}
 
+		// Skip asteroid belts for physics checks
+		if p.PlanetType == "Asteroid Belt" {
+			t.Logf("  %s: Asteroid Belt at %.2f AU", p.Name, p.OrbitAU)
+			continue
+		}
+
 		if p.Mass <= 0 {
 			t.Errorf("planet %s has zero mass", p.Name)
 		}
@@ -106,6 +112,10 @@ func TestFormationRedDwarf(t *testing.T) {
 	for _, e := range result {
 		p := e.(*entities.Planet)
 
+		if p.PlanetType == "Asteroid Belt" {
+			t.Logf("  %s: Asteroid Belt at %.2f AU", p.Name, p.OrbitAU)
+			continue
+		}
 		// Red dwarf planets should mostly be close-in
 		if p.ParentPlanetID == 0 && p.OrbitAU > 5.0 {
 			t.Errorf("planet %s at %.2f AU — too far for red dwarf", p.Name, p.OrbitAU)
