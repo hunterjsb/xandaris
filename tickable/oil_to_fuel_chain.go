@@ -74,15 +74,15 @@ func (otfc *OilToFuelChainSystem) OnTick(tick int64) {
 				}
 			}
 
-			if !hasGenerator || hasRefinery {
-				continue // refinery handles this properly
+			if !hasGenerator {
+				continue
 			}
 
 			oilStored := planet.GetStoredAmount(entities.ResOil)
 			fuelStored := planet.GetStoredAmount(entities.ResFuel)
 
-			if oilStored < 10 || fuelStored >= 20 {
-				continue // not desperate enough
+			if oilStored < 5 || fuelStored >= 30 {
+				if hasRefinery && fuelStored >= 10 { continue } // crude backup when refinery offline
 			}
 
 			// Crude conversion: 5 Oil → 2 Fuel
