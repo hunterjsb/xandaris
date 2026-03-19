@@ -357,10 +357,12 @@ func generateMoon(parent *entities.Planet, index, systemID int, star *entities.S
 	atmo := atmosphereFromPressure(atmoPressure, comp, tempK)
 	tempC := int(tempK - 273)
 
-	oceanCov, iceCov := computeHydrosphere(comp.Water, tempC, atmoPressure)
+	oceanCov, iceCov := computeHydrosphereWithTidal(comp.Water, tempC, atmoPressure, tidalHeat)
 
 	planetType := "Barren"
-	if comp.Water > 0.3 && tempC > -40 && tempC < 50 {
+	if oceanCov > 0.15 { // subsurface ocean counts (Europa analog)
+		planetType = "Ocean"
+	} else if comp.Water > 0.3 && tempC > -40 && tempC < 50 {
 		planetType = "Ocean"
 	} else if comp.Water > 0.2 && tempC < -20 {
 		planetType = "Ice"
@@ -912,22 +914,54 @@ func computeAlbedo(comp entities.Composition, tempC int) float64 {
 	return math.Min(0.9, albedo)
 }
 
+// computeHydrosphere determines surface ocean and ice coverage.
+// For subsurface oceans (Europa analogs), use computeHydrosphereWithTidal.
 func computeHydrosphere(waterFrac float64, tempC int, pressure float64) (ocean, ice float64) {
-	if waterFrac < 0.01 || pressure < 0.006 { // 0.006 atm = Mars, below triple point
-		return 0, 0 // no stable liquid water
+	return computeHydrosphereWithTidal(waterFrac, tempC, pressure, 0)
+}
+
+// computeHydrosphereWithTidal includes tidal heating for moon subsurface oceans.
+// Tidal heating can melt interior ice even on worlds with 0 surface pressure
+// and -130°C surface temps (Europa, Enceladus).
+func computeHydrosphereWithTidal(waterFrac float64, tempC int, pressure float64, tidalHeat float64) (ocean, ice float64) {
+	if waterFrac < 0.01 {
+		return 0, 0
 	}
 
-	if tempC > 100 { // above boiling at 1atm (simplified)
-		return 0, 0 // water is vapor
-	}
-
-	if tempC < 0 {
-		// Below freezing: ice coverage proportional to water fraction
+	// Tidal heating: subsurface ocean even with no atmosphere
+	if tidalHeat > 0.03 && waterFrac > 0.05 && tempC < 0 {
+		// Subsurface ocean proportional to tidal heating × water fraction
+		ocean = tidalHeat * waterFrac * 10
+		if ocean > 0.5 {
+			ocean = 0.5 // max 50% subsurface ocean
+		}
 		ice = waterFrac * 2
 		if ice > 1.0 {
 			ice = 1.0
 		}
-		// Some liquid possible under ice (subsurface ocean)
+		return
+	}
+
+	if pressure < 0.006 { // below triple point
+		if tempC < 0 {
+			// Ice exists but no liquid without pressure
+			ice = waterFrac * 2
+			if ice > 1.0 {
+				ice = 1.0
+			}
+		}
+		return
+	}
+
+	if tempC > 100 {
+		return 0, 0 // vapor
+	}
+
+	if tempC < 0 {
+		ice = waterFrac * 2
+		if ice > 1.0 {
+			ice = 1.0
+		}
 		if pressure > 0.5 && tempC > -40 {
 			ocean = waterFrac * 0.1
 		}
