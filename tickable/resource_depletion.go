@@ -97,16 +97,17 @@ func (rds *ResourceDepletionSystem) processDepletion(tick int64, planet *entitie
 
 		if hasMine && res.Abundance > 0 {
 			// Depletion: higher mine level = faster depletion
-			depletionRate := 0.02 * float64(mineLevel)
+			// Slowed: 0.005 base (was 0.02) — deposits last ~4x longer
+			depletionRate := 0.005 * float64(mineLevel)
 			res.Abundance -= int(depletionRate)
 			if res.Abundance < 0 {
 				res.Abundance = 0
 			}
 
-			// Warn when resource is getting low
-			if res.Abundance <= 15 && res.Abundance > 0 {
+			// Warn when resource is getting low (once per 30K ticks, was 10K)
+			if res.Abundance <= 10 && res.Abundance > 0 {
 				lastWarn := rds.depletionLog[res.GetID()]
-				if tick-lastWarn > 10000 {
+				if tick-lastWarn > 30000 {
 					rds.depletionLog[res.GetID()] = tick
 					game.LogEvent("alert", planet.Owner,
 						fmt.Sprintf("⛏️ %s deposit on %s running low! Abundance: %d. Explore for new deposits or import!",
@@ -116,7 +117,7 @@ func (rds *ResourceDepletionSystem) processDepletion(tick int64, planet *entitie
 
 			if res.Abundance == 0 {
 				lastWarn := rds.depletionLog[res.GetID()]
-				if tick-lastWarn > 20000 {
+				if tick-lastWarn > 50000 { // once per ~83 min (was 20K)
 					rds.depletionLog[res.GetID()] = tick
 					game.LogEvent("alert", planet.Owner,
 						fmt.Sprintf("🚫 %s deposit on %s is EXHAUSTED! Mine produces nothing. Find new sources!",
