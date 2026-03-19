@@ -424,8 +424,8 @@ func computeComposition(insideFrost bool, metallicity float64, rng *rand.Rand) e
 	var c entities.Composition
 	if insideFrost {
 		c.Iron = 0.25 + rng.Float64()*0.15
-		c.Silicate = 0.45 + rng.Float64()*0.15
-		c.Water = 0.03 + rng.Float64()*0.07
+		c.Silicate = 0.40 + rng.Float64()*0.15
+		c.Water = 0.05 + rng.Float64()*0.12 // 5-17% water (comet bombardment delivers water)
 		c.Gas = 0.01 + rng.Float64()*0.04
 		c.Organics = 0.03 + rng.Float64()*0.07
 		c.RareEarth = metallicity * (0.01 + rng.Float64()*0.02)
@@ -952,13 +952,13 @@ func classifyPlanetDeep(mass float64, comp entities.Composition, tempC int, ocea
 	if comp.Gas > 0.45 && mass > 10.0 {
 		return "Gas Giant"
 	}
-	if oceanCov > 0.5 {
-		return "Ocean"
+	if oceanCov > 0.3 {
+		return "Ocean" // 30%+ ocean = ocean world
 	}
-	if comp.Water > 0.25 && tempC < -30 {
+	if comp.Water > 0.20 && tempC < -30 {
 		return "Ice"
 	}
-	if tempC > 500 || (tempC > 300 && atmoPressure > 50) {
+	if tempC > 400 {
 		return "Lava"
 	}
 	if comp.Silicate > 0.30 {
