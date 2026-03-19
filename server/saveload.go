@@ -10,6 +10,7 @@ import (
 	"github.com/hunterjsb/xandaris/api"
 	"github.com/hunterjsb/xandaris/economy"
 	"github.com/hunterjsb/xandaris/entities"
+	"github.com/hunterjsb/xandaris/entities/planet"
 	"github.com/hunterjsb/xandaris/game"
 	"github.com/hunterjsb/xandaris/systems"
 	"github.com/hunterjsb/xandaris/tickable"
@@ -488,6 +489,30 @@ func (gs *GameServer) LoadGame(path string) error {
 	if saveData.DiplomacyRelations != nil && gs.DiplomacyMgr != nil {
 		gs.DiplomacyMgr.RestoreRelations(saveData.DiplomacyRelations)
 		fmt.Printf("[Load] Restored diplomacy relations for %d factions\n", len(saveData.DiplomacyRelations))
+	}
+
+	// Retrofit formation physics onto legacy planets (Mass=0)
+	retrofitted := 0
+	for _, sys := range gs.State.Systems {
+		var star *entities.Star
+		for _, e := range sys.Entities {
+			if s, ok := e.(*entities.Star); ok {
+				star = s
+				break
+			}
+		}
+		if star == nil {
+			continue
+		}
+		for _, e := range sys.Entities {
+			if p, ok := e.(*entities.Planet); ok && p.Mass == 0 {
+				planet.RetrofitPhysics(p, star, sys.ID)
+				retrofitted++
+			}
+		}
+	}
+	if retrofitted > 0 {
+		fmt.Printf("[Load] Retrofitted formation physics onto %d legacy planets\n", retrofitted)
 	}
 
 	// Start API
