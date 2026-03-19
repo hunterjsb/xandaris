@@ -58,6 +58,24 @@ type Planet struct {
 	Density     float64     // Bulk density in g/cm³ (Earth ≈ 5.5)
 	Comp        Composition // Material mass fractions
 	OrbitAU     float64     // Orbital distance in AU (0 = legacy)
+
+	// Deep simulation properties
+	MagneticField  float64 // Field strength (0-1, Earth=1.0). Protects atmosphere.
+	CoreIronFrac   float64 // Fraction of iron that sank to core (0-1). Drives dynamo.
+	AtmoPressure   float64 // Surface pressure in atm (Earth=1.0, Mars=0.006, Venus=92)
+	OceanCoverage  float64 // Fraction of surface covered by liquid water (0-1)
+	IceCoverage    float64 // Fraction covered by ice caps (0-1)
+	AxialTilt      float64 // Degrees (Earth=23.4). Affects seasons.
+	DayLength      float64 // Hours (Earth=24). 0 = tidally locked.
+	TidallyLocked  bool    // Locked to parent (star or gas giant for moons)
+	TectonicActive bool    // Plate tectonics active (recycles atmosphere, exposes resources)
+	VolcanicLevel  float64 // 0-1 (0=dead, 0.3=Earth, 1.0=Io)
+	InternalHeat   float64 // Watts/m² internal heat flux. Drives volcanism + dynamo.
+	Albedo         float64 // Reflectivity (0-1). Ice=0.7, Ocean=0.06, Rock=0.2
+
+	// Moon system
+	ParentPlanetID int     // If >0, this is a moon orbiting another planet
+	Moons          []int   // IDs of moons orbiting this planet
 }
 
 // NewPlanet creates a new planet entity
@@ -130,6 +148,26 @@ func (p *Planet) GetContextMenuItems() []string {
 		items = append(items, fmt.Sprintf("Radius: %.2f R⊕ | Density: %.1f g/cm³", p.RadiusAU, p.Density))
 		if p.OrbitAU > 0 {
 			items = append(items, fmt.Sprintf("Orbit: %.2f AU", p.OrbitAU))
+		}
+		if p.MagneticField > 0 {
+			items = append(items, fmt.Sprintf("Magnetic: %.0f%% | Pressure: %.2f atm", p.MagneticField*100, p.AtmoPressure))
+		}
+		if p.OceanCoverage > 0 || p.IceCoverage > 0 {
+			items = append(items, fmt.Sprintf("Ocean: %.0f%% | Ice: %.0f%%", p.OceanCoverage*100, p.IceCoverage*100))
+		}
+		if p.TidallyLocked {
+			items = append(items, "⚠ Tidally locked")
+		} else if p.DayLength > 0 {
+			items = append(items, fmt.Sprintf("Day: %.0fh | Tilt: %.0f°", p.DayLength, p.AxialTilt))
+		}
+		if p.TectonicActive {
+			items = append(items, fmt.Sprintf("Tectonics: active | Volcanism: %.0f%%", p.VolcanicLevel*100))
+		}
+		if p.ParentPlanetID > 0 {
+			items = append(items, fmt.Sprintf("Moon of planet %d", p.ParentPlanetID))
+		}
+		if len(p.Moons) > 0 {
+			items = append(items, fmt.Sprintf("Moons: %d", len(p.Moons)))
 		}
 	}
 	items = append(items, fmt.Sprintf("Temperature: %d°C", p.Temperature))

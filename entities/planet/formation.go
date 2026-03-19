@@ -109,8 +109,52 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 		// Density = mass / radius^3 * 5.51
 		density := massShare / (radiusE * radiusE * radiusE) * 5.51
 
-		// Habitability
-		hab := formationHabitability(tempC, atmo, gravity, comp)
+		// === Deep simulation ===
+
+		// Core differentiation: iron sinks to core based on mass + heat
+		coreIronFrac := computeCoreFraction(massShare, comp, rng)
+
+		// Internal heat: radiogenic + gravitational (scales with mass)
+		internalHeat := computeInternalHeat(massShare, density, rng)
+
+		// Magnetic field: requires molten iron core + rotation
+		// Tidal locking kills the dynamo (no differential rotation)
+		tidallyLocked := au < 0.3*math.Pow(star.Mass, 0.5) // close orbits lock
+		dayLength := computeDayLength(massShare, au, tidallyLocked, rng)
+		magneticField := computeMagneticField(coreIronFrac, internalHeat, massShare, tidallyLocked)
+
+		// Axial tilt (random, but gas giants tend toward low tilt)
+		axialTilt := rng.Float64() * 45
+		if comp.Gas > 0.4 {
+			axialTilt = rng.Float64() * 10
+		}
+
+		// Tectonics: requires internal heat + silicate mantle + mass
+		tectonicActive := internalHeat > 0.04 && comp.Silicate > 0.2 && massShare > 0.3 && massShare < 10
+		volcanicLevel := computeVolcanism(internalHeat, tectonicActive, massShare, rng)
+
+		// Atmospheric pressure: from mass, gravity, composition, magnetic field
+		atmoPressure := computeAtmoPressure(massShare, gravity, comp, magneticField, star.Luminosity, au, rng)
+
+		// Recalculate temperature with proper greenhouse (using pressure)
+		tempK = computeTemperature(star.Luminosity, au, atmoPressure, comp, volcanicLevel)
+		tempC = int(tempK - 273)
+
+		// Redetermine atmosphere type from pressure
+		atmo = atmosphereFromPressure(atmoPressure, comp, tempK)
+
+		// Albedo from surface composition + ice/ocean
+		albedo := computeAlbedo(comp, tempC)
+
+		// Hydrosphere: water state depends on temp + pressure
+		oceanCoverage, iceCoverage := computeHydrosphere(comp.Water, tempC, atmoPressure)
+
+		// Re-classify planet with full physics
+		planetType = classifyPlanetDeep(massShare, comp, tempC, oceanCoverage, atmoPressure)
+
+		// Full habitability with all factors
+		hab := deepHabitability(tempC, atmo, gravity, comp, magneticField,
+			atmoPressure, oceanCoverage, tidallyLocked, tectonicActive)
 
 		// Visual properties
 		pixelSize := radiusToPixelSize(radiusE, planetType)
@@ -137,6 +181,20 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 		planet.Comp = comp
 		planet.OrbitAU = au
 
+		// Deep sim properties
+		planet.MagneticField = magneticField
+		planet.CoreIronFrac = coreIronFrac
+		planet.AtmoPressure = atmoPressure
+		planet.OceanCoverage = oceanCoverage
+		planet.IceCoverage = iceCoverage
+		planet.AxialTilt = axialTilt
+		planet.DayLength = dayLength
+		planet.TidallyLocked = tidallyLocked
+		planet.TectonicActive = tectonicActive
+		planet.VolcanicLevel = volcanicLevel
+		planet.InternalHeat = internalHeat
+		planet.Albedo = albedo
+
 		// Generate resources from composition
 		generateResourcesFromComposition(planet, comp, rng)
 
@@ -151,7 +209,156 @@ func FormSystem(star *entities.Star, rng *rand.Rand, systemID int, seed int64) [
 		result = append(result, planet)
 	}
 
+	// === Moon generation ===
+	// Gas giants and large planets spawn moons
+	var moons []entities.Entity
+	for _, e := range result {
+		parent, ok := e.(*entities.Planet)
+		if !ok || parent.Mass < 5.0 {
+			continue // only massive planets get moons
+		}
+
+		moonCount := 1 + rng.Intn(3)
+		if parent.PlanetType == "Gas Giant" {
+			moonCount = 2 + rng.Intn(4) // 2-5 moons for gas giants
+		}
+
+		for m := 0; m < moonCount; m++ {
+			moon := generateMoon(parent, m, systemID, star, rng, seed)
+			parent.Moons = append(parent.Moons, moon.GetID())
+			moons = append(moons, moon)
+		}
+	}
+	result = append(result, moons...)
+
 	return result
+}
+
+func generateMoon(parent *entities.Planet, index, systemID int, star *entities.Star, rng *rand.Rand, seed int64) *entities.Planet {
+	// Moon mass: 0.001-0.05 of parent mass
+	moonMass := parent.Mass * (0.001 + rng.Float64()*0.05)
+	if moonMass < 0.001 {
+		moonMass = 0.001
+	}
+
+	// Composition: inherit from parent's zone but more rocky
+	comp := entities.Composition{
+		Iron:      parent.Comp.Iron * (1.0 + rng.Float64()*0.5),
+		Silicate:  parent.Comp.Silicate * (1.0 + rng.Float64()*0.5),
+		Water:     parent.Comp.Water * (0.5 + rng.Float64()),
+		Gas:       0.01 * rng.Float64(), // moons lose gas
+		Organics:  parent.Comp.Organics * (0.5 + rng.Float64()),
+		RareEarth: parent.Comp.RareEarth * (1.0 + rng.Float64()),
+	}
+	// Normalize
+	total := comp.Iron + comp.Silicate + comp.Water + comp.Gas + comp.Organics + comp.RareEarth
+	if total > 0 {
+		comp.Iron /= total
+		comp.Silicate /= total
+		comp.Water /= total
+		comp.Gas /= total
+		comp.Organics /= total
+		comp.RareEarth /= total
+	}
+
+	radiusE := computeRadius(moonMass, "")
+	gravity := moonMass / (radiusE * radiusE)
+	density := moonMass / (radiusE * radiusE * radiusE) * 5.51
+
+	// Tidal heating from parent (closer = more heating)
+	tidalHeat := parent.Mass * 0.001 / float64(index+1)
+	internalHeat := 0.01 + tidalHeat
+	volcanicLevel := 0.0
+	if tidalHeat > 0.05 {
+		volcanicLevel = tidalHeat * 2
+		if volcanicLevel > 1.0 {
+			volcanicLevel = 1.0
+		}
+	}
+
+	// Moons are tidally locked to parent
+	tidallyLocked := true
+	coreIronFrac := comp.Iron * (0.5 + rng.Float64()*0.3)
+	magneticField := 0.0
+	if coreIronFrac > 0.15 && internalHeat > 0.03 {
+		magneticField = coreIronFrac * internalHeat * 5
+		if magneticField > 0.5 {
+			magneticField = 0.5 // moons have weak fields
+		}
+	}
+
+	// Temperature: parent's orbit AU from star + tidal heating
+	tempK := 278.0 * math.Pow(star.Luminosity, 0.25) / math.Sqrt(parent.OrbitAU)
+	tempK += tidalHeat * 200 // tidal heating warms the moon
+	atmoPressure := moonMass * gravity * 0.1 * magneticField
+	if atmoPressure > 2.0 {
+		atmoPressure = 2.0
+	}
+
+	atmo := atmosphereFromPressure(atmoPressure, comp, tempK)
+	tempC := int(tempK - 273)
+
+	oceanCov, iceCov := computeHydrosphere(comp.Water, tempC, atmoPressure)
+
+	planetType := "Barren"
+	if comp.Water > 0.3 && tempC > -40 && tempC < 50 {
+		planetType = "Ocean"
+	} else if comp.Water > 0.2 && tempC < -20 {
+		planetType = "Ice"
+	} else if volcanicLevel > 0.5 {
+		planetType = "Lava"
+	}
+
+	hab := deepHabitability(tempC, atmo, gravity, comp, magneticField,
+		atmoPressure, oceanCov, tidallyLocked, comp.Silicate > 0.2)
+
+	// Visual: moons are small
+	pixelSize := 3
+	if moonMass > 0.01 {
+		pixelSize = 4
+	}
+
+	// Orbit the parent planet (visual offset)
+	moonOrbitPx := parent.OrbitDistance + 12.0 + float64(index)*8.0
+	moonAngle := parent.OrbitAngle + float64(index)*1.2
+
+	moonNames := []string{"Luna", "Europa", "Titan", "Io", "Ganymede",
+		"Callisto", "Enceladus", "Triton", "Oberon", "Charon"}
+	name := fmt.Sprintf("%s %d", moonNames[rng.Intn(len(moonNames))], rng.Intn(99)+1)
+
+	pColor := planetColor(planetType, comp, rng)
+	id := systemID*1000 + parent.GetID()*10 + index + 50
+
+	moon := entities.NewPlanet(id, name, planetType, moonOrbitPx, moonAngle, pColor)
+	moon.Size = pixelSize
+	moon.Temperature = tempC
+	moon.Atmosphere = atmo
+	moon.Habitability = hab
+	moon.Mass = moonMass
+	moon.RadiusAU = radiusE
+	moon.Gravity = gravity
+	moon.Density = density
+	moon.Comp = comp
+	moon.OrbitAU = parent.OrbitAU
+	moon.MagneticField = magneticField
+	moon.CoreIronFrac = coreIronFrac
+	moon.AtmoPressure = atmoPressure
+	moon.OceanCoverage = oceanCov
+	moon.IceCoverage = iceCov
+	moon.TidallyLocked = tidallyLocked
+	moon.VolcanicLevel = volcanicLevel
+	moon.InternalHeat = internalHeat
+	moon.DayLength = 0 // tidally locked
+	moon.ParentPlanetID = parent.GetID()
+	moon.Albedo = computeAlbedo(comp, tempC)
+
+	generateResourcesFromComposition(moon, comp, rng)
+	building.EnsurePlanetHasBase(moon, entities.GenerationParams{
+		SystemID: systemID, OrbitDistance: moonOrbitPx,
+		OrbitAngle: moonAngle, SystemSeed: seed,
+	})
+
+	return moon
 }
 
 func computeComposition(insideFrost bool, metallicity float64, rng *rand.Rand) entities.Composition {
@@ -495,4 +702,288 @@ func generateResourcesFromComposition(planet *entities.Planet, comp entities.Com
 			deposits++
 		}
 	}
+}
+
+// === Deep simulation functions ===
+
+func computeCoreFraction(mass float64, comp entities.Composition, rng *rand.Rand) float64 {
+	// Iron sinks to core if planet is massive enough (gravitational differentiation)
+	// Small bodies: iron distributed throughout (low core fraction)
+	// Large bodies: iron sinks efficiently (high core fraction)
+	if mass < 0.01 {
+		return 0.1 + rng.Float64()*0.2
+	}
+	efficiency := math.Min(1.0, math.Log10(mass*100)/3) // 0.3 at 0.1Me, 1.0 at 10Me
+	return comp.Iron * efficiency * (0.7 + rng.Float64()*0.3)
+}
+
+func computeInternalHeat(mass, density float64, rng *rand.Rand) float64 {
+	// Internal heat from radiogenic decay + gravitational compression
+	// Earth ≈ 0.087 W/m², scales with mass and density
+	base := mass * 0.02 * density / 5.5
+	base *= 0.7 + rng.Float64()*0.6
+	if base > 1.0 {
+		base = 1.0
+	}
+	return base
+}
+
+func computeMagneticField(coreIronFrac, internalHeat, mass float64, tidallyLocked bool) float64 {
+	// Dynamo requires: molten iron core + rotation (not tidally locked)
+	// Earth = 1.0 (core iron 0.32, internal heat 0.087)
+	if tidallyLocked {
+		return coreIronFrac * internalHeat * 0.5 // weak field if locked
+	}
+	field := coreIronFrac * internalHeat * mass * 8
+	if field > 2.0 {
+		field = 2.0
+	}
+	return field
+}
+
+func computeDayLength(mass, orbitAU float64, tidallyLocked bool, rng *rand.Rand) float64 {
+	if tidallyLocked {
+		return 0 // represents infinite day (one side always faces star)
+	}
+	// Day length: smaller planets spin faster (angular momentum conservation)
+	// Earth (1.0Me) = 24h, Jupiter (318Me) = 10h, Mars (0.1Me) = 24.6h
+	base := 10.0 + rng.Float64()*30.0
+	if mass > 10 {
+		base = 8 + rng.Float64()*6 // gas giants spin fast
+	}
+	return base
+}
+
+func computeVolcanism(internalHeat float64, tectonic bool, mass float64, rng *rand.Rand) float64 {
+	if internalHeat < 0.02 {
+		return 0 // dead world
+	}
+	v := internalHeat * 3 * (0.7 + rng.Float64()*0.6)
+	if tectonic {
+		v *= 1.5 // tectonics amplify surface expression
+	}
+	if v > 1.0 {
+		v = 1.0
+	}
+	return v
+}
+
+func computeAtmoPressure(mass, gravity float64, comp entities.Composition, magField, starLum, orbitAU float64, rng *rand.Rand) float64 {
+	if mass < 0.01 || gravity < 0.05 {
+		return 0 // too small to hold atmosphere
+	}
+
+	// Base pressure from outgassing (proportional to mass × volatile content)
+	volatiles := comp.Gas + comp.Water*0.3 + comp.Organics*0.2
+	pressure := mass * gravity * volatiles * 5
+
+	// Magnetic field protects atmosphere from solar wind stripping
+	// No field + close to star = atmosphere stripped
+	if magField < 0.2 {
+		solarWindStrip := starLum / (orbitAU * orbitAU)
+		pressure *= math.Max(0.01, 1.0-solarWindStrip*0.3)
+	}
+
+	// Gas giants have massive atmospheres
+	if comp.Gas > 0.4 {
+		pressure = mass * comp.Gas * 10
+		if pressure > 1000 {
+			pressure = 1000
+		}
+	}
+
+	pressure *= 0.7 + rng.Float64()*0.6
+
+	return pressure
+}
+
+func computeTemperature(starLum, orbitAU, atmoPressure float64, comp entities.Composition, volcanism float64) float64 {
+	// Stefan-Boltzmann equilibrium temperature
+	tempK := 278.0 * math.Pow(starLum, 0.25) / math.Sqrt(orbitAU)
+
+	// Greenhouse effect: depends on pressure AND composition
+	// CO2/methane equivalent from organics + gas composition
+	greenhouseGas := comp.Gas*0.3 + comp.Organics*0.5 + comp.Water*0.1
+	greenhouse := math.Log1p(atmoPressure) * greenhouseGas * 100
+	if greenhouse > 500 {
+		greenhouse = 500 // Venus-like maximum
+	}
+	tempK += greenhouse
+
+	// Volcanic outgassing adds heat
+	tempK += volcanism * 50
+
+	return tempK
+}
+
+func atmosphereFromPressure(pressure float64, comp entities.Composition, tempK float64) string {
+	if pressure < 0.001 {
+		return entities.AtmosphereNone
+	}
+	if pressure > 50 {
+		return entities.AtmosphereDense
+	}
+	if tempK > 1200 || (comp.Organics > 0.15 && pressure > 5) {
+		return entities.AtmosphereCorrosive
+	}
+	if comp.Organics > 0.1 && pressure > 0.5 {
+		return entities.AtmosphereToxic
+	}
+	if pressure > 0.3 && pressure < 3.0 && comp.Water > 0.05 {
+		return entities.AtmosphereBreathable
+	}
+	if pressure > 0.003 {
+		return entities.AtmosphereThin
+	}
+	return entities.AtmosphereNone
+}
+
+func computeAlbedo(comp entities.Composition, tempC int) float64 {
+	// Ice is very reflective, oceans absorb, rock is moderate
+	albedo := 0.3 // rocky baseline
+	if tempC < -30 && comp.Water > 0.1 {
+		albedo = 0.5 + comp.Water*0.3 // ice world
+	} else if tempC > 0 && comp.Water > 0.2 {
+		albedo = 0.12 // ocean absorbs light
+	}
+	if comp.Gas > 0.4 {
+		albedo = 0.3 + comp.Gas*0.2 // cloud cover
+	}
+	return math.Min(0.9, albedo)
+}
+
+func computeHydrosphere(waterFrac float64, tempC int, pressure float64) (ocean, ice float64) {
+	if waterFrac < 0.01 || pressure < 0.006 { // 0.006 atm = Mars, below triple point
+		return 0, 0 // no stable liquid water
+	}
+
+	if tempC > 100 { // above boiling at 1atm (simplified)
+		return 0, 0 // water is vapor
+	}
+
+	if tempC < 0 {
+		// Below freezing: ice coverage proportional to water fraction
+		ice = waterFrac * 2
+		if ice > 1.0 {
+			ice = 1.0
+		}
+		// Some liquid possible under ice (subsurface ocean)
+		if pressure > 0.5 && tempC > -40 {
+			ocean = waterFrac * 0.1
+		}
+		return
+	}
+
+	// Liquid water range (0-100°C at ~1 atm)
+	ocean = waterFrac * 3
+	if ocean > 0.95 {
+		ocean = 0.95
+	}
+
+	// Polar ice caps if tilt exists and cold enough
+	if tempC < 30 {
+		ice = math.Max(0, (30-float64(tempC))/100) * waterFrac
+	}
+
+	return
+}
+
+func classifyPlanetDeep(mass float64, comp entities.Composition, tempC int, oceanCov, atmoPressure float64) string {
+	if comp.Gas > 0.45 && mass > 10.0 {
+		return "Gas Giant"
+	}
+	if oceanCov > 0.5 {
+		return "Ocean"
+	}
+	if comp.Water > 0.25 && tempC < -30 {
+		return "Ice"
+	}
+	if tempC > 500 || (tempC > 300 && atmoPressure > 50) {
+		return "Lava"
+	}
+	if comp.Silicate > 0.30 {
+		if tempC > 60 || (atmoPressure < 0.01 && tempC > 20) {
+			return "Desert"
+		}
+		if oceanCov > 0.1 || comp.Water > 0.08 {
+			return "Terrestrial"
+		}
+		return "Barren"
+	}
+	return "Barren"
+}
+
+func deepHabitability(tempC int, atmo string, gravity float64, comp entities.Composition,
+	magField, atmoPressure, oceanCov float64, tidallyLocked, tectonic bool) int {
+
+	score := 0
+
+	// Temperature (ideal: -10 to 35°C)
+	if tempC >= -10 && tempC <= 35 {
+		score += 30
+	} else if tempC >= -50 && tempC <= 60 {
+		score += 10
+	} else {
+		score -= 25
+	}
+
+	// Atmosphere (type + pressure)
+	switch atmo {
+	case entities.AtmosphereBreathable:
+		score += 20
+	case entities.AtmosphereThin:
+		score += 3
+	default:
+		score -= 20
+	}
+	// Pressure sweet spot: 0.5-2.0 atm
+	if atmoPressure >= 0.5 && atmoPressure <= 2.0 {
+		score += 10
+	} else if atmoPressure > 0 && atmoPressure < 5 {
+		score += 3
+	}
+
+	// Gravity (ideal: 0.5-1.5g)
+	if gravity >= 0.5 && gravity <= 1.5 {
+		score += 10
+	} else if gravity >= 0.2 && gravity <= 2.5 {
+		score += 3
+	} else {
+		score -= 10
+	}
+
+	// Magnetic field (protects from radiation)
+	if magField > 0.5 {
+		score += 10
+	} else if magField > 0.1 {
+		score += 5
+	} else {
+		score -= 5 // radiation exposure
+	}
+
+	// Water / ocean
+	if oceanCov > 0.3 {
+		score += 10
+	} else if oceanCov > 0.05 {
+		score += 5
+	}
+	score += int(comp.Water * 10)
+
+	// Tidal locking penalty (habitable twilight band only)
+	if tidallyLocked {
+		score -= 10
+	}
+
+	// Tectonics bonus (carbon cycle, resource renewal)
+	if tectonic {
+		score += 5
+	}
+
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+	return score
 }
