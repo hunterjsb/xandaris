@@ -3275,23 +3275,34 @@ func StartServer(provider GameStateProvider) {
 	mux.HandleFunc("/api/planets/physics", func(w http.ResponseWriter, r *http.Request) {
 		p := getProvider()
 		type planetPhys struct {
-			ID        int     `json:"id"`
-			Name      string  `json:"name"`
-			Type      string  `json:"type"`
-			Owner     string  `json:"owner"`
-			System    string  `json:"system"`
-			Mass      float64 `json:"mass"`
-			Radius    float64 `json:"radius"`
-			Gravity   float64 `json:"gravity"`
-			Density   float64 `json:"density"`
-			OrbitAU   float64 `json:"orbit_au"`
-			TempC     int     `json:"temp_c"`
-			Iron      float64 `json:"iron"`
-			Silicate  float64 `json:"silicate"`
-			Water     float64 `json:"water"`
-			Gas       float64 `json:"gas"`
-			Organics  float64 `json:"organics"`
-			RareEarth float64 `json:"rare_earth"`
+			ID             int     `json:"id"`
+			Name           string  `json:"name"`
+			Type           string  `json:"type"`
+			Owner          string  `json:"owner"`
+			System         string  `json:"system"`
+			Mass           float64 `json:"mass"`
+			Radius         float64 `json:"radius"`
+			Gravity        float64 `json:"gravity"`
+			Density        float64 `json:"density"`
+			OrbitAU        float64 `json:"orbit_au"`
+			TempC          int     `json:"temp_c"`
+			Iron           float64 `json:"iron"`
+			Silicate       float64 `json:"silicate"`
+			Water          float64 `json:"water"`
+			Gas            float64 `json:"gas"`
+			Organics       float64 `json:"organics"`
+			RareEarth      float64 `json:"rare_earth"`
+			MagneticField  float64 `json:"magnetic_field"`
+			AtmoPressure   float64 `json:"atmo_pressure"`
+			OceanCoverage  float64 `json:"ocean_coverage"`
+			IceCoverage    float64 `json:"ice_coverage"`
+			TidallyLocked  bool    `json:"tidally_locked"`
+			TectonicActive bool    `json:"tectonic_active"`
+			VolcanicLevel  float64 `json:"volcanic_level"`
+			DayLength      float64 `json:"day_length"`
+			Moons          int     `json:"moons"`
+			ParentID       int     `json:"parent_id,omitempty"`
+			Habitability   int     `json:"habitability"`
 		}
 		var result []planetPhys
 		for _, sys := range p.GetSystems() {
@@ -3312,6 +3323,17 @@ func StartServer(provider GameStateProvider) {
 					Iron: pl.Comp.Iron, Silicate: pl.Comp.Silicate,
 					Water: pl.Comp.Water, Gas: pl.Comp.Gas,
 					Organics: pl.Comp.Organics, RareEarth: pl.Comp.RareEarth,
+					MagneticField: math.Round(pl.MagneticField*100) / 100,
+					AtmoPressure: math.Round(pl.AtmoPressure*100) / 100,
+					OceanCoverage: math.Round(pl.OceanCoverage*100) / 100,
+					IceCoverage: math.Round(pl.IceCoverage*100) / 100,
+					TidallyLocked: pl.TidallyLocked,
+					TectonicActive: pl.TectonicActive,
+					VolcanicLevel: math.Round(pl.VolcanicLevel*100) / 100,
+					DayLength: math.Round(pl.DayLength*10) / 10,
+					Moons: len(pl.Moons),
+					ParentID: pl.ParentPlanetID,
+					Habitability: pl.Habitability,
 				})
 			}
 		}
